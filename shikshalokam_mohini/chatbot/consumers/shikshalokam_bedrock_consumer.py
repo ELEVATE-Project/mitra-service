@@ -13,6 +13,15 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
     profile_id = None
     route = None
 
+    def disconnect(self, code):
+        chat_session = ChatSession.objects.filter(session=self.session_id)
+        if chat_session.exists():
+            c = chat_session[0]
+        else:
+            c = ChatSession(session=self.session_id)
+        c.save_title()
+        self.close()
+
     def receive(self, text_data):
         text_data_json = json.loads(text_data)
         message_type = text_data_json.get('type', None)

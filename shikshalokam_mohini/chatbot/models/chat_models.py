@@ -31,20 +31,26 @@ class ChatSession(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def save_title(self):
-        company_chats = CompanyChat.objects.filter(session=self.session)
+        company_chats = CompanyChat.objects.filter(session=self.session).order_by('created_at')
         prompt = self._get_prompt()
+        print(f"Leng:  {len(company_chats)} for session {self.session}")
         messages = self._get_bedrock_format_message(chats=company_chats)
 
         json_output = self._handle_bedrock_model(prompt=prompt, messages=messages)
+        if json_output:
+            output_title = json_output.get('title')
+        else:
+            output_title = 'Project'
 
-        self.title = json_output.get('title', 'Project')
+        self.title = output_title
         self.save()
 
     def _get_prompt(self):
         prompt = (
             "Given below is the conversation between the user and the assistant. "
             "Please provide the title of the conversation in 3-4 words. "
-            "Give the output in the VALID JSON format as shown below: "
+            "The response must only be in JSON format, without any additional text. "
+            "Return the output in the following JSON format: "
             "{"
             "\"title\": \"Title of the conversation\""
             "}"
