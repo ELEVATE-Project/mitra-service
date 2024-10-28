@@ -1,0 +1,95 @@
+import datetime
+import json
+from django.db import models
+from chatbot.llm_models.llm_script import handle_openai_model, handle_llama_model
+from chatbot.models import CompanyChat, Profile, CompanyBot, ChatStatus, LLMModel
+from chatbot.utils.chat_utils import format_message_as_per_openai_format
+from chatbot.llm_models.llm_script import handle_bedrock_model
+
+
+class ChatSession(models.Model):
+    session = models.CharField(max_length=255, unique=True)
+    profile = models.ForeignKey(Profile, on_delete=models.DO_NOTHING, null=True, blank=True)
+    company_bot = models.ForeignKey(CompanyBot, on_delete=models.SET_NULL, null=True, blank=True)
+    title = models.CharField(max_length=255, null=True, blank=True)
+    summary = models.TextField(null=True, blank=True)
+    sqs_message_id = models.CharField(max_length=255, null=True, blank=True)
+    retell_call_id = models.CharField(max_length=255, null=True, blank=True)
+    twilio_call_id = models.CharField(max_length=255, null=True, blank=True)
+    call_recording_url = models.URLField(null=True, blank=True)
+    public_log_url = models.URLField(null=True, blank=True)
+    current_step = models.IntegerField(null=True, blank=True)
+    next_session = models.CharField(max_length=255, null=True, blank=True)
+    twilio_call_status = models.CharField(max_length=255, null=True, blank=True)
+    retell_disconnection_reason = models.CharField(max_length=255, null=True, blank=True)
+    retell_conversation_eval = models.JSONField(null=True, blank=True)
+    session_context = models.JSONField(null=True, blank=True)
+    session_status = models.CharField(max_length=20, choices=ChatStatus.choices, null=True, blank=True)
+    call_duration = models.TimeField(default=datetime.time(0, 0))
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save_title(self):
+        company_chats = CompanyChat.objects.filter(session=self.session)
+        prompt = self._get_prompt()
+        messages = self._get_bedrock_format_message(chats=company_chats)
+
+        json_output = self._handle_bedrock_model(prompt=prompt, messages=messages)
+
+        self.title = json_output.get('title', 'Project')
+        self.save()
+
+    def _get_prompt(self):
+        prompt = (
+            "Given below is the conversation between the user and the assistant. "
+            "Please provide the title of the conversation in 3-4 words. "
+            "Give the output in the VALID JSON format as shown below: "
+            "{"
+            "\"title\": \"Title of the conversation\""
+            "}"
+        )
+        return [{'text': prompt}]
+
+    def _get_bedrock_format_message(self, chats):
+        ai_user = Profile.objects.get(id=1)
+        messages = []
+        for chat in chats:
+            if chat.receiver == ai_user:
+                user_message = chat.message
+                if chat.translated_message is not None and chat.translated_message != '':
+                    user_message = chat.translated_message
+                messages.append({
+                    'role': 'user',
+                    'content': [{'text': user_message}]
+                })
+            else:
+                messages.append({
+                    'role': 'assistant',
+                    "content": [{'text': chat.message}]
+                })
+        return messages
+
+    def _determine_model(self):
+        model = LLMModel.GPT4_O
+        if self.company_bot:
+            model = self.company_bot.llm_model if self.company_bot.llm_model else model
+        return model
+
+    def _handle_bedrock_model(self, prompt, messages):
+        print("Using Bedrock")
+
+        json_output = handle_bedrock_model(
+            system_prompt=prompt, messages=messages, max_token=2048,
+            temperature=0.0
+        )
+
+        return json_output
+
+    def _parse_response(self, response):
+        response_str = str(response.content, encoding="utf-8")
+        response_json = json.loads(response_str)
+        response_content = response_json['choices'][0]['message']['content']
+        cleaned_content = (response_content.replace('\n', '').replace('\t', '').replace('\r', '')
+                           .replace('\\n', '').replace('\\t', '').replace('\\r', ''))
+        return json.loads(cleaned_content)

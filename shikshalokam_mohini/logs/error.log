@@ -1,0 +1,460 @@
+WARNING 2024-10-28 11:54:35,098 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.04, 127.0.0.1:56302][0m
+WARNING 2024-10-28 11:54:35,920 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:56314][0m
+WARNING 2024-10-28 11:54:38,747 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:56314][0m
+WARNING 2024-10-28 12:00:23,104 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.03, 127.0.0.1:51040][0m
+WARNING 2024-10-28 12:03:53,419 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:45084][0m
+WARNING 2024-10-28 12:03:55,659 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:45084][0m
+WARNING 2024-10-28 12:03:58,654 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:45084][0m
+WARNING 2024-10-28 12:04:00,528 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:45084][0m
+WARNING 2024-10-28 12:04:06,530 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:45084][0m
+WARNING 2024-10-28 12:04:27,345 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:45084][0m
+WARNING 2024-10-28 12:04:30,781 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:45084][0m
+WARNING 2024-10-28 12:04:36,400 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.02, 127.0.0.1:40034][0m
+WARNING 2024-10-28 12:04:39,436 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.04, 127.0.0.1:45084][0m
+WARNING 2024-10-28 12:04:46,498 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40034][0m
+WARNING 2024-10-28 12:04:49,185 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40034][0m
+WARNING 2024-10-28 12:05:03,044 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40034][0m
+WARNING 2024-10-28 12:05:05,003 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40034][0m
+WARNING 2024-10-28 12:05:06,253 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40034][0m
+WARNING 2024-10-28 12:05:11,514 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40034][0m
+WARNING 2024-10-28 12:05:13,813 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40034][0m
+WARNING 2024-10-28 12:05:20,958 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40066][0m
+WARNING 2024-10-28 12:05:24,845 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:40066][0m
+WARNING 2024-10-28 12:05:26,211 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:40066][0m
+WARNING 2024-10-28 12:05:27,800 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40066][0m
+WARNING 2024-10-28 12:05:32,975 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40034][0m
+WARNING 2024-10-28 12:05:34,709 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40040][0m
+WARNING 2024-10-28 12:05:59,158 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40040][0m
+WARNING 2024-10-28 12:06:00,697 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40066][0m
+WARNING 2024-10-28 12:06:05,890 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40066][0m
+WARNING 2024-10-28 12:06:07,821 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40066][0m
+WARNING 2024-10-28 12:07:02,320 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.02, 127.0.0.1:40066][0m
+WARNING 2024-10-28 12:07:11,475 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40066][0m
+WARNING 2024-10-28 12:14:26,465 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.03, 127.0.0.1:54310][0m
+WARNING 2024-10-28 12:14:28,054 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:54304][0m
+WARNING 2024-10-28 12:14:29,165 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:54304][0m
+WARNING 2024-10-28 12:14:35,937 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:54304][0m
+WARNING 2024-10-28 12:14:39,473 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:54310][0m
+WARNING 2024-10-28 12:15:46,065 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:38594][0m
+WARNING 2024-10-28 12:15:48,031 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.02, 127.0.0.1:38594][0m
+WARNING 2024-10-28 12:15:49,628 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:38596][0m
+WARNING 2024-10-28 12:16:07,208 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:38594][0m
+WARNING 2024-10-28 12:16:07,953 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:38594][0m
+WARNING 2024-10-28 12:16:42,832 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.02, 127.0.0.1:38596][0m
+WARNING 2024-10-28 12:16:56,223 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:38596][0m
+WARNING 2024-10-28 12:16:57,623 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:38596][0m
+WARNING 2024-10-28 12:17:28,794 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:38596][0m
+WARNING 2024-10-28 12:17:34,160 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:38596][0m
+WARNING 2024-10-28 12:17:45,482 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:38594][0m
+WARNING 2024-10-28 12:18:34,697 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:38594][0m
+WARNING 2024-10-28 12:18:37,155 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:38594][0m
+WARNING 2024-10-28 12:43:07,334 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:51596][0m
+WARNING 2024-10-28 12:43:10,063 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.02, 127.0.0.1:51610][0m
+WARNING 2024-10-28 12:43:13,805 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:51610][0m
+WARNING 2024-10-28 12:43:16,974 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:51610][0m
+WARNING 2024-10-28 12:43:18,667 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:51610][0m
+WARNING 2024-10-28 12:43:19,866 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:51610][0m
+WARNING 2024-10-28 12:43:32,326 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:51610][0m
+WARNING 2024-10-28 12:43:33,776 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:51610][0m
+WARNING 2024-10-28 12:44:27,251 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:51610][0m
+WARNING 2024-10-28 12:44:29,623 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:51610][0m
+WARNING 2024-10-28 12:46:05,100 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.02, 127.0.0.1:56268][0m
+WARNING 2024-10-28 12:46:17,782 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:56268][0m
+WARNING 2024-10-28 12:46:19,808 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:56268][0m
+ERROR 2024-10-28 12:46:45,681 log Internal Server Error: /admin/chatbot/company/add/
+Traceback (most recent call last):
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+psycopg2.errors.UniqueViolation: duplicate key value violates unique constraint "chatbot_company_pkey"
+DETAIL:  Key (id)=(1) already exists.
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/asgiref/sync.py", line 518, in thread_handler
+    raise exc_info[1]
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/core/handlers/exception.py", line 42, in inner
+    response = await get_response(request)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/core/handlers/base.py", line 253, in _get_response_async
+    response = await wrapped_callback(
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/asgiref/sync.py", line 468, in __call__
+    ret = await asyncio.shield(exec_coro)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/asgiref/current_thread_executor.py", line 40, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/asgiref/sync.py", line 522, in thread_handler
+    return func(*args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/sentry_sdk/integrations/django/views.py", line 90, in sentry_wrapped_callback
+    return callback(request, *args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/contrib/admin/options.py", line 718, in wrapper
+    return self.admin_site.admin_view(view)(*args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/utils/decorators.py", line 188, in _view_wrapper
+    result = _process_exception(request, e)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/utils/decorators.py", line 186, in _view_wrapper
+    response = view_func(request, *args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/views/decorators/cache.py", line 80, in _view_wrapper
+    response = view_func(request, *args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/contrib/admin/sites.py", line 241, in inner
+    return view(request, *args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/contrib/admin/options.py", line 1961, in add_view
+    return self.changeform_view(request, None, form_url, extra_context)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/utils/decorators.py", line 48, in _wrapper
+    return bound_method(*args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/utils/decorators.py", line 188, in _view_wrapper
+    result = _process_exception(request, e)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/utils/decorators.py", line 186, in _view_wrapper
+    response = view_func(request, *args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/contrib/admin/options.py", line 1820, in changeform_view
+    return self._changeform_view(request, object_id, form_url, extra_context)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/contrib/admin/options.py", line 1871, in _changeform_view
+    self.save_model(request, new_object, form, not add)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/contrib/admin/options.py", line 1294, in save_model
+    obj.save()
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/models/base.py", line 891, in save
+    self.save_base(
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/models/base.py", line 997, in save_base
+    updated = self._save_table(
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/models/base.py", line 1160, in _save_table
+    results = self._do_insert(
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/models/base.py", line 1201, in _do_insert
+    return manager._insert(
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/models/query.py", line 1847, in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/models/sql/compiler.py", line 1836, in execute_sql
+    cursor.execute(sql, params)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/debug_toolbar/panels/sql/tracking.py", line 235, in execute
+    return self._record(super().execute, sql, params)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/debug_toolbar/panels/sql/tracking.py", line 160, in _record
+    return method(sql, params)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/backends/utils.py", line 122, in execute
+    return super().execute(sql, params)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/sentry_sdk/utils.py", line 1788, in runner
+    return sentry_patched_function(*args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/sentry_sdk/integrations/django/__init__.py", line 653, in execute
+    result = real_execute(self, sql, params)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+django.db.utils.IntegrityError: duplicate key value violates unique constraint "chatbot_company_pkey"
+DETAIL:  Key (id)=(1) already exists.
+
+ERROR 2024-10-28 12:46:45,681 log Internal Server Error: /admin/chatbot/company/add/
+Traceback (most recent call last):
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+psycopg2.errors.UniqueViolation: duplicate key value violates unique constraint "chatbot_company_pkey"
+DETAIL:  Key (id)=(1) already exists.
+
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/asgiref/sync.py", line 518, in thread_handler
+    raise exc_info[1]
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/core/handlers/exception.py", line 42, in inner
+    response = await get_response(request)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/core/handlers/base.py", line 253, in _get_response_async
+    response = await wrapped_callback(
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/asgiref/sync.py", line 468, in __call__
+    ret = await asyncio.shield(exec_coro)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/asgiref/current_thread_executor.py", line 40, in run
+    result = self.fn(*self.args, **self.kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/asgiref/sync.py", line 522, in thread_handler
+    return func(*args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/sentry_sdk/integrations/django/views.py", line 90, in sentry_wrapped_callback
+    return callback(request, *args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/contrib/admin/options.py", line 718, in wrapper
+    return self.admin_site.admin_view(view)(*args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/utils/decorators.py", line 188, in _view_wrapper
+    result = _process_exception(request, e)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/utils/decorators.py", line 186, in _view_wrapper
+    response = view_func(request, *args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/views/decorators/cache.py", line 80, in _view_wrapper
+    response = view_func(request, *args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/contrib/admin/sites.py", line 241, in inner
+    return view(request, *args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/contrib/admin/options.py", line 1961, in add_view
+    return self.changeform_view(request, None, form_url, extra_context)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/utils/decorators.py", line 48, in _wrapper
+    return bound_method(*args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/utils/decorators.py", line 188, in _view_wrapper
+    result = _process_exception(request, e)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/utils/decorators.py", line 186, in _view_wrapper
+    response = view_func(request, *args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/contrib/admin/options.py", line 1820, in changeform_view
+    return self._changeform_view(request, object_id, form_url, extra_context)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/contrib/admin/options.py", line 1871, in _changeform_view
+    self.save_model(request, new_object, form, not add)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/contrib/admin/options.py", line 1294, in save_model
+    obj.save()
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/models/base.py", line 891, in save
+    self.save_base(
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/models/base.py", line 997, in save_base
+    updated = self._save_table(
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/models/base.py", line 1160, in _save_table
+    results = self._do_insert(
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/models/base.py", line 1201, in _do_insert
+    return manager._insert(
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/models/manager.py", line 87, in manager_method
+    return getattr(self.get_queryset(), name)(*args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/models/query.py", line 1847, in _insert
+    return query.get_compiler(using=using).execute_sql(returning_fields)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/models/sql/compiler.py", line 1836, in execute_sql
+    cursor.execute(sql, params)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/debug_toolbar/panels/sql/tracking.py", line 235, in execute
+    return self._record(super().execute, sql, params)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/debug_toolbar/panels/sql/tracking.py", line 160, in _record
+    return method(sql, params)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/backends/utils.py", line 122, in execute
+    return super().execute(sql, params)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/sentry_sdk/utils.py", line 1788, in runner
+    return sentry_patched_function(*args, **kwargs)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/sentry_sdk/integrations/django/__init__.py", line 653, in execute
+    result = real_execute(self, sql, params)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/kunal/GritWorks/code/shikshalokam-mohini-service/mohini-env/lib/python3.10/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+django.db.utils.IntegrityError: duplicate key value violates unique constraint "chatbot_company_pkey"
+DETAIL:  Key (id)=(1) already exists.
+
+ERROR 2024-10-28 12:46:45,786 runserver [35;1mHTTP POST /admin/chatbot/company/add/ 500 [0.86, 127.0.0.1:56260][0m
+ERROR 2024-10-28 12:46:45,786 runserver [35;1mHTTP POST /admin/chatbot/company/add/ 500 [0.86, 127.0.0.1:56260][0m
+WARNING 2024-10-28 12:46:46,086 log Not Found: /favicon.ico
+WARNING 2024-10-28 12:46:46,087 runserver [33mHTTP GET /favicon.ico 404 [0.10, 127.0.0.1:56260][0m
+WARNING 2024-10-28 12:46:55,999 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:56268][0m
+WARNING 2024-10-28 12:47:00,183 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:56268][0m
+WARNING 2024-10-28 12:47:02,288 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:56268][0m
+WARNING 2024-10-28 12:47:11,506 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:56268][0m
+WARNING 2024-10-28 12:47:13,524 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:52480][0m
+WARNING 2024-10-28 12:47:18,613 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:52480][0m
+ERROR 2024-10-28 12:47:42,914 log Internal Server Error: /api/profile/
+ERROR 2024-10-28 12:47:42,914 log Internal Server Error: /api/profile/
+ERROR 2024-10-28 12:47:42,915 runserver [35;1mHTTP POST /api/profile/ 500 [1.21, 127.0.0.1:57888][0m
+ERROR 2024-10-28 12:47:42,915 runserver [35;1mHTTP POST /api/profile/ 500 [1.21, 127.0.0.1:57888][0m
+WARNING 2024-10-28 12:48:16,095 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:56268][0m
+WARNING 2024-10-28 12:48:18,576 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:52466][0m
+WARNING 2024-10-28 12:48:25,379 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:33008][0m
+WARNING 2024-10-28 12:48:36,181 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:52466][0m
+ERROR 2024-10-28 12:49:08,933 log Internal Server Error: /api/profile/
+ERROR 2024-10-28 12:49:08,933 log Internal Server Error: /api/profile/
+ERROR 2024-10-28 12:49:08,934 runserver [35;1mHTTP POST /api/profile/ 500 [0.72, 127.0.0.1:33420][0m
+ERROR 2024-10-28 12:49:08,934 runserver [35;1mHTTP POST /api/profile/ 500 [0.72, 127.0.0.1:33420][0m
+WARNING 2024-10-28 12:49:39,885 log Not Found: /apple-touch-icon.png
+WARNING 2024-10-28 12:49:39,886 runserver [33mHTTP GET /apple-touch-icon.png 404 [0.07, 127.0.0.1:43060][0m
+WARNING 2024-10-28 13:06:06,763 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:34328][0m
+WARNING 2024-10-28 13:06:09,828 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:34312][0m
+WARNING 2024-10-28 13:39:52,779 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.03, 127.0.0.1:38566][0m
+WARNING 2024-10-28 13:39:56,751 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.08, 127.0.0.1:38566][0m
+WARNING 2024-10-28 13:40:00,276 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:38606][0m
+WARNING 2024-10-28 13:40:01,432 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.02, 127.0.0.1:38606][0m
+WARNING 2024-10-28 13:40:02,898 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:38606][0m
+WARNING 2024-10-28 13:40:03,542 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:38606][0m
+WARNING 2024-10-28 13:40:04,713 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.02, 127.0.0.1:38606][0m
+WARNING 2024-10-28 13:40:06,178 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:38606][0m
+WARNING 2024-10-28 15:17:38,100 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.03, 127.0.0.1:45380][0m
+WARNING 2024-10-28 15:17:42,909 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:45396][0m
+WARNING 2024-10-28 15:17:53,047 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.04, 127.0.0.1:45370][0m
+WARNING 2024-10-28 15:17:54,578 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.02, 127.0.0.1:45400][0m
+WARNING 2024-10-28 15:20:25,219 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:41582][0m
+WARNING 2024-10-28 15:21:49,983 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:51332][0m
+WARNING 2024-10-28 15:21:52,476 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.03, 127.0.0.1:43656][0m
+WARNING 2024-10-28 15:22:45,188 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.02, 127.0.0.1:43656][0m
+WARNING 2024-10-28 16:08:03,725 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:40244][0m
+WARNING 2024-10-28 16:08:06,582 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40238][0m
+WARNING 2024-10-28 16:08:42,252 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:40238][0m
+WARNING 2024-10-28 16:13:06,022 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.02, 127.0.0.1:53926][0m
+WARNING 2024-10-28 16:13:09,223 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.02, 127.0.0.1:53926][0m
+WARNING 2024-10-28 16:13:15,701 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:53926][0m
+WARNING 2024-10-28 16:13:28,515 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:35774][0m
+WARNING 2024-10-28 16:13:32,299 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.02, 127.0.0.1:35774][0m
+WARNING 2024-10-28 16:13:38,913 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:53916][0m
+WARNING 2024-10-28 16:13:39,832 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:53916][0m
+WARNING 2024-10-28 16:13:44,748 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:53916][0m
+WARNING 2024-10-28 16:18:49,301 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:38986][0m
+WARNING 2024-10-28 16:20:54,039 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:37318][0m
+WARNING 2024-10-28 16:21:04,870 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:37304][0m
+WARNING 2024-10-28 16:21:06,540 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:37318][0m
+WARNING 2024-10-28 16:21:07,702 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.04, 127.0.0.1:37318][0m
+WARNING 2024-10-28 16:21:12,669 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:37304][0m
+WARNING 2024-10-28 16:21:16,518 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:37304][0m
+WARNING 2024-10-28 16:21:22,149 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:37304][0m
+WARNING 2024-10-28 16:21:26,177 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:37304][0m
+WARNING 2024-10-28 16:22:00,087 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:37318][0m
+WARNING 2024-10-28 16:22:02,425 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:37304][0m
+WARNING 2024-10-28 16:37:14,431 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.02, 127.0.0.1:44796][0m
+WARNING 2024-10-28 16:37:16,660 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:44790][0m
+WARNING 2024-10-28 16:37:17,400 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:44790][0m
+WARNING 2024-10-28 16:37:17,753 log Forbidden (CSRF token from POST incorrect.): /admin/login/
+WARNING 2024-10-28 16:37:17,844 runserver [31;1mHTTP POST /admin/login/?next=/admin/chatbot/chatsession/ 403 [0.30, 127.0.0.1:44796][0m
+WARNING 2024-10-28 16:37:21,553 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:44790][0m
+WARNING 2024-10-28 16:37:27,093 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.02, 127.0.0.1:44796][0m
+WARNING 2024-10-28 16:37:36,118 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:44796][0m
+WARNING 2024-10-28 16:37:47,078 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:44790][0m
+WARNING 2024-10-28 16:37:49,676 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:55104][0m
+WARNING 2024-10-28 16:42:26,268 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:39100][0m
+WARNING 2024-10-28 16:42:28,362 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:39094][0m
+WARNING 2024-10-28 16:42:36,303 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:39100][0m
+WARNING 2024-10-28 16:42:38,074 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:39094][0m
+WARNING 2024-10-28 16:42:43,420 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:39094][0m
+WARNING 2024-10-28 16:42:47,789 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:39094][0m
+WARNING 2024-10-28 16:44:53,490 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.01, 127.0.0.1:50382][0m
+WARNING 2024-10-28 16:44:55,503 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.02, 127.0.0.1:50370][0m
+WARNING 2024-10-28 16:45:07,955 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:50382][0m
+WARNING 2024-10-28 16:45:09,809 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.02, 127.0.0.1:54756][0m
+WARNING 2024-10-28 16:45:10,706 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:54756][0m
+WARNING 2024-10-28 16:45:15,427 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:54756][0m
+WARNING 2024-10-28 16:52:09,498 runserver [33mHTTP GET /static/public/group-11.svg 404 [0.03, 127.0.0.1:48060][0m
+WARNING 2024-10-28 16:52:12,036 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:48098][0m
+WARNING 2024-10-28 16:52:21,654 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:48060][0m
+WARNING 2024-10-28 16:52:23,520 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:48082][0m
+WARNING 2024-10-28 16:52:28,338 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:48082][0m
+WARNING 2024-10-28 16:52:33,633 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:48082][0m
+WARNING 2024-10-28 16:54:17,026 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.05, 127.0.0.1:44896][0m
+WARNING 2024-10-28 16:54:20,732 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:44896][0m
+WARNING 2024-10-28 16:54:26,243 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.02, 127.0.0.1:44880][0m
+WARNING 2024-10-28 16:54:33,497 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:44896][0m
+WARNING 2024-10-28 16:54:34,999 runserver [33mHTTP GET /static/public/only_logo.svg 404 [0.01, 127.0.0.1:44880][0m
+WARNING 2024-10-28 16:55:51,186 log Not Found: /images/grit_logo_pdf.png
+WARNING 2024-10-28 16:55:51,203 runserver [33mHTTP GET /images/grit_logo_pdf.png 404 [0.60, 127.0.0.1:34072][0m
+WARNING 2024-10-28 16:55:51,450 log Not Found: /images/shikshalokam_logo_pdf.png
+WARNING 2024-10-28 16:55:51,451 runserver [33mHTTP GET /images/shikshalokam_logo_pdf.png 404 [0.89, 127.0.0.1:34068][0m
+WARNING 2024-10-28 16:55:51,486 log Not Found: /images/line_story.png
+WARNING 2024-10-28 16:55:51,493 runserver [33mHTTP GET /images/line_story.png 404 [0.89, 127.0.0.1:34088][0m
+WARNING 2024-10-28 16:55:51,583 log Not Found: /images/nagaland_samagra_logo.png
+WARNING 2024-10-28 16:55:51,589 runserver [33mHTTP GET /images/nagaland_samagra_logo.png 404 [1.03, 127.0.0.1:34058][0m
+WARNING 2024-10-28 16:55:51,678 log Not Found: /images/pdf_page1_logo_fmt1.png
+WARNING 2024-10-28 16:55:51,682 log Not Found: /images/nagaland_govt_logo.png
+WARNING 2024-10-28 16:55:51,686 runserver [33mHTTP GET /images/pdf_page1_logo_fmt1.png 404 [1.13, 127.0.0.1:34036][0m
+WARNING 2024-10-28 16:55:51,686 log Not Found: /images/star.svg
+WARNING 2024-10-28 16:55:51,699 runserver [33mHTTP GET /images/nagaland_govt_logo.png 404 [1.14, 127.0.0.1:34044][0m
+WARNING 2024-10-28 16:55:51,734 runserver [33mHTTP GET /images/star.svg 404 [0.50, 127.0.0.1:34098][0m
+WARNING 2024-10-28 16:55:51,738 log Not Found: /images/twitter_logo.png
+WARNING 2024-10-28 16:55:51,763 runserver [33mHTTP GET /images/twitter_logo.png 404 [0.29, 127.0.0.1:34106][0m
+WARNING 2024-10-28 16:55:56,739 log Not Found: /images/pdf_page1_logo_fmt1.png
+WARNING 2024-10-28 16:55:56,759 runserver [33mHTTP GET /images/pdf_page1_logo_fmt1.png 404 [0.72, 127.0.0.1:33234][0m
+WARNING 2024-10-28 16:55:56,824 log Not Found: /images/grit_logo_pdf.png
+WARNING 2024-10-28 16:55:56,834 runserver [33mHTTP GET /images/grit_logo_pdf.png 404 [0.76, 127.0.0.1:33256][0m
+WARNING 2024-10-28 16:55:57,103 log Not Found: /images/shikshalokam_logo_pdf.png
+WARNING 2024-10-28 16:55:57,189 runserver [33mHTTP GET /images/shikshalokam_logo_pdf.png 404 [1.12, 127.0.0.1:33254][0m
+WARNING 2024-10-28 16:55:57,219 log Not Found: /images/nagaland_govt_logo.png
+WARNING 2024-10-28 16:55:57,329 runserver [33mHTTP GET /images/nagaland_govt_logo.png 404 [1.28, 127.0.0.1:33240][0m
+WARNING 2024-10-28 16:55:57,344 log Not Found: /images/line_story.png
+WARNING 2024-10-28 16:55:57,352 log Not Found: /images/nagaland_samagra_logo.png
+WARNING 2024-10-28 16:55:57,374 runserver [33mHTTP GET /images/line_story.png 404 [1.28, 127.0.0.1:33272][0m
+WARNING 2024-10-28 16:55:57,384 runserver [33mHTTP GET /images/nagaland_samagra_logo.png 404 [1.33, 127.0.0.1:33246][0m
+WARNING 2024-10-28 16:55:57,606 log Not Found: /images/twitter_logo.png
+WARNING 2024-10-28 16:55:57,636 runserver [33mHTTP GET /images/twitter_logo.png 404 [0.68, 127.0.0.1:33288][0m
+WARNING 2024-10-28 16:55:57,636 log Not Found: /images/pdf_page1_logo_fmt1.png
+WARNING 2024-10-28 16:55:57,636 log Not Found: /images/star.svg
+WARNING 2024-10-28 16:55:57,638 runserver [33mHTTP GET /images/pdf_page1_logo_fmt1.png 404 [0.31, 127.0.0.1:33296][0m
+WARNING 2024-10-28 16:55:57,645 runserver [33mHTTP GET /images/star.svg 404 [0.83, 127.0.0.1:33286][0m
+WARNING 2024-10-28 16:55:58,664 log Not Found: /images/nagaland_govt_logo.png
+WARNING 2024-10-28 16:55:58,672 runserver [33mHTTP GET /images/nagaland_govt_logo.png 404 [0.42, 127.0.0.1:33306][0m
+WARNING 2024-10-28 16:55:58,678 log Not Found: /images/grit_logo_pdf.png
+WARNING 2024-10-28 16:55:58,679 log Not Found: /images/shikshalokam_logo_pdf.png
+WARNING 2024-10-28 16:55:58,720 runserver [33mHTTP GET /images/grit_logo_pdf.png 404 [0.41, 127.0.0.1:33332][0m
+WARNING 2024-10-28 16:55:58,734 runserver [33mHTTP GET /images/shikshalokam_logo_pdf.png 404 [0.43, 127.0.0.1:33320][0m
+WARNING 2024-10-28 16:55:58,741 log Not Found: /images/line_story.png
+WARNING 2024-10-28 16:55:58,777 runserver [33mHTTP GET /images/line_story.png 404 [0.47, 127.0.0.1:33336][0m
+WARNING 2024-10-28 16:55:59,247 log Not Found: /images/nagaland_samagra_logo.png
+WARNING 2024-10-28 16:55:59,249 runserver [33mHTTP GET /images/nagaland_samagra_logo.png 404 [0.60, 127.0.0.1:33354][0m
+WARNING 2024-10-28 16:55:59,332 log Not Found: /images/star.svg
+WARNING 2024-10-28 16:55:59,365 runserver [33mHTTP GET /images/star.svg 404 [0.72, 127.0.0.1:33350][0m
+WARNING 2024-10-28 16:55:59,365 log Not Found: /images/twitter_logo.png
+WARNING 2024-10-28 16:55:59,434 log Not Found: /images/nagaland_samagra_logo.png
+WARNING 2024-10-28 16:55:59,442 runserver [33mHTTP GET /images/twitter_logo.png 404 [0.72, 127.0.0.1:33370][0m
+WARNING 2024-10-28 16:55:59,450 runserver [33mHTTP GET /images/nagaland_samagra_logo.png 404 [0.54, 127.0.0.1:33402][0m
+WARNING 2024-10-28 16:55:59,516 log Not Found: /images/pdf_page1_logo_fmt1.png
+WARNING 2024-10-28 16:55:59,522 log Not Found: /images/nagaland_govt_logo.png
+WARNING 2024-10-28 16:55:59,556 runserver [33mHTTP GET /images/pdf_page1_logo_fmt1.png 404 [0.69, 127.0.0.1:33386][0m
+WARNING 2024-10-28 16:55:59,557 runserver [33mHTTP GET /images/nagaland_govt_logo.png 404 [0.67, 127.0.0.1:33392][0m
+WARNING 2024-10-28 16:56:00,065 log Not Found: /images/shikshalokam_logo_pdf.png
+WARNING 2024-10-28 16:56:00,075 runserver [33mHTTP GET /images/shikshalokam_logo_pdf.png 404 [0.64, 127.0.0.1:33404][0m
+WARNING 2024-10-28 16:56:00,327 log Not Found: /images/grit_logo_pdf.png
+WARNING 2024-10-28 16:56:00,328 runserver [33mHTTP GET /images/grit_logo_pdf.png 404 [0.81, 127.0.0.1:33422][0m
+WARNING 2024-10-28 16:56:00,582 log Not Found: /images/nagaland_samagra_logo.png
+WARNING 2024-10-28 16:56:00,584 runserver [33mHTTP GET /images/nagaland_samagra_logo.png 404 [1.07, 127.0.0.1:33420][0m
+WARNING 2024-10-28 16:56:00,750 log Not Found: /images/twitter_logo.png
+WARNING 2024-10-28 16:56:00,753 runserver [33mHTTP GET /images/twitter_logo.png 404 [1.04, 127.0.0.1:33450][0m
+WARNING 2024-10-28 16:56:00,768 log Not Found: /images/star.svg
+WARNING 2024-10-28 16:56:00,769 log Not Found: /images/line_story.png
+WARNING 2024-10-28 16:56:00,769 log Not Found: /images/pdf_page1_logo_fmt1.png
+WARNING 2024-10-28 16:56:00,782 runserver [33mHTTP GET /images/star.svg 404 [1.08, 127.0.0.1:33436][0m
+WARNING 2024-10-28 16:56:00,787 runserver [33mHTTP GET /images/line_story.png 404 [1.23, 127.0.0.1:33434][0m
+WARNING 2024-10-28 16:56:00,795 runserver [33mHTTP GET /images/pdf_page1_logo_fmt1.png 404 [0.70, 127.0.0.1:33460][0m
+WARNING 2024-10-28 16:56:00,968 log Not Found: /images/nagaland_samagra_logo.png
+WARNING 2024-10-28 16:56:00,979 runserver [33mHTTP GET /images/nagaland_samagra_logo.png 404 [0.37, 127.0.0.1:33466][0m
+WARNING 2024-10-28 16:56:01,802 log Not Found: /images/nagaland_govt_logo.png
+WARNING 2024-10-28 16:56:01,825 runserver [33mHTTP GET /images/nagaland_govt_logo.png 404 [1.04, 127.0.0.1:33480][0m
+WARNING 2024-10-28 16:56:01,860 log Not Found: /images/grit_logo_pdf.png
+WARNING 2024-10-28 16:56:01,884 log Not Found: /images/pdf_page1_logo_fmt1.png
+WARNING 2024-10-28 16:56:01,912 log Not Found: /images/shikshalokam_logo_pdf.png
+WARNING 2024-10-28 16:56:01,913 log Not Found: /images/line_story.png
+WARNING 2024-10-28 16:56:01,922 runserver [33mHTTP GET /images/grit_logo_pdf.png 404 [1.06, 127.0.0.1:33500][0m
+WARNING 2024-10-28 16:56:01,928 runserver [33mHTTP GET /images/pdf_page1_logo_fmt1.png 404 [1.08, 127.0.0.1:33486][0m
+WARNING 2024-10-28 16:56:01,929 log Not Found: /images/nagaland_samagra_logo.png
+WARNING 2024-10-28 16:56:01,931 runserver [33mHTTP GET /images/shikshalokam_logo_pdf.png 404 [1.07, 127.0.0.1:33496][0m
+WARNING 2024-10-28 16:56:01,934 runserver [33mHTTP GET /images/line_story.png 404 [0.80, 127.0.0.1:33524][0m
+WARNING 2024-10-28 16:56:01,966 runserver [33mHTTP GET /images/nagaland_samagra_logo.png 404 [0.86, 127.0.0.1:33512][0m
+WARNING 2024-10-28 16:56:02,777 log Not Found: /images/twitter_logo.png
+WARNING 2024-10-28 16:56:02,778 log Not Found: /images/star.svg
+WARNING 2024-10-28 16:56:02,778 log Not Found: /images/pdf_page1_logo_fmt1.png
+WARNING 2024-10-28 16:56:02,780 runserver [33mHTTP GET /images/twitter_logo.png 404 [0.77, 127.0.0.1:52056][0m
+WARNING 2024-10-28 16:56:02,786 log Not Found: /images/nagaland_samagra_logo.png
+WARNING 2024-10-28 16:56:02,841 runserver [33mHTTP GET /images/star.svg 404 [0.94, 127.0.0.1:52046][0m
+WARNING 2024-10-28 16:56:02,850 runserver [33mHTTP GET /images/pdf_page1_logo_fmt1.png 404 [0.81, 127.0.0.1:52068][0m
+WARNING 2024-10-28 16:56:02,858 runserver [33mHTTP GET /images/nagaland_samagra_logo.png 404 [0.82, 127.0.0.1:52082][0m
+WARNING 2024-10-28 16:56:02,858 log Not Found: /images/shikshalokam_logo_pdf.png
+WARNING 2024-10-28 16:56:02,858 log Not Found: /images/nagaland_govt_logo.png
+WARNING 2024-10-28 16:56:02,891 runserver [33mHTTP GET /images/shikshalokam_logo_pdf.png 404 [0.80, 127.0.0.1:52084][0m
+WARNING 2024-10-28 16:56:02,893 runserver [33mHTTP GET /images/nagaland_govt_logo.png 404 [0.85, 127.0.0.1:52078][0m
+WARNING 2024-10-28 16:56:03,580 log Not Found: /images/nagaland_govt_logo.png
+WARNING 2024-10-28 16:56:03,587 runserver [33mHTTP GET /images/nagaland_govt_logo.png 404 [0.62, 127.0.0.1:52138][0m
+WARNING 2024-10-28 16:56:03,805 log Not Found: /images/twitter_logo.png
+WARNING 2024-10-28 16:56:03,813 runserver [33mHTTP GET /images/twitter_logo.png 404 [0.86, 127.0.0.1:52112][0m
+WARNING 2024-10-28 16:56:03,935 log Not Found: /images/pdf_page1_logo_fmt1.png
+WARNING 2024-10-28 16:56:03,937 runserver [33mHTTP GET /images/pdf_page1_logo_fmt1.png 404 [0.98, 127.0.0.1:52122][0m
+WARNING 2024-10-28 16:56:03,939 log Not Found: /images/grit_logo_pdf.png
+WARNING 2024-10-28 16:56:03,957 runserver [33mHTTP GET /images/grit_logo_pdf.png 404 [1.06, 127.0.0.1:52092][0m
+WARNING 2024-10-28 16:56:03,995 log Not Found: /images/line_story.png
+WARNING 2024-10-28 16:56:04,000 runserver [33mHTTP GET /images/line_story.png 404 [1.08, 127.0.0.1:52096][0m
+WARNING 2024-10-28 16:56:04,195 log Not Found: /images/star.svg
+WARNING 2024-10-28 16:56:04,197 log Not Found: /images/nagaland_samagra_logo.png
+WARNING 2024-10-28 16:56:04,198 runserver [33mHTTP GET /images/star.svg 404 [1.26, 127.0.0.1:52102][0m
+WARNING 2024-10-28 16:56:04,203 runserver [33mHTTP GET /images/nagaland_samagra_logo.png 404 [0.59, 127.0.0.1:52152][0m
+WARNING 2024-10-28 16:56:04,522 log Not Found: /images/shikshalokam_logo_pdf.png
+WARNING 2024-10-28 16:56:04,525 runserver [33mHTTP GET /images/shikshalokam_logo_pdf.png 404 [0.69, 127.0.0.1:52154][0m
+WARNING 2024-10-28 16:56:04,657 log Not Found: /images/line_story.png
+WARNING 2024-10-28 16:56:04,659 runserver [33mHTTP GET /images/line_story.png 404 [0.61, 127.0.0.1:52174][0m
+WARNING 2024-10-28 16:56:04,753 log Not Found: /images/grit_logo_pdf.png
+WARNING 2024-10-28 16:56:04,754 runserver [33mHTTP GET /images/grit_logo_pdf.png 404 [0.72, 127.0.0.1:52166][0m
+WARNING 2024-10-28 16:56:04,801 log Not Found: /images/twitter_logo.png
+WARNING 2024-10-28 16:56:04,802 runserver [33mHTTP GET /images/twitter_logo.png 404 [0.56, 127.0.0.1:52196][0m
+WARNING 2024-10-28 16:56:04,839 log Not Found: /images/star.svg
+WARNING 2024-10-28 16:56:04,840 runserver [33mHTTP GET /images/star.svg 404 [0.61, 127.0.0.1:52180][0m
+WARNING 2024-10-28 16:56:04,954 log Not Found: /images/star.svg
+WARNING 2024-10-28 16:56:04,954 runserver [33mHTTP GET /images/star.svg 404 [0.07, 127.0.0.1:52208][0m
+WARNING 2024-10-28 17:39:37,850 log Not Found: /favicon-32x32.png
+WARNING 2024-10-28 17:39:37,862 runserver [33mHTTP GET /favicon-32x32.png 404 [0.14, 127.0.0.1:52314][0m
+WARNING 2024-10-28 17:39:37,987 log Not Found: /favicon-16x16.png
+WARNING 2024-10-28 17:39:37,987 runserver [33mHTTP GET /favicon-16x16.png 404 [0.11, 127.0.0.1:52322][0m
+WARNING 2024-10-28 17:42:26,070 log Not Found: /favicon-32x32.png
+WARNING 2024-10-28 17:42:26,071 runserver [33mHTTP GET /favicon-32x32.png 404 [0.20, 127.0.0.1:39220][0m
+WARNING 2024-10-28 17:42:26,279 log Not Found: /favicon-16x16.png
+WARNING 2024-10-28 17:42:26,282 runserver [33mHTTP GET /favicon-16x16.png 404 [0.17, 127.0.0.1:39222][0m

@@ -1,0 +1,132 @@
+import json
+import secrets
+import traceback
+from datetime import datetime
+from chatbot.models.geo_models import ProfileAddress
+from shikshalokam.models import Project
+
+
+def get_company_context(profile, company):
+    address = ProfileAddress.objects.filter(profile=profile)
+    if len(address) > 0 and company.slug == 'shikshalokam':
+        return """
+        Use following personal information as well:
+        Name of Author: {},
+        School Name: {},
+        State: {},
+        District: {},
+        Block: {},
+        Designation of Author: {} 
+        """.format(profile.first_name, profile.org_associated, address[0].state, address[0].district,
+                   address[0].block, profile.designation)
+    elif len(address) > 0 and company.slug == 'shikshalokamstaging':
+        return """
+        Use following personal information as well:
+        Name of Author: {},
+        State: {},
+        District: {},
+        Block: {},
+        """.format(profile.first_name, address[0].state, address[0].district, address[0].block)
+    else:
+        return ''
+
+
+def get_company_end_context(slug):
+
+    if slug == 'shikshalokamstaging':
+        return """
+            Make sure to use SIMPLE AT A HIGH SCHOOL LEVEL ENGLISH.
+            OUTPUT SHOULD BE A VALID JSON FORMAT WITHOUT ANY EXTRA INFORMATION OUTSIDE THE JSON.:
+            {
+                "title": "Title of the story",
+                "content": "Content of the story. Make sure content generated is of 600 words.",
+                "tweet": "Tweet for the story in less than 200 characters with minimum 5 hashtags",
+                "objective": "Objective of the micro improvement",
+                "action_steps": "5 Action steps taken by the user to implement the micro improvement",
+                "impact": "Impact created from this micro improvement",
+                "micro_improvement": "Why is this micro-improvement important"
+                "resource_name": "Learning resources name that you want the stakeholders to see while doing the project"
+                "resource_link": "Learning resources link that you want the stakeholders to see while doing the project"
+                "duration": "Total time span of the project, from start to end"
+                "keywords": "Keywords improve search ability, tag this Improvement project with appropriate keywords"
+                "status": "The current state of the project, such as 'STARTED,' 'inPROGRESS,' or 'SUBMITTED'."
+                "project_start_date": "Starting date of the project if any."
+                "project_end_date": "Completion date of project if any."
+            }
+            
+            Ensure all JSON fields are properly formatted. If certain information is not explicitly provided in 
+            the conversation, use reasonable inferences or leave the field empty.
+            
+            Respond only with valid JSON. Do not write an introduction or summary.
+        """
+    else:
+        return """
+            OUTPUT JSON FORMAT:
+            {
+                "title": "Title of the story",
+                "content": "Content of the story in 600 words",
+                "tweet": "Tweet for the story in less than 200 characters with minimum 5 hashtags",
+                "objective": "Objective of the micro improvement",
+                "action_steps": "5 Action steps taken by the user to implement the micro improvement",
+                "impact": "Impact created from this micro improvement",
+                "micro_improvement": "Why is this micro-improvement important"
+            }
+            Respond only with valid JSON. Do not write an introduction or summary.
+        """
+
+
+def create_project(response_json, story, profile):
+    try:
+        title = response_json.get('title', '')
+        objective = response_json.get('objective', '')
+        resource_name = response_json.get('resource_name', '')
+        resource_link = response_json.get('resource_link', '')
+        duration = response_json.get('duration', '')
+        status = response_json.get('status', '')
+        keywords = response_json.get('keywords', '')
+        project_start_date = parse_datetime(response_json.get('project_start_date', ''))
+        project_end_date = parse_datetime(response_json.get('project_end_date', ''))
+
+        random_hex = generate_random_hex()
+        project = Project(
+            story=story,
+            author=profile,
+            title=title,
+            objective=objective,
+            duration=duration,
+            project_status=status,
+            project_id=random_hex,
+            keywords=keywords,
+            resource_name=resource_name,
+            resource_link=resource_link,
+            project_start_date=project_start_date,
+            project_end_date=project_end_date,
+        )
+        project.save()
+        return story.id, story.content
+
+    except Exception as e:
+        traceback.print_exc()
+        return "", ""
+
+
+def generate_random_hex(length=16):
+    return secrets.token_hex(length)
+
+
+def parse_datetime(date_str):
+    try:
+        if date_str:
+            return datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        pass
+    return None
+
+def validate_json(response_content):
+    if isinstance(response_content, dict):
+        return response_content
+    try:
+        return json.loads(response_content)
+    except json.JSONDecodeError:
+        print('Invalid JSON response:', response_content)
+        return response_content

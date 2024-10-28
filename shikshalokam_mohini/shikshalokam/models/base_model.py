@@ -1,0 +1,159 @@
+import os
+
+from django.contrib.auth.models import User
+from django.db import models
+from django_s3_storage.storage import S3Storage
+from simple_history.models import HistoricalRecords
+
+from chatbot.models import Profile, Story
+from shikshalokam.models.enums import ProjectStatus, TaskMandatoryStatus
+
+storage = S3Storage(aws_s3_bucket_name='static-media.gritworks.ai')
+S3_BASE_URL = os.getenv('S3_MEDIA_URL')
+
+
+class Category(models.Model):
+    name = models.CharField(max_length=1000, null=True, blank=True)
+    category_id = models.CharField(max_length=255, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        db_table = 'shikshalokam"."category'
+
+        indexes = [
+            models.Index(fields=['name']),
+            models.Index(fields=['category_id']),
+            models.Index(fields=['created_at']),
+        ]
+
+
+class ProjectTemplate(models.Model):
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, related_name="project_template",
+                                 null=True, blank=True)
+    title = models.CharField(max_length=1000, null=True, blank=True)
+    template_id = models.CharField(max_length=255, null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        db_table = 'shikshalokam"."project_template'
+        indexes = [
+            models.Index(fields=['title']),
+            models.Index(fields=['template_id']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['category']),
+        ]
+
+
+class Project(models.Model):
+    story = models.ForeignKey(Story, related_name='project', on_delete=models.SET_NULL, null=True, blank=True)
+    project_template = models.ForeignKey(ProjectTemplate, on_delete=models.CASCADE, related_name="project",
+                                         null=True, blank=True)
+    author = models.ForeignKey(Profile, on_delete=models.CASCADE, null=False, blank=False, related_name="project")
+
+    title = models.CharField(max_length=1000, null=True, blank=True)
+    project_id = models.CharField(max_length=255, unique=True)
+    recommended_for = models.CharField(max_length=400, null=True, blank=True)
+    keywords = models.TextField(null=True, blank=True)
+    objective = models.TextField(null=True, blank=True)
+    duration = models.CharField(max_length=1000, null=True, blank=True)
+    project_status = models.CharField(max_length=100, choices=ProjectStatus.choices, null=True, blank=True)
+    other_params = models.JSONField(null=True, blank=True)
+
+    resource_name = models.CharField(max_length=1000, null=True, blank=True)
+    resource_link = models.CharField(max_length=2000, null=True, blank=True)
+
+    project_start_date = models.DateTimeField(null=True, blank=True)
+    project_end_date = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    history = HistoricalRecords()
+
+    def __str__(self):
+        return self.title if self.title else "Unnamed Project"
+
+    class Meta:
+        db_table = 'shikshalokam"."project'
+        indexes = [
+            models.Index(fields=['title']),
+            models.Index(fields=['project_id']),
+            models.Index(fields=['recommended_for']),
+            models.Index(fields=['keywords']),
+            models.Index(fields=['objective']),
+            models.Index(fields=['duration']),
+            models.Index(fields=['project_status']),
+            models.Index(fields=['resource_name']),
+            models.Index(fields=['project_start_date']),
+            models.Index(fields=['project_end_date']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['story']),
+            models.Index(fields=['project_template']),
+            models.Index(fields=['author']),
+        ]
+
+
+class Task(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='task')
+    parent_task_id = models.CharField(max_length=255, null=True, blank=True)
+    task_id = models.CharField(max_length=255, null=True, blank=True)
+    task_name = models.CharField(max_length=1000, null=True, blank=True)
+    mandatory_task = models.CharField(max_length=100, choices=TaskMandatoryStatus.choices, null=True, blank=True)
+    observation_name = models.CharField(max_length=255, null=True, blank=True)
+    number_of_submission_observation = models.IntegerField(null=True, blank=True)
+    other_params = models.JSONField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        db_table = 'shikshalokam"."task'
+        indexes = [
+            models.Index(fields=['parent_task_id']),
+            models.Index(fields=['task_id']),
+            models.Index(fields=['task_name']),
+            models.Index(fields=['mandatory_task']),
+            models.Index(fields=['observation_name']),
+            models.Index(fields=['number_of_submission_observation']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['project']),
+        ]
+
+
+class Evidence(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.SET_NULL, related_name='evidence', null=True, blank=True)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='evidence', null=True, blank=True)
+
+    remark = models.CharField(max_length=1000, null=True, blank=True)
+    evidence_link = models.CharField(max_length=2000, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        db_table = 'shikshalokam"."evidence'
+        indexes = [
+            models.Index(fields=['remark']),
+            models.Index(fields=['evidence_link']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['task']),
+            models.Index(fields=['project']),
+        ]
