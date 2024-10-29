@@ -3,7 +3,6 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django_countries.fields import CountryField
-from django_s3_storage.storage import S3Storage
 from django.core.validators import MinValueValidator
 from django.contrib.auth.hashers import make_password
 from simple_history.models import HistoricalRecords
@@ -12,8 +11,6 @@ from chatbot.models.enums import VoiceProviderChoices, EntityStatus, \
     LanguageChoices, CompanyBotTypeChoices, CompanyBotDynamicContextType, CompanyChatSourceChoices, \
     ChatStageChoices
 
-storage = S3Storage(aws_s3_bucket_name='root-media-uploads')
-company_storage = S3Storage(aws_s3_bucket_name='static-media.gritworks.ai')
 
 S3_BASE_URL = os.getenv('S3_BASE_URL')
 
@@ -46,12 +43,6 @@ class Company(models.Model):
     name = models.CharField(max_length=100)
     slug = models.CharField(max_length=100, unique=True)
     status = models.CharField(max_length=20, choices=EntityStatus.choices)
-    logo_small = models.FileField(storage=company_storage, upload_to=get_file_upload_path, max_length=1000,
-                                  null=True, blank=True)
-    logo_medium = models.FileField(storage=company_storage, upload_to=get_file_upload_path, max_length=1000,
-                                   null=True, blank=True)
-    logo_large = models.FileField(storage=company_storage, upload_to=get_file_upload_path, max_length=1000,
-                                  null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -81,7 +72,6 @@ class CompanyBot(models.Model):
     top_k = models.IntegerField(default=2, validators=[MinValueValidator(1)])
     llm_model = models.CharField(max_length=100, choices=LLMModel.choices, default=LLMModel.GPT3_5)
     filter_score = models.FloatField(default=0.8)
-    image = models.FileField(null=True, blank=True, storage=storage, upload_to=get_file_upload_path)
     end_context = models.TextField(null=True, blank=True)
     introductory_message = models.CharField(max_length=1000, null=True, blank=True)
     abrupt_introductory_message = models.CharField(max_length=1000, null=True, blank=True)
