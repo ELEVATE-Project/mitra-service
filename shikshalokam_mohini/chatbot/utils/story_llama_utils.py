@@ -39,7 +39,6 @@ def get_company_end_context(slug):
             OUTPUT SHOULD BE A VALID JSON FORMAT WITHOUT ANY EXTRA INFORMATION OUTSIDE THE JSON.:
             {
                 "title": "Title of the story",
-                "content": "Content of the story. Make sure content generated is of 600 words.",
                 "tweet": "Tweet for the story in less than 200 characters with minimum 5 hashtags",
                 "objective": "Objective of the micro improvement",
                 "action_steps": "5 Action steps taken by the user to implement the micro improvement",
@@ -73,6 +72,21 @@ def get_company_end_context(slug):
             }
             Respond only with valid JSON. Do not write an introduction or summary.
         """
+
+
+def get_company_content_prompt():
+    return """
+        Make sure to use SIMPLE AT A HIGH SCHOOL LEVEL ENGLISH.
+        OUTPUT SHOULD BE A VALID JSON FORMAT WITHOUT ANY EXTRA INFORMATION OUTSIDE THE JSON.:
+        {
+            "story": "Content of the story. Make sure content generated of 600 words. This filed needs to be the story of user experience."
+        }
+
+        Ensure all JSON fields are properly formatted. If certain information is not explicitly provided in 
+        the conversation, use reasonable inferences or leave the field empty.
+
+        Respond only with valid JSON CONTAINING "story" FIELD. Do not write an introduction or summary.
+    """
 
 
 def create_project(response_json, story, profile):

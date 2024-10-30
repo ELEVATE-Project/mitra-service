@@ -8,8 +8,10 @@ from chatbot.models import (Profile, CompanyChat, CompanyBot, StoryLanguageChoic
 from chatbot.models.story_models import Story
 from chatbot.utils.story_llama_utils import (get_company_end_context, create_project,
                                                                  get_company_context)
-
 from chatbot.llm_models.llm_script import handle_bedrock_model
+from chatbot.llm_models.llm_script import handle_bedrock_invoke_model
+
+from chatbot.utils.story_llama_utils import get_company_content_prompt
 
 DEFAULT_PROMPT = """
             Based on the detailed interview you've conducted with a field staff member, 
@@ -43,15 +45,17 @@ def create_story_object(profile_id, session, model=None):
             end_context = DEFAULT_PROMPT
         end_context += company_context
         extra_context = get_company_end_context(company_slug)
+        content_prompt = get_company_content_prompt()
         end_context += extra_context
+        # end_context += content_prompt
         print('-------------------------------')
         print(end_context)
-        messages = []
-        prompt_to_use = [
-            {
-                'text':  end_context
-            }
-        ]
+        messages = [{
+            'role': 'system',
+            'content': end_context
+        }]
+        # messages=[]
+        # prompt_to_use = "<s>[INST] <<SYS>> "+ end_context + " <</SYS>>"
         for chat in company_chats:
             if chat.receiver == ai_user:
                 user_message = chat.message
@@ -67,9 +71,16 @@ def create_story_object(profile_id, session, model=None):
                     "content": [{'text': chat.message}]
                 })
 
-        response_json = handle_bedrock_model(
-            system_prompt = prompt_to_use, messages = messages, max_token = 2048,
-            temperature = 0.7, top_p = 0.9
+        # messages = prompt_to_use + json.dumps(messages) + " [/INST]"
+
+        # response_json = handle_bedrock_model(
+        #     system_prompt = prompt_to_use, messages = messages, max_token = 2048,
+        #     temperature = 0.7, top_p = 0.9
+        # )
+
+        response_json = handle_bedrock_invoke_model(
+            messages = messages, max_token = 2048,
+            temperature = 0.0, top_p = 0.0
         )
 
         title = response_json.get('title', '')
