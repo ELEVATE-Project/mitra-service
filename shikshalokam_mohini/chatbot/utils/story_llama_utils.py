@@ -43,14 +43,15 @@ def get_company_end_context(slug):
                 "objective": "Objective of the micro improvement",
                 "action_steps": "5 Action steps taken by the user to implement the micro improvement",
                 "impact": "Impact created from this micro improvement",
-                "micro_improvement": "Why is this micro-improvement important"
-                "resource_name": "Learning resources name that you want the stakeholders to see while doing the project"
-                "resource_link": "Learning resources link that you want the stakeholders to see while doing the project"
-                "duration": "Total time span of the project, from start to end"
-                "keywords": "Keywords improve search ability, tag this Improvement project with appropriate keywords"
-                "status": "The current state of the project, such as 'STARTED,' 'inPROGRESS,' or 'SUBMITTED'."
-                "project_start_date": "Starting date of the project if any."
-                "project_end_date": "Completion date of project if any."
+                "micro_improvement": "Why is this micro-improvement important",
+                "resource_name": "Learning resources name that you want the stakeholders to see while doing the project",
+                "resource_link": "Learning resources link that you want the stakeholders to see while doing the project",
+                "duration": "Total time span of the project, from start to end",
+                "keywords": "Keywords improve search ability, tag this Improvement project with appropriate keywords",
+                "status": "The current state of the project, such as 'STARTED,' 'inPROGRESS,' or 'SUBMITTED'.",
+                "project_start_date": "Starting date of the project if any.",
+                "project_end_date": "Completion date of project if any.",
+                "content": "Content of the story. Make sure content generated is of 600 words.",
             }
             
             Ensure all JSON fields are properly formatted. If certain information is not explicitly provided in 
@@ -82,9 +83,9 @@ def get_company_content_prompt():
             "story": "Content of the story. Make sure content generated of 600 words. This filed needs to be the story of user experience."
         }
 
-        Ensure all JSON fields are properly formatted. If certain information is not explicitly provided in 
-        the conversation, use reasonable inferences or leave the field empty.
-
+        Ensure the story is around 600 words AND NOT LESS, capturing all details provided without adding additional information.
+        Expand on each step of the journey, describing actions, emotions, challenges, and the eventual resolution in detail. 
+        Include vivid but straightforward details on each point, capturing what the protagonist saw, felt, and thought.
         Respond only with valid JSON CONTAINING "story" FIELD. Do not write an introduction or summary.
     """
 

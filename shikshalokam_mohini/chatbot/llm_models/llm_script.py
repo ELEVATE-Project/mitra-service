@@ -1,5 +1,3 @@
-import re
-
 import requests
 import json
 import os
@@ -173,7 +171,7 @@ def handle_bedrock_model(
         if inference_config:
             request_payload['inferenceConfig'] = inference_config
         if tools:
-            request_payload['toolConfig'] = {'tools': tools}
+            request_payload['toolConfig'] = tools.get('toolConfig')
         response = bedrock_runtime.converse(**request_payload)
 
         print("Response:", response)
