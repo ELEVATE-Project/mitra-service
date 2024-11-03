@@ -75,12 +75,8 @@ def create_story_object(profile_id, session, model=None):
             system_prompt = prompt_to_use, messages = messages, tools=tool_to_use,
             temperature=0.0, max_token=2048
         )
-
-        # response_json = handle_bedrock_invoke_model(
-        #     messages = messages, max_token = 2048,
-        #     temperature = 0.0, top_p = 0.0
-        # )
-        response_json = json.loads(response_json)
+        if isinstance(response_json, str):
+            response_json = json.loads(response_json)
         print("response_json: ", response_json)
         print("TYPE response_json: ", type(response_json))
 

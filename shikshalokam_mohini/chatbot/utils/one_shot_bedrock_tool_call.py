@@ -66,8 +66,10 @@ def get_one_shot_bedrock_tool_call_response(system_prompt, messages, company_bot
 
     print("Response: ", response)
     is_function_call = False
-    if 'get_state_information' in response:
-        is_function_call = True
+    if isinstance(response, dict):
+        tool_use_id = response.get('toolUseId', None)
+        if tool_use_id:
+            is_function_call = True
     print("is_function_call: ", is_function_call)
 
     if is_function_call and remaining_stages:

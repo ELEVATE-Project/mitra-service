@@ -180,7 +180,10 @@ def handle_bedrock_model(
         content_tool = content.get('toolUse')
         if content_tool:
             print("content_tool: ", content_tool)
-            final_output = content_tool.get('name')
+            if isinstance(content_tool, str):
+                final_output = json.loads(content_tool)
+            else:
+                final_output = content_tool
         elif not tools:
             content_text = content.get('text')
             print("content_text: ", content_text)

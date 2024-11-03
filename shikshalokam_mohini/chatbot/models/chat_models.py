@@ -37,7 +37,8 @@ class ChatSession(models.Model):
 
         json_output = self._handle_bedrock_model(prompt=prompt, messages=messages, tools=tool_to_use)
         if json_output:
-            json_output = json.loads(json_output)
+            if isinstance(json_output, str):
+                json_output = json.loads(json_output)
             output_title = json_output.get('title')
         else:
             output_title = 'Project'
@@ -46,15 +47,27 @@ class ChatSession(models.Model):
         self.save()
 
     def _get_prompt(self):
-        prompt = (
-            "Given below is the conversation between the user and the assistant. "
-            "Please provide the title of the conversation in 3-4 words. "
-            "The response must only be in JSON format, without any additional text. "
-            "Return the output in the following JSON format: "
-            "{"
-            "\"title\": \"Title of the conversation\""
-            "}"
-        )
+        prompt = """
+        Given below is the conversation between the user and the assistant.
+        Please provide the title of the conversation in 3-4 words.
+        The response must only be in JSON format, without any additional text.
+        Return the output in the following JSON format:
+        {
+          "title": "Title of the conversation"
+        }
+
+        **Example:**
+
+        **Conversation:**
+        User: "How do I bake a cake?"
+        Assistant: "To bake a cake, you need to follow these steps..."
+
+        **Expected Output:**
+        {
+          "title": "Baking a cake"
+        }
+        """
+
         return [{'text': prompt}]
 
     def _get_bedrock_format_message(self, chats):
@@ -87,7 +100,8 @@ class ChatSession(models.Model):
 
         json_output = handle_bedrock_model(
             system_prompt=prompt, messages=messages, max_token=2048,
-            temperature=0.0, tools=tools
+            temperature=0.0
+            # , tools=tools
         )
 
         return json_output

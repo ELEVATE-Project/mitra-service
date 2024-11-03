@@ -1,3 +1,5 @@
+import json
+
 from chatbot.llm_models.llm_script import handle_bedrock_model
 from chatbot.pompts.one_shot_prompt import get_remaining_stage_prompt
 
@@ -19,7 +21,6 @@ def get_remaining_strands(messages):
                                         "type": "string",
                                         "description": (
                                             "Summary of the conversation. "
-                                            "Output should be in JSON format with array of remaining state."
                                         )
                                     }
                                 },
@@ -38,5 +39,12 @@ def get_remaining_strands(messages):
         system_prompt=one_shot_prompt, messages=messages
         # , tools=tool
     )
+
+    if isinstance(response, dict):
+        tool_use_id = response.get('toolUseId', None)
+        if tool_use_id:
+            response = response.get('input').get('conversation_summary')
+            if isinstance(response, str):
+                response = json.loads(response)
 
     return response

@@ -58,6 +58,7 @@ def get_company_end_context(slug):
             the conversation, use reasonable inferences or leave the field empty.
             
             Respond only with valid JSON. Do not write an introduction or summary.
+            
         """
     else:
         return """
