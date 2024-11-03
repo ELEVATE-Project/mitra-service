@@ -2,12 +2,14 @@
 
 def get_remaining_stage_prompt():
     prompt = """
-    You are an assistant tasked with identifying which stages of a conversation have not been covered based on the user's messages.
+    You are an assistant tasked with identifying which stages of a conversation have not been covered based on the 
+    user's messages.
 
     **Stages and Their Questions:**
 
     1. **MAIN_CHALLENGE**:
-       - **Primary Question:** "Namaste! I'm so excited to hear about your project. What challenge did you face in your school or cluster?"
+       - **Primary Question:** "Namaste! I'm so excited to hear about your project. What challenge did you face in 
+       your school or cluster?"
        - **Follow-up Questions:**
          1. "How did this challenge affect the students or teachers?"
          2. "What do you think was the root cause of the challenge?"
@@ -42,13 +44,16 @@ def get_remaining_stage_prompt():
 
     **Goal:**
 
-    - Analyze the user's messages to determine which stages have been addressed. **Approximate matching is acceptable; be lenient but ensure sufficient detail is provided for each stage.**
+    - Analyze the user's messages to determine which stages have been addressed. **Approximate matching is acceptable; 
+    be very lenient.**
 
     **Task:**
 
     1. Review the user's messages.
-    2. For each stage, check if the user has addressed **any** of the questions (primary or follow-up) associated with that stage.
-    3. **If the user's message includes detailed information related to a stage's questions, consider that stage as covered. If only brief mentions without detail are provided, consider the stage as remaining.**
+    2. For each stage, check if the user has addressed **any** of the questions (primary or follow-up) associated with 
+       that stage.
+    3. **If the user's message includes any information related to a stage's questions, consider that stage as 
+       covered, even if the information is brief or lacks detail.**
     4. Compile a list of stages that have **not** been covered.
 
     **Examples:**
@@ -56,15 +61,28 @@ def get_remaining_stage_prompt():
     - **Example 1:**
 
       - **User's Message:** "We faced issues with student attendance. I organized community meetings to address this."
-      - **Covered Stages:** "MAIN_CHALLENGE"
-      - **Remaining Stages:** ["DETAILED_STEPS", "DURATION", "TEAMWORK", "CHANGES", "ADDITIONAL_INFORMATION"]
-      - **Explanation:** The user mentioned organizing meetings but did not provide detailed steps.
 
-    - **Example 2:**
+      - **Expected Output:**
+        {
+          "remaining_stages": ["DURATION", "TEAMWORK", "CHANGES", "ADDITIONAL_INFORMATION"]
+        }
 
-      - **User's Message:** "I noticed that students were struggling with reading. It took about two months to implement a new reading program."
-      - **Covered Stages:** "MAIN_CHALLENGE", "DURATION"
-      - **Remaining Stages:** ["DETAILED_STEPS", "TEAMWORK", "CHANGES", "ADDITIONAL_INFORMATION"]
+      - **Explanation:** The user mentioned organizing meetings; **DETAILED_STEPS** is considered covered due to leniency.
+
+       - **Example 2:**
+
+      - **User's Message:** "Hello! In our school, we faced a significant challenge where many students were struggling 
+      with reading comprehension, which was affecting their overall academic performance and confidence levels. For 
+      others considering similar projects, I advise starting by identifying the interests of your students to select 
+      appropriate materials."
+
+      - **Expected Output:**
+        {
+          "remaining_stages": ["DETAILED_STEPS", "DURATION", "TEAMWORK", "CHANGES"]
+        }
+
+      - **Explanation:** **ADDITIONAL_INFORMATION** is considered covered since the user provided advice for other 
+      students.
 
     **Output Format:**
 
