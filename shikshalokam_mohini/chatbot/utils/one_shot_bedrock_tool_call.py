@@ -59,7 +59,8 @@ def get_one_shot_bedrock_tool_call_response(system_prompt, messages, company_bot
         return bot_question
 
     response = handle_bedrock_model(
-        system_prompt=system_prompt, messages=messages, tools=tool
+        system_prompt=system_prompt, messages=messages
+        # , tools=tool
     )
     print("response_body bedrock: ", response)
 
