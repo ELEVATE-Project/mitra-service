@@ -93,14 +93,19 @@ def login(request):
         if 'email' in request.data and 'password' in request.data:
             email = request.data['email']
             password = request.data['password']
+            print("Login User Email: ", email)
+            print("Login User Password: ", password)
 
             host = request.get_host()
             subdomain = host.split('.')[0]
-            if subdomain in ['demo', 'demous', 'localhost:9000', 'interview', 'voicedemo']:
+            if subdomain in ['demo', 'demous', 'localhost:9000', 'interview', 'voicedemo', 'mohini']:
+                print("In here 1")
                 p = Profile.objects.filter(email=email)
             elif subdomain in ['prospect']:
+                print("In here 2")
                 p = Profile.objects.filter(email=email, profile_type=ProfileType.MODERATOR)
             else:
+                print("In here 3")
                 p = Profile.objects.filter(email=email, company__slug=subdomain)
             if len(p) > 0:
                 p = p[0]
