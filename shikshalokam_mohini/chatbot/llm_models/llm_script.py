@@ -142,6 +142,8 @@ def handle_bedrock_model(
     else:
         model_id = 'meta.llama3-1-8b-instruct-v1:0'
 
+        # 'meta.llama3-1-70b-instruct-v1:0'
+
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
@@ -198,8 +200,7 @@ def handle_bedrock_model(
                     print(f"Error decoding JSON: {e}")
                     return None
             else:
-                print("No JSON found in content")
-                return None
+                return content_text
         else:
             content_text = content.get('text')
             print("content_text: ", content_text)
