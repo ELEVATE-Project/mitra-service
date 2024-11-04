@@ -29,8 +29,8 @@ def create_story_object(profile_id, session, model=None):
         company_slug = company.slug
         company_context = get_company_context(profile, company)
         company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
-        if len(company_chats) <= 10:
-            return "", ""
+        # if len(company_chats) <= 10:
+        #     return "", ""
         ai_user = Profile.objects.get(id=1)
         company_bot = CompanyBot.objects.filter(company=profile.company)
         if company_bot.count() > 0:
