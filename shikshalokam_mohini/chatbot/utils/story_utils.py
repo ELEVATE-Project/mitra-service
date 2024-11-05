@@ -75,6 +75,9 @@ def create_story_object(profile_id, session, model=None):
             system_prompt = prompt_to_use, messages = messages, tools=tool_to_use,
             temperature=0.0, max_token=2048
         )
+        response_json = response_json.replace('\n', '').replace('\t', '').replace(
+            '\r', '').replace('\\n', '').replace('\\t', '').replace('\\r', '')
+        print("\nBEFORE LOADS: ", response_json)
         if isinstance(response_json, str):
             response_json = json.loads(response_json)
         print("response_json: ", response_json)
