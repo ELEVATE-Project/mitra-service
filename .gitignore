@@ -1,3 +1,4 @@
 /shikshalokam_mohini/logs/
 .env
 .idea
+shikshalokam_mohini/**/__pycache__/
