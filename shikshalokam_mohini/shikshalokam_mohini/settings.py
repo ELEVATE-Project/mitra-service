@@ -11,15 +11,10 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 import os
 import re
-import json
 from pathlib import Path
 from datetime import timedelta
 import sentry_sdk
 from dotenv import load_dotenv
-
-
-from django.core.exceptions import ImproperlyConfigured
-
 
 load_dotenv()
 
@@ -27,20 +22,6 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 
 # Define the directory for log files
 LOGGING_DIR = BASE_DIR + '/shikshalokam_mohini/logs'
-
-# def get_secret(setting, secrets=secret):
-#     """
-#     Get the secret variable or return explicit exception.
-#     :param setting: The Key of the setting
-#     :param secrets: The secret.json file
-#
-#     """
-#     try:
-#         return secrets[setting]
-#     except KeyError:
-#         error_msg = "Set the {0} environment variable".format(setting)
-#         raise ImproperlyConfigured(error_msg)
-
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -113,8 +94,6 @@ INSTALLED_APPS = [
     'import_export',
     'simple_history',
 ]
-if DEBUG:
-    INSTALLED_APPS += ['debug_toolbar']
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
