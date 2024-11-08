@@ -1,0 +1,131 @@
+from django.db import models
+from django.utils.translation import gettext_lazy as _
+
+
+class ChatStatus(models.TextChoices):
+    STARTED = 'STARTED', _('STARTED')
+    IN_PROGRESS = 'IN_PROGRESS', _('IN_PROGRESS')
+    COMPLETED = 'COMPLETED', _('COMPLETED')
+
+
+class LLMModel(models.TextChoices):
+    GPT3_5 = 'gpt-3.5-turbo', _('GPT3.5')
+    GPT3_5_16K = 'gpt-3.5-turbo-16k', _('GPT3.5-16k')
+    GPT4 = 'gpt-4', _('GPT4')
+    GPT4_128K = 'gpt-4-1106-preview', _('GPT4-128k')
+    GPT4_TURBO = 'gpt-4-turbo', _('GPT4_TURBO')
+    GPT3_5_TURBO_0125 = 'gpt-3.5-turbo-0125', _('GPT3_5_TURBO_0125')
+    LLAMA_3_8B_8192 = 'llama3-8b-8192', _('LLAMA_3_8B_8192')
+    LLAMA_3_70B_8192 = 'llama3-70b-8192', _('LLAMA_3_70B_8192')
+    LLAMA_3_1_70B_VERSATILE = 'llama-3.1-70b-versatile', _('LLAMA_3_1_70B_VERSATILE')
+    LLAMA_3_1_8B_INSTANT = 'llama-3.1-8b-instant', _('LLAMA_3_1_8B_INSTANT')
+    MIXTRAL_8X70B_32768 = 'mixtral-8x7b-32768', _('MIXTRAL_8X70B_32768')
+    GPT4_O = 'gpt-4o', _('GPT4_O')
+    GPT4_O_MINI = 'gpt-4o-mini', _('GPT4_O_MINI')
+    LLAMA_3_1_8B_OPS = 'meta-llama/Meta-Llama-3.1-8B-Instruct', _('meta-llama/Meta-Llama-3.1-8B-Instruct')
+
+
+class EntityStatus(models.TextChoices):
+    ACTIVE = 'ACTIVE', _('ACTIVE')
+    INACTIVE = 'INACTIVE', _('INACTIVE')
+
+
+class ProfileType(models.TextChoices):
+    USER = 'USER', _('USER')
+    MODERATOR = 'MODERATOR', _('MODERATOR')
+    PROSPECT = 'PROSPECT', _('PROSPECT')
+
+
+class FeedbackChoices(models.TextChoices):
+    POSITIVE = 'POSITIVE', _('POSITIVE')
+    NEGATIVE = 'NEGATIVE', _('NEGATIVE')
+
+
+class GenderChoices(models.TextChoices):
+    MALE = 'Male', _('Male')
+    FEMALE = 'Female', _('Female')
+
+
+class LanguageChoices(models.TextChoices):
+    INDIAN_ENGLISH = 'en-IN', _('INDIAN ENGLISH')
+    INDIAN_HINDI = 'hi-IN', _('INDIAN HINDI')
+    US_ENGLISH = 'en-US', _('US ENGLISH')
+    INDIAN_KANNADA = 'kn-IN', _('INDIAN KANNADA')
+
+
+class MediaTypeChoices(models.TextChoices):
+    PDF = 'application/pdf', _('PDF')
+    TXT = 'text/plain', _('TXT')
+    CSV = 'text/csv', _('CSV')
+    JPEG = 'image/jpeg', _('JPEG')
+    PNG = 'image/png', _('PNG')
+
+
+class VoiceProviderChoices(models.TextChoices):
+    AWS = 'aws', _('AWS')
+    GCP = 'gcp', _('GCP')
+    AZURE = 'azure', _('Azure')
+    ELEVEN_LABS = 'eleven-labs', _('Eleven Labs')
+
+
+
+class ChatStageChoices(models.TextChoices):
+    WELCOME = 'Welcome_Strand', _('WELCOME_STRAND')
+    ACHIEVEMENT_ORIENTATION = 'Achievement_Orientation', _('ACHIEVEMENT_ORIENTATION')
+    COURAGE = 'Courage_Strand', _('COURAGE_STRAND')
+    CONTINUOUS_LEARNING = 'Continuous_Strand', _('CONTINUOUS_STRAND')
+    CRITICAL_THINKING = 'Critical_Thinking_Strand', _('CRITICAL_THINKING_STRAND')
+    PURPOSE = 'Purpose_Strand', _('PURPOSE_STRAND')
+    THANKYOU = 'Thank_You_Strand', _('THANK_YOU_STRAND')
+    OTHER = 'Other', _('OTHER')
+
+
+class TagChoices(models.TextChoices):
+    APPROVED = 'Approved', _('Approved')
+    PENDING = 'Pending', _('Pending')
+
+
+class StoryLanguageChoices(models.TextChoices):
+    ENGLISH = 'en', _('English')
+    HINDI = 'hi', _('Hindi')
+    KANNADA = 'kn', _('Kannada')
+
+
+class StorySourceChoices(models.TextChoices):
+    AI_GENERATED = 'AI_GENERATED', _('AI_GENERATED')
+    USER_GENERATED = 'USER_GENERATED', _('USER_GENERATED')
+    THIRD_PARTY = 'THIRD_PARTY', _('THIRD_PARTY')
+
+
+class StoryStatusChoices(models.TextChoices):
+    PENDING = 'PENDING', _('PENDING')
+    COMPLETED = 'COMPLETED', _('COMPLETED')
+
+
+class EntityTypeChoices(models.TextChoices):
+    MANDATORY = 'MANDATORY', _('MANDATORY')
+    OPTIONAL = 'OPTIONAL', _('OPTIONAL')
+
+
+class CompanyBotTypeChoices(models.TextChoices):
+    SIMPLE = 'SIMPLE', _('SIMPLE')
+    STATE_MACHINE = 'STATE_MACHINE', _('STATE_MACHINE')
+    DATABASE_SIMPLE = 'DATABASE_SIMPLE', _('DATABASE_SIMPLE')
+    INTERVIEW_STATE_MACHINE = 'INTERVIEW_STATE_MACHINE', _('INTERVIEW_STATE_MACHINE')
+
+
+class CompanyBotDynamicContextType(models.TextChoices):
+    SQL_QUERY = 'SQL_QUERY', _('SQL_QUERY')
+    PYTHON_SCRIPT = 'PYTHON_SCRIPT', _('PYTHON_SCRIPT')
+
+
+class CompanyChatSourceChoices(models.TextChoices):
+    WEB = 'WEB', _('WEB')
+    PHONE = 'PHONE', _('PHONE')
+    WHATSAPP = 'WHATSAPP', _('WHATSAPP')
+
+
+class RouteLanguageChoices(models.TextChoices):
+    ENGLISH = 'en', _('/')
+    HINDI = 'hi', _('/hindi')
+    KANNADA = 'kn', _('/kannada')
