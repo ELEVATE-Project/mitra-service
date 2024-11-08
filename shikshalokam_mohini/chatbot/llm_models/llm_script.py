@@ -142,6 +142,8 @@ def handle_bedrock_model(
     else:
         model_id = 'meta.llama3-1-8b-instruct-v1:0'
 
+        # 'meta.llama3-1-70b-instruct-v1:0'
+
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
@@ -171,7 +173,7 @@ def handle_bedrock_model(
         if inference_config:
             request_payload['inferenceConfig'] = inference_config
         if tools:
-            request_payload['toolConfig'] = {'tools': tools}
+            request_payload['toolConfig'] = tools.get('toolConfig')
         response = bedrock_runtime.converse(**request_payload)
 
         print("Response:", response)
@@ -180,7 +182,10 @@ def handle_bedrock_model(
         content_tool = content.get('toolUse')
         if content_tool:
             print("content_tool: ", content_tool)
-            final_output = content_tool.get('name')
+            if isinstance(content_tool, str):
+                final_output = json.loads(content_tool)
+            else:
+                final_output = content_tool
         elif not tools:
             content_text = content.get('text')
             print("content_text: ", content_text)
@@ -195,8 +200,7 @@ def handle_bedrock_model(
                     print(f"Error decoding JSON: {e}")
                     return None
             else:
-                print("No JSON found in content")
-                return None
+                return content_text
         else:
             content_text = content.get('text')
             print("content_text: ", content_text)
@@ -204,6 +208,62 @@ def handle_bedrock_model(
             print("final_output: ", final_output)
 
         return  final_output
+
+    except Exception as e:
+        print(f"Error processing request: {e}")
+
+
+@observe()
+def handle_bedrock_invoke_model(
+        messages=None, max_token=None, temperature=None, top_p=None,
+        model_name=None, region_name='us-west-2', tools=None
+):
+
+    if model_name:
+        model_id = model_name
+    else:
+        model_id = 'meta.llama3-1-8b-instruct-v1:0'
+        # model_id = 'meta.llama3-2-3b-instruct-v1:0'
+
+    print("USING MODEL ID: ", model_id)
+
+    print("Messages: ", messages)
+    try:
+
+        body = json.dumps({
+            "prompt": json.dumps(messages),
+            "max_gen_len": max_token,
+            "temperature": temperature,
+            "top_p": top_p
+        })
+
+        bedrock_runtime = boto3.client(
+            service_name='bedrock-runtime',
+            region_name=region_name,
+            aws_access_key_id=AWS_KEY,
+            aws_secret_access_key=AWS_SECRET_KEY
+        )
+
+        response = bedrock_runtime.invoke_model(
+            body=body,
+            modelId=model_id,
+            accept="application/json",
+            contentType="application/json"
+        )
+
+        a = response.get('body').read()
+        # print(a)
+        # print(type(a))
+        b = a.decode('utf-8')
+        response_body = json.loads(b)
+        print(response_body)
+        print(type(response_body))
+
+        result = response_body.get('generation', '')
+        print("\nResult:\n\t", result)
+
+
+        return result
 
     except Exception as e:
         print(f"Error processing request: {e}")
