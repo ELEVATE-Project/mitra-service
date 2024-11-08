@@ -20,9 +20,6 @@ load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Define the directory for log files
-LOGGING_DIR = BASE_DIR + '/shikshalokam_mohini/logs'
-
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -267,63 +264,6 @@ SIMPLE_JWT = {
 
 SESSION_COOKIE_HTTPONLY = False
 SESSION_COOKIE_SAMESITE = None
-
-
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'debug_file': {
-            'level': 'DEBUG',
-            'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': os.path.join(LOGGING_DIR, 'debug.log'),
-            'when': 'midnight',  # Rotate daily
-            'interval': 1,        # 1 day interval
-            'backupCount': 7,     # Keep 7 backup copies
-            'formatter': 'verbose',
-        },
-        'info_file': {
-            'level': 'INFO',
-            'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': os.path.join(LOGGING_DIR, 'info.log'),
-            'when': 'midnight',  # Rotate daily
-            'interval': 1,        # 1 day interval
-            'backupCount': 7,     # Keep 7 backup copies
-            'formatter': 'verbose',
-        },
-        'warning_file': {
-            'level': 'WARNING',
-            'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': os.path.join(LOGGING_DIR, 'error.log'),
-            'when': 'midnight',  # Rotate daily
-            'interval': 1,        # 1 day interval
-            'backupCount': 7,     # Keep 7 backup copies
-            'formatter': 'verbose',
-        },
-        'error_file': {
-            'level': 'ERROR',
-            'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': os.path.join(LOGGING_DIR, 'error.log'),
-            'when': 'midnight',  # Rotate daily
-            'interval': 1,        # 1 day interval
-            'backupCount': 7,     # Keep 7 backup copies
-            'formatter': 'verbose',
-        },
-    },
-    'loggers': {
-        'django': {
-            'handlers': ['debug_file', 'info_file', 'warning_file', 'error_file'],
-            'level': os.getenv('DEFAULT_LOG_LEVEL', 'INFO'),
-            'propagate': False,
-        },
-    },
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
-            'style': '{',
-        },
-    },
-}
 
 
 sentry_sdk.init(
