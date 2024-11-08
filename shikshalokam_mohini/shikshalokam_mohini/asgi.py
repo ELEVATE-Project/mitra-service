@@ -16,7 +16,7 @@ from django.core.asgi import get_asgi_application
 from chatbot import routing
 
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'shikshalokam_mohini.settings')
 
 django_asgi_app = get_asgi_application()
 
