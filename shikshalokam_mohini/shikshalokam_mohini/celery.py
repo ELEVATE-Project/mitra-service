@@ -8,6 +8,7 @@ app = Celery('shikshalokam_mohini', backend='redis://localhost', broker='redis:/
 app.config_from_object("django.conf:settings", namespace="CELERY")
 app.autodiscover_tasks([
     'chatbot.celery_tasks.shikshalokam_bedrock_tasks',
+    'chatbot.celery_tasks.one_shot_bedrock_tasks',
     'chatbot.celery_tasks.common_chat_tasks',
     'chatbot.utils.story_utils',
 ])

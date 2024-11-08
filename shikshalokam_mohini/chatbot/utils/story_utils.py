@@ -2,14 +2,13 @@ import json
 import traceback
 import random
 import string
-from chatbot.llm_models.llm_script import handle_openai_model, handle_llama_model
 from chatbot.models import (Profile, CompanyChat, CompanyBot, StoryLanguageChoices,
                                                 StoryStatusChoices, ChatSession, ChatStatus, LLMModel)
 from chatbot.models.story_models import Story
 from chatbot.utils.story_llama_utils import (get_company_end_context, create_project,
                                                                  get_company_context)
-
 from chatbot.llm_models.llm_script import handle_bedrock_model
+
 
 DEFAULT_PROMPT = """
             Based on the detailed interview you've conducted with a field staff member, 
@@ -30,8 +29,8 @@ def create_story_object(profile_id, session, model=None):
         company_slug = company.slug
         company_context = get_company_context(profile, company)
         company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
-        if len(company_chats) <= 10:
-            return "", ""
+        # if len(company_chats) <= 10:
+        #     return "", ""
         ai_user = Profile.objects.get(id=1)
         company_bot = CompanyBot.objects.filter(company=profile.company)
         if company_bot.count() > 0:
@@ -43,14 +42,17 @@ def create_story_object(profile_id, session, model=None):
             end_context = DEFAULT_PROMPT
         end_context += company_context
         extra_context = get_company_end_context(company_slug)
+        # content_prompt = get_company_content_prompt()
         end_context += extra_context
+        # end_context += content_prompt
         print('-------------------------------')
         print(end_context)
-        messages = []
+
+        messages=[]
         prompt_to_use = [
             {
-                'text':  end_context
-            }
+                'text': end_context
+            },
         ]
         for chat in company_chats:
             if chat.receiver == ai_user:
@@ -67,10 +69,19 @@ def create_story_object(profile_id, session, model=None):
                     "content": [{'text': chat.message}]
                 })
 
+        tool_to_use = get_end_story_tools()
+
         response_json = handle_bedrock_model(
-            system_prompt = prompt_to_use, messages = messages, max_token = 2048,
-            temperature = 0.7, top_p = 0.9
+            system_prompt = prompt_to_use, messages = messages, tools=tool_to_use,
+            temperature=0.0, max_token=2048
         )
+        response_json = response_json.replace('\n', '').replace('\t', '').replace(
+            '\r', '').replace('\\n', '').replace('\\t', '').replace('\\r', '')
+        print("\nBEFORE LOADS: ", response_json)
+        if isinstance(response_json, str):
+            response_json = json.loads(response_json)
+        print("response_json: ", response_json)
+        print("TYPE response_json: ", type(response_json))
 
         title = response_json.get('title', '')
         print('title: ', title)
@@ -154,3 +165,57 @@ def generate_random_string(length):
     rs = ''.join(random.choice(characters) for _ in range(length))
     return rs
 
+
+def get_end_story_tools():
+    tool = {
+        "toolConfig": {
+            "tools": [
+                {
+                    "toolSpec": {
+                        "name": "get_story_output",
+                        "description": "Generate a detailed narrative output in a valid JSON format containing specific fields.",
+                        "inputSchema": {
+                            "json": {
+                                "type": "object",
+                                "properties": {
+                                    "author_name": {
+                                        "type": "string",
+                                        "description": "Name of the author."
+                                    },
+                                    "state": {
+                                        "type": "string",
+                                        "description": "The user's state."
+                                    },
+                                    "district": {
+                                        "type": "string",
+                                        "description": "The user's district."
+                                    },
+                                    "block": {
+                                        "type": "string",
+                                        "description": "The user's block."
+                                    },
+                                    "conversation_data": {
+                                        "type": "string",
+                                        "description": "Text of the conversation to create the narrative from."
+                                    },
+                                    "start_date": {
+                                        "type": "string",
+                                        "description": "Starting date of the project if any.",
+                                        "format": "date"
+                                    },
+                                    "end_date": {
+                                        "type": "string",
+                                        "description": "Completion date of the project if any.",
+                                        "format": "date"
+                                    }
+                                },
+                                "required": ["author_name", "state", "district", "block", "conversation_data"]
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }
+
+    return tool

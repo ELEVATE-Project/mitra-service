@@ -1,14 +1,11 @@
 import os
 import base64
-
 from django.db import models
-from django_s3_storage.storage import S3Storage
 from django.core.validators import MinLengthValidator
-
 from chatbot.models import Profile, TagChoices, StoryLanguageChoices, StorySourceChoices, MediaTypeChoices, \
     StoryStatusChoices, Company
 
-storage = S3Storage(aws_s3_bucket_name='static-media.gritworks.ai')
+
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 
 
@@ -58,7 +55,7 @@ class StoryMedia(models.Model):
         return upload_path
 
     name = models.CharField(max_length=1000)
-    file = models.FileField(storage=storage, upload_to=get_file_upload_path, max_length=1000)
+    file = models.FileField(upload_to=get_file_upload_path, max_length=1000)
     story = models.ForeignKey(Story, related_name='story_media', on_delete=models.CASCADE)
     include_in_story = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
