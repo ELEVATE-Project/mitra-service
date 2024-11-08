@@ -28,22 +28,18 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 # Define the directory for log files
 LOGGING_DIR = BASE_DIR + '/shikshalokam_mohini/logs'
 
-with open(BASE_DIR + "/shikshalokam_mohini/config/secrets.json") as f:
-    secret = json.loads(f.read())
-
-
-def get_secret(setting, secrets=secret):
-    """
-    Get the secret variable or return explicit exception.
-    :param setting: The Key of the setting
-    :param secrets: The secret.json file
-
-    """
-    try:
-        return secrets[setting]
-    except KeyError:
-        error_msg = "Set the {0} environment variable".format(setting)
-        raise ImproperlyConfigured(error_msg)
+# def get_secret(setting, secrets=secret):
+#     """
+#     Get the secret variable or return explicit exception.
+#     :param setting: The Key of the setting
+#     :param secrets: The secret.json file
+#
+#     """
+#     try:
+#         return secrets[setting]
+#     except KeyError:
+#         error_msg = "Set the {0} environment variable".format(setting)
+#         raise ImproperlyConfigured(error_msg)
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -77,11 +73,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://localhost:9000',
     'https://*.gritworks.ai',
-    'https://*.retellai.com',
     'https://gritworks.ai',
-    'https://*.vercel.app',
-    'https://demo.karnataka.gov.in',
-    'https://eitbt.karnataka.gov.in'
 ]
 
 CORS_ALLOWED_METHODS = [
@@ -95,11 +87,7 @@ CORS_ALLOWED_METHODS = [
 ALLOWED_HOSTS = [
     'localhost',
     '.gritworks.ai',
-    '.retellai.com',
     'gritworks.ai',
-    '.vercel.app',
-    '.demo.karnataka.gov.in',
-    '.eitbt.karnataka.gov.in'
 ]
 
 
