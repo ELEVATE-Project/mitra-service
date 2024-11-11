@@ -8,8 +8,7 @@ celery_datas = collect_data_files('celery')
 datas = celery_datas + collect_data_files('coreschema')
 
 
-hidden_imports =  [
-    'rest_framework_simplejwt',
+hidden_imports =  ['rest_framework_simplejwt',
     'rest_framework_simplejwt.authentication.JWTAuthentication',
     'celery.fixups',
     'celery.fixups.django',
@@ -62,7 +61,6 @@ hidden_imports =  [
     'celery.result',
     'celery.signals',
     'celery.utils',
-    'celery.contrib',
     'celery.worker.direct',
     'celery.worker.kafka',
     'celery.worker.amqp',
@@ -146,11 +144,11 @@ hidden_imports =  [
 ]
 
 a = Analysis(
-    ['/Users/darshil/Desktop/Private/shikshalokam-mohini-service/shikshalokam_mohini/start_celery_worker.py'],
-    pathex=['/Users/darshil/Desktop/Private/shikshalokam-mohini-service/shikshalokam_mohini/shikshalokam_mohini'],
+    ['/Users/darshil/Desktop/Private/shikshalokam-mohini-service/start_celery_worker.py'],
+    pathex=['/Users/darshil/Desktop/Private/shikshalokam-mohini-service'],
     binaries=[],
-    datas=[],
-    hiddenimports=[],
+    datas=datas,
+    hiddenimports=hidden_imports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

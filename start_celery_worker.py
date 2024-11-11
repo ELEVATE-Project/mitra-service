@@ -1,4 +1,5 @@
 from celery import Celery
+from shikshalokam_mohini.celery_config import app
 import os
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'shikshalokam_mohini.settings')

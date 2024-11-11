@@ -1,4 +1,4 @@
-from celery import shared_task
+from celery_config import shared_task
 from channels.layers import get_channel_layer
 from chatbot.models import CompanyChat, Profile, CompanyBot
 from chatbot.models.geo_models import ProfileAddress
