@@ -5,7 +5,7 @@ from django.core.validators import URLValidator
 from django.core.exceptions import ValidationError
 from django.contrib.sessions.backends.db import SessionStore
 from chatbot.llm_models.llm_script import handle_llama_model, handle_openai_model
-from chatbot.models import Company, CompanyBot, Story, StoryStatusChoices, LLMModel
+from chatbot.models import Company, CompanyBot, Story, StoryStatusChoices
 from chatbot.utils.story_utils import get_formatted_story
 from shikshalokam.models import Project
 
