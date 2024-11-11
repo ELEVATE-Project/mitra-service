@@ -1,4 +1,4 @@
-from celery_config import shared_task
+from celery import shared_task
 from chatbot.models import CompanyChat, Profile, CompanyBot, ChatSession
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.bedrock_tool_call import get_bedrock_tool_call_response
