@@ -144,8 +144,8 @@ hidden_imports =  ['rest_framework_simplejwt',
 ]
 
 a = Analysis(
-    ['/Users/darshil/Desktop/Private/shikshalokam-mohini-service/start_celery_worker.py'],
-    pathex=['/Users/darshil/Desktop/Private/shikshalokam-mohini-service'],
+    ['/home/ubuntu/shikshalokam-mohini-service/shikshalokam-mohini-service/start_celery_worker.py'],
+    pathex=['/home/ubuntu/shikshalokam-mohini-service/shikshalokam-mohini-service'],
     binaries=[],
     datas=datas,
     hiddenimports=hidden_imports,

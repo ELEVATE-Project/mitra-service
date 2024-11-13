@@ -34,8 +34,8 @@ hiddenimports =  ['rest_framework_simplejwt', 'rest_framework_simplejwt.authenti
 ]
 
 a = Analysis(
-    ['/Users/darshil/Desktop/Private/shikshalokam-mohini-service/manage.py'],
-    pathex=['/Users/darshil/Desktop/Private/shikshalokam-mohini-service'],
+    ['/home/ubuntu/shikshalokam-mohini-service/shikshalokam-mohini-service/manage.py'],
+    pathex=['/home/ubuntu/shikshalokam-mohini-service/shikshalokam-mohini-service'],
     binaries=[],
     datas=datas,
     hiddenimports=hiddenimports,
