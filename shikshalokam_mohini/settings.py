@@ -52,6 +52,7 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:9000',
     'https://*.gritworks.ai',
     'https://gritworks.ai',
+    'https:/*.shikshalokam.org'
 ]
 
 CORS_ALLOWED_METHODS = [
@@ -66,6 +67,8 @@ ALLOWED_HOSTS = [
     'localhost',
     '.gritworks.ai',
     'gritworks.ai',
+    'shikshalokam.org',
+    '.shikshalokam.org'
 ]
 
 
