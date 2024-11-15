@@ -8,7 +8,7 @@ from simple_history.models import HistoricalRecords
 from chatbot.models import Profile, Story
 from shikshalokam.models.enums import ProjectStatus, TaskMandatoryStatus
 
-storage = S3Storage(aws_s3_bucket_name='static-media.gritworks.ai')
+storage = S3Storage(aws_s3_bucket_name='mohini-static.shikshalokam.org')
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 
 

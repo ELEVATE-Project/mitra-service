@@ -50,8 +50,6 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://localhost:9000',
-    'https://*.gritworks.ai',
-    'https://gritworks.ai',
     'https://*.shikshalokam.org'
 ]
 
@@ -65,8 +63,6 @@ CORS_ALLOWED_METHODS = [
 
 ALLOWED_HOSTS = [
     'localhost',
-    '.gritworks.ai',
-    'gritworks.ai',
     'shikshalokam.org',
     '.shikshalokam.org'
 ]
@@ -181,7 +177,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
-STATIC_ROOT = "/var/www/gritworks.ai/static/"
+STATIC_ROOT = "/var/www/shikshalokam/static/"
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static')
 ]
@@ -215,27 +211,27 @@ INTERNAL_IPS = [
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
-CSRF_TRUSTED_ORIGINS = ['https://*.gritworks.ai', 'https://*.127.0.0.1', 'https://*.65.1.97.8']
+CSRF_TRUSTED_ORIGINS = ['https://*.shikshalokam.org', 'https://*.127.0.0.1', 'https://*.65.1.97.8']
 
 DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
 
 # AWS Configurations
 AWS_REGION = 'ap-south-1'
-AWS_ACCESS_KEY_ID = 'AKIARXEET4VKKMHTXQES'
-AWS_SECRET_ACCESS_KEY = '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'
+AWS_ACCESS_KEY_ID = 'AKIA5WLTS55C36C3DKE6'
+AWS_SECRET_ACCESS_KEY = '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'
 
-AWS_S3_BUCKET_NAME = 'root-media-uploads'
-AWS_STORAGE_BUCKET_NAME = 'static-media.gritworks.ai'
+AWS_S3_BUCKET_NAME = 'mohini-static.shikshalokam.org'
+AWS_STORAGE_BUCKET_NAME = 'mohini-static.shikshalokam.org'
 
 JAZZMIN_SETTINGS = {
-    'site_title': 'Gritworks',
-    'site_header': 'Gritworks',
-    'site_brand': 'Gritworks',
+    'site_title': 'Shikshalokam',
+    'site_header': 'Shikshalokam',
+    'site_brand': 'Shikshalokam',
     'site_logo': 'public/only_logo.svg',
     'login_logo': 'public/group-11.svg',
     'site_logo_classes': 'img-fluid',
     'welcome_sign': '',
-    'copyright': 'Gritworks Pvt Ltd',
+    'copyright': 'Shikshalokam',
     'show_ui_builder': False,
     'changeform_format': 'single',
 
