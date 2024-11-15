@@ -5,6 +5,7 @@ from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 datas = collect_data_files('coreschema')
 hiddenimports =  ['rest_framework_simplejwt', 'rest_framework_simplejwt.authentication.JWTAuthentication'
     'celery.fixups',
+    'rest_framework_simplejwt.state',
     'celery.fixups.django',
     'kombu.utils',
     'django',
