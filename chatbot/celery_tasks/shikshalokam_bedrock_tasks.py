@@ -7,6 +7,7 @@ from chatbot.utils.bedrock_tool_call import get_bedrock_tool_call_response
 @shared_task
 def get_shikshalokam_bedrock_response(channel_name, session_id, profile_id, route):
     company_chats = CompanyChat.objects.filter(session=session_id).order_by('created_at')
+    print(session_id)
     chat_session = ChatSession.objects.get(session=session_id)
     profile = Profile.objects.get(id=profile_id)
     ai_user = Profile.objects.get(id=1)

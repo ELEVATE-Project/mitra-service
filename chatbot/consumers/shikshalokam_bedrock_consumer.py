@@ -62,4 +62,5 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
                 translated_message = None
             save_in_company_db(self.session_id, self.profile_id, 'User', text_data_json['text'],
                                None, ChatStatus.IN_PROGRESS, translated_message)
+
             get_shikshalokam_bedrock_response.delay(self.channel_name, self.session_id, self.profile_id, self.route)
