@@ -16,6 +16,7 @@ hiddenimports =  ['rest_framework_simplejwt', 'rest_framework_simplejwt.authenti
     'django.db.backends.sqlite3',
     'django.http',
     'django.urls',
+    'django.utils.formats',
     'django.utils',
     'importlib',
     'celery',

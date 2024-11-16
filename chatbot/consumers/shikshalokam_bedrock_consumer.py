@@ -44,6 +44,7 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
                     'session_status': ChatStatus.IN_PROGRESS
                 }
             )
+            print(cs, cs_created)
         else:
             async_to_sync(self.channel_layer.send)(
                 self.channel_name,
