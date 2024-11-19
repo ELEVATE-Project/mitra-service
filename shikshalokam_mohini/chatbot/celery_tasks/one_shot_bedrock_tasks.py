@@ -74,18 +74,18 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
             {
                 "type": "function",
                 "function": {
-                "name": "get_state_information",
-                "description": "Get the information of the state you want to be in",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "state_name": {
-                            "type": "string",
-                            "description": "Name of the next state provided in the context."
-                        }
-                    },
-                    "required": ["state_name"]
-                }
+                    "name": "get_state_information",
+                    "description": "Get the information of the state you want to be in",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "state_name": {
+                                "type": "string",
+                                "description": "Name of the next state provided in the context."
+                            }
+                        },
+                        "required": ["state_name"]
+                    }
                 }
             }
 

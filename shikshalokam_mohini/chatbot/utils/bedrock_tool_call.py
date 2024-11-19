@@ -10,32 +10,6 @@ channel_layer = get_channel_layer()
 
 
 def get_bedrock_tool_call_response(system_prompt, messages, company_bot, session_id, channel_name, route, profile_id):
-    tool = {
-        "toolConfig": {
-            "tools": [
-                {
-                    "toolSpec": {
-                        "name": "get_state_information",
-                        "description": "Get the information of the state you want to be in.",
-                        "inputSchema": {
-                            "json": {
-                                "type": "object",
-                                "properties": {
-                                    "state_name": {
-                                        "type": "string",
-                                        "description": "Name of the next state provided in the context."
-                                    }
-                                },
-                                "required": [
-                                    "state_name"
-                                ]
-                            }
-                        }
-                    }
-                }
-            ]
-        }
-    }
 
     chat_session = ChatSession.objects.get(session=session_id)
     current_step = chat_session.current_step
@@ -62,7 +36,7 @@ def get_bedrock_tool_call_response(system_prompt, messages, company_bot, session
 
 
     response = handle_bedrock_model(
-        system_prompt=system_prompt, messages=messages, tools=tool
+        system_prompt=system_prompt, messages=messages
     )
     print("response_body bedrock: ", response)
 

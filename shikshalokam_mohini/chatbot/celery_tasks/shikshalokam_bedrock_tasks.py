@@ -28,6 +28,39 @@ def get_shikshalokam_bedrock_response(channel_name, session_id, profile_id, rout
             {}
             """.format(state_machine.context, state_machine.completion_criteria)
             # Use 'text' key for system instructions
+        },
+        {
+            'text': """
+            Given the following functions, please respond with a JSON for a function call with its proper arguments 
+            that best answers the given prompt.
+            
+            Respond strictly in the format:
+            {"name": "function_name", "parameters": {"argument_name": "argument_value"}}. 
+            Do not use variables, placeholders, or additional conversational responses.
+            
+            If the next state is provided in the context (e.g., `state_name`), always respond with a function call to transition to the specified state. Do not engage in further dialog or ask follow-up questions in this step.
+            
+            Here is the function definition:
+            
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_state_information",
+                    "description": "Get the information of the state you want to be in",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "state_name": {
+                                "type": "string",
+                                "description": "Name of the next state provided in the context."
+                            }
+                        },
+                        "required": ["state_name"]
+                    }
+                }
+            }
+
+            """
         }
     ]
 
