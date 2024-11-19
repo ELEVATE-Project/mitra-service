@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     'django_s3_storage',
     'import_export',
     'simple_history',
+    'storages',
 ]
 
 MIDDLEWARE = [
@@ -216,15 +217,27 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
 CSRF_TRUSTED_ORIGINS = ['https://*.shikshalokam.org', 'https://*.127.0.0.1', 'https://*.gritworks.ai']
 
-DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {
+            "bucket_name": os.getenv('S3_BUCKET_NAME'),
+            "region_name": os.getenv('AWS_REGION'),
+        },
+    },
+    "staticfiles": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {
+            "bucket_name": os.getenv('S3_BUCKET_NAME'),
+            "region_name": os.getenv('AWS_REGION'),
+        },
+    },
+}
 
 # AWS Configurations
-AWS_REGION = 'ap-south-1'
 AWS_ACCESS_KEY_ID = 'AKIA5WLTS55C36C3DKE6'
 AWS_SECRET_ACCESS_KEY = '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'
 
-AWS_S3_BUCKET_NAME = 'mohini-static.shikshalokam.org'
-AWS_STORAGE_BUCKET_NAME = 'mohini-static.shikshalokam.org'
 
 JAZZMIN_SETTINGS = {
     'site_title': 'Shikshalokam',
