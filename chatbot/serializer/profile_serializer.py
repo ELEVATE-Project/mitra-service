@@ -1,24 +1,11 @@
-from django_countries.fields import Country
 from rest_framework import serializers
-from django_countries.serializers import CountryFieldMixin
 from chatbot.models.media_models import ProfileMedia
 from chatbot.models.base_models import Profile, CompanyChat
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.serializer.company_serializer import CompanySerializer
 
 
-class CountryFieldSerializer(serializers.BaseSerializer):
-    def to_representation(self, obj):
-        if isinstance(obj, Country):
-            return obj.code
-        return obj
-
-    def to_internal_value(self, data):
-        return data
-
-
 class ProfileAddressSerializer(serializers.ModelSerializer):
-    country = CountryFieldSerializer(required=False)
 
     class Meta:
         model = ProfileAddress
@@ -37,8 +24,7 @@ class ProfileMediaSerializer(serializers.ModelSerializer):
         return obj.get_public_url()
 
 
-class ProfileSerializer(CountryFieldMixin, serializers.ModelSerializer):
-    country = CountryFieldSerializer(required=False)
+class ProfileSerializer(serializers.ModelSerializer):
     company = CompanySerializer(read_only=True)
     profile_address = ProfileAddressSerializer(many=True, required=False)
     profile_media = ProfileMediaSerializer(many=True, required=False)

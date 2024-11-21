@@ -1,6 +1,5 @@
 from django.db import models
 from django.db.models import DecimalField
-from django_countries.fields import CountryField
 from chatbot.models import Profile
 
 
@@ -12,7 +11,7 @@ class ProfileAddress(models.Model):
     city = models.CharField(max_length=1000, null=True, blank=True)
     district = models.CharField(max_length=1000, null=True, blank=True)
     state = models.CharField(max_length=1000, null=True, blank=True)
-    country = CountryField(null=True, blank=True)
+    country = models.CharField(max_length=1000, null=True, blank=True)
     pincode = models.CharField(null=True, blank=True, max_length=10)
 
     latitude = DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)

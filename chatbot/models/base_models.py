@@ -2,7 +2,6 @@ import os
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
-from django_countries.fields import CountryField
 from django.core.validators import MinValueValidator
 from django.contrib.auth.hashers import make_password
 from simple_history.models import HistoricalRecords
@@ -114,7 +113,7 @@ class Profile(models.Model):
     email = models.EmailField(max_length=100, null=False, blank=False)
     phone = models.CharField(max_length=20, null=True, blank=True)
     alternate_phone = models.CharField(max_length=20, null=True, blank=True)
-    country = CountryField(null=True, blank=True)
+    country = models.CharField(max_length=100, null=True, blank=True)
     status = models.CharField(max_length=20, choices=EntityStatus.choices, default=EntityStatus.ACTIVE)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
