@@ -2,8 +2,8 @@ from import_export.admin import ExportActionMixin
 from django.contrib import admin
 from django.db.models import Q
 from simple_history.admin import SimpleHistoryAdmin
-from chatbot.filter.admin_filter import (CompanyChatCompanyFilter, ChatSessionFilter, ProfileCityFilter, ProfileStateFilter,
-                            ProfileCompanyChatFilter, ProfileEmailFilter)
+from chatbot.filter.admin_filter import (CompanyChatCompanyFilter, ChatSessionFilter, ProfileCityFilter,
+                                         ProfileStateFilter, ProfileCompanyChatFilter, ProfileEmailFilter)
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import Company, Profile, ProfileType, CompanyBot, CompanyChat, ChatSession, \
     CompanyBotTypeChoices
@@ -17,7 +17,6 @@ class CompanyStateMachineAdmin(admin.TabularInline):
     extra = 1
 
 
-@admin.register(Company)
 class CompanyAdmin(admin.ModelAdmin):
     list_display = ('name', 'created_at', 'status')
     search_fields = ('name', )
@@ -181,3 +180,6 @@ class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
             form.base_fields = {field_name: form.base_fields[field_name] for field_name in form.base_fields
                                 if field_name not in ['sqs_message_id', 'retell_call_id', 'twilio_call_id', 'twilio_call_status', 'retell_disconnection_reason', 'retell_conversation_eval', 'current_step']}
         return form
+
+
+admin.site.register(Company, CompanyAdmin)
