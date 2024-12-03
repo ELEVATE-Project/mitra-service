@@ -2,9 +2,13 @@ from django.urls import path
 from chatbot.views import api_views
 from chatbot.views.bhashini_views import ai4bharat_text_speech, ai4bharat_asr, \
     ai4bharat_text_translation
+from chatbot.views.chat_view import save_chats_view, create_chatsession
 from chatbot.views.drf_views import CompanyChatListCreateView, CompanyChatRetrieveUpdateDestroyView, \
     CompanyBotListCreateView, CompanyBotRetrieveUpdateDestroyView, ProfileListCreateView, \
-    ProfileRetrieveUpdateDestroyView, ChatSessionListCreateView, ChatSessionRetrieveUpdateDestroyView
+    ProfileRetrieveUpdateDestroyView, ChatSessionListCreateView, ChatSessionRetrieveUpdateDestroyView, \
+    ChatSessionRetrieveUpdateDestroyViewSession
+from chatbot.views.mitra_views import paraphrase_view, generate_objectives_view, generate_action_list_view, \
+    generate_title_view
 from chatbot.views.story_views import end_story, StoryListCreateView, StoryBySessionView, \
     StoryRetrieveUpdateDestroyView, story_recreate_view, StoryMediaListCreateView, StoryMediaRetrieveUpdateDestroyView
 
@@ -49,5 +53,15 @@ urlpatterns = [
     path('api/chatsession/', ChatSessionListCreateView.as_view(), name='chatsession-list-create'),
     path('api/chatsession/<int:pk>/', ChatSessionRetrieveUpdateDestroyView.as_view(),
          name='chatsession-retrieve-update-destroy'),
+    path('api/chatsession/<str:session>/', ChatSessionRetrieveUpdateDestroyViewSession.as_view(),
+         name='chatsession-retrieve-update-destroy'),
+
+
+    path('api/paraphrase/', paraphrase_view, name="paraphrase"),
+    path('api/generate-objective/', generate_objectives_view, name="generate-objectives"),
+    path('api/generate-action-list/', generate_action_list_view, name="generate-action-list"),
+    path('api/generate-title/', generate_title_view, name="generate-title"),
+    path('api/save-company-chat/', save_chats_view, name="save-company-chat"),
+    path('api/create-chatsession/', create_chatsession, name="create-chatsession"),
 
 ]

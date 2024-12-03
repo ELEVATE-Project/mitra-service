@@ -62,3 +62,9 @@ class ChatSessionRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):
     serializer_class = ChatSessionSerializer
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend]
     filterset_fields = ['session', 'twilio_call_id']
+
+
+class ChatSessionRetrieveUpdateDestroyViewSession(generics.RetrieveUpdateAPIView):
+    queryset = ChatSession.objects.all()
+    serializer_class = ChatSessionSerializer
+    lookup_field = 'session'
