@@ -1,3 +1,4 @@
+from chatbot.views.profile_views import create_profile_views
 from django.urls import path
 from chatbot.views import api_views
 from chatbot.views.bhashini_views import ai4bharat_text_speech, ai4bharat_asr, \
@@ -8,7 +9,7 @@ from chatbot.views.drf_views import CompanyChatListCreateView, CompanyChatRetrie
     ProfileRetrieveUpdateDestroyView, ChatSessionListCreateView, ChatSessionRetrieveUpdateDestroyView, \
     ChatSessionRetrieveUpdateDestroyViewSession
 from chatbot.views.mitra_views import paraphrase_view, generate_objectives_view, generate_action_list_view, \
-    generate_title_view
+    generate_title_view, create_project_view
 from chatbot.views.story_views import end_story, StoryListCreateView, StoryBySessionView, \
     StoryRetrieveUpdateDestroyView, story_recreate_view, StoryMediaListCreateView, StoryMediaRetrieveUpdateDestroyView
 
@@ -63,5 +64,7 @@ urlpatterns = [
     path('api/generate-title/', generate_title_view, name="generate-title"),
     path('api/save-company-chat/', save_chats_view, name="save-company-chat"),
     path('api/create-chatsession/', create_chatsession, name="create-chatsession"),
+    path('api/create-profile/', create_profile_views, name="create-profile"),
+    path('api/create-project/', create_project_view, name="create-project"),
 
 ]

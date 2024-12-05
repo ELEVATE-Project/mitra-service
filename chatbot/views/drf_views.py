@@ -44,7 +44,7 @@ class ProfileListCreateView(generics.ListCreateAPIView):
     filterset_fields = ['first_name', 'email', 'company__name', 'phone', 'company__slug']
 
 
-@authentication_classes([ProfileJWTAuthentication])
+# @authentication_classes([ProfileJWTAuthentication])
 class ProfileRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):
     queryset = Profile.objects.all()
     serializer_class = ProfileSerializer

@@ -1,6 +1,6 @@
+from chatbot.utils.shikshalokam_mitra_utils import create_project_utils
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-
 from chatbot.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_objective_utils, \
     generate_action_list_utils, generate_title_utils
 
@@ -72,4 +72,23 @@ def generate_title_view(request):
     return Response({
         'status': 'ok',
         'title': title
+    }, status=200)
+
+
+def create_project_view(request):
+    body = request.data
+    access_token = body.get('access_token')
+    user_problem_statement = body.get('user_problem_statement')
+    user_objective = body.get('user_objective')
+    project_duration = body.get('project_duration')
+    project_title = body.get('project_title')
+
+    response = create_project_utils(
+        access_token=access_token, user_problem_statement=user_problem_statement, user_objective=user_objective,
+        project_title=project_title, project_duration=project_duration
+    )
+
+    return Response({
+        'status': 'ok',
+        'title': response
     }, status=200)

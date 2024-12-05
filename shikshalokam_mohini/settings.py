@@ -234,9 +234,10 @@ STORAGES = {
     },
 }
 
+
 # AWS Configurations
-AWS_ACCESS_KEY_ID = 'AKIA5WLTS55C36C3DKE6'
-AWS_SECRET_ACCESS_KEY = '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'
+AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 
 
 JAZZMIN_SETTINGS = {
@@ -258,7 +259,9 @@ JAZZMIN_UI_TWEAKS = {
 }
 
 REST_FRAMEWORK = {
-    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.AllowAny',
+    ),
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
     'PAGE_SIZE': 100,
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -266,6 +269,7 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.coreapi.AutoSchema'
 }
+
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Your Project API',

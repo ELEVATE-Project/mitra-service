@@ -2,6 +2,7 @@ import traceback
 from chatbot.models import Story, StoryMedia
 from chatbot.serializer.story_serializer import StoryCreateSerializer, StoryRetrieveSerializer, \
     StoryMediaRetrieveSerializer, StoryFullSerializer
+from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.story_utils import create_story_object
 import django_filters
 from rest_framework import generics, status
@@ -19,13 +20,22 @@ def end_story(request):
         profile_id = request.data['profile_id']
         session = request.data['session']
         model = request.data.get('model', None)
-        if profile_id is None or session is None:
+        access_token = request.data.get('access_token', None)
+        problem_statement = request.data.get('problem_statement', None)
+        project_id = request.data.get('project_id', None)
+        print("profile_id:", profile_id)
+        print("session:", session)
+        if profile_id is None or session is None or access_token is None:
             return Response({
                 'status': 'error',
-                'message': 'profile id or session is mandatory'
+                'message': 'profile id or session or access_token is mandatory'
             }, status=400)
         else:
-            id, content = create_story_object(profile_id, session, model)
+            id, content = create_story_object(
+                profile_id=profile_id, session=session, model=model,
+                access_token=access_token, problem_statement=problem_statement,
+                project_id=project_id
+            )
             return Response({
                 'status': 'ok',
                 'message': 'Story created',
@@ -37,7 +47,7 @@ def end_story(request):
         traceback.print_exc()
 
 
-@authentication_classes([ProfileJWTAuthentication])
+# @authentication_classes([ProfileJWTAuthentication])
 class StoryListCreateView(generics.ListCreateAPIView):
     queryset = Story.objects.all()
     serializer_class = StoryCreateSerializer
@@ -51,7 +61,7 @@ class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = StoryRetrieveSerializer
 
 
-@authentication_classes([ProfileJWTAuthentication])
+# @authentication_classes([ProfileJWTAuthentication])
 class StoryMediaListCreateView(generics.ListCreateAPIView):
     queryset = StoryMedia.objects.all()
     serializer_class = StoryMediaRetrieveSerializer
@@ -63,8 +73,30 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
         context['request'] = self.request
         return context
 
+    def create(self, request, *args, **kwargs):
+        """
+        Handle POST requests (create).
+        """
+        print("Creating")
+        session_value = request.data.get('session')
+        access_token = request.data.get('access_token')
+        print("session_value: ", session_value)
+        print("access_token: ", access_token)
+        try:
+            response = super().create(request, *args, **kwargs)
+            print("response: ", response)
+            print("response status_code: ", response.status_code)
 
-@authentication_classes([ProfileJWTAuthentication])
+            if response.status_code == status.HTTP_201_CREATED:
+                upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
+            return response
+
+        except Exception as e:
+            print("Error occurred: ", str(e))
+            raise
+
+
+# @authentication_classes([ProfileJWTAuthentication])
 class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = StoryMedia.objects.all()
     serializer_class = StoryMediaRetrieveSerializer
@@ -73,6 +105,53 @@ class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
+    def partial_update(self, request, *args, **kwargs):
+        """
+        Handle PATCH requests for partial updates.
+        """
+        print("Updating (PATCH)")
+        return self.handle_update_logic(request, *args, **kwargs, is_partial=True)
+
+    def update(self, request, *args, **kwargs):
+        """
+        Handle PUT requests for full updates.
+        """
+        print("Updating (PUT)")
+        return self.handle_update_logic(request, *args, **kwargs, is_partial=False)
+
+    def handle_update_logic(self, request, *args, **kwargs):
+        """
+        Shared logic for PUT and PATCH requests.
+        """
+        is_partial = kwargs.pop('is_partial', False)  # Safely extract the flag
+        session_value = request.data.get('session')
+        access_token = request.data.get('access_token')
+        print("session_value: ", session_value)
+        print("access_token: ", access_token)
+
+        try:
+            if is_partial:
+                response = super().partial_update(request, *args, **kwargs)
+            else:
+                response = super().update(request, *args, **kwargs)
+
+            print("response: ", response)
+            print("response status_code: ", response.status_code)
+
+            if response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]:
+                # Pass response.data directly as the instance
+                upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
+
+            return response
+        except Exception as e:
+            print("Error occurred: ", str(e))
+            raise
 
 
 @authentication_classes([ProfileJWTAuthentication])
@@ -117,7 +196,7 @@ def story_recreate_view(request):
     return Response({'message': temp_json}, status=status.HTTP_200_OK)
 
 
-@authentication_classes([ProfileJWTAuthentication])
+# @authentication_classes([ProfileJWTAuthentication])
 class StoryBySessionView(generics.ListAPIView):
     serializer_class = StoryFullSerializer
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend]
