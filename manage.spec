@@ -3,10 +3,14 @@ import os
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
 datas = collect_data_files('coreschema')
-hiddenimports =  ['rest_framework_simplejwt', 'rest_framework_simplejwt.authentication.JWTAuthentication'
+hiddenimports =  ['rest_framework_simplejwt', 'rest_framework_simplejwt.authentication.JWTAuthentication',
     'celery.fixups',
     'rest_framework_simplejwt.state',
     'celery.fixups.django',
+    'shikshalokam.serializer',
+    'chatbot.models',
+    'simple_history.tests.tests',
+    'rest_framework.schemas',
     'kombu.utils',
     'django',
     'django.conf',
@@ -33,7 +37,7 @@ hiddenimports =  ['rest_framework_simplejwt', 'rest_framework_simplejwt.authenti
     'channels_redis.persistence',
     'channels_redis.exceptions',
     'channels_redis.router',
-    'celery.app.amqp'
+    'celery.app.amqp',
     'rest_framework_simplejwt.authentication.JWTAuthentication',
     'celery.concurrency.prefork',
     'celery.apps.worker',
