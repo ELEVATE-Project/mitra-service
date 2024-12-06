@@ -139,7 +139,7 @@ class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
 
 @admin.register(ChatSession)
 class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
-    list_display = ('session', 'get_first_name', 'created_at', 'retell_call_id')
+    list_display = ('session', 'get_first_name', 'created_at')
     list_filter = ('session', 'title', ChatSessionFilter)
     search_fields = ('session', 'title', 'profile__first_name')
     raw_id_fields = ('profile',)
@@ -163,7 +163,7 @@ class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
         profile = Profile.objects.filter(email=user_email)
         if not user.is_superuser and len(profile) > 0 and profile[0].profile_type == ProfileType.MODERATOR:
             return 'session', 'get_first_name', 'created_at'
-        return 'session', 'get_first_name', 'created_at', 'retell_call_id'
+        return 'session', 'get_first_name', 'created_at'
 
     def get_first_name(self, obj):
         return obj.profile.first_name if obj.profile else None
@@ -178,7 +178,7 @@ class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
         if not user.is_superuser and len(profile) > 0 and profile[0].profile_type == ProfileType.MODERATOR:
             # Exclude the fields for moderators
             form.base_fields = {field_name: form.base_fields[field_name] for field_name in form.base_fields
-                                if field_name not in ['sqs_message_id', 'retell_call_id', 'twilio_call_id', 'twilio_call_status', 'retell_disconnection_reason', 'retell_conversation_eval', 'current_step']}
+                                if field_name not in ['current_step']}
         return form
 
 
