@@ -106,11 +106,6 @@ class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
         context['request'] = self.request
         return context
 
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context['request'] = self.request
-        return context
-
     def partial_update(self, request, *args, **kwargs):
         """
         Handle PATCH requests for partial updates.

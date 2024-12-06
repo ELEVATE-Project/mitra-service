@@ -59,13 +59,22 @@ def get_one_shot_bedrock_tool_call_response(system_prompt, messages, company_bot
 
         bot_question = state_machine.bot_question
 
+        name_machine = state_machine.name
+        print("name_machine: ", name_machine)
+        if state_machine.name == "APPRECIATION":
+            chat_status = ChatStatus.COMPLETED
+        else:
+            chat_status = ChatStatus.IN_PROGRESS
+
+
         translated_message = translate_and_send_message(
             accumulated_message=bot_question, current_channel_name=channel_name,
             current_step_number=chat_session.current_step, finish_reason="stop", route=route
         )
+        print("chat_status: ", chat_status)
 
         save_in_company_db(
-            session_id, profile_id, 'AI', bot_question, chunks, ChatStatus.IN_PROGRESS, translated_message
+            session_id, profile_id, 'AI', bot_question, chunks, chat_status, translated_message
         )
         return response
 

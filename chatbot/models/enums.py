@@ -6,6 +6,8 @@ class ChatStatus(models.TextChoices):
     STARTED = 'STARTED', _('STARTED')
     IN_PROGRESS = 'IN_PROGRESS', _('IN_PROGRESS')
     COMPLETED = 'COMPLETED', _('COMPLETED')
+    PAUSED = 'PAUSED', _('PAUSED')
+    RESUME = 'RESUME', _('RESUME')
 
 
 class LLMModel(models.TextChoices):

@@ -79,16 +79,17 @@ def create_project_view(request):
     body = request.data
     access_token = body.get('access_token')
     user_problem_statement = body.get('user_problem_statement')
-    user_objective = body.get('user_objective')
+    user_action_steps = body.get('user_action_steps')
     project_duration = body.get('project_duration')
     project_title = body.get('project_title')
 
     response = create_project_utils(
-        access_token=access_token, user_problem_statement=user_problem_statement, user_objective=user_objective,
-        project_title=project_title, project_duration=project_duration
+        access_token=access_token, user_problem_statement=user_problem_statement,
+        user_action_steps=user_action_steps, project_title=project_title,
+        project_duration_weeks=project_duration
     )
 
     return Response({
         'status': 'ok',
-        'title': response
+        'result': response
     }, status=200)

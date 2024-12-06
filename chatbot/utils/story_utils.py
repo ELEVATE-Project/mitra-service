@@ -163,11 +163,6 @@ def create_story_object(profile_id, session, access_token, problem_statement, pr
                 story=story, chat_history=chat_history, access_token=access_token,
                 problem_statement=problem_statement, project_id=project_id, session=session
             )
-        else:
-            save_shikshalokam_story(
-                story=story, chat_history=chat_history, access_token=access_token,
-                problem_statement=problem_statement, project_id=project_id, session=session
-            )
 
         return story.id, story.content
     except Exception as e:

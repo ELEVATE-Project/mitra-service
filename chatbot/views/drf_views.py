@@ -10,7 +10,6 @@ from chatbot.serializer.company_serializer import CompanyBotSerializer
 from chatbot.serializer.profile_serializer import ProfileSerializer, CompanyChatSerializer
 
 
-@authentication_classes([ProfileJWTAuthentication])
 class CompanyChatListCreateView(generics.ListCreateAPIView):
     queryset = CompanyChat.objects.all()
     serializer_class = CompanyChatSerializer
@@ -18,7 +17,6 @@ class CompanyChatListCreateView(generics.ListCreateAPIView):
     filterset_fields = ['message', 'sender', 'receiver', 'session', 'status']
 
 
-@authentication_classes([ProfileJWTAuthentication])
 class CompanyChatRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):
     queryset = CompanyChat.objects.all()
     serializer_class = CompanyChatSerializer
@@ -31,7 +29,6 @@ class CompanyBotListCreateView(generics.ListCreateAPIView):
     filterset_fields = ['name', 'company__name', 'llm_model', 'company__slug']
 
 
-@authentication_classes([ProfileJWTAuthentication])
 class CompanyBotRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):
     queryset = CompanyBot.objects.all()
     serializer_class = CompanyBotSerializer
@@ -44,7 +41,6 @@ class ProfileListCreateView(generics.ListCreateAPIView):
     filterset_fields = ['first_name', 'email', 'company__name', 'phone', 'company__slug']
 
 
-# @authentication_classes([ProfileJWTAuthentication])
 class ProfileRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):
     queryset = Profile.objects.all()
     serializer_class = ProfileSerializer

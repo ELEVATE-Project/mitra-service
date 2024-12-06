@@ -155,7 +155,6 @@ def login(request):
 
 
 @api_view(['POST'])
-@authentication_classes([ProfileJWTAuthentication])
 def logout(request):
     try:
         # Blacklist the token
