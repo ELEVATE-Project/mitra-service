@@ -77,7 +77,6 @@ INSTALLED_APPS = [
     'daphne',
     'chatbot',
     'shikshalokam',
-    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -238,38 +237,6 @@ STORAGES = {
 # AWS Configurations
 AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
-
-
-JAZZMIN_SETTINGS = {
-    'site_title': 'Shikshalokam',
-    'site_header': 'Shikshalokam',
-    'site_brand': 'Shikshalokam',
-    'site_logo': 'public/only_logo.svg',
-    'login_logo': 'public/group-11.svg',
-    'site_logo_classes': 'img-fluid',
-    'welcome_sign': '',
-    'copyright': 'Shikshalokam',
-    'show_ui_builder': False,
-    'changeform_format': 'single',
-
-}
-
-JAZZMIN_UI_TWEAKS = {
-    'navbar_fixed': True
-}
-
-REST_FRAMEWORK = {
-    'DEFAULT_PERMISSION_CLASSES': (
-        'rest_framework.permissions.AllowAny',
-    ),
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
-    'PAGE_SIZE': 100,
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-    'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.coreapi.AutoSchema'
-}
-
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Your Project API',

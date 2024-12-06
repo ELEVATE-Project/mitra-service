@@ -50,14 +50,14 @@ class ChatSessionListCreateView(generics.ListCreateAPIView):
     queryset = ChatSession.objects.all()
     serializer_class = ChatSessionSerializer
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend, ChatSessionProfileFilter]
-    filterset_fields = ['session', 'retell_call_id', 'sqs_message_id']
+    filterset_fields = ['session']
 
 
 class ChatSessionRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):
     queryset = ChatSession.objects.all()
     serializer_class = ChatSessionSerializer
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend]
-    filterset_fields = ['session', 'twilio_call_id']
+    filterset_fields = ['session']
 
 
 class ChatSessionRetrieveUpdateDestroyViewSession(generics.RetrieveUpdateAPIView):
