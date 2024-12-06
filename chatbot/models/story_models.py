@@ -21,6 +21,7 @@ class Story(models.Model):
     micro_improvement = models.TextField(null=True, blank=True)
     location = models.CharField(max_length=1000, null=True, blank=True)
     formatted_content = models.TextField(null=True, blank=True)
+    problem_statement = models.TextField(null=True, blank=True)
     language = models.CharField(max_length=1000, choices=StoryLanguageChoices.choices,
                                 default=StoryLanguageChoices.ENGLISH)
     source = models.CharField(max_length=1000, choices=StorySourceChoices.choices,
@@ -61,6 +62,7 @@ class StoryMedia(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     base64_str = models.TextField(null=True, blank=True)
+    source_path = models.TextField(null=True, blank=True)
     media_type = models.CharField(max_length=100, choices=MediaTypeChoices.choices, null=True, blank=True)
 
     def get_public_url(self):
