@@ -4,7 +4,9 @@ import random
 import string
 from chatbot.models import (Profile, CompanyChat, CompanyBot, StoryLanguageChoices,
                                                 StoryStatusChoices, ChatSession, ChatStatus, LLMModel)
+from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.story_models import Story
+from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
 from chatbot.utils.story_llama_utils import (get_company_end_context, create_project,
                                                                  get_company_context)
 from chatbot.llm_models.llm_script import handle_bedrock_model
@@ -22,7 +24,7 @@ DEFAULT_PROMPT = """
 """
 
 
-def create_story_object(profile_id, session, model=None):
+def create_story_object(profile_id, session, access_token, problem_statement, project_id, model=None):
     try:
         profile = Profile.objects.get(id=profile_id)
         company = profile.company
@@ -49,26 +51,37 @@ def create_story_object(profile_id, session, model=None):
         print(end_context)
 
         messages=[]
+        chat_history=[]
         prompt_to_use = [
             {
                 'text': end_context
             },
         ]
         for chat in company_chats:
+            user_message = chat.message
             if chat.receiver == ai_user:
-                user_message = chat.message
                 if chat.translated_message is not None and chat.translated_message != '':
                     user_message = chat.translated_message
                 messages.append({
                     'role': 'user',
                     'content': [{'text': user_message}]
                 })
+                chat_history.append({
+                    'role': 'user',
+                    'content': [{'text': user_message, 'created_at': chat.created_at}]
+                })
             else:
                 messages.append({
                     'role': 'assistant',
-                    "content": [{'text': chat.message}]
+                    'content': [{'text': user_message}]
+                })
+                chat_history.append({
+                    'role': 'assistant',
+                    'content': [{'text': user_message, 'created_at': chat.created_at}]
                 })
 
+        if messages and messages[0].get('role') == 'bot':
+            messages.pop(0)
         tool_to_use = get_end_story_tools()
 
         response_json = handle_bedrock_model(
@@ -77,6 +90,8 @@ def create_story_object(profile_id, session, model=None):
         )
         response_json = response_json.replace('\n', '').replace('\t', '').replace(
             '\r', '').replace('\\n', '').replace('\\t', '').replace('\\r', '')
+        if '{' in response_json:
+            response_json = response_json[response_json.index('{'):]
         print("\nBEFORE LOADS: ", response_json)
         if isinstance(response_json, str):
             response_json = json.loads(response_json)
@@ -106,6 +121,16 @@ def create_story_object(profile_id, session, model=None):
         else:
             other_params = {}
 
+        if profile:
+            address = ProfileAddress.objects.filter(profile=profile).first()
+            if address:
+                location_parts = filter(None, [address.block, address.district, address.state])
+                location = ", ".join(location_parts)
+            else:
+                location = ""
+        else:
+            location = ""
+
         story = Story(
             title=title,
             content=content,
@@ -118,7 +143,8 @@ def create_story_object(profile_id, session, model=None):
             micro_improvement=micro_improvement,
             language=StoryLanguageChoices.ENGLISH,
             stage=StoryStatusChoices.COMPLETED,
-            other_params=other_params
+            other_params=other_params,
+            location=location
         )
 
         story.save()
@@ -131,6 +157,12 @@ def create_story_object(profile_id, session, model=None):
         chat_session = ChatSession.objects.get(session=session)
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=['session_status'])
+
+        if access_token and problem_statement and project_id:
+            save_shikshalokam_story(
+                story=story, chat_history=chat_history, access_token=access_token,
+                problem_statement=problem_statement, project_id=project_id, session=session
+            )
 
         return story.id, story.content
     except Exception as e:

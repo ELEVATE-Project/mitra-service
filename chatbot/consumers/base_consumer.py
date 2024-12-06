@@ -1,6 +1,7 @@
 import json
 from channels.generic.websocket import WebsocketConsumer
-from chatbot.models import ChatSession
+from chatbot.models import ChatSession, CompanyChat, ChatStatus, Profile, CompanyBot
+from chatbot.models.company_models import CompanyStateMachine
 
 
 class BaseConsumer(WebsocketConsumer):
@@ -23,3 +24,31 @@ class BaseConsumer(WebsocketConsumer):
     def chat_message(self, event):
         text = event["text"]
         self.send(text_data=json.dumps({"text": text}))
+
+    def determine_company_chat_status(self, session_id, profile_id, is_disconnected=False):
+        chat_session = ChatSession.objects.filter(session=session_id).first()
+        profile = Profile.objects.get(id=profile_id)
+        company_bot = CompanyBot.objects.get(company=profile.company, route='/')
+        state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
+
+        existing_chats = CompanyChat.objects.filter(session=session_id)
+
+        if existing_chats.count() == 0:
+            return ChatStatus.STARTED
+        elif state_machine.name != 'APPRECIATION' and is_disconnected:
+            return ChatStatus.PAUSED
+        elif existing_chats.exists():
+            last_chat = existing_chats.last()
+            if last_chat.status == ChatStatus.PAUSED:
+                return ChatStatus.RESUME
+        elif chat_session and chat_session.session_status == ChatStatus.COMPLETED:
+            return ChatStatus.COMPLETED
+
+        return ChatStatus.IN_PROGRESS
+
+    def update_last_chat_status(self, chat_status):
+        existing_chat = CompanyChat.objects.filter(session=self.session_id).last()
+        print("msg: ", existing_chat.message)
+        if existing_chat and existing_chat.status != ChatStatus.COMPLETED:
+            existing_chat.status = chat_status
+            existing_chat.save()

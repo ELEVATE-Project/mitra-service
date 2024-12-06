@@ -20,6 +20,11 @@ class OneShotBedrockConsumer(BaseConsumer):
         else:
             c = ChatSession(session=self.session_id)
         c.save_title()
+        company_chat_status = self.determine_company_chat_status(
+            session_id=self.session_id, profile_id=self.profile_id, is_disconnected=True
+        )
+        print("COMPANY CHAT STATUS: ", company_chat_status)
+        self.update_last_chat_status(chat_status=company_chat_status)
         self.close()
 
     def receive(self, text_data):
@@ -46,6 +51,10 @@ class OneShotBedrockConsumer(BaseConsumer):
             )
             print(cs, cs_created)
         else:
+            company_chat_status = self.determine_company_chat_status(
+                session_id=self.session_id, profile_id=self.profile_id
+            )
+            print("COMPANY CHAT STATUS: ", company_chat_status)
             async_to_sync(self.channel_layer.send)(
                 self.channel_name,
                 {
@@ -62,5 +71,5 @@ class OneShotBedrockConsumer(BaseConsumer):
             else:
                 translated_message = None
             save_in_company_db(self.session_id, self.profile_id, 'User', text_data_json['text'],
-                               None, ChatStatus.IN_PROGRESS, translated_message)
+                               None, company_chat_status, translated_message)
             get_one_shot_bedrock_response.delay(self.channel_name, self.session_id, self.profile_id, self.route)
