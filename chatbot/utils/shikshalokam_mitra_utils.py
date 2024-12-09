@@ -20,7 +20,6 @@ def create_project_utils(
         "X-auth-token": access_token,
     }
     start_date = now()
-    start_date = make_aware(start_date)
     start_date = start_date.astimezone(tz=timezone.utc)
 
     end_date = (start_date + timedelta(weeks=project_duration_weeks))
@@ -61,6 +60,8 @@ def create_project_utils(
             }
         ]
     }
+
+    print("req body: ", request_body)
 
     try:
         response = requests.post(url, headers=headers, json=request_body)

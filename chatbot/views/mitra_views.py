@@ -75,6 +75,7 @@ def generate_title_view(request):
     }, status=200)
 
 
+@api_view(['POST'])
 def create_project_view(request):
     body = request.data
     access_token = body.get('access_token')

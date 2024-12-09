@@ -47,7 +47,6 @@ def end_story(request):
         traceback.print_exc()
 
 
-# @authentication_classes([ProfileJWTAuthentication])
 class StoryListCreateView(generics.ListCreateAPIView):
     queryset = Story.objects.all()
     serializer_class = StoryCreateSerializer
@@ -55,13 +54,11 @@ class StoryListCreateView(generics.ListCreateAPIView):
     filterset_fields = ['session', 'author']
 
 
-@authentication_classes([ProfileJWTAuthentication])
 class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Story.objects.all()
     serializer_class = StoryRetrieveSerializer
 
 
-# @authentication_classes([ProfileJWTAuthentication])
 class StoryMediaListCreateView(generics.ListCreateAPIView):
     queryset = StoryMedia.objects.all()
     serializer_class = StoryMediaRetrieveSerializer
@@ -96,7 +93,6 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
             raise
 
 
-# @authentication_classes([ProfileJWTAuthentication])
 class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = StoryMedia.objects.all()
     serializer_class = StoryMediaRetrieveSerializer
@@ -149,7 +145,6 @@ class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
             raise
 
 
-@authentication_classes([ProfileJWTAuthentication])
 class ProfileMediaListCreateView(generics.ListCreateAPIView):
     queryset = ProfileMedia.objects.all()
     serializer_class = ProfileMediaSerializer
@@ -162,7 +157,6 @@ class ProfileMediaListCreateView(generics.ListCreateAPIView):
         return context
 
 
-@authentication_classes([ProfileJWTAuthentication])
 class ProfileMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = ProfileMedia.objects.all()
     serializer_class = ProfileMediaSerializer
@@ -191,7 +185,6 @@ def story_recreate_view(request):
     return Response({'message': temp_json}, status=status.HTTP_200_OK)
 
 
-# @authentication_classes([ProfileJWTAuthentication])
 class StoryBySessionView(generics.ListAPIView):
     serializer_class = StoryFullSerializer
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend]
