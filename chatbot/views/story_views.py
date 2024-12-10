@@ -21,20 +21,18 @@ def end_story(request):
         session = request.data['session']
         model = request.data.get('model', None)
         access_token = request.data.get('access_token', None)
-        problem_statement = request.data.get('problem_statement', None)
         project_id = request.data.get('project_id', None)
         print("profile_id:", profile_id)
         print("session:", session)
-        if profile_id is None or session is None or access_token is None:
+        if profile_id is None or session is None:
             return Response({
                 'status': 'error',
-                'message': 'profile id or session or access_token is mandatory'
+                'message': 'profile id or session is mandatory'
             }, status=400)
         else:
             id, content = create_story_object(
                 profile_id=profile_id, session=session, model=model,
-                access_token=access_token, problem_statement=problem_statement,
-                project_id=project_id
+                access_token=access_token, project_id=project_id
             )
             return Response({
                 'status': 'ok',

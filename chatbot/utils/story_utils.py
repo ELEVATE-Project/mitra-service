@@ -24,7 +24,7 @@ DEFAULT_PROMPT = """
 """
 
 
-def create_story_object(profile_id, session, access_token, problem_statement, project_id, model=None):
+def create_story_object(profile_id, session, access_token, project_id, model=None):
     try:
         profile = Profile.objects.get(id=profile_id)
         company = profile.company
@@ -112,6 +112,8 @@ def create_story_object(profile_id, session, access_token, problem_statement, pr
         print('impact: ', impact)
         micro_improvement =  response_json.get('micro_improvement', '')
         print('micro_improvement: ', micro_improvement)
+        problem_statement = response_json.get('problem_statement', '')
+        print('problem_statement: ', problem_statement)
 
         if company_slug == 'shikshalokamstaging':
             duration = response_json.get('duration', '')
@@ -144,7 +146,8 @@ def create_story_object(profile_id, session, access_token, problem_statement, pr
             language=StoryLanguageChoices.ENGLISH,
             stage=StoryStatusChoices.COMPLETED,
             other_params=other_params,
-            location=location
+            location=location,
+            problem_statement=problem_statement
         )
 
         story.save()
@@ -158,7 +161,7 @@ def create_story_object(profile_id, session, access_token, problem_statement, pr
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=['session_status'])
 
-        if access_token and problem_statement and project_id:
+        if access_token and project_id:
             save_shikshalokam_story(
                 story=story, chat_history=chat_history, access_token=access_token,
                 problem_statement=problem_statement, project_id=project_id, session=session

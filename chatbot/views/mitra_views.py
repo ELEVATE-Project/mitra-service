@@ -1,4 +1,5 @@
-from chatbot.utils.shikshalokam_mitra_utils import create_project_utils
+from chatbot.models import Profile
+from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_mitra_project_utils
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from chatbot.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_objective_utils, \
@@ -79,10 +80,13 @@ def generate_title_view(request):
 def create_project_view(request):
     body = request.data
     access_token = body.get('access_token')
+    session = body.get('session')
     user_problem_statement = body.get('user_problem_statement')
     user_action_steps = body.get('user_action_steps')
     project_duration = body.get('project_duration')
     project_title = body.get('project_title')
+    project_objective = body.get('user_objective')
+    profile_id = body.get('profile_id')
 
     response = create_project_utils(
         access_token=access_token, user_problem_statement=user_problem_statement,
@@ -90,7 +94,28 @@ def create_project_view(request):
         project_duration_weeks=project_duration
     )
 
+    project_id = response.get('programId')
+    program_id = response.get('projectId')
+    profile = Profile.objects.get(id=profile_id)
+
+    result = ''
+    if project_id and program_id and profile:
+        result = create_mitra_project_utils(
+            profile=profile,
+            session=session,
+            user_problem_statement=user_problem_statement,
+            project_title=project_title,
+            project_duration=project_duration,
+            project_objective=project_objective,
+            user_action_steps=user_action_steps,
+            project_id=project_id,
+            program_id=program_id
+        )
+
+        print("Result: ", result)
+
     return Response({
         'status': 'ok',
-        'result': response
+        'result': response,
+        'mitra_result': result
     }, status=200)
