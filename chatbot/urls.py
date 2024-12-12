@@ -11,6 +11,7 @@ from chatbot.views.drf_views import CompanyChatListCreateView, CompanyChatRetrie
     ChatSessionRetrieveUpdateDestroyViewSession
 from chatbot.views.mitra_views import paraphrase_view, generate_objectives_view, generate_action_list_view, \
     generate_title_view, create_project_view
+from chatbot.views.recommendation import generate_recommendation
 from chatbot.views.story_views import end_story, StoryListCreateView, StoryBySessionView, \
     StoryRetrieveUpdateDestroyView, story_recreate_view, StoryMediaListCreateView, StoryMediaRetrieveUpdateDestroyView
 
@@ -68,5 +69,6 @@ urlpatterns = [
     path('api/create-profile/', create_profile_views, name="create-profile"),
     path('api/create-project/', create_project_view, name="create-project"),
     path('api/generate-pdf/', generate_pdf_view, name='generate_pdf'),
+    path('api/generate-recommendation/', generate_recommendation, name='generate-recommendation'),
 
 ]

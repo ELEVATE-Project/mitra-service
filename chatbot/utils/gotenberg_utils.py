@@ -23,10 +23,9 @@ def generate_pdf_with_gotenberg(html_content):
 
         if response.status_code == 200:
             pdf = response.content
-            http_response = HttpResponse(pdf, content_type="application/pdf")
-            http_response["Content-Disposition"] = 'inline; filename="output.pdf"'
-            return http_response
+            return pdf
         else:
-            return HttpResponse(f"Error: {response.status_code} - {response.text}", status=500)
+            return None
     except Exception as e:
-        return HttpResponse(f"An error occurred: {str(e)}", status=500)
+        print("Error: ", e)
+        return None

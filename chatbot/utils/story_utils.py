@@ -164,7 +164,8 @@ def create_story_object(profile_id, session, access_token, project_id, model=Non
         if access_token and project_id:
             save_shikshalokam_story(
                 story=story, chat_history=chat_history, access_token=access_token,
-                problem_statement=problem_statement, project_id=project_id, session=session
+                problem_statement=problem_statement, project_id=project_id, session=session,
+                profile=profile
             )
 
         return story.id, story.content
