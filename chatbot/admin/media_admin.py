@@ -13,7 +13,7 @@ class KeyValueInline(admin.TabularInline):
 @admin.register(Media)
 class MediaAdmin(ExportActionMixin, admin.ModelAdmin):
     form = MediaAdminForm
-    list_display = ('name', 'media_type', 'company')
+    list_display = ('name', 'media_type',)
     search_fields = ('name', )
     actions = ['export_selected']
     list_export = ('csv', 'xlsx')
