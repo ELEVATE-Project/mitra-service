@@ -14,6 +14,9 @@ def generate_recommendation(request):
     email = body.get("email")
 
     current_profile = Profile.objects.get(email=email)
+    if not current_profile:
+        return JsonResponse({'message': 'Profile not found'}, status=404)
+
     other_profiles = Profile.objects.exclude(email=email).exclude(id=1)
 
     current_profile_serialized = ProfileSerializer(current_profile).data
