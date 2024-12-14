@@ -24,7 +24,7 @@ DEFAULT_PROMPT = """
 """
 
 
-def create_story_object(profile_id, session, access_token, project_id, model=None):
+def create_story_object(profile_id, session, access_token, model=None):
     try:
         profile = Profile.objects.get(id=profile_id)
         company = profile.company
@@ -52,11 +52,14 @@ def create_story_object(profile_id, session, access_token, project_id, model=Non
 
         messages=[]
         chat_history=[]
+        conversation=[]
         prompt_to_use = [
             {
                 'text': end_context
             },
         ]
+        if company_chats and company_chats[0].receiver != ai_user:
+            company_chats.pop(0)
         for chat in company_chats:
             user_message = chat.message
             if chat.receiver == ai_user:
@@ -66,22 +69,31 @@ def create_story_object(profile_id, session, access_token, project_id, model=Non
                     'role': 'user',
                     'content': [{'text': user_message}]
                 })
+                conversation.append({
+                    "botResponse": "",
+                    "timestamp": chat.created_at.isoformat(),
+                    "userMessage": user_message
+                })
                 chat_history.append({
-                    'role': 'user',
-                    'content': [{'text': user_message, 'created_at': chat.created_at}]
+                    "details": "",
+                    "event": chat.status,
+                    "timestamp": chat.created_at.isoformat()
                 })
             else:
                 messages.append({
                     'role': 'assistant',
                     'content': [{'text': user_message}]
                 })
+                if conversation and len(conversation)>0:
+                    conversation[-1]["botResponse"] = user_message
                 chat_history.append({
-                    'role': 'assistant',
-                    'content': [{'text': user_message, 'created_at': chat.created_at}]
+                    "details": "",
+                    "event": chat.status,
+                    "timestamp": chat.created_at.isoformat()
                 })
 
-        if messages and messages[0].get('role') == 'bot':
-            messages.pop(0)
+        print("\n\nchat_history: ", chat_history)
+        print("\n\nconversation: ", conversation)
         tool_to_use = get_end_story_tools()
 
         response_json = handle_bedrock_model(
@@ -158,15 +170,14 @@ def create_story_object(profile_id, session, access_token, project_id, model=Non
             create_project(response_json, story, profile)
 
         chat_session = ChatSession.objects.get(session=session)
+        project_id = chat_session.project_id
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=['session_status'])
-
-        if access_token and project_id:
-            save_shikshalokam_story(
-                story=story, chat_history=chat_history, access_token=access_token,
-                problem_statement=problem_statement, project_id=project_id, session=session,
-                profile=profile
-            )
+        save_shikshalokam_story(
+            story=story, chat_history=chat_history, access_token=access_token,
+            problem_statement=problem_statement, project_id=project_id, session=session,
+            profile=profile, conversation=conversation
+        )
 
         return story.id, story.content
     except Exception as e:

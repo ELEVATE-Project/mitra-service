@@ -11,6 +11,8 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
 
     session_id = None
     profile_id = None
+    project_id = None
+    user_id = None
     route = None
 
     def disconnect(self, code):
@@ -34,10 +36,13 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
         if message_type == 'authenticate':
             self.session_id = text_data_json.get('sessionid')
             self.profile_id = text_data_json.get('profileid')
+            self.project_id = text_data_json.get('projectid')
+            self.user_id = text_data_json.get('userid')
             self.route = text_data_json.get('route')
             profile = Profile.objects.get(id=self.profile_id)
             print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
                   f"route: {self.route}")
+            print(f"Received project_id: {self.project_id} and userid: {self.user_id}")
 
             # chat session create (session, profile)
             cs, cs_created = ChatSession.objects.get_or_create(
@@ -46,7 +51,9 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
                     'profile': profile,
                     'current_step': 1,
                     'company_bot': CompanyBot.objects.get(company=profile.company, route='/'),
-                    'session_status': ChatStatus.IN_PROGRESS
+                    'session_status': ChatStatus.IN_PROGRESS,
+                    'project_id': self.project_id,
+                    'user_id': self.user_id,
                 }
             )
             print(cs, cs_created)

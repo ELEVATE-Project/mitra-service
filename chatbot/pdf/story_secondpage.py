@@ -1,7 +1,11 @@
 
 
 def get_story_secondpage_html(story):
-    action_steps = story.action_steps.split("\n") if story.action_steps else ["No action steps provided."]
+    action_steps = (
+        story.action_steps.split("\n") if isinstance(story.action_steps, str)
+        else story.action_steps if isinstance(story.action_steps, list)
+        else ["No action steps provided."]
+    )
     print("action step type: ", type(action_steps))
     print("action_steps: ", action_steps)
     page_html = f"""

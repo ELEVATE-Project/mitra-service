@@ -1,8 +1,8 @@
 import os
 import traceback
 import requests
-
-from chatbot.models import StoryMedia, MediaTypeChoices
+from django.core.files.base import ContentFile
+from chatbot.models import StoryMedia, MediaTypeChoices, CompanyChat, Profile, Story, ChatSession
 from chatbot.pdf.story_first_page import get_first_page_html
 from chatbot.pdf.story_images_page import get_story_images_page_html
 from chatbot.pdf.story_secondpage import get_story_secondpage_html
@@ -10,24 +10,33 @@ from chatbot.pdf.story_thirdpage import get_thirdpage_html
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 from chatbot.utils.media_utils import upload_to_cloud
 
+
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
 
-def save_shikshalokam_story(story, problem_statement, chat_history, access_token, project_id, session, profile):
+def save_shikshalokam_story(
+        story, problem_statement, chat_history, access_token, project_id, session, profile, conversation
+):
     try:
         html_content = get_story_html(story=story, profile=profile)
 
         pdf_generated = generate_pdf_with_gotenberg(html_content)
-        pdf_file_name = story.get("title")
+        pdf_file_name = story.title
         pdf_file_name = f"{pdf_file_name}.pdf"
+        pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
+        print("pdf_content: ", pdf_content)
+        print("pdf_content type: ", type(pdf_content))
         StoryMedia.objects.create(
             name=pdf_file_name,
-            file=pdf_generated,
+            file=pdf_content,
             story=story,
             include_in_story=False,
             media_type=MediaTypeChoices.PDF
         )
 
+        if access_token in [None, "", "null"] or not session or not project_id:
+            print("Not calling shikshalokam api as access_tokne or session or project_id is missing")
+            return
         upload_response_json = upload_to_cloud(session_value=session, access_token=access_token, story=story)
         attachments = upload_response_json.get('attachments')
         print("attachments: ", attachments)
@@ -48,7 +57,7 @@ def save_shikshalokam_story(story, problem_statement, chat_history, access_token
                 "summary": story.content,
                 "authorName": story.author.first_name if story.author else "",
                 "location": story.location or "",
-                "conversation": [],
+                "conversation": conversation,
                 "chatHistory": chat_history,
                 "attachments": attachments,
                 "pdfInformation": pdf_information,
@@ -63,6 +72,7 @@ def save_shikshalokam_story(story, problem_statement, chat_history, access_token
         }
 
         response = requests.post(url, headers=headers, json=request_body)
+        print("response: ", response)
         response.raise_for_status()
 
         print(f"Story successfully saved to Shikshalokam: {response.status_code}")
@@ -103,3 +113,118 @@ def get_story_html(story, profile):
         """
 
     return html_content
+
+
+def update_story_pdf(access_token, session):
+
+    try:
+        story = Story.objects.get(session=session)
+        profile = story.author
+        print("profile: ", profile)
+        print("story: ", story.title)
+        html_content = get_story_html(story=story, profile=profile)
+
+        pdf_generated = generate_pdf_with_gotenberg(html_content)
+        pdf_file_name = story.title
+        pdf_file_name = f"{pdf_file_name}.pdf"
+        pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
+        print("pdf_content: ", pdf_content)
+        print("pdf_content type: ", type(pdf_content))
+
+        story_media = StoryMedia.objects.get(story=story, media_type=MediaTypeChoices.PDF)
+        story_media.name = pdf_file_name
+        story_media.file = pdf_content
+        story_media.include_in_story = False
+        story_media.save()
+
+        chat_session = ChatSession.objects.get(session=session)
+        project_id = chat_session.project_id
+
+        if access_token in [None, "", "null"] or not session or not project_id:
+            print("Not calling shikshalokam api as access_tokne or session or project_id is missing")
+            return
+
+        upload_response_json = upload_to_cloud(
+            session_value=session, access_token=access_token, story=story
+        )
+
+        print("upload_response_json: ", upload_response_json)
+
+        attachments = upload_response_json.get('attachments')
+        print("attachments: ", attachments)
+
+        pdf_information = upload_response_json.get('pdfInformation')
+        print("pdf_information: ", pdf_information)
+
+        company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
+        ai_user = Profile.objects.get(id=1)
+
+        chat_history = []
+        conversation = []
+
+        if company_chats and company_chats[0].receiver != ai_user:
+            company_chats.pop(0)
+        for chat in company_chats:
+            user_message = chat.message
+            if chat.receiver == ai_user:
+                if chat.translated_message is not None and chat.translated_message != '':
+                    user_message = chat.translated_message
+                conversation.append({
+                    "botResponse": "",
+                    "timestamp": chat.created_at.isoformat(),
+                    "userMessage": user_message
+                })
+                chat_history.append({
+                    "details": "",
+                    "event": chat.status,
+                    "timestamp": chat.created_at.isoformat()
+                })
+            else:
+                if conversation and len(conversation) > 0:
+                    conversation[-1]["botResponse"] = user_message
+                chat_history.append({
+                    "details": "",
+                    "event": chat.status,
+                    "timestamp": chat.created_at.isoformat()
+                })
+
+        request_body = {
+            "story": {
+                "title": story.title,
+                "problemStatement": story.problem_statement,
+                "objective": story.objective,
+                "timeline": "",
+                "actionSteps": story.action_steps or [],
+                "resources": [],
+                "impact": story.impact,
+                "summary": story.content,
+                "authorName": story.author.first_name if story.author else "",
+                "location": story.location or "",
+                "conversation": conversation,
+                "chatHistory": chat_history,
+                "attachments": attachments,
+                "pdfInformation": pdf_information,
+            }
+        }
+        print("request_body: ", request_body)
+
+
+        url = f"https://{base_url}/project/userProjects/addStory/{project_id}"
+
+        headers = {
+            "X-auth-token": access_token,
+        }
+
+        response = requests.put(url, headers=headers, json=request_body)
+        print("response: ", response)
+        response.raise_for_status()
+
+        print(f"Story successfully saved to Shikshalokam: {response.status_code}")
+
+    except requests.exceptions.RequestException as e:
+        print("Failed to save story to Shikshalokam: %s", e)
+        raise
+    except Exception as e:
+        print("An unexpected error occurred: %s", e)
+        traceback.print_exc()
+        raise

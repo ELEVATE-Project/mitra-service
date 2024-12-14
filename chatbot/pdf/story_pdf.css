@@ -924,18 +924,22 @@
         display: grid;
         grid-template-columns: repeat(2, 1fr);
         justify-items: center;
-        grid-row-gap: 30px;
+        grid-row-gap: 20px;
         grid-column-gap: 0px;
     }
 
+    .image-nohead {
+        margin-top: 40px;
+    }
+
     .story-image-page-image-box {
-      width: 300px;
+      width: 330px;
       height: 300px;
       background-color: #fff;
       border: 2px solid #ccc;
       border-radius: 20px;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      padding: 5px;
+      padding: 3px;
 
     }
 

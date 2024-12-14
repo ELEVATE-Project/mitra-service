@@ -8,6 +8,7 @@ from chatbot.pdf.story_secondpage import get_story_secondpage_html
 from chatbot.pdf.story_thirdpage import get_thirdpage_html
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 from chatbot.utils.shikshalokam_story_utils import get_story_html
+from django.core.files.base import ContentFile
 
 
 @api_view(['GET'])
@@ -18,6 +19,10 @@ def generate_pdf_view(request):
     html_content = get_story_html(story=story, profile=profile)
 
     pdf_generated =  generate_pdf_with_gotenberg(html_content)
+    pdf_file_name = f"Sample.pdf"
+    pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
+    print("pdf_content: ", pdf_content)
+    print("pdf_content type: ", type(pdf_content))
     if pdf_generated:
         http_response = HttpResponse(pdf_generated, content_type="application/pdf")
         http_response["Content-Disposition"] = 'inline; filename="output.pdf"'

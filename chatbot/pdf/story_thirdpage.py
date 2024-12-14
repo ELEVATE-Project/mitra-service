@@ -1,6 +1,76 @@
+import json
+from bs4 import BeautifulSoup
+
+
+def json_to_html(formatted_content):
+
+    try:
+        content_data = json.loads(formatted_content)
+        print("type: ", type(content_data))
+    except json.JSONDecodeError:
+        return ""
+
+    html_content = ""
+    for block in content_data:
+        print("block type: ", type(block))
+        if isinstance(block, dict) and "type" in block and "data" in block:
+            if block["type"] == "paragraph":
+                text = block["data"].get("text", "")
+
+                text = text.replace("\n\n", "<br><br>").replace("\n", "<br>")
+
+                html_content += f"<p>{text}</p>"
+        else:
+            print(f"Unexpected block format: {block}")
+
+    return html_content
+
+
+def count_words_and_lines(text):
+
+    word_count = 0
+    lines = text.splitlines()
+
+    for line in lines:
+        word_count += len(line.split())
+
+    return word_count, len(lines)
+
+
+def split_content_based_on_words(content, max_words_per_page=300):
+    soup = BeautifulSoup(content, "html.parser")
+    chunks = []
+    current_chunk = ""
+    word_counter = 0
+    line_counter = 0
+
+    for element in soup.descendants:
+        if hasattr(element, "string") and element.string:
+            text = str(element.string)
+
+            words_in_text, lines_in_text = count_words_and_lines(text)
+
+            if word_counter + words_in_text > max_words_per_page:
+                chunks.append(current_chunk)
+                current_chunk = text
+                word_counter = words_in_text
+                line_counter = lines_in_text
+            else:
+                current_chunk += text
+                word_counter += words_in_text
+                line_counter += lines_in_text
+
+        elif not isinstance(element, str):
+            current_chunk += str(element)
+
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    return chunks
 
 
 def get_thirdpage_html(profile, story):
+
     profile_addresses = profile.profile_address.all().first()
 
     address_components = [
@@ -15,24 +85,31 @@ def get_thirdpage_html(profile, story):
         f"{profile.first_name or ''}'s initiative"
     )
 
-    sanitized_content = story.content or ""
+    sanitized_content = json_to_html(story.formatted_content)
     should_show_story_heading = True
 
-    html = f"""
-    <div class="story-company2-div page-break">
-        <div class="story-in-thirdpage">
-            {f'<p class="story-heading-third">{title}</p>' if should_show_story_heading else ''}
-            {(f'<img src="https://static-media.gritworks.ai/fe-images/PNG/GritPersona/line_story.png" '
-              f'class="story-line-logo1-third" alt="line_story" />') if should_show_story_heading else ''}
+    content_chunks = split_content_based_on_words(sanitized_content)
 
-            <div class="story-contentBox">
-                <div style="position: relative; width: 90%; height: auto;">
-                    {sanitized_content}
+    html_pages = []
+    for chunk in content_chunks:
+        html_page = f"""
+        <div class="story-company2-div page-break">
+            <div class="story-in-thirdpage">
+                {f'<p class="story-heading-third">{title}</p>' if should_show_story_heading else ''}
+                {(f'<img src="https://static-media.gritworks.ai/fe-images/PNG/GritPersona/line_story.png" '
+                  f'class="story-line-logo1-third" alt="line_story" />') if should_show_story_heading else ''}
+
+                <div class="story-contentBox">
+                    <div style="position: relative; width: 90%; height: auto;">
+                        {chunk}
+                    </div>
+                    <img src="https://static-media.gritworks.ai/fe-images/PNG/GritPersona/line_story.png" 
+                    class="story-line1-logo" alt="line_story" />
                 </div>
-                <img src="https://static-media.gritworks.ai/fe-images/PNG/GritPersona/line_story.png" 
-                class="story-line1-logo" alt="line_story" />
             </div>
         </div>
-    </div>
-    """
-    return html
+        """
+        html_pages.append(html_page)
+        should_show_story_heading = False
+
+    return "\n".join(html_pages)

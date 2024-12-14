@@ -3,7 +3,7 @@ from django.http import HttpResponse
 
 
 def generate_pdf_with_gotenberg(html_content):
-    gotenberg_url = "http://localhost:3001/forms/chromium/convert/html"
+    gotenberg_url = "http://localhost:3002/forms/chromium/convert/html"
 
     files = {
         "files": ("index.html", html_content, "text/html"),

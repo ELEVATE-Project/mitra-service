@@ -10,7 +10,7 @@ base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
 def get_file_names_for_story(story):
     """Retrieve file names for a specific story."""
-    return StoryMedia.objects.filter(story=story, media_type=MediaTypeChoices.PDF)
+    return StoryMedia.objects.filter(story=story, media_type=MediaTypeChoices.PDF).first()
 
 
 def get_file_names_for_session(session_value):
@@ -32,13 +32,13 @@ def prepare_request_data(session_value, file_names):
     }
 
 
-def perform_cloud_upload(file_info, base64_data):
+def perform_cloud_upload(file_info, pdf_file):
     """Upload a file to the cloud using base64-encoded data."""
     presigned_url = file_info["url"]
 
     response = requests.put(
         presigned_url,
-        data=base64_data,
+        data=pdf_file,
         headers={"Content-Type": "multipart/form-data"}
     )
 
@@ -65,8 +65,18 @@ def handle_cloud_response(results, session_value, story=None, instance=None):
             source_path = file_info["payload"]["sourcePath"]
             update_story_media_source_path(file_info["file"], source_path)
             story_media_file = get_file_names_for_story(story)
-            base64_data = story_media_file.get('base64_str')
-            if perform_cloud_upload(file_info, base64_data):
+            print("story_media_file: ", story_media_file)
+            if not story_media_file:
+                print(f"No story file found for story ID: {story.id}")
+            else:
+                print(f"Story file: {story_media_file.name}")
+            pdf_file = story_media_file.file
+            if not pdf_file:
+                print(f"No pdf_file found for story ID: {story.id}")
+            else:
+                print(f"Pdf file: {pdf_file}")
+            print("pdf_file type: ", type(pdf_file))
+            if perform_cloud_upload(file_info, pdf_file):
                 pdf_information.append({
                     "filePath": source_path,
                     "language": story.language
@@ -136,7 +146,7 @@ def upload_to_cloud(session_value, access_token, story=None, instance=None):
 
     if story:
         story_file_name = get_file_names_for_story(story)
-        file_names = [file.name for file in story_file_name]
+        file_names = [story_file_name.name if story_file_name else "sample"]
     elif instance:
         if not instance.get("include_in_story") and instance.get("media_type") != MediaTypeChoices.PDF:
             return
@@ -145,7 +155,7 @@ def upload_to_cloud(session_value, access_token, story=None, instance=None):
         file_names = [file.name for file in get_file_names_for_session(session_value)]
 
     data = prepare_request_data(session_value, file_names)
-
+    print("upload data: ", data)
     try:
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()
