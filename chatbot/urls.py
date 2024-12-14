@@ -10,11 +10,11 @@ from chatbot.views.drf_views import CompanyChatListCreateView, CompanyChatRetrie
     ProfileRetrieveUpdateDestroyView, ChatSessionListCreateView, ChatSessionRetrieveUpdateDestroyView, \
     ChatSessionRetrieveUpdateDestroyViewSession
 from chatbot.views.mitra_views import paraphrase_view, generate_objectives_view, generate_action_list_view, \
-    generate_title_view, create_project_view
+    generate_title_view, create_project_view, update_project_status_view
 from chatbot.views.recommendation import generate_recommendation
 from chatbot.views.story_views import end_story, StoryListCreateView, StoryBySessionView, \
     StoryRetrieveUpdateDestroyView, story_recreate_view, StoryMediaListCreateView, StoryMediaRetrieveUpdateDestroyView
-
+from shikshalokam.utils.project_utils import update_project_status_utils
 
 app_name = "chatbot"
 
@@ -70,5 +70,6 @@ urlpatterns = [
     path('api/create-project/', create_project_view, name="create-project"),
     path('api/generate-pdf/', generate_pdf_view, name='generate_pdf'),
     path('api/generate-recommendation/', generate_recommendation, name='generate-recommendation'),
+    path('api/update-project-status/', update_project_status_view, name='update-project-status'),
 
 ]

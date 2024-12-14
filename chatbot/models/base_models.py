@@ -109,6 +109,7 @@ class Profile(models.Model):
         return upload_path
 
     first_name = models.CharField(max_length=100)
+    userid = models.CharField(max_length=200, null=True, blank=True)
     last_name = models.CharField(max_length=100, null=True, blank=True)
     email = models.EmailField(max_length=100, null=False, blank=False)
     phone = models.CharField(max_length=20, null=True, blank=True)

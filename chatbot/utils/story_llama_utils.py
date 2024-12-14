@@ -3,7 +3,7 @@ import secrets
 import traceback
 from datetime import datetime
 from chatbot.models.geo_models import ProfileAddress
-from shikshalokam.models import Project
+from shikshalokam.models import Project, ProjectStatus
 
 
 def get_company_context(profile, company):
@@ -91,33 +91,43 @@ def get_company_content_prompt():
     """
 
 
-def create_project(response_json, story, profile):
+def create_project(response_json, story, profile, problem_statement, project_id):
     try:
         title = response_json.get('title', '')
         objective = response_json.get('objective', '')
         resource_name = response_json.get('resource_name', '')
         resource_link = response_json.get('resource_link', '')
         duration = response_json.get('duration', '')
-        status = response_json.get('status', '')
         keywords = response_json.get('keywords', '')
         project_start_date = parse_datetime(response_json.get('project_start_date', ''))
         project_end_date = parse_datetime(response_json.get('project_end_date', ''))
 
-        random_hex = generate_random_hex()
-        project = Project(
-            story=story,
-            author=profile,
-            title=title,
-            objective=objective,
-            duration=duration,
-            project_status=status,
-            project_id=random_hex,
-            keywords=keywords,
-            resource_name=resource_name,
-            resource_link=resource_link,
-            project_start_date=project_start_date,
-            project_end_date=project_end_date,
+        if not Project.objects.filter(project_id=project_id).exists():
+            project_id = generate_random_hex()
+
+        project, created = Project.objects.update_or_create(
+            project_id=project_id,
+            defaults={
+                "story": story,
+                "author": profile,
+                "actual_title": title,
+                "actual_objective": objective,
+                "actual_duration": duration,
+                "project_status": ProjectStatus.SUBMITTED,
+                "actual_problem_statement": problem_statement,
+                "keywords": keywords,
+                "resource_name": resource_name,
+                "resource_link": resource_link,
+                "project_start_date": project_start_date,
+                "project_end_date": project_end_date,
+            }
         )
+
+        if created:
+            print("A new project was created.")
+        else:
+            print("The existing project was updated.")
+
         project.save()
         return story.id, story.content
 

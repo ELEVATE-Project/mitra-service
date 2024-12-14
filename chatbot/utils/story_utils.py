@@ -124,6 +124,7 @@ def create_story_object(profile_id, session, access_token, model=None):
         print('impact: ', impact)
         micro_improvement =  response_json.get('micro_improvement', '')
         print('micro_improvement: ', micro_improvement)
+
         problem_statement = response_json.get('problem_statement', '')
         print('problem_statement: ', problem_statement)
 
@@ -158,21 +159,24 @@ def create_story_object(profile_id, session, access_token, model=None):
             language=StoryLanguageChoices.ENGLISH,
             stage=StoryStatusChoices.COMPLETED,
             other_params=other_params,
-            location=location,
-            problem_statement=problem_statement
+            location=location
         )
 
         story.save()
         formatted_content = get_formatted_story(story)
         story.formatted_content = formatted_content
         story.save(update_fields=['formatted_content'])
-        if company_slug == 'shikshalokamstaging':
-            create_project(response_json, story, profile)
 
         chat_session = ChatSession.objects.get(session=session)
         project_id = chat_session.project_id
+
+        if company_slug == 'shikshalokamstaging':
+            create_project(response_json, story, profile, problem_statement, project_id)
+
+
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=['session_status'])
+
         save_shikshalokam_story(
             story=story, chat_history=chat_history, access_token=access_token,
             problem_statement=problem_statement, project_id=project_id, session=session,

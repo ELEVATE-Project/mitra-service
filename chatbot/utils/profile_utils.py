@@ -28,6 +28,7 @@ def create_profile_utils(access_token):
 
         result = json_response.get("result")
         email = result.get('email')
+        userid = result.get('id')
         name = result.get('name')
         preferred_language = result.get('preferred_language', {}).get('value')
         organization = result.get('organization', {}).get('name')
@@ -53,7 +54,7 @@ def create_profile_utils(access_token):
         }
 
         profile, created = Profile.objects.update_or_create(
-            email=email,
+            userid=userid,
             defaults=profile_data
         )
 

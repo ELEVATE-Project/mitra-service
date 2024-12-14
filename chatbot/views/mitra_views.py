@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from chatbot.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_objective_utils, \
     generate_action_list_utils, generate_title_utils
+from shikshalokam.utils.project_utils import update_project_status_utils
 
 
 @api_view(['POST'])
@@ -100,10 +101,11 @@ def create_project_view(request):
 
     result = ''
     if project_id and program_id and profile:
+
         result = create_mitra_project_utils(
             profile=profile,
             session=session,
-            user_problem_statement=user_problem_statement,
+            expected_problem_statement=user_problem_statement,
             project_title=project_title,
             project_duration=project_duration,
             project_objective=project_objective,
@@ -118,4 +120,20 @@ def create_project_view(request):
         'status': 'ok',
         'result': response,
         'mitra_result': result
+    }, status=200)
+
+
+@api_view(['POST'])
+def update_project_status_view(request):
+    body = request.data
+    access_token = body.get('access_token')
+    project_id = body.get('project_id')
+
+    response = update_project_status_utils(
+        project_id=project_id, access_token=access_token
+    )
+
+    return Response({
+        'status': 'ok',
+        'result': response,
     }, status=200)

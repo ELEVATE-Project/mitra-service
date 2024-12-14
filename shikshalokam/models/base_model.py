@@ -6,7 +6,7 @@ from django_s3_storage.storage import S3Storage
 from simple_history.models import HistoricalRecords
 
 from chatbot.models import Profile, Story
-from shikshalokam.models.enums import ProjectStatus, TaskMandatoryStatus
+from shikshalokam.models.enums import ProjectStatus, TaskMandatoryStatus, ProjectCreatedBy
 
 storage = S3Storage(aws_s3_bucket_name='mohini-static.shikshalokam.org')
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
@@ -61,13 +61,29 @@ class Project(models.Model):
                                          null=True, blank=True)
     author = models.ForeignKey(Profile, on_delete=models.CASCADE, null=False, blank=False, related_name="project")
 
-    title = models.CharField(max_length=1000, null=True, blank=True)
+    expected_title = models.CharField(max_length=1000, null=True, blank=True)
+    actual_title = models.CharField(max_length=1000, null=True, blank=True)
+
+    expected_problem_statement = models.TextField(null=True, blank=True)
+    actual_problem_statement = models.TextField(null=True, blank=True)
+
     project_id = models.CharField(max_length=255, unique=True)
+    program_id = models.CharField(max_length=255, null=True, blank=True)
+    program_name = models.CharField(max_length=1000, null=True, blank=True)
+
     recommended_for = models.CharField(max_length=400, null=True, blank=True)
     keywords = models.TextField(null=True, blank=True)
-    objective = models.TextField(null=True, blank=True)
-    duration = models.CharField(max_length=1000, null=True, blank=True)
+
+    expected_objective = models.TextField(null=True, blank=True)
+    actual_objective = models.TextField(null=True, blank=True)
+
+    expected_duration = models.CharField(max_length=1000, null=True, blank=True)
+    actual_duration = models.CharField(max_length=1000, null=True, blank=True)
+
     project_status = models.CharField(max_length=100, choices=ProjectStatus.choices, null=True, blank=True)
+    generated_by = models.CharField(max_length=100, choices=ProjectCreatedBy.choices,
+                                    default=ProjectCreatedBy.AI_GENERATED)
+
     other_params = models.JSONField(null=True, blank=True)
 
     resource_name = models.CharField(max_length=1000, null=True, blank=True)
@@ -79,21 +95,17 @@ class Project(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     history = HistoricalRecords()
 
     def __str__(self):
-        return self.title if self.title else "Unnamed Project"
+        return self.actual_title if self.actual_title else "Unnamed Project"
 
     class Meta:
         db_table = 'shikshalokam"."project'
         indexes = [
-            models.Index(fields=['title']),
             models.Index(fields=['project_id']),
             models.Index(fields=['recommended_for']),
             models.Index(fields=['keywords']),
-            models.Index(fields=['objective']),
-            models.Index(fields=['duration']),
             models.Index(fields=['project_status']),
             models.Index(fields=['resource_name']),
             models.Index(fields=['project_start_date']),

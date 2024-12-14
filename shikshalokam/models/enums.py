@@ -22,3 +22,8 @@ class ProjectStatus(models.TextChoices):
 class TaskMandatoryStatus(models.TextChoices):
     YES = 'YES', _('YES')
     NO = 'NO', _('NO')
+
+class ProjectCreatedBy(models.TextChoices):
+    AI_GENERATED = 'AI_GENERATED', _('AI_GENERATED')
+    EXPERT_VETTED = 'EXPERT_VETTED', _('EXPERT_VETTED')
+

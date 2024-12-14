@@ -6,6 +6,7 @@ from django.utils.timezone import now
 from chatbot.models import Profile, MitraProject
 import json
 
+from shikshalokam.models import Project, Task
 
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
@@ -92,29 +93,33 @@ def create_project_utils(
 
 
 def create_mitra_project_utils(
-        session, user_problem_statement, project_title, project_duration,
+        session, expected_problem_statement, project_title, project_duration,
         project_objective, user_action_steps, project_id, program_id, profile
 ):
     try:
 
         action_list = json.dumps(user_action_steps)
 
-        mitra_entry = MitraProject.objects.create(
-            profile=profile,
-            session=session,
-            duration=project_duration,
-            title=project_title,
-            problem_statement=user_problem_statement,
-            objective=project_objective,
-            actions=action_list,
+        project = Project.objects.create(
+            author=profile,
+            expected_duration=project_duration,
+            expected_title=project_title,
+            expected_problem_statement=expected_problem_statement,
+            expected_objective=project_objective,
             project_id=project_id,
             program_id=program_id
         )
 
+        for action in action_list:
+            Task.objects.create(
+                project=project,
+                task_name=action
+            )
+
         return {
             "status": "success",
-            "message": "Mitra project created successfully",
-            "project_id": mitra_entry.id,
+            "message": "Project and Task created successfully",
+            "project_id": project.id,
         }
 
     except Profile.DoesNotExist:

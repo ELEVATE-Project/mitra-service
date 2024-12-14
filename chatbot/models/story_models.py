@@ -21,7 +21,6 @@ class Story(models.Model):
     micro_improvement = models.TextField(null=True, blank=True)
     location = models.CharField(max_length=1000, null=True, blank=True)
     formatted_content = models.TextField(null=True, blank=True)
-    problem_statement = models.TextField(null=True, blank=True)
     language = models.CharField(max_length=1000, choices=StoryLanguageChoices.choices,
                                 default=StoryLanguageChoices.ENGLISH)
     source = models.CharField(max_length=1000, choices=StorySourceChoices.choices,

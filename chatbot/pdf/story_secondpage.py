@@ -1,3 +1,4 @@
+from shikshalokam.models import Project
 
 
 def get_story_secondpage_html(story):
@@ -6,6 +7,7 @@ def get_story_secondpage_html(story):
         else story.action_steps if isinstance(story.action_steps, list)
         else ["No action steps provided."]
     )
+    project = Project.objects.get(story=story)
     print("action step type: ", type(action_steps))
     print("action_steps: ", action_steps)
     page_html = f"""
@@ -13,7 +15,7 @@ def get_story_secondpage_html(story):
         <h1>Report of Micro Improvement</h1>
         <div class="story-second-page-section">
             <h2>Problem Statement</h2>
-            <p>{story.problem_statement or "No problem statement provided."}</p>
+            <p>{project.actual_problem_statement or "No problem statement provided."}</p>
         </div>
         <div class="story-second-page-section">
             <h2>Objective</h2>
