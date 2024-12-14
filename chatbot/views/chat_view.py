@@ -10,7 +10,7 @@ def save_chats_view(request):
     session = body.get('session')
     status = body.get('status', 'COMPLETED')
     role = body.get('role')
-
+    user_profile = None
     if not message or not session:
         return Response({"error": "message and session are required."}, status=400)
 
@@ -22,12 +22,19 @@ def save_chats_view(request):
     except Profile.DoesNotExist:
         return Response({"error": "AI profile not found."}, status=400)
 
+    try:
+        chat_session = ChatSession.objects.get(session=session)
+        if chat_session:
+            user_profile = chat_session.profile
+    except ChatSession.DoesNotExist:
+        return Response({"error": "chat_session not found."}, status=400)
+
 
     if role == 'bot':
         sender = ai_user
-        receiver = None
+        receiver = user_profile
     elif role == 'user':
-        sender = None
+        sender = user_profile
         receiver = ai_user
     else:
         return Response({"error": "Invalid role. Must be 'bot' or 'user'."}, status=400)
