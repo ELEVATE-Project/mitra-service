@@ -1,9 +1,11 @@
+import os
 import requests
-from django.http import HttpResponse
+
+
+gotenberg_url = os.getenv("GOTENBERG_URL")
 
 
 def generate_pdf_with_gotenberg(html_content):
-    gotenberg_url = "http://localhost:3002/forms/chromium/convert/html"
 
     files = {
         "files": ("index.html", html_content, "text/html"),
