@@ -33,7 +33,7 @@ class StoryAdmin(ExportActionMixin, admin.ModelAdmin):
     list_display = ('title', 'author', 'session', 'created_at',)
     list_filter = (CustomAdvanceDateFilter, StoryCompanyFilter, 'author', 'session', StoryLocationFilter)
     search_fields = ('title', 'session',)
-    # exclude = ('formatted_content', )
+    exclude = ('formatted_content', )
     inlines = [StoryTagInline, StoryMediaInline]
     list_per_page = 20
 
