@@ -51,7 +51,9 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
     'http://localhost:9000',
     'https://*.shikshalokam.org',
-    'https://*.gritworks.ai'
+    'https://*.gritworks.ai',
+    'https://demo-mitra.shikshalokam.org',
+    'https://mohini.shikshalokam.org'
 ]
 
 CORS_ALLOWED_METHODS = [
@@ -66,6 +68,8 @@ ALLOWED_HOSTS = [
     'localhost',
     'shikshalokam.org',
     '.shikshalokam.org',
+    'demo-mitra.shikshalokam.org',
+    'mohini.shikshalokam.org',
     'gritworks.ai',
     '.gritworks.ai'
 ]
@@ -77,6 +81,7 @@ INSTALLED_APPS = [
     'daphne',
     'chatbot',
     'shikshalokam',
+    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -271,3 +276,20 @@ sentry_sdk.init(
     profiles_sample_rate=1.0,
 )
 
+JAZZMIN_SETTINGS = {
+    'site_title': 'Shikshalokam',
+    'site_header': 'Shikshalokam',
+    'site_brand': 'Shikshalokam',
+    'site_logo': 'fe-images/PNG/Shikshalokam/shikshalokam-logo.png',
+    'login_logo': 'fe-images/PNG/Shikshalokam/shikshalokam-logo.png',
+    'site_logo_classes': 'img-fluid',
+    'welcome_sign': '',
+    'copyright': 'Shikshalokam',
+    'show_ui_builder': False,
+    'changeform_format': 'single',
+
+}
+
+JAZZMIN_UI_TWEAKS = {
+    'navbar_fixed': True
+}

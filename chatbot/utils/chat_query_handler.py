@@ -10,7 +10,7 @@ def query_database(query_prompt: str, priority_filter: str, limit: int):
     """
     Query vector database to retrieve chunk with user's input questions.
     """
-    url = "http://13.202.158.115:8000/query/"
+    url = "https://demo-mitra.shikshalokam.org/api/query/"
     headers = {
         "Content-Type": "application/json",
         "accept": "application/json",
