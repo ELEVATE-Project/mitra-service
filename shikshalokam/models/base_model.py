@@ -71,7 +71,7 @@ class Project(models.Model):
     program_id = models.CharField(max_length=255, null=True, blank=True)
     program_name = models.CharField(max_length=1000, null=True, blank=True)
 
-    recommended_for = models.CharField(max_length=400, null=True, blank=True)
+    recommended_for = models.TextField(null=True, blank=True)
     keywords = models.TextField(null=True, blank=True)
 
     expected_objective = models.TextField(null=True, blank=True)
@@ -126,6 +126,8 @@ class Task(models.Model):
     observation_name = models.CharField(max_length=255, null=True, blank=True)
     number_of_submission_observation = models.IntegerField(null=True, blank=True)
     other_params = models.JSONField(null=True, blank=True)
+    task_status = models.CharField(max_length=100, null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

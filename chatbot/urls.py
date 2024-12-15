@@ -1,4 +1,5 @@
 from chatbot.views.gotenberg_view import generate_pdf_view
+from chatbot.views.kafka_views import sync_user_project_view
 from chatbot.views.profile_views import create_profile_views
 from django.urls import path
 from chatbot.views import api_views
@@ -71,5 +72,6 @@ urlpatterns = [
     path('api/generate-pdf/', generate_pdf_view, name='generate_pdf'),
     path('api/generate-recommendation/', generate_recommendation, name='generate-recommendation'),
     path('api/update-project-status/', update_project_status_view, name='update-project-status'),
+    path('api/sync-user-project/', sync_user_project_view, name='sync-user-project'),
 
 ]
