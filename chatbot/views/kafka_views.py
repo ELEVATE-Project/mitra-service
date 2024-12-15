@@ -15,7 +15,7 @@ def sync_user_project_view(request):
         update_project_in_db(project_data=project_data)
 
         return JsonResponse({
-            "message": "Recommendations generated and saved successfully.",
+            "message": "Data updated successfully.",
             "status": "success",
         }, status=200)
 

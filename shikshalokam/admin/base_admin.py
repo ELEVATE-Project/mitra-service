@@ -62,6 +62,8 @@ class TaskAdmin(admin.ModelAdmin):
     list_filter = (CustomAdvanceDateFilter, 'task_id', 'project__project_id')
     search_fields = ('task_name', )
 
+    raw_id_fields = ('project',)
+
     def save_model(self, request, obj, form, change):
         if not obj.pk:
             obj.created_by = request.user

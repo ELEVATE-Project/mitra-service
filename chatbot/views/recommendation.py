@@ -5,7 +5,7 @@ from django.http import JsonResponse
 from chatbot.models import Profile
 from chatbot.serializer.profile_serializer import ProfileSerializer
 from shikshalokam.models import Project
-from shikshalokam.serializer import ProjectSerializer
+from shikshalokam.serializer import ProjectSerializer, ProjectTemplateSerializer, CategorySerializer, TaskSerializer
 
 
 @api_view(["POST"])
@@ -20,7 +20,7 @@ def generate_recommendation(request):
     if not current_profile:
         return JsonResponse({'message': 'Profile not found'}, status=404)
 
-    other_profiles = Profile.objects.exclude(userid=user_id).exclude(id=1)
+    other_profiles = Profile.objects.exclude(userid=user_id).exclude(id=1).exclude(id=6)
 
     current_profile_serialized = ProfileSerializer(current_profile).data
     other_profiles_serialized = ProfileSerializer(other_profiles, many=True).data
@@ -37,9 +37,10 @@ def generate_recommendation(request):
     results = response.json()
 
     recommended_projects = get_project_recommendation(request=results, limit=limit)
-    print("\n\nrecommended_projects: ", recommended_projects)
+    # print("\n\nrecommended_projects: ", recommended_projects)
 
-    return JsonResponse(results)
+    return JsonResponse(recommended_projects, safe=False)
+
 
 
 def get_project_recommendation(request, limit):
@@ -48,35 +49,24 @@ def get_project_recommendation(request, limit):
     recommended_projects = []
 
     try:
-        if profile_details and similarity_result and similarity_result[0].get('score') > 0:
+        if profile_details and similarity_result:
             profile_id = profile_details.get('id')
             projects = Project.objects.filter(author=profile_id)[:limit]
-            serialized_projects = ProjectSerializer(projects, many=True).data
-
-            if serialized_projects:
-                return serialized_projects
 
             for project in projects:
                 project_template = project.project_template
-                categories = project.categories.all()
-                tasks = project.tasks.all()
+                category = project_template.category if project_template else None
+
+                tasks = project.task.all()
 
                 serialized_project = ProjectSerializer(project).data
-                project_template_data = {
-                    'template_id': project_template.template_id,
-                    'title': project_template.title,
-                    'description': project_template.description,
-                } if project_template else {}
-
-                serialized_categories = [{'category_id': cat.category_id, 'name': cat.name} for cat in categories]
-                serialized_tasks = [{
-                    'task_id': task.task_id, 'task_name': task.task_name,
-                    'description': task.description, 'task_status': task.task_status
-                } for task in tasks]
+                serialized_project_template = ProjectTemplateSerializer(project_template).data if project_template else None
+                serialized_category = CategorySerializer(category).data if category else None
+                serialized_tasks = TaskSerializer(tasks, many=True).data
 
                 serialized_project.update({
-                    'template': project_template_data,
-                    'categories': serialized_categories,
+                    'project_template': serialized_project_template,
+                    'category': serialized_category,
                     'tasks': serialized_tasks,
                 })
 
