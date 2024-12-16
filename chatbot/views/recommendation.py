@@ -10,15 +10,20 @@ from shikshalokam.serializer import ProjectSerializer, ProjectTemplateSerializer
 
 @api_view(["POST"])
 def generate_recommendation(request):
-    body = request.data
-    user_id = body.get("user_id")
-    page = body.get("email")
+    body = request.query_params
+    user_id = body.get("userId").strip()
+    page = body.get("page")
     limit = body.get("limit")
     language = body.get("language")
 
-    current_profile = Profile.objects.get(userid=user_id)
-    if not current_profile:
-        return JsonResponse({'message': 'Profile not found'}, status=404)
+    limit = int(limit) if limit else 1
+
+    print(f"user_id={user_id} page={page} limit={limit} language={language}")
+
+    try:
+        current_profile = Profile.objects.get(userid=user_id)
+    except Profile.DoesNotExist:
+        return JsonResponse({'message': f"Profile not found for userid: {user_id}"}, status=404)
 
     other_profiles = Profile.objects.exclude(userid=user_id).exclude(id=1).exclude(id=6)
 
@@ -37,9 +42,14 @@ def generate_recommendation(request):
     results = response.json()
 
     recommended_projects = get_project_recommendation(request=results, limit=limit)
+    count = len(recommended_projects)
+
     # print("\n\nrecommended_projects: ", recommended_projects)
 
-    return JsonResponse(recommended_projects, safe=False)
+    return JsonResponse({
+        "recommended_projects": recommended_projects,
+        "count": count
+    }, safe=False)
 
 
 

@@ -8,7 +8,7 @@ base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
 def update_project_status_utils(project_id, access_token):
     try:
-        url = f"https://{base_url}/project/userProjects/addStory/{project_id}"
+        url = f"https://{base_url}/userProjects/update/{project_id}"
 
         headers = {
             "X-auth-token": access_token,
@@ -18,7 +18,7 @@ def update_project_status_utils(project_id, access_token):
             "reflectionStatus": "completed"
         }
 
-        response = requests.put(url, headers=headers, json=request_body)
+        response = requests.post(url, headers=headers, json=request_body)
         print("response: ", response)
         response.raise_for_status()
 

@@ -7,7 +7,7 @@ from chatbot.utils.kafka_utils import update_profile_in_db, update_project_in_db
 def sync_user_project_view(request):
     body = request.data
     user_id = body.get("userId")
-    profile_data = body.get("Profile")
+    profile_data = body.get("profile")
     project_data = body.get("project")
 
     try:

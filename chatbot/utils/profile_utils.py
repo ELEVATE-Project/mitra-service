@@ -11,7 +11,7 @@ base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
 
 def create_profile_utils(access_token):
-    url = f"https://{base_url}/project/v1/profile/read"
+    url = f"https://{base_url}/profile/read"
 
     headers = {
         "X-auth-token": access_token,

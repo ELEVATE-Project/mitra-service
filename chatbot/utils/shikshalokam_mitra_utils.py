@@ -18,7 +18,7 @@ def create_project_utils(
     project_duration_weeks,
     user_action_steps,
 ):
-    url = f"https://{base_url}/project/v1/userProjects/add"
+    url = f"https://{base_url}/userProjects/add"
 
     headers = {
         "X-auth-token": access_token,

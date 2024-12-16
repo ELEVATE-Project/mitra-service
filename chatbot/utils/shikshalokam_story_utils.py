@@ -65,13 +65,13 @@ def save_shikshalokam_story(
         }
         print("request_body: ", request_body)
 
-        url = f"https://{base_url}/project/userProjects/addStory/{project_id}"
+        url = f"https://{base_url}/userProjects/addStory/{project_id}"
 
         headers = {
             "X-auth-token": access_token,
         }
 
-        response = requests.post(url, headers=headers, json=request_body)
+        response = requests.put(url, headers=headers, json=request_body)
         print("response: ", response)
         response.raise_for_status()
 
@@ -209,7 +209,7 @@ def update_story_pdf(access_token, session):
         print("request_body: ", request_body)
 
 
-        url = f"https://{base_url}/project/userProjects/addStory/{project_id}"
+        url = f"https://{base_url}/userProjects/addStory/{project_id}"
 
         headers = {
             "X-auth-token": access_token,

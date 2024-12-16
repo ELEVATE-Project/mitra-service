@@ -141,7 +141,7 @@ def handle_cloud_response(results, session_value, story=None, instance=None):
 
 def upload_to_cloud(session_value, access_token, story=None, instance=None):
     """Main function to upload files to the cloud."""
-    url = f"https://{base_url}/project/v1/cloud-services/files/preSignedUrls"
+    url = f"https://{base_url}/cloud-services/files/preSignedUrls"
     headers = {"X-auth-token": access_token}
 
     if story:
