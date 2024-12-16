@@ -49,7 +49,7 @@ def get_project_recommendation(request, limit):
     recommended_projects = []
 
     try:
-        if profile_details and similarity_result:
+        if profile_details and similarity_result and similarity_result[0].get('score') > 0:
             profile_id = profile_details.get('id')
             projects = Project.objects.filter(author=profile_id)[:limit]
 
