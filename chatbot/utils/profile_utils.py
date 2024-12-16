@@ -35,6 +35,8 @@ def create_profile_utils(access_token):
         block = result.get('block', {}).get('label')
         state = result.get('state', {}).get('label')
         district = result.get('district', {}).get('label')
+        user_roles = result.get('user_roles', [])
+
 
         company = Company.objects.get(slug='shikshalokamstaging')
 
@@ -44,7 +46,8 @@ def create_profile_utils(access_token):
             "preferred_route": preferred_language,
             "org_associated": organization,
             "password": 'grit@123',
-            "company": company
+            "company": company,
+            "designation": user_roles
         }
 
         address_data = {

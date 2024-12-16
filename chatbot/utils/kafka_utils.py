@@ -90,6 +90,7 @@ def update_profile_in_db(profile_data, user_id):
             current_profile.block = profile_data.get('block', {}).get('label', current_profile.block)
             current_profile.state = profile_data.get('state', {}).get('label', current_profile.state)
             current_profile.district = profile_data.get('district', {}).get('label', current_profile.district)
+            current_profile.designation = profile_data.get('user_roles', current_profile.designation)
 
             current_profile.save()
 
