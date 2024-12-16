@@ -80,4 +80,7 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
             save_in_company_db(self.session_id, self.profile_id, 'User', text_data_json['text'],
                                None, company_chat_status, translated_message)
 
+            print(f"channel_name: {self.channel_name}, session_id: {self.session_id}, profile_id: {self.profile_id}, "
+                  f"route: {self.route}")
+
             get_shikshalokam_bedrock_response.delay(self.channel_name, self.session_id, self.profile_id, self.route)
