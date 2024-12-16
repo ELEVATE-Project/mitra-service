@@ -13,8 +13,11 @@ from django.core.files.base import ContentFile
 
 @api_view(['GET'])
 def generate_pdf_view(request):
-    profile = Profile.objects.get(id=4)
-    story = Story.objects.get(session="z0ou6sjf102601ngzu8q5oeqptxuqu0a")
+    body = request.data
+    session = body.get("session")
+
+    story = Story.objects.get(session=session)
+    profile = story.author
 
     html_content = get_story_html(story=story, profile=profile)
 

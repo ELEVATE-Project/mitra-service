@@ -37,31 +37,37 @@ def count_words_and_lines(text):
     return word_count, len(lines)
 
 
-def split_content_based_on_words(content, max_words_per_page=300):
+def split_content_based_on_words(content, max_words_per_page=400):
     soup = BeautifulSoup(content, "html.parser")
     chunks = []
     current_chunk = ""
     word_counter = 0
-    line_counter = 0
 
-    for element in soup.descendants:
-        if hasattr(element, "string") and element.string:
-            text = str(element.string)
+    for element in soup.find_all(["p", "br"]):  # Limit to <p> and <br>
+        if element.name == "p":
+            text = element.get_text(strip=True)
+            words = text.split()  # Split paragraph into words
+            paragraph_word_count = len(words)
 
-            words_in_text, lines_in_text = count_words_and_lines(text)
-
-            if word_counter + words_in_text > max_words_per_page:
-                chunks.append(current_chunk)
-                current_chunk = text
-                word_counter = words_in_text
-                line_counter = lines_in_text
+            if paragraph_word_count > max_words_per_page:
+                # Split paragraph into smaller parts
+                for i in range(0, paragraph_word_count, max_words_per_page):
+                    part = " ".join(words[i:i + max_words_per_page]) + "<br>"
+                    if word_counter + len(part.split()) > max_words_per_page:
+                        chunks.append(current_chunk)
+                        current_chunk = part
+                        word_counter = len(part.split())
+                    else:
+                        current_chunk += part
+                        word_counter += len(part.split())
             else:
-                current_chunk += text
-                word_counter += words_in_text
-                line_counter += lines_in_text
-
-        elif not isinstance(element, str):
-            current_chunk += str(element)
+                if word_counter + paragraph_word_count > max_words_per_page:
+                    chunks.append(current_chunk)
+                    current_chunk = text + "<br>"
+                    word_counter = paragraph_word_count
+                else:
+                    current_chunk += text + "<br>"
+                    word_counter += paragraph_word_count
 
     if current_chunk:
         chunks.append(current_chunk)
