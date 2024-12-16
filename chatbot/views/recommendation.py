@@ -1,3 +1,5 @@
+import os
+
 from rest_framework.decorators import api_view
 import requests
 from django.http import JsonResponse
@@ -7,6 +9,8 @@ from chatbot.serializer.profile_serializer import ProfileSerializer
 from shikshalokam.models import Project
 from shikshalokam.serializer import ProjectSerializer, ProjectTemplateSerializer, CategorySerializer, TaskSerializer
 
+
+recommendation_base_url = os.getenv("RECOMMENDATION_BASE_URL")
 
 @api_view(["POST"])
 def generate_recommendation(request):
@@ -35,7 +39,7 @@ def generate_recommendation(request):
         "other_profiles": other_profiles_serialized
     }
 
-    url = "http://localhost:9001/similarity-score/"
+    url = recommendation_base_url
     response = requests.post(url, json=data)
     response.raise_for_status()
 
