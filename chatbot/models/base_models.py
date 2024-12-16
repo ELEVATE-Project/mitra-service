@@ -109,6 +109,7 @@ class Profile(models.Model):
         return upload_path
 
     first_name = models.CharField(max_length=100)
+    userid = models.CharField(max_length=200, null=True, blank=True)
     last_name = models.CharField(max_length=100, null=True, blank=True)
     email = models.EmailField(max_length=100, null=False, blank=False)
     phone = models.CharField(max_length=20, null=True, blank=True)
@@ -124,7 +125,7 @@ class Profile(models.Model):
     location = models.CharField(max_length=1000, null=True, blank=True)
     caste = models.CharField(max_length=1000, null=True, blank=True)
     gender = models.CharField(max_length=1000, null=True, blank=True, choices=GenderChoices.choices)
-    designation = models.CharField(max_length=200, null=True, blank=True)
+    designation = models.TextField(null=True, blank=True)
     org_associated = models.CharField(max_length=1000, null=True, blank=True)
     product_interested = models.CharField(max_length=1000, null=True, blank=True)
     company_spoc = models.CharField(max_length=1000, null=True, blank=True)

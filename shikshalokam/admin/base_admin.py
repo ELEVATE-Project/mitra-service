@@ -32,9 +32,9 @@ class ProjectTemplateAdmin(admin.ModelAdmin):
 @admin.register(Project)
 class ProjectAdmin(ImportMixin, ExportActionMixin, admin.ModelAdmin):
     resource_class = ProjectResource
-    list_display = ('title', 'duration', 'project_status', 'created_at', )
+    list_display = ('actual_title', 'actual_duration', 'project_status', 'created_at', )
     list_filter = (CustomAdvanceDateFilter, 'project_id', 'project_status', 'author__company', 'author')
-    search_fields = ('title', )
+    search_fields = ('actual_title', )
     raw_id_fields = ('author', 'story')
     # inlines = [TaskInline, EvidenceInline]
 
@@ -61,6 +61,8 @@ class TaskAdmin(admin.ModelAdmin):
     list_display = ('task_name', 'created_at', 'mandatory_task')
     list_filter = (CustomAdvanceDateFilter, 'task_id', 'project__project_id')
     search_fields = ('task_name', )
+
+    raw_id_fields = ('project',)
 
     def save_model(self, request, obj, form, change):
         if not obj.pk:

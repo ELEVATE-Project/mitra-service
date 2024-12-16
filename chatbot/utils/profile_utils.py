@@ -11,7 +11,7 @@ base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
 
 def create_profile_utils(access_token):
-    url = f"https://{base_url}/project/v1/profile/read"
+    url = f"https://{base_url}/profile/read"
 
     headers = {
         "X-auth-token": access_token,
@@ -28,12 +28,15 @@ def create_profile_utils(access_token):
 
         result = json_response.get("result")
         email = result.get('email')
+        userid = result.get('id')
         name = result.get('name')
         preferred_language = result.get('preferred_language', {}).get('value')
         organization = result.get('organization', {}).get('name')
         block = result.get('block', {}).get('label')
         state = result.get('state', {}).get('label')
         district = result.get('district', {}).get('label')
+        user_roles = result.get('user_roles', [])
+
 
         company = Company.objects.get(slug='shikshalokamstaging')
 
@@ -43,7 +46,8 @@ def create_profile_utils(access_token):
             "preferred_route": preferred_language,
             "org_associated": organization,
             "password": 'grit@123',
-            "company": company
+            "company": company,
+            "designation": user_roles
         }
 
         address_data = {
@@ -53,7 +57,7 @@ def create_profile_utils(access_token):
         }
 
         profile, created = Profile.objects.update_or_create(
-            email=email,
+            userid=userid,
             defaults=profile_data
         )
 

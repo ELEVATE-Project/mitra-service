@@ -11,7 +11,7 @@ from chatbot.serializer.profile_serializer import ProfileSerializer, CompanyChat
 
 
 class CompanyChatListCreateView(generics.ListCreateAPIView):
-    queryset = CompanyChat.objects.all()
+    queryset = CompanyChat.objects.all().order_by('created_at')
     serializer_class = CompanyChatSerializer
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend]
     filterset_fields = ['message', 'sender', 'receiver', 'session', 'status']
@@ -50,7 +50,7 @@ class ChatSessionListCreateView(generics.ListCreateAPIView):
     queryset = ChatSession.objects.all()
     serializer_class = ChatSessionSerializer
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend, ChatSessionProfileFilter]
-    filterset_fields = ['session']
+    filterset_fields = ['session', 'project_id', 'user_id']
 
 
 class ChatSessionRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):

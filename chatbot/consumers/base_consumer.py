@@ -48,6 +48,8 @@ class BaseConsumer(WebsocketConsumer):
 
     def update_last_chat_status(self, chat_status):
         existing_chat = CompanyChat.objects.filter(session=self.session_id).last()
+        if not existing_chat:
+            return
         print("msg: ", existing_chat.message)
         if existing_chat and existing_chat.status != ChatStatus.COMPLETED:
             existing_chat.status = chat_status

@@ -68,24 +68,26 @@ def ask(messages, user_question, temperature, priority_filter, top_k, prompt):
     """
     Handle user's questions.
     """
-    chunks_response = query_database(query_prompt=user_question, priority_filter=priority_filter, limit=top_k)
-    print("chunks_response", chunks_response)
+    # chunks_response = query_database(query_prompt=user_question, priority_filter=priority_filter, limit=top_k)
+    # print("chunks_response", chunks_response)
+    # chunks = []
+    # if chunks_response and chunks_response["relevant_texts"]:
+    #     for result in chunks_response["relevant_texts"]:
+    #         if (
+    #                 "qdrant_recommendation_text" in result
+    #                 and result["qdrant_recommendation_text"] is not None
+    #                 and len(result["qdrant_recommendation_text"]) > 20
+    #         ):
+    #             chunks.append(result["qdrant_recommendation_text"])
+    #
+    #         elif (
+    #                 "translated_text" in result
+    #                 and result["translated_text"] is not None
+    #                 and len(result["translated_text"]) > 20
+    #         ):
+    #             chunks.append(result["translated_text"])
+    # print("\nCHUNKS: ", chunks)
     chunks = []
-    if chunks_response and chunks_response["relevant_texts"]:
-        for result in chunks_response["relevant_texts"]:
-            if (
-                    "qdrant_recommendation_text" in result
-                    and result["qdrant_recommendation_text"] is not None
-                    and len(result["qdrant_recommendation_text"]) > 20
-            ):
-                chunks.append(result["qdrant_recommendation_text"])
-
-            elif (
-                    "translated_text" in result
-                    and result["translated_text"] is not None
-                    and len(result["translated_text"]) > 20
-            ):
-                chunks.append(result["translated_text"])
-    print("\nCHUNKS: ", chunks)
+    chunks_response = None
     response = call_bedrock_api(prompt=prompt, messages=messages, temperature=temperature, chunks=chunks)
     return response, chunks, chunks_response

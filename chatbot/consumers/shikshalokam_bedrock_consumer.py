@@ -1,4 +1,6 @@
 import json
+import traceback
+
 from asgiref.sync import async_to_sync
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.base_consumer import BaseConsumer
@@ -11,6 +13,8 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
 
     session_id = None
     profile_id = None
+    project_id = None
+    user_id = None
     route = None
 
     def disconnect(self, code):
@@ -31,46 +35,58 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
         text_data_json = json.loads(text_data)
         message_type = text_data_json.get('type', None)
 
-        if message_type == 'authenticate':
-            self.session_id = text_data_json.get('sessionid')
-            self.profile_id = text_data_json.get('profileid')
-            self.route = text_data_json.get('route')
-            profile = Profile.objects.get(id=self.profile_id)
-            print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
-                  f"route: {self.route}")
+        try:
+            if message_type == 'authenticate':
+                self.session_id = text_data_json.get('sessionid')
+                self.profile_id = text_data_json.get('profileid')
+                self.project_id = text_data_json.get('projectid')
+                self.user_id = text_data_json.get('userid')
+                self.route = text_data_json.get('route')
+                profile = Profile.objects.get(id=self.profile_id)
+                print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
+                      f"route: {self.route}")
+                print(f"Received project_id: {self.project_id} and userid: {self.user_id}")
 
-            # chat session create (session, profile)
-            cs, cs_created = ChatSession.objects.get_or_create(
-                session=self.session_id,
-                defaults={
-                    'profile': profile,
-                    'current_step': 1,
-                    'company_bot': CompanyBot.objects.get(company=profile.company, route='/'),
-                    'session_status': ChatStatus.IN_PROGRESS
-                }
-            )
-            print(cs, cs_created)
-        else:
-            company_chat_status = self.determine_company_chat_status(
-                session_id=self.session_id, profile_id=self.profile_id
-            )
-            print("COMPANY CHAT STATUS: ", company_chat_status)
-            async_to_sync(self.channel_layer.send)(
-                self.channel_name,
-                {
-                    "type": "chat_message",
-                    "text": {"msg": text_data_json["text"], "source": "user"},
-                },
-            )
-
-            if self.route != '/':
-                translated_message = call_ai4bharat_translation_api(
-                    message_body=text_data_json['text'], target_language='en',
-                    source_language='hi'
+                # chat session create (session, profile)
+                cs, cs_created = ChatSession.objects.get_or_create(
+                    session=self.session_id,
+                    defaults={
+                        'profile': profile,
+                        'current_step': 1,
+                        'company_bot': CompanyBot.objects.get(company=profile.company, route='/'),
+                        'session_status': ChatStatus.IN_PROGRESS,
+                        'project_id': self.project_id,
+                        'user_id': self.user_id,
+                    }
                 )
+                print(cs, cs_created)
             else:
-                translated_message = None
-            save_in_company_db(self.session_id, self.profile_id, 'User', text_data_json['text'],
-                               None, company_chat_status, translated_message)
+                company_chat_status = self.determine_company_chat_status(
+                    session_id=self.session_id, profile_id=self.profile_id
+                )
+                print("COMPANY CHAT STATUS: ", company_chat_status)
+                async_to_sync(self.channel_layer.send)(
+                    self.channel_name,
+                    {
+                        "type": "chat_message",
+                        "text": {"msg": text_data_json["text"], "source": "user"},
+                    },
+                )
 
-            get_shikshalokam_bedrock_response.delay(self.channel_name, self.session_id, self.profile_id, self.route)
+                if self.route != '/':
+                    translated_message = call_ai4bharat_translation_api(
+                        message_body=text_data_json['text'], target_language='en',
+                        source_language='hi'
+                    )
+                else:
+                    translated_message = None
+                save_in_company_db(self.session_id, self.profile_id, 'User', text_data_json['text'],
+                                   None, company_chat_status, translated_message)
+
+                print(f"channel_name: {self.channel_name}, session_id: {self.session_id}, profile_id: {self.profile_id}, "
+                      f"route: {self.route}")
+
+                get_shikshalokam_bedrock_response.delay(self.channel_name, self.session_id, self.profile_id, self.route)
+        except Exception as e:
+            print(e)
+            traceback.print_exc()

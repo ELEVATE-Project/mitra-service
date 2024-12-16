@@ -219,7 +219,8 @@ INTERNAL_IPS = [
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
-CSRF_TRUSTED_ORIGINS = ['https://*.shikshalokam.org', 'https://*.127.0.0.1', 'https://*.gritworks.ai']
+CSRF_TRUSTED_ORIGINS = ['https://*.shikshalokam.org', 'https://*.127.0.0.1',
+                        'https://*.gritworks.ai', 'http://localhost:3000']
 
 STORAGES = {
     "default": {
