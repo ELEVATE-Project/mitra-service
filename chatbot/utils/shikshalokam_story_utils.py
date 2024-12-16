@@ -191,7 +191,6 @@ def update_story_pdf(access_token, session):
         request_body = {
             "story": {
                 "title": story.title,
-                "problemStatement": story.problem_statement,
                 "objective": story.objective,
                 "timeline": "",
                 "actionSteps": story.action_steps or [],
