@@ -19,10 +19,9 @@ def update_project_status_utils(project_id, access_token):
         }
 
         response = requests.post(url, headers=headers, json=request_body)
-        print("response: ", response)
-        response.raise_for_status()
+        print("response: ", response.json())
 
-        return response
+        return response.json()
 
     except Exception as e:
         traceback.print_exc()

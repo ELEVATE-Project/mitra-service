@@ -7,7 +7,7 @@ def get_story_secondpage_html(story):
         else story.action_steps if isinstance(story.action_steps, list)
         else ["No action steps provided."]
     )
-    project = Project.objects.get(story=story)
+    project = Project.objects.filter(story=story).first()
     print("action step type: ", type(action_steps))
     print("action_steps: ", action_steps)
     page_html = f"""

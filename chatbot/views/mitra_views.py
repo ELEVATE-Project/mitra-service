@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from chatbot.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_objective_utils, \
     generate_action_list_utils, generate_title_utils
 from shikshalokam.utils.project_utils import update_project_status_utils
+from django.http import JsonResponse
 
 
 @api_view(['POST'])
@@ -89,6 +90,9 @@ def create_project_view(request):
     project_objective = body.get('user_objective')
     profile_id = body.get('profile_id')
 
+    print("project_title: ", project_title)
+    print("profile_id: ", profile_id)
+
     response = create_project_utils(
         access_token=access_token, user_problem_statement=user_problem_statement,
         user_action_steps=user_action_steps, project_title=project_title,
@@ -133,7 +137,4 @@ def update_project_status_view(request):
         project_id=project_id, access_token=access_token
     )
 
-    return Response({
-        'status': 'ok',
-        'result': response,
-    }, status=200)
+    return JsonResponse(response.get("message"), status=response.get("status"), safe=False)
