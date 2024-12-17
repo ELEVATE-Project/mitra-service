@@ -156,6 +156,7 @@ def upload_to_cloud(session_value, access_token, story=None, instance=None):
 
     data = prepare_request_data(session_value, file_names)
     print("upload data: ", data)
+    response = None
     try:
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()
@@ -165,4 +166,5 @@ def upload_to_cloud(session_value, access_token, story=None, instance=None):
             return handle_cloud_response(results, session_value, story=story, instance=instance)
     except requests.exceptions.RequestException as e:
         print(f"Error during cloud request: {e}")
+        response.raise_for_status()
         return None

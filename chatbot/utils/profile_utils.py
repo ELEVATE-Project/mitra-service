@@ -19,12 +19,27 @@ def create_profile_utils(access_token):
 
     try:
         response = requests.get(url, headers=headers)
-        response.raise_for_status()
+        if response.status_code == 401:
+            return {
+                'success': False,
+                'status_code': 401,
+                'message': 'Access token is invalid or expired.'
+            }
+        elif response.status_code != 200:
+            return {
+                'success': False,
+                'status_code': response.status_code,
+                'message': f"API returned an error: {response.text}"
+            }
+
         json_response = response.json()
         print("json_response: ", json_response)
-
         if not json_response or "result" not in json_response:
-            raise ValidationError("Invalid response from the API")
+            return {
+                'success': False,
+                'status_code': 400,
+                'message': 'Invalid response from the API.'
+            }
 
         result = json_response.get("result")
         email = result.get('email')
@@ -69,11 +84,21 @@ def create_profile_utils(access_token):
         print("profile: ", profile)
         serialized_profile = ProfileSerializer(profile).data
         print("serialized_profile: ", serialized_profile)
-        return serialized_profile
-
+        return {
+            'success': True,
+            'data': serialized_profile
+        }
     except requests.exceptions.RequestException as e:
         print(f"An error occurred while making the API call: {e}")
-        return None
-    except ValidationError as e:
-        print(f"Validation error: {e}")
-        return None
+        return {
+            'success': False,
+            'status_code': 500,
+            'message': f"Error while making the API call: {e}"
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'status_code': 500,
+            'message': f"An unexpected error occurred: {e}"
+        }
+
