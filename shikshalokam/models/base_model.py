@@ -67,8 +67,8 @@ class Project(models.Model):
     expected_problem_statement = models.TextField(null=True, blank=True)
     actual_problem_statement = models.TextField(null=True, blank=True)
 
-    project_id = models.CharField(max_length=255, unique=True)
-    program_id = models.CharField(max_length=255, null=True, blank=True)
+    project_id = models.CharField(max_length=500, unique=True)
+    program_id = models.CharField(max_length=500, null=True, blank=True)
     program_name = models.CharField(max_length=1000, null=True, blank=True)
 
     recommended_for = models.TextField(null=True, blank=True)

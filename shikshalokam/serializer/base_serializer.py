@@ -9,14 +9,9 @@ class CategorySerializer(serializers.ModelSerializer):
 
 
 class ProjectTemplateSerializer(serializers.ModelSerializer):
+    category = CategorySerializer(read_only=True)
     class Meta:
         model = ProjectTemplate
-        fields = '__all__'
-
-
-class ProjectSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Project
         fields = '__all__'
 
 
@@ -29,4 +24,13 @@ class TaskSerializer(serializers.ModelSerializer):
 class EvidenceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Evidence
+        fields = '__all__'
+
+
+class ProjectSerializer(serializers.ModelSerializer):
+    project_template = ProjectTemplateSerializer(read_only=True)
+    task = TaskSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Project
         fields = '__all__'
