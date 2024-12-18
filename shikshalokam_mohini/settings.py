@@ -47,14 +47,7 @@ CORS_ALLOW_HEADERS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',
-    'http://localhost:9000',
-    'https://*.shikshalokam.org',
-    'https://*.gritworks.ai',
-    'https://demo-mitra.shikshalokam.org',
-    'https://mohini.shikshalokam.org'
-]
+CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS').split(',')
 
 CORS_ALLOWED_METHODS = [
     'GET',
@@ -64,15 +57,7 @@ CORS_ALLOWED_METHODS = [
     'OPTIONS'  # Include the OPTIONS method for preflight requests
 ]
 
-ALLOWED_HOSTS = [
-    'localhost',
-    'shikshalokam.org',
-    '.shikshalokam.org',
-    'demo-mitra.shikshalokam.org',
-    'mohini.shikshalokam.org',
-    'gritworks.ai',
-    '.gritworks.ai'
-]
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 
 
 # Application definition
