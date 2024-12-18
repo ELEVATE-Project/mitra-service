@@ -15,7 +15,8 @@ base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
 
 def save_shikshalokam_story(
-        story, problem_statement, chat_history, access_token, project_id, session, profile, conversation
+        story, problem_statement, chat_history, access_token, project_id, session,
+        profile, conversation, flow
 ):
     try:
         html_content = get_story_html(story=story, profile=profile)
@@ -34,7 +35,7 @@ def save_shikshalokam_story(
             media_type=MediaTypeChoices.PDF
         )
 
-        if access_token in [None, "", "null"] or not session or not project_id:
+        if access_token in [None, "", "null"] or not session or not project_id or flow == 'login':
             print("Not calling shikshalokam api as access_tokne or session or project_id is missing")
             return
         upload_response_json = upload_to_cloud(session_value=session, access_token=access_token, story=story)
@@ -115,7 +116,7 @@ def get_story_html(story, profile):
     return html_content
 
 
-def update_story_pdf(access_token, session):
+def update_story_pdf(access_token, session, flow):
 
     try:
         story = Story.objects.get(session=session)
@@ -140,7 +141,7 @@ def update_story_pdf(access_token, session):
         chat_session = ChatSession.objects.get(session=session)
         project_id = chat_session.project_id
 
-        if access_token in [None, "", "null"] or not session or not project_id:
+        if access_token in [None, "", "null"] or not session or not project_id or flow == 'login':
             print("Not calling shikshalokam api as access_tokne or session or project_id is missing")
             return
 

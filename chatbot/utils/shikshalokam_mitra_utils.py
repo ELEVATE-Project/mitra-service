@@ -126,3 +126,35 @@ def create_mitra_project_utils(
         return {"status": "error", "message": "Profile not found"}
     except Exception as e:
         return {"status": "error", "message": f"An error occurred: {str(e)}"}
+
+
+def import_project_from_library_utils(access_token, program_name, project_template_id):
+    url = f"https://{base_url}/userProjects/importFromLibrary/{project_template_id}"
+
+    headers = {
+        "X-auth-token": access_token,
+    }
+
+    request_body = {
+        "programName": program_name
+    }
+
+    print("req body: ", request_body)
+
+    try:
+        response = requests.post(url, headers=headers, json=request_body)
+        response.raise_for_status()
+        json_response = response.json()
+        print("json_response: ", json_response)
+
+        if not json_response or "result" not in json_response:
+            raise ValidationError("Invalid response from the API")
+
+        return json_response
+
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred while making the API call: {e}")
+        return None
+    except ValueError as e:
+        print(f"Validation error: {e}")
+        return None

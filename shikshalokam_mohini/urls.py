@@ -21,5 +21,6 @@ admin.site.site_header = 'Mohini Admin Panel'
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('api/shikshalokam/', include('shikshalokam.urls')),
     path("", include("chatbot.urls", namespace="chatbot")),
 ]

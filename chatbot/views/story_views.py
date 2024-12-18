@@ -22,6 +22,7 @@ def end_story(request):
         session = request.data['session']
         model = request.data.get('model', None)
         access_token = request.data.get('access_token', None)
+        flow = request.data.get('flow')
 
         print("profile_id:", profile_id)
         print("session:", session)
@@ -34,7 +35,7 @@ def end_story(request):
         else:
             id, content = create_story_object(
                 profile_id=profile_id, session=session, model=model,
-                access_token=access_token
+                access_token=access_token, flow=flow
             )
             return Response({
                 'status': 'ok',
@@ -73,8 +74,10 @@ class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
         is_partial = kwargs.pop('is_partial', False)
         session_value = request.data.get('session')
         access_token = request.data.get('access_token')
+        flow = request.data.get('flow')
         print("session_value: ", session_value)
         print("access_token: ", access_token)
+        print("flow: ", flow)
 
         try:
             if is_partial:
@@ -82,7 +85,7 @@ class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
                 if response and response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]:
                     print("response.data: ", response.data.get('session'))
                     update_story_pdf(
-                        access_token=access_token, session=session_value
+                        access_token=access_token, session=session_value, flow=flow
                     )
 
                 return response
@@ -109,7 +112,9 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
         print("Creating")
         session_value = request.data.get('session')
         access_token = request.data.get('access_token')
+        flow = request.data.get('flow')
         print("session_value: ", session_value)
+        print("flow: ", flow)
         print("access_token: ", access_token)
         try:
             response = super().create(request, *args, **kwargs)
@@ -117,7 +122,7 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
             print("response status_code: ", response.status_code)
 
             if (response.status_code == status.HTTP_201_CREATED and access_token not in [None, "", "null"]
-                    and session_value):
+                    and session_value and flow != 'login'):
                 upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
             return response
 
@@ -134,49 +139,6 @@ class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
-
-    def partial_update(self, request, *args, **kwargs):
-        """
-        Handle PATCH requests for partial updates.
-        """
-        print("Updating (PATCH)")
-        return self.handle_update_logic(request, *args, **kwargs, is_partial=True)
-
-    def update(self, request, *args, **kwargs):
-        """
-        Handle PUT requests for full updates.
-        """
-        print("Updating (PUT)")
-        return self.handle_update_logic(request, *args, **kwargs, is_partial=False)
-
-    def handle_update_logic(self, request, *args, **kwargs):
-        """
-        Shared logic for PUT and PATCH requests.
-        """
-        is_partial = kwargs.pop('is_partial', False)  # Safely extract the flag
-        session_value = request.data.get('session')
-        access_token = request.data.get('access_token')
-        print("session_value: ", session_value)
-        print("access_token: ", access_token)
-
-        try:
-            if is_partial:
-                response = super().partial_update(request, *args, **kwargs)
-            else:
-                response = super().update(request, *args, **kwargs)
-
-            print("response: ", response)
-            print("response status_code: ", response.status_code)
-
-            if (response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]
-                    and access_token not in [None, "", "null"] and session_value):
-                # Pass response.data directly as the instance
-                upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
-
-            return response
-        except Exception as e:
-            print("Error occurred: ", str(e))
-            raise
 
 
 class ProfileMediaListCreateView(generics.ListCreateAPIView):

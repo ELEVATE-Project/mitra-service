@@ -24,7 +24,7 @@ DEFAULT_PROMPT = """
 """
 
 
-def create_story_object(profile_id, session, access_token, model=None):
+def create_story_object(profile_id, session, access_token, flow, model=None):
     try:
         profile = Profile.objects.get(id=profile_id)
         company = profile.company
@@ -180,7 +180,7 @@ def create_story_object(profile_id, session, access_token, model=None):
         save_shikshalokam_story(
             story=story, chat_history=chat_history, access_token=access_token,
             problem_statement=problem_statement, project_id=project_id, session=session,
-            profile=profile, conversation=conversation
+            profile=profile, conversation=conversation, flow=flow
         )
 
         return story.id, story.content
