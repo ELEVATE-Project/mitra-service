@@ -6,7 +6,7 @@ from django.http import JsonResponse
 
 from chatbot.models import Profile
 from chatbot.serializer.profile_serializer import ProfileSerializer
-from shikshalokam.models import Project
+from shikshalokam.models import Project, ProjectCreatedBy
 from shikshalokam.serializer import ProjectSerializer, ProjectTemplateSerializer, CategorySerializer, TaskSerializer
 
 
@@ -65,7 +65,9 @@ def get_project_recommendation(request, limit):
     try:
         if profile_details and similarity_result and similarity_result[0].get('score') > 0:
             profile_id = profile_details.get('id')
-            projects = Project.objects.filter(author=profile_id)[:limit]
+            projects = Project.objects.filter(
+                author=profile_id, generated_by=ProjectCreatedBy.EXPERT_VETTED
+            )[:limit]
 
             for project in projects:
                 project_template = project.project_template
@@ -74,7 +76,8 @@ def get_project_recommendation(request, limit):
                 tasks = project.task.all()
 
                 serialized_project = ProjectSerializer(project).data
-                serialized_project_template = ProjectTemplateSerializer(project_template).data if project_template else None
+                serialized_project_template = ProjectTemplateSerializer(project_template).data \
+                    if project_template else None
                 serialized_category = CategorySerializer(category).data if category else None
                 serialized_tasks = TaskSerializer(tasks, many=True).data
 

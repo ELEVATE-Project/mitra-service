@@ -5,6 +5,7 @@ from django.http import JsonResponse
 from chatbot.models import Profile
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, import_project_from_library_utils
 from shikshalokam.models import Project, Task, Evidence
+from shikshalokam.scripts.template_ingestion import ingest_project_template
 from shikshalokam.serializer import ProjectSerializer
 from rest_framework.decorators import api_view
 from django.db import transaction
@@ -136,3 +137,11 @@ def duplicate_project_view(request):
         return JsonResponse({
             'message': f"An error occurred while duplicating the project: {str(e)}"
         }, status=500, safe=False)
+
+
+def project_ingestion_view(request):
+    ingest_project_template('')
+
+    return JsonResponse({
+        'message': f"Done"
+    }, status=200, safe=False)

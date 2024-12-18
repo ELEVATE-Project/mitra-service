@@ -57,9 +57,13 @@ class ProjectTemplate(models.Model):
 
 class Project(models.Model):
     story = models.ForeignKey(Story, related_name='project', on_delete=models.SET_NULL, null=True, blank=True)
+
     project_template = models.ForeignKey(ProjectTemplate, on_delete=models.CASCADE, related_name="project",
                                          null=True, blank=True)
     author = models.ForeignKey(Profile, on_delete=models.CASCADE, null=False, blank=False, related_name="project")
+
+    categories = models.TextField(null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
 
     expected_title = models.CharField(max_length=1000, null=True, blank=True)
     actual_title = models.CharField(max_length=1000, null=True, blank=True)
@@ -67,6 +71,7 @@ class Project(models.Model):
     expected_problem_statement = models.TextField(null=True, blank=True)
     actual_problem_statement = models.TextField(null=True, blank=True)
 
+    template_id = models.CharField(max_length=500, null=True, blank=True)
     project_id = models.CharField(max_length=500, unique=True)
     program_id = models.CharField(max_length=500, null=True, blank=True)
     program_name = models.CharField(max_length=1000, null=True, blank=True)
@@ -155,6 +160,8 @@ class Evidence(models.Model):
 
     remark = models.CharField(max_length=1000, null=True, blank=True)
     evidence_link = models.CharField(max_length=2000, null=True, blank=True)
+
+    type = models.CharField(max_length=250, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
