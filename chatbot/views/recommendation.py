@@ -12,6 +12,7 @@ from shikshalokam.serializer import ProjectSerializer, ProjectTemplateSerializer
 
 recommendation_base_url = os.getenv("RECOMMENDATION_BASE_URL")
 
+
 @api_view(["POST"])
 def generate_recommendation(request):
     body = request.query_params
@@ -54,7 +55,6 @@ def generate_recommendation(request):
         "recommended_projects": recommended_projects,
         "count": count
     }, safe=False)
-
 
 
 def get_project_recommendation(request, limit):
