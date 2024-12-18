@@ -131,11 +131,11 @@ def create_project_view(request):
 def update_project_status_view(request):
     body = request.data
     access_token = body.get('access_token')
-    project_id = body.get('project_id')
+    program_id = body.get('program_id')
     flow = body.get('flow')
 
     response = update_project_status_utils(
-        project_id=project_id, access_token=access_token, flow=flow
+        program_id=program_id, access_token=access_token, flow=flow
     )
 
     return JsonResponse(response.get("message"), status=response.get("status"), safe=False)
