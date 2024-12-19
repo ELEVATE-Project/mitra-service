@@ -4,6 +4,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from chatbot.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_objective_utils, \
     generate_action_list_utils, generate_title_utils
+from shikshalokam.models import Project
 from shikshalokam.utils.project_utils import update_project_status_utils
 from django.http import JsonResponse
 
@@ -134,8 +135,11 @@ def update_project_status_view(request):
     project_id = body.get('project_id')
     flow = body.get('flow')
 
+    required_project = Project.objects.filter(project_id=project_id).first()
+    program_id = required_project.program_id
+
     response = update_project_status_utils(
-        project_id=project_id, access_token=access_token, flow=flow
+        program_id=program_id, access_token=access_token, flow=flow
     )
 
     return JsonResponse(response.get("message"), status=response.get("status"), safe=False)

@@ -6,12 +6,12 @@ import requests
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
 
-def update_project_status_utils(project_id, access_token, flow):
+def update_project_status_utils(program_id, access_token, flow):
     try:
         if flow == 'login':
             return {'message': 'This api has no effect in the current flow', 'status': 200}
 
-        url = f"https://{base_url}/userProjects/update/{project_id}"
+        url = f"https://{base_url}/userProjects/update/{program_id}"
 
         headers = {
             "X-auth-token": access_token,
