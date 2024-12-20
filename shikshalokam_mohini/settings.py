@@ -42,8 +42,7 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
-    'access-control-allow-origin',
-    'X-auth-token'
+    'access-control-allow-origin'
 ]
 
 CORS_ALLOW_CREDENTIALS = True
