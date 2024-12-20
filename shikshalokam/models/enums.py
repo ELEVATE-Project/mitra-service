@@ -17,6 +17,7 @@ class ProjectStatus(models.TextChoices):
     STARTED = 'STARTED', _('STARTED')
     IN_PROGRESS = 'inPROGRESS', _('inPROGRESS')
     SUBMITTED = 'SUBMITTED', _('SUBMITTED')
+    PUBLISHED = 'PUBLISHED', _('PUBLISHED')
 
 
 class TaskMandatoryStatus(models.TextChoices):

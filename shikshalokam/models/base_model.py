@@ -54,13 +54,13 @@ class ProjectTemplate(models.Model):
             models.Index(fields=['category']),
         ]
 
-
+#FOR FUTURE: WE SHOULD REMOVE ProjectTEMPLATE FK. ALSO REMOVE Learning Res name and link and keep fk.
 class Project(models.Model):
     story = models.ForeignKey(Story, related_name='project', on_delete=models.SET_NULL, null=True, blank=True)
 
     project_template = models.ForeignKey(ProjectTemplate, on_delete=models.CASCADE, related_name="project",
                                          null=True, blank=True)
-    author = models.ForeignKey(Profile, on_delete=models.CASCADE, null=False, blank=False, related_name="project")
+    author = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True, related_name="project")
 
     categories = models.TextField(null=True, blank=True)
     description = models.TextField(null=True, blank=True)
@@ -176,5 +176,31 @@ class Evidence(models.Model):
             models.Index(fields=['evidence_link']),
             models.Index(fields=['created_at']),
             models.Index(fields=['task']),
+            models.Index(fields=['project']),
+        ]
+
+class LearningResources(models.Model):
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='learning_resource',
+                                null=True, blank=True)
+
+    name = models.CharField(max_length=1000, null=True, blank=True)
+    link = models.CharField(max_length=2000, null=True, blank=True)
+
+    resource_id = models.CharField(max_length=500, null=True, blank=True)
+    app = models.CharField(max_length=500, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        db_table = 'shikshalokam"."learning_resource'
+        indexes = [
+            models.Index(fields=['name']),
+            models.Index(fields=['link']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['resource_id']),
             models.Index(fields=['project']),
         ]

@@ -39,7 +39,7 @@ def create_project_utils(
         },
         "projects": [
             {
-                "duration": f"{project_duration_weeks} weeks",
+                "duration": f"{project_duration_weeks} week",
                 "endDate": end_date,
                 "source": {
                     "apiVersion": "",

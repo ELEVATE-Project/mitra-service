@@ -1,6 +1,8 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from chatbot.models import CompanyChat, ChatSession, ChatStatus, Profile, Company
+import jwt
+from django.http import JsonResponse
 
 
 @api_view(['POST'])
@@ -59,8 +61,17 @@ def create_chatsession(request):
     body = request.data
     session = body.get('session')
     email = body.get('email')
-    first_name = body.get('first_name')
     preferred_language =  body.get('preferred_language', {}).get('value')
+
+    access_token = request.headers.get("X-auth-token")
+    decoded = jwt.decode(access_token, options={"verify_signature": False})
+    print(decoded)
+    if decoded:
+        user_id = decoded.get('data', {}).get('id')
+        first_name = decoded.get('data', {}).get('name')
+        user_roles = decoded.get('roles', [])
+    else:
+        return JsonResponse({'message': f"Invalid access token"}, status=500)
 
     if not session:
         return Response({"error": "session is required."}, status=400)
@@ -74,12 +85,14 @@ def create_chatsession(request):
         return Response({"error": f"{e}"}, status=400)
 
     profile, created = Profile.objects.get_or_create(
-        email=email,
+        userid = user_id,
         defaults={
             'first_name': first_name,
+            'email': email,
             'password': 'grit@123',
             'preferred_route': preferred_language,
-            'company': company
+            'company': company,
+            "designation": user_roles
         }
     )
 

@@ -8,6 +8,7 @@ from chatbot.models import Profile
 from chatbot.serializer.profile_serializer import ProfileSerializer
 from shikshalokam.models import Project, ProjectCreatedBy
 from shikshalokam.serializer import ProjectSerializer, ProjectTemplateSerializer, CategorySerializer, TaskSerializer
+import jwt
 
 
 recommendation_base_url = os.getenv("RECOMMENDATION_BASE_URL")
@@ -16,10 +17,17 @@ recommendation_base_url = os.getenv("RECOMMENDATION_BASE_URL")
 @api_view(["POST"])
 def generate_recommendation(request):
     body = request.query_params
-    user_id = body.get("userId").strip()
     page = body.get("page")
     limit = body.get("limit")
     language = body.get("language")
+    access_token = request.headers.get("X-auth-token")
+
+    decoded = jwt.decode(access_token, options={"verify_signature": False})
+    print(decoded)
+    if decoded:
+        user_id = decoded.get('data', {}).get('id')
+    else:
+        return JsonResponse({'message': f"Invalid access token"}, status=500)
 
     limit = int(limit) if limit else 1
 
@@ -30,14 +38,13 @@ def generate_recommendation(request):
     except Profile.DoesNotExist:
         return JsonResponse({'message': f"Profile not found for userid: {user_id}"}, status=404)
 
-    other_profiles = Profile.objects.exclude(userid=user_id).exclude(id=1).exclude(id=6)
-
+    projects = Project.objects.filter(generated_by=ProjectCreatedBy.EXPERT_VETTED)[:2]
+    project_serialized = ProjectSerializer(projects, many=True).data
     current_profile_serialized = ProfileSerializer(current_profile).data
-    other_profiles_serialized = ProfileSerializer(other_profiles, many=True).data
 
     data = {
         "current_profile": current_profile_serialized,
-        "other_profiles": other_profiles_serialized
+        "project_templates": project_serialized
     }
 
     url = recommendation_base_url
@@ -45,51 +52,13 @@ def generate_recommendation(request):
     response.raise_for_status()
 
     results = response.json()
-
-    recommended_projects = get_project_recommendation(request=results, limit=limit)
-    count = len(recommended_projects)
-
-    # print("\n\nrecommended_projects: ", recommended_projects)
+    matched_projects = []
+    print("results: ", results)
+    if results:
+        matched_projects = results.get('matched_projects')
+    count = len(matched_projects)
 
     return JsonResponse({
-        "recommended_projects": recommended_projects,
+        "data": matched_projects,
         "count": count
     }, safe=False)
-
-
-def get_project_recommendation(request, limit):
-    profile_details = request.get('profile_details')
-    similarity_result = request.get('similarity_result')
-    recommended_projects = []
-
-    try:
-        if profile_details and similarity_result and similarity_result[0].get('score') > 0:
-            profile_id = profile_details.get('id')
-            projects = Project.objects.filter(
-                author=profile_id, generated_by=ProjectCreatedBy.EXPERT_VETTED
-            )[:limit]
-
-            for project in projects:
-                project_template = project.project_template
-                category = project_template.category if project_template else None
-
-                tasks = project.task.all()
-
-                serialized_project = ProjectSerializer(project).data
-                serialized_project_template = ProjectTemplateSerializer(project_template).data \
-                    if project_template else None
-                serialized_category = CategorySerializer(category).data if category else None
-                serialized_tasks = TaskSerializer(tasks, many=True).data
-
-                serialized_project.update({
-                    'project_template': serialized_project_template,
-                    'category': serialized_category,
-                    'tasks': serialized_tasks,
-                })
-
-                recommended_projects.append(serialized_project)
-
-        return recommended_projects
-    except Exception as e:
-        print("Error: ", e)
-        return []
