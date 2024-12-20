@@ -36,9 +36,12 @@ class ProjectListCreateView(generics.ListCreateAPIView):
 @api_view(['POST'])
 @transaction.atomic
 def duplicate_project_view(request):
+    body = request.query_params
+
     project_template_id = request.data.get('projectTemplateId')
     program_name = request.data.get('programName')
     program_id = request.data.get('programId')
+    project_id = body.get("id")
 
     access_token = request.headers.get("X-auth-token")
     decoded = jwt.decode(access_token, options={"verify_signature": False})
@@ -54,6 +57,13 @@ def duplicate_project_view(request):
         return JsonResponse({'message': f"Profile not found for userid: {user_id}"}, status=404)
 
     try:
+        original_project = Project.objects.prefetch_related('task__evidence').get(id=project_id)
+        user_action_steps = [task.task_name for task in original_project.task.all()]
+
+        try:
+            duration = int(original_project.expected_duration) if original_project.expected_duration else None
+        except ValueError:
+            duration = None
 
         if project_template_id:
             response = import_project_from_library_utils(
@@ -61,9 +71,9 @@ def duplicate_project_view(request):
             )
         else:
             response = create_project_utils(
-                access_token=access_token, user_problem_statement=None,
-                user_action_steps=None, project_title=None,
-                project_duration_weeks=None
+                access_token=access_token, user_problem_statement=original_project.expected_problem_statement,
+                user_action_steps=user_action_steps, project_title=original_project.expected_title,
+                project_duration_weeks=duration
             )
 
         print("response: ", response)
@@ -81,7 +91,6 @@ def duplicate_project_view(request):
         if not project_id:
             return JsonResponse({'message': 'Error in Shikshalokam Project API'}, status=500, safe=False)
 
-        original_project = Project.objects.prefetch_related('task__evidence').get(project_id=project_id)
         duplicate_project = Project.objects.create(
             **{
                 field.name: getattr(original_project, field.name)
@@ -132,7 +141,14 @@ def duplicate_project_view(request):
 
 
 def project_ingestion_view(request):
-    ingest_task_data('')
+    body = request.data
+    key = body.get('key')
+    file_path = body.get('file_path')
+
+    if key == 'TASK':
+        ingest_task_data(file_path)
+    elif key == 'PROJECT':
+        ingest_project_template(file_path)
 
     return JsonResponse({
         'message': f"Done"

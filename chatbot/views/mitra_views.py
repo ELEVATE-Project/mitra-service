@@ -100,8 +100,8 @@ def create_project_view(request):
         project_duration_weeks=project_duration
     )
 
-    project_id = response.get('programId')
-    program_id = response.get('projectId')
+    project_id = response.get('projectId')
+    program_id = response.get('programId')
     profile = Profile.objects.get(id=profile_id)
 
     result = ''

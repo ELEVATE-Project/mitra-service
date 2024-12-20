@@ -1,4 +1,6 @@
 from rest_framework import serializers
+
+from chatbot.serializer.profile_serializer import ProfileSerializer
 from shikshalokam.models.base_model import Project, Task, Category, ProjectTemplate, Evidence
 
 
@@ -30,6 +32,7 @@ class EvidenceSerializer(serializers.ModelSerializer):
 class ProjectSerializer(serializers.ModelSerializer):
     project_template = ProjectTemplateSerializer(read_only=True)
     task = TaskSerializer(many=True, read_only=True)
+    author = ProfileSerializer(read_only=True)
 
     class Meta:
         model = Project
