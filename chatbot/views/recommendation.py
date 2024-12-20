@@ -38,7 +38,7 @@ def generate_recommendation(request):
     except Profile.DoesNotExist:
         return JsonResponse({'message': f"Profile not found for userid: {user_id}"}, status=404)
 
-    projects = Project.objects.filter(generated_by=ProjectCreatedBy.EXPERT_VETTED)[:2]
+    projects = Project.objects.filter(generated_by=ProjectCreatedBy.EXPERT_VETTED)
     project_serialized = ProjectSerializer(projects, many=True).data
     current_profile_serialized = ProfileSerializer(current_profile).data
 
