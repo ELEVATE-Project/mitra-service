@@ -135,11 +135,11 @@ def update_project_status_view(request):
     project_id = body.get('project_id')
     flow = body.get('flow')
 
-    required_project = Project.objects.filter(project_id=project_id).first()
-    program_id = required_project.program_id
+    # required_project = Project.objects.filter(project_id=project_id).first()
+    # program_id = required_project.program_id
 
     response = update_project_status_utils(
-        program_id=program_id, access_token=access_token, flow=flow
+        project_id=project_id, access_token=access_token, flow=flow
     )
 
     return JsonResponse(response.get("message"), status=response.get("status"), safe=False)
