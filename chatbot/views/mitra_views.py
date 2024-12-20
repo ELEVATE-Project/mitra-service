@@ -110,7 +110,7 @@ def create_project_view(request):
         result = create_mitra_project_utils(
             profile=profile,
             session=session,
-            expected_problem_statement=user_problem_statement,
+            actual_problem_statement=user_problem_statement,
             project_title=project_title,
             project_duration=project_duration,
             project_objective=project_objective,

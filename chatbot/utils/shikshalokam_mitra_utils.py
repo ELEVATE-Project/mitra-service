@@ -93,24 +93,28 @@ def create_project_utils(
 
 
 def create_mitra_project_utils(
-        session, expected_problem_statement, project_title, project_duration,
+        session, actual_problem_statement, project_title, project_duration,
         project_objective, user_action_steps, project_id, program_id, profile
 ):
     try:
 
-        action_list = json.dumps(user_action_steps)
+        if isinstance(user_action_steps, str):
+            user_action_steps = json.loads(user_action_steps)
+
+        if not isinstance(user_action_steps, list):
+            user_action_steps = []
 
         project = Project.objects.create(
             author=profile,
-            expected_duration=project_duration,
-            expected_title=project_title,
-            expected_problem_statement=expected_problem_statement,
-            expected_objective=project_objective,
+            actual_duration=project_duration,
+            actual_title=project_title,
+            actual_problem_statement=actual_problem_statement,
+            actual_objective=project_objective,
             project_id=project_id,
             program_id=program_id
         )
 
-        for action in action_list:
+        for action in user_action_steps:
             Task.objects.create(
                 project=project,
                 task_name=action
