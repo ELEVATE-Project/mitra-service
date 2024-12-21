@@ -117,7 +117,7 @@ def ingest_task_data(file_path):
                     print(
                         f"Project with project_id '{project_id}' does not exist. Skipping task "
                         f"'{task_data.get('name')}'.")
-                    missing_project_tasks.append(task_data.get('_id'))
+                    missing_project_tasks.append(project_id)
                     continue
 
                 task, task_created = Task.objects.get_or_create(
@@ -168,7 +168,7 @@ def ingest_task_data(file_path):
                             print(f"Assigned parent_task_id '{parent_task.task_id}' "
                                   f"to child task '{child_task.task_id}'.")
             if missing_project_tasks:
-                print("Tasks with missing projects (_id fields):", missing_project_tasks)
+                print("Tasks with missing projects: ", missing_project_tasks)
 
     except Exception as e:
         print(f"Error during task ingestion: {e}")
