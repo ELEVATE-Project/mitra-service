@@ -28,6 +28,7 @@ def ingest_project_template(file_path):
                         "categories": json.dumps(result.get('categories')),
                         "actual_duration": result.get('metaInformation', {}).get('duration', None),
                         "actual_problem_statement": result.get('problemStatement'),
+                        "program_id": result.get('programId'),
                         "other_params": {
                             'text': result.get('text'),
                             'impact': result.get('impact'),
