@@ -12,6 +12,7 @@ def save_chats_view(request):
     session = body.get('session')
     status = body.get('status', 'COMPLETED')
     role = body.get('role')
+    chunks = body.get('chunks')
     user_profile = None
     if not message or not session:
         return Response({"error": "message and session are required."}, status=400)
@@ -46,7 +47,8 @@ def save_chats_view(request):
         session=session,
         status=status,
         sender=sender,
-        receiver=receiver
+        receiver=receiver,
+        chunks=chunks
     )
 
 

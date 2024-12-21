@@ -73,7 +73,7 @@ def duplicate_project_view(request):
             response = create_project_utils(
                 access_token=access_token, user_problem_statement=original_project.expected_problem_statement,
                 user_action_steps=user_action_steps, project_title=original_project.expected_title,
-                project_duration_weeks=duration
+                project_duration_weeks=duration, chunks=original_project.project_source
             )
 
         print("response: ", response)

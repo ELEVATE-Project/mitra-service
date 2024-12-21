@@ -88,6 +88,6 @@ def ask(messages, user_question, temperature, priority_filter, top_k, prompt):
                 chunks.append(result["translated_text"])
     print("\nCHUNKS: ", chunks)
     chunks = []
-    chunks_response = None
+    print("\nChunk Response: ", chunks_response)
     response = call_bedrock_api(prompt=prompt, messages=messages, temperature=temperature, chunks=chunks)
     return response, chunks, chunks_response
