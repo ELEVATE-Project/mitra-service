@@ -150,8 +150,16 @@ def update_story_pdf(access_token, session, flow):
         )
 
         print("upload_response_json: ", upload_response_json)
+        story_media_objects = StoryMedia.objects.filter(story=story).exclude(media_type=MediaTypeChoices.PDF)
 
-        attachments = upload_response_json.get('attachments')
+        attachments = [
+            {
+                "name": media.name,
+                "sourcePath": media.source_path,
+                "type": media.media_type
+            }
+            for media in story_media_objects
+        ]
         print("attachments: ", attachments)
 
         pdf_information = upload_response_json.get('pdfInformation')
