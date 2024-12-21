@@ -91,40 +91,44 @@ def duplicate_project_view(request):
         if not project_id:
             return JsonResponse({'message': 'Error in Shikshalokam Project API'}, status=500, safe=False)
 
-        duplicate_project = Project.objects.create(
-            **{
-                field.name: getattr(original_project, field.name)
-                for field in Project._meta.fields
-                if field.name not in ['id', 'author', 'project_id', 'program_id', 'created_at', 'updated_at', 'history']
-            },
+        duplicate_project, created = Project.objects.get_or_create(
             project_id=project_id,
-            program_id=program_id,
-            author=new_author,
-        )
-
-        for original_task in original_project.task.all():
-            duplicate_task = Task.objects.create(
+            defaults={
                 **{
-                    field.name: getattr(original_task, field.name)
-                    for field in Task._meta.fields
-                    if field.name not in ['id', 'project', 'created_at', 'updated_at', 'history', 'created_by']
+                    field.name: getattr(original_project, field.name)
+                    for field in Project._meta.fields
+                    if field.name not in ['id', 'author', 'project_id', 'program_id', 'created_at', 'updated_at',
+                                          'history', 'program_name', 'generated_by']
                 },
-                project=duplicate_project
-            )
-
-            for original_evidence in original_task.evidence.all():
-                Evidence.objects.create(
+                'program_id': program_id,
+                'program_name': program_name,
+                'author': new_author,
+            }
+        )
+        if created:
+            for original_task in original_project.task.all():
+                duplicate_task = Task.objects.create(
                     **{
-                        field.name: getattr(original_evidence, field.name)
-                        for field in Evidence._meta.fields
-                        if field.name not in ['id', 'created_at', 'updated_at', 'history', 'created_by']
+                        field.name: getattr(original_task, field.name)
+                        for field in Task._meta.fields
+                        if field.name not in ['id', 'project', 'created_at', 'updated_at', 'history', 'created_by']
                     },
-                    task=duplicate_task
+                    project=duplicate_project
                 )
 
-        serialized_project = ProjectSerializer(duplicate_project).data
+                for original_evidence in original_task.evidence.all():
+                    Evidence.objects.create(
+                        **{
+                            field.name: getattr(original_evidence, field.name)
+                            for field in Evidence._meta.fields
+                            if field.name not in ['id', 'created_at', 'updated_at', 'history', 'created_by']
+                        },
+                        task=duplicate_task
+                    )
 
-        return JsonResponse(serialized_project, status=200, safe=False)
+        serialized_project = ProjectSerializer(duplicate_project).data
+        print("Serialized project: ", serialized_project)
+        return JsonResponse(response, status=200, safe=False)
 
 
     except ObjectDoesNotExist:
@@ -140,6 +144,7 @@ def duplicate_project_view(request):
         }, status=500, safe=False)
 
 
+@api_view(['POST'])
 def project_ingestion_view(request):
     body = request.data
     key = body.get('key')
