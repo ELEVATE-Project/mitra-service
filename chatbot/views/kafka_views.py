@@ -8,7 +8,7 @@ def sync_user_project_view(request):
     body = request.data
     user_id = body.get("userId")
     profile_data = body.get("profile")
-    project_data = body.get("project")
+    project_data = body.get("projects")
 
     try:
         update_profile_in_db(profile_data=profile_data, user_id=user_id)

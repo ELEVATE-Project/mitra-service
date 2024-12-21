@@ -41,7 +41,7 @@ def generate_objective_utils(user_problem_statement):
     )
 
     response = response.get('objective_list')
-    return response
+    return response, chunks_response
 
 
 def generate_action_list_utils(input_data):

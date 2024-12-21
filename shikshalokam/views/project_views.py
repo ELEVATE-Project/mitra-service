@@ -5,12 +5,13 @@ from django.http import JsonResponse
 from chatbot.models import Profile
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, import_project_from_library_utils
 from shikshalokam.models import Project, Task, Evidence
+from shikshalokam.scripts.template_ingestion import ingest_project_template, ingest_task_data
 from shikshalokam.serializer import ProjectSerializer
 from rest_framework.decorators import api_view
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework.response import Response
-
+import jwt
 
 class ProjectListCreateView(generics.ListCreateAPIView):
     queryset = Project.objects.prefetch_related('task__evidence').select_related(
@@ -36,18 +37,19 @@ class ProjectListCreateView(generics.ListCreateAPIView):
 @transaction.atomic
 def duplicate_project_view(request):
     body = request.query_params
-    project_id = body.get("id")
-    user_id = body.get("userId")
+
     project_template_id = request.data.get('projectTemplateId')
     program_name = request.data.get('programName')
     program_id = request.data.get('programId')
+    project_id = body.get("id")
 
-    access_token = request.headers.get("accessToken")
-
-    if not access_token or not user_id or not project_id or not project_template_id:
-        return JsonResponse({
-            'message': f"Access token and userid and projectId and project_template_id is required"
-        }, status=404)
+    access_token = request.headers.get("X-auth-token")
+    decoded = jwt.decode(access_token, options={"verify_signature": False})
+    print(decoded)
+    if decoded:
+        user_id = decoded.get('data', {}).get('id')
+    else:
+        return JsonResponse({'message': f"Invalid access token"}, status=500)
 
     try:
         new_author = Profile.objects.get(userid=user_id)
@@ -71,7 +73,7 @@ def duplicate_project_view(request):
             response = create_project_utils(
                 access_token=access_token, user_problem_statement=original_project.expected_problem_statement,
                 user_action_steps=user_action_steps, project_title=original_project.expected_title,
-                project_duration_weeks=duration
+                project_duration_weeks=duration, chunks=original_project.project_source
             )
 
         print("response: ", response)
@@ -85,8 +87,8 @@ def duplicate_project_view(request):
             project_id = response.get('projectId')
             program_id = response.get('programId')
 
-        print(f"project_id: {project_id} & program_id: {program_id}")
-        if not project_id or not program_id:
+        print(f"project_id: {project_id}")
+        if not project_id:
             return JsonResponse({'message': 'Error in Shikshalokam Project API'}, status=500, safe=False)
 
         duplicate_project = Project.objects.create(
@@ -136,3 +138,18 @@ def duplicate_project_view(request):
         return JsonResponse({
             'message': f"An error occurred while duplicating the project: {str(e)}"
         }, status=500, safe=False)
+
+
+def project_ingestion_view(request):
+    body = request.data
+    key = body.get('key')
+    file_path = body.get('file_path')
+
+    if key == 'TASK':
+        ingest_task_data(file_path)
+    elif key == 'PROJECT':
+        ingest_project_template(file_path)
+
+    return JsonResponse({
+        'message': f"Done"
+    }, status=200, safe=False)

@@ -29,11 +29,12 @@ def generate_objectives_view(request):
     user_input = body.get('user_input')
     print("User Input: ", user_input)
 
-    objective_list = generate_objective_utils(user_problem_statement=user_input)
+    objective_list, chunk_response = generate_objective_utils(user_problem_statement=user_input)
 
     return Response({
         'status': 'ok',
-        'objective_list': objective_list
+        'objective_list': objective_list,
+        'chunks': chunk_response
     }, status=200)
 
 
@@ -90,6 +91,7 @@ def create_project_view(request):
     project_title = body.get('project_title')
     project_objective = body.get('user_objective')
     profile_id = body.get('profile_id')
+    chunks = body.get('chunks')
 
     print("project_title: ", project_title)
     print("profile_id: ", profile_id)
@@ -97,11 +99,11 @@ def create_project_view(request):
     response = create_project_utils(
         access_token=access_token, user_problem_statement=user_problem_statement,
         user_action_steps=user_action_steps, project_title=project_title,
-        project_duration_weeks=project_duration
+        project_duration_weeks=project_duration, chunks=chunks, session=session
     )
 
-    project_id = response.get('programId')
-    program_id = response.get('projectId')
+    project_id = response.get('projectId')
+    program_id = response.get('programId')
     profile = Profile.objects.get(id=profile_id)
 
     result = ''
@@ -109,14 +111,14 @@ def create_project_view(request):
 
         result = create_mitra_project_utils(
             profile=profile,
-            session=session,
-            expected_problem_statement=user_problem_statement,
+            actual_problem_statement=user_problem_statement,
             project_title=project_title,
             project_duration=project_duration,
             project_objective=project_objective,
             user_action_steps=user_action_steps,
             project_id=project_id,
-            program_id=program_id
+            program_id=program_id,
+            chunks=chunks
         )
 
         print("Result: ", result)
@@ -135,11 +137,11 @@ def update_project_status_view(request):
     project_id = body.get('project_id')
     flow = body.get('flow')
 
-    required_project = Project.objects.filter(project_id=project_id).first()
-    program_id = required_project.program_id
+    # required_project = Project.objects.filter(project_id=project_id).first()
+    # program_id = required_project.program_id
 
     response = update_project_status_utils(
-        program_id=program_id, access_token=access_token, flow=flow
+        project_id=project_id, access_token=access_token, flow=flow
     )
 
     return JsonResponse(response.get("message"), status=response.get("status"), safe=False)

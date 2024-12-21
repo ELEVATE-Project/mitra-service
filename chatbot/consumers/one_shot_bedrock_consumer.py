@@ -5,14 +5,14 @@ from chatbot.consumers.base_consumer import BaseConsumer
 from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot
 from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
 from chatbot.celery_tasks.one_shot_bedrock_tasks import get_one_shot_bedrock_response
-
+import jwt
 
 class OneShotBedrockConsumer(BaseConsumer):
 
     session_id = None
     profile_id = None
     project_id = None
-    user_id = None
+    access_token = None
     route = None
 
     def disconnect(self, code):
@@ -37,12 +37,20 @@ class OneShotBedrockConsumer(BaseConsumer):
             self.session_id = text_data_json.get('sessionid')
             self.profile_id = text_data_json.get('profileid')
             self.project_id = text_data_json.get('projectid')
-            self.user_id = text_data_json.get('userid')
+            self.access_token = text_data_json.get('access_token')
             self.route = text_data_json.get('route')
             profile = Profile.objects.get(id=self.profile_id)
             print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
                   f"route: {self.route}")
-            print(f"Received project_id: {self.project_id} and userid: {self.user_id}")
+            print(f"Received project_id: {self.project_id} and access_token: {self.access_token}")
+
+            decoded = jwt.decode(self.access_token, options={"verify_signature": False})
+            print(decoded)
+            if decoded:
+                user_id = decoded.get('data', {}).get('id')
+            else:
+                user_id = None
+            print("User_id: ", user_id)
 
             # chat session create (session, profile)
             cs, cs_created = ChatSession.objects.get_or_create(
@@ -53,7 +61,7 @@ class OneShotBedrockConsumer(BaseConsumer):
                     'company_bot': CompanyBot.objects.get(company=profile.company, route='/'),
                     'session_status': ChatStatus.IN_PROGRESS,
                     'project_id': self.project_id,
-                    'user_id': self.user_id,
+                    'user_id': user_id,
                 }
             )
             print(cs, cs_created)

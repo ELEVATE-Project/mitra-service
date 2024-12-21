@@ -3,7 +3,7 @@ import requests
 from datetime import timedelta, timezone
 from pydantic_core._pydantic_core import ValidationError
 from django.utils.timezone import now
-from chatbot.models import Profile, MitraProject
+from chatbot.models import Profile, CompanyChat
 import json
 
 from shikshalokam.models import Project, Task
@@ -17,6 +17,8 @@ def create_project_utils(
     project_title,
     project_duration_weeks,
     user_action_steps,
+    chunks,
+    session=None
 ):
     url = f"https://{base_url}/userProjects/add"
 
@@ -30,34 +32,39 @@ def create_project_utils(
 
     start_date = start_date.isoformat()
     end_date = end_date.isoformat()
+    if session:
+        company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
+        ai_user = Profile.objects.get(id=1)
+
+        conversation = get_conversation(company_chats=company_chats, ai_user=ai_user)
+    else:
+        conversation = []
 
     request_body = {
         "program": {
-            "conversation": [],
+            "conversation": conversation,
             "name": user_problem_statement,
             "startDate": start_date,
+            "source": {
+                "model": "llama3.1",
+                "provider": "Bedrock"
+            }
         },
         "projects": [
             {
-                "duration": f"{project_duration_weeks} weeks",
+                "duration": f"{project_duration_weeks} week",
                 "endDate": end_date,
-                "source": {
-                    "apiVersion": "",
-                    "confidenceScore": 0,
-                    "info": {
-                        "pageNo": "",
-                        "title": "",
-                        "url": ""
-                    },
-                    "model": "",
-                    "provider": ""
-                },
+                "source": chunks,
                 "startDate": start_date,
                 "status": "completed",
                 "tasks": [
                     {
                         "isDeletable": False,
                         "name": step,
+                        "source": {
+                            "model": "llama3.1",
+                            "provider": "Bedrock"
+                        },
                     } for step in user_action_steps
                 ],
                 "title": project_title
@@ -93,27 +100,40 @@ def create_project_utils(
 
 
 def create_mitra_project_utils(
-        session, expected_problem_statement, project_title, project_duration,
+        chunks, actual_problem_statement, project_title, project_duration,
         project_objective, user_action_steps, project_id, program_id, profile
 ):
     try:
 
-        action_list = json.dumps(user_action_steps)
+        if isinstance(user_action_steps, str):
+            user_action_steps = json.loads(user_action_steps)
+
+        if not isinstance(user_action_steps, list):
+            user_action_steps = []
 
         project = Project.objects.create(
             author=profile,
             expected_duration=project_duration,
             expected_title=project_title,
-            expected_problem_statement=expected_problem_statement,
+            expected_problem_statement=actual_problem_statement,
             expected_objective=project_objective,
             project_id=project_id,
-            program_id=program_id
+            program_id=program_id,
+            project_source=chunks,
+            program_source={
+                "model": "llama3.1",
+                "provider": "Bedrock"
+            }
         )
 
-        for action in action_list:
+        for action in user_action_steps:
             Task.objects.create(
                 project=project,
-                task_name=action
+                task_name=action,
+                source={
+                    "model": "llama3.1",
+                    "provider": "Bedrock"
+                }
             )
 
         return {
@@ -158,3 +178,24 @@ def import_project_from_library_utils(access_token, program_name, project_templa
     except ValueError as e:
         print(f"Validation error: {e}")
         return None
+
+
+def get_conversation(company_chats, ai_user):
+    conversation = []
+    for chat in company_chats:
+        user_message = chat.message
+        if chat.receiver == ai_user:
+            if chat.translated_message is not None and chat.translated_message != '':
+                user_message = chat.translated_message
+            if conversation and len(conversation) > 0:
+                conversation[-1]["userMessage"] = user_message
+
+        else:
+            conversation.append({
+                "botResponse": user_message,
+                "timestamp": chat.created_at.isoformat(),
+                "userMessage": ""
+            })
+    print("\n\nconversation: ", conversation)
+
+    return conversation
