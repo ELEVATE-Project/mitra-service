@@ -32,6 +32,7 @@ def ingest_project_template(file_path):
                             'text': result.get('text'),
                             'impact': result.get('impact'),
                             'summary': result.get('summary'),
+                            'template_author': result.get('author'),
                         },
                         "project_status": result.get('status', '').upper(),
                         "generated_by": ProjectCreatedBy.EXPERT_VETTED
