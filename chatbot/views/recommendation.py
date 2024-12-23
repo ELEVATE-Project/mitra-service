@@ -64,7 +64,6 @@ def generate_recommendation(request):
 
         results = response.json()
         matched_projects = []
-        print("results: ", results)
         if results:
             matched_projects = results.get('matched_projects')
         count = len(matched_projects)
