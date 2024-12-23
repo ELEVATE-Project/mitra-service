@@ -95,7 +95,10 @@ def handle_cloud_response(results, session_value, story=None, instance=None):
         response = requests.put(
             file_info["url"],
             data=file_data,
-            headers={"Content-Type": "multipart/form-data"}
+            headers={
+                "Content-Type": "multipart/form-data",
+                "Access-Control-Allow-Origin": "*"
+            }
         )
 
         if response.status_code == 200:
