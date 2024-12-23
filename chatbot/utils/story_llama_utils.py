@@ -51,7 +51,8 @@ def get_company_end_context(slug):
                 "status": "The current state of the project, such as 'STARTED,' 'inPROGRESS,' or 'SUBMITTED'.",
                 "project_start_date": "Starting date of the project if any.",
                 "project_end_date": "Completion date of project if any.",
-                "content": "Content of the story. Make sure content generated is of 600 words.",
+                "content": "Content of the story. Make sure content generated is around 600 words.",
+                "problem_statement": "The challenge faced by the user and what they wanted to solve."
             }
             
             Ensure all JSON fields are properly formatted. If certain information is not explicitly provided in 
