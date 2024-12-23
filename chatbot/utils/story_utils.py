@@ -229,38 +229,65 @@ def get_end_story_tools():
                             "json": {
                                 "type": "object",
                                 "properties": {
-                                    "author_name": {
+                                    "title": {
                                         "type": "string",
-                                        "description": "Name of the author."
+                                        "description": "Title of the story"
                                     },
-                                    "state": {
+                                    "objective": {
                                         "type": "string",
-                                        "description": "The user's state."
+                                        "description": "Objective of the micro improvement"
                                     },
-                                    "district": {
+                                    "action_steps": {
                                         "type": "string",
-                                        "description": "The user's district."
+                                        "description": "5 Action steps taken by the user to implement the micro improvement"
                                     },
-                                    "block": {
+                                    "impact": {
                                         "type": "string",
-                                        "description": "The user's block."
+                                        "description": "Impact created from this micro improvement"
                                     },
-                                    "conversation_data": {
+                                    "micro_improvement": {
                                         "type": "string",
-                                        "description": "Text of the conversation to create the narrative from."
+                                        "description": "Why is this micro-improvement important"
                                     },
-                                    "start_date": {
+                                    "resource_name": {
                                         "type": "string",
-                                        "description": "Starting date of the project if any.",
-                                        "format": "date"
+                                        "description": "Learning resources name that you want the stakeholders to see while doing the project"
                                     },
-                                    "end_date": {
+                                    "resource_link": {
                                         "type": "string",
-                                        "description": "Completion date of the project if any.",
-                                        "format": "date"
+                                        "description": "Learning resources link that you want the stakeholders to see while doing the project"
+                                    },
+                                    "duration": {
+                                        "type": "string",
+                                        "description": "Total time span of the project, from start to end"
+                                    },
+                                    "keywords": {
+                                        "type": "string",
+                                        "description": "Keywords improve search ability, tag this Improvement project with appropriate keywords"
+                                    },
+                                    "status": {
+                                        "type": "string",
+                                        "description": "The current state of the project, such as 'STARTED,' 'inPROGRESS,' or 'SUBMITTED'"
+                                    },
+                                    "project_start_date": {
+                                        "type": "string",
+                                        "description": "Starting date of the project if any"
+                                    },
+                                    "project_end_date": {
+                                        "type": "string",
+                                        "description": "Completion date of project if any"
+                                    },
+                                    "content": {
+                                        "type": "string",
+                                        "description": "Content of the story. MAKE SURE CONTENT GENERATED IS AROUND 600 WORDS"
+                                    },
+                                    "problem_statement": {
+                                        "type": "string",
+                                        "description": "The challenge faced by the user and what they wanted to solve"
                                     }
                                 },
-                                "required": ["author_name", "state", "district", "block", "conversation_data"]
+                                "required": ["title", "objective", "action_steps", "impact", "micro_improvement",
+                                             "duration", "status", "content", "problem_statement"]
                             }
                         }
                     }
