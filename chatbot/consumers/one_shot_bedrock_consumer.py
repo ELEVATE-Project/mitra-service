@@ -44,10 +44,13 @@ class OneShotBedrockConsumer(BaseConsumer):
                   f"route: {self.route}")
             print(f"Received project_id: {self.project_id} and access_token: {self.access_token}")
 
-            decoded = jwt.decode(self.access_token, options={"verify_signature": False})
-            print(decoded)
-            if decoded:
-                user_id = decoded.get('data', {}).get('id')
+            if self.access_token:
+                decoded = jwt.decode(self.access_token, options={"verify_signature": False})
+                print(decoded)
+                if decoded:
+                    user_id = decoded.get('data', {}).get('id')
+                else:
+                    user_id = None
             else:
                 user_id = None
             print("User_id: ", user_id)
