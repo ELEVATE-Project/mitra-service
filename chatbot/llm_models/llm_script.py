@@ -165,10 +165,17 @@ def handle_bedrock_model(
     # print("Prompt: ", json.dumps(system_prompt))
     # print("Messages: ", json.dumps(messages))
     try:
+        formatted_prompt = f"""
+        <|begin_of_text|><|start_header_id|>user<|end_header_id|>
+        {system_prompt}
+        <|eot_id|>
+        <|start_header_id|>assistant<|end_header_id|>
+        """
+
         request_payload = {
             'modelId': model_id,
             'messages': messages,
-            'system': system_prompt,
+            'system': formatted_prompt,
         }
         if inference_config:
             request_payload['inferenceConfig'] = inference_config
@@ -178,6 +185,7 @@ def handle_bedrock_model(
         print("messages: ", request_payload['messages'])
         print("inferenceConfig: ", request_payload['inferenceConfig'])
         print("toolConfig: ", request_payload['toolConfig'])
+
         response = bedrock_runtime.converse(**request_payload)
 
         # print("Response:", response)
