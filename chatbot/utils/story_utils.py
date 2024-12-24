@@ -10,52 +10,42 @@ from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
 from chatbot.utils.story_llama_utils import (get_company_end_context, create_project,
                                                                  get_company_context)
 from chatbot.llm_models.llm_script import handle_bedrock_model
-
-
-DEFAULT_PROMPT = """
-            Based on the detailed interview you've conducted with a field staff member, 
-            craft a SIMPLE STORY OF MORE THAN 600 TOKENS AT A HIGH SCHOOL ENGLISH LEVEL IN HUMANS OF NEW YORK STYLE that captures the
-            journey of the highlighted beneficiary. The story should flow naturally. 
-            THINGS TO INCORPORATE:
-            1. USE PRESENT TENSE
-            2. DO NOT USE CLICHE BEGINNINGS
-            3. DO NOT ADD FLUFF DO NOT USE FLOWERY LANGUAGE.
-            4. DO NOT ADD ANY INFORMATION FROM YOUR END IF NOT PROVIDED.
-"""
+from jinja2 import Template
 
 
 def create_story_object(profile_id, session, access_token, flow, model=None):
     try:
         profile = Profile.objects.get(id=profile_id)
-        company = profile.company
-        company_slug = company.slug
-        company_context = get_company_context(profile, company)
         company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
-        # if len(company_chats) <= 10:
-        #     return "", ""
         ai_user = Profile.objects.get(id=1)
-        company_bot = CompanyBot.objects.filter(company=profile.company)
-        if company_bot.count() > 0:
-            company_bot = company_bot[0]
-            end_context = company_bot.end_context
-            if end_context is None or end_context == "":
-                end_context = DEFAULT_PROMPT
-        else:
-            end_context = DEFAULT_PROMPT
-        end_context += company_context
-        extra_context = get_company_end_context(company_slug)
-        # content_prompt = get_company_content_prompt()
-        end_context += extra_context
-        # end_context += content_prompt
+        company_bot = CompanyBot.objects.get(route='/story')
+        context = company_bot.context
+        address = ProfileAddress.objects.filter(profile=profile)
+        context_data = {
+            "profile": profile,
+            "address": address if address else [{}]
+        }
+        template = Template(company_bot.tag_context)
+
+        tag_context = template.render(context_data)
+
+        end_context = company_bot.end_context
+        story_prompt = f"""
+            {context}
+            
+            {tag_context}
+            
+            {end_context}
+        """
         print('-------------------------------')
-        print(end_context)
+        print(story_prompt)
 
         messages=[]
         chat_history=[]
         conversation=[]
         prompt_to_use = [
             {
-                'text': end_context
+                'text': story_prompt
             },
         ]
         if company_chats and company_chats[0].receiver != ai_user:
@@ -92,14 +82,15 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
                     "timestamp": chat.created_at.isoformat()
                 })
 
-        print("\n\nchat_history: ", chat_history)
-        print("\n\nconversation: ", conversation)
+        # print("\n\nchat_history: ", chat_history)
+        # print("\n\nconversation: ", conversation)
         tool_to_use = get_end_story_tools()
 
         response_json = handle_bedrock_model(
             system_prompt = prompt_to_use, messages = messages, tools=tool_to_use,
             temperature=0.5, max_token=2048, top_p=0.9
         )
+
         response_json = response_json.replace('\n', '').replace('\t', '').replace(
             '\r', '').replace('\\n', '').replace('\\t', '').replace('\\r', '')
         if '{' in response_json:
@@ -107,7 +98,7 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
         print("\nBEFORE LOADS: ", response_json)
         if isinstance(response_json, str):
             response_json = json.loads(response_json)
-        print("response_json: ", response_json)
+        print("AFTER LOADS: ", response_json)
         print("TYPE response_json: ", type(response_json))
 
         title = response_json.get('title', '')
@@ -129,13 +120,10 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
         print('problem_statement: ', problem_statement)
 
 
-        if company_slug == 'shikshalokamstaging':
-            duration = response_json.get('duration', '')
-            other_params = {
-                'duration': duration
-            }
-        else:
-            other_params = {}
+        duration = response_json.get('duration', '')
+        other_params = {
+            'duration': duration
+        }
 
         if profile:
             address = ProfileAddress.objects.filter(profile=profile).first()
@@ -171,9 +159,7 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
         chat_session = ChatSession.objects.get(session=session)
         project_id = chat_session.project_id
 
-        if company_slug == 'shikshalokamstaging':
-            create_project(response_json, story, profile, problem_statement, project_id)
-
+        create_project(response_json, story, profile, problem_statement, project_id)
 
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=['session_status'])

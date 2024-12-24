@@ -162,8 +162,8 @@ def handle_bedrock_model(
     if messages and messages[-1]['role'] == 'assistant':
         messages.pop()
 
-    print("Prompt: ", json.dumps(system_prompt))
-    print("Messages: ", json.dumps(messages))
+    # print("Prompt: ", json.dumps(system_prompt))
+    # print("Messages: ", json.dumps(messages))
     try:
         request_payload = {
             'modelId': model_id,
@@ -176,26 +176,26 @@ def handle_bedrock_model(
             request_payload['toolConfig'] = tools.get('toolConfig')
         response = bedrock_runtime.converse(**request_payload)
 
-        print("Response:", response)
+        # print("Response:", response)
 
         content = response['output']['message']['content'][0]
         content_tool = content.get('toolUse')
         if content_tool:
-            print("content_tool: ", content_tool)
+            # print("content_tool: ", content_tool)
             if isinstance(content_tool, str):
                 final_output = json.loads(content_tool)
             else:
                 final_output = content_tool
         elif not tools:
             content_text = content.get('text')
-            print("content_text: ", content_text)
+            # print("content_text: ", content_text)
             json_start = content_text.find('{')
             if json_start != -1:
                 json_str = content_text[json_start:]
                 try:
                     final_output = json.loads(json_str)
-                    print("final_output JSON:", final_output)
-                    print("final_output JSON type: ", type(final_output))
+                    # print("final_output JSON:", final_output)
+                    # print("final_output JSON type: ", type(final_output))
                 except json.JSONDecodeError as e:
                     print(f"Error decoding JSON: {e}")
                     return None
@@ -203,9 +203,9 @@ def handle_bedrock_model(
                 return content_text
         else:
             content_text = content.get('text')
-            print("content_text: ", content_text)
+            # print("content_text: ", content_text)
             final_output = content_text
-            print("final_output: ", final_output)
+            # print("final_output: ", final_output)
 
         return  final_output
 
