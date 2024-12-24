@@ -11,11 +11,11 @@ from chatbot.utils.shikshalokam_story_utils import get_story_html
 from django.core.files.base import ContentFile
 
 
-@api_view(['GET'])
+@api_view(['POST'])
 def generate_pdf_view(request):
     body = request.data
     session = body.get("session")
-
+    print("session: ", session)
     story = Story.objects.get(session=session)
     profile = story.author
 

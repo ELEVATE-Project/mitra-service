@@ -44,7 +44,7 @@ urlpatterns = [
     path('api/get-story/', StoryBySessionView.as_view(), name='story-by-session'),
     path('api/story/<int:pk>/', StoryRetrieveUpdateDestroyView.as_view(),
          name='story-retrieve-update-destroy'),
-    path('api/story-re-create/', story_recreate_view, name='story_recreate_view'),
+    # path('api/story-re-create/', story_recreate_view, name='story_recreate_view'),
 
     path('api/storymedia/', StoryMediaListCreateView.as_view(), name='story-media-list-create'),
     path('api/storymedia/<int:pk>/', StoryMediaRetrieveUpdateDestroyView.as_view(),

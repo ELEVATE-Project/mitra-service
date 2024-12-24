@@ -3,7 +3,7 @@ from chatbot.llm_models.llm_script import handle_openai_model
 from chatbot.models import (Profile, CompanyChat, CompanyBot, StoryLanguageChoices,
                                                 StoryStatusChoices, LLMModel)
 from chatbot.models.story_models import Story
-from chatbot.utils.story_utils import get_company_context, DEFAULT_PROMPT, get_formatted_story
+from chatbot.utils.story_utils import get_company_context, get_formatted_story
 
 
 def re_create_story_object(profile_id, session):
@@ -20,10 +20,10 @@ def re_create_story_object(profile_id, session):
         if company_bot.count() > 0:
             company_bot = company_bot[0]
             end_context = company_bot.end_context
-            if end_context is None or end_context == "":
-                end_context = DEFAULT_PROMPT
-        else:
-            end_context = DEFAULT_PROMPT
+            # if end_context is None or end_context == "":
+                # end_context = DEFAULT_PROMPT
+        # else:
+            # end_context = DEFAULT_PROMPT
         end_context += company_context
         end_context += """
             OUTPUT JSON FORMAT:
