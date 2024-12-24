@@ -9,7 +9,7 @@ from chatbot.models.story_models import Story
 from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
 from chatbot.utils.story_llama_utils import (get_company_end_context, create_project,
                                                                  get_company_context)
-from chatbot.llm_models.llm_script import handle_bedrock_model
+from chatbot.llm_models.llm_script import handle_bedrock_model, handle_bedrock_invoke_model
 from jinja2 import Template
 
 
@@ -86,8 +86,14 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
         # print("\n\nconversation: ", conversation)
         tool_to_use = get_end_story_tools()
 
-        response_json = handle_bedrock_model(
-            system_prompt = prompt_to_use, messages = messages, tools=tool_to_use,
+        # response_json = handle_bedrock_model(
+        #     system_prompt = prompt_to_use, messages = messages, tools=tool_to_use,
+        #     temperature=company_bot.bot_temperature, max_token=2048, top_p=company_bot.filter_score,
+        #     model_name='meta.llama3-1-70b-instruct-v1:0'
+        # )
+
+        response_json = handle_bedrock_invoke_model(
+            system_prompt=prompt_to_use, messages=messages, tools=tool_to_use,
             temperature=company_bot.bot_temperature, max_token=2048, top_p=company_bot.filter_score,
             model_name='meta.llama3-1-70b-instruct-v1:0'
         )

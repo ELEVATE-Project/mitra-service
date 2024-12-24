@@ -165,17 +165,11 @@ def handle_bedrock_model(
     # print("Prompt: ", json.dumps(system_prompt))
     # print("Messages: ", json.dumps(messages))
     try:
-        formatted_prompt = f"""
-        <|begin_of_text|><|start_header_id|>user<|end_header_id|>
-        {system_prompt}
-        <|eot_id|>
-        <|start_header_id|>assistant<|end_header_id|>
-        """
 
         request_payload = {
             'modelId': model_id,
             'messages': messages,
-            'system': formatted_prompt,
+            'system': system_prompt,
         }
         if inference_config:
             request_payload['inferenceConfig'] = inference_config
@@ -226,7 +220,7 @@ def handle_bedrock_model(
 
 
 @observe()
-def handle_bedrock_invoke_model(
+def handle_bedrock_invoke_model(system_prompt=None,
         messages=None, max_token=None, temperature=None, top_p=None,
         model_name=None, region_name='us-west-2', tools=None
 ):
@@ -234,16 +228,23 @@ def handle_bedrock_invoke_model(
     if model_name:
         model_id = model_name
     else:
-        model_id = 'meta.llama3-1-8b-instruct-v1:0'
+        model_id = 'meta.llama3-1-70b-instruct-v1:0'
         # model_id = 'meta.llama3-2-3b-instruct-v1:0'
 
     print("USING MODEL ID: ", model_id)
 
     print("Messages: ", messages)
     try:
+        messages.append(system_prompt)
+        formatted_prompt = f"""
+        <|begin_of_text|><|start_header_id|>user<|end_header_id|>
+        {messages}
+        <|eot_id|>
+        <|start_header_id|>assistant<|end_header_id|>
+        """
 
         body = json.dumps({
-            "prompt": json.dumps(messages),
+            "prompt": json.dumps(formatted_prompt),
             "max_gen_len": max_token,
             "temperature": temperature,
             "top_p": top_p
@@ -262,10 +263,9 @@ def handle_bedrock_invoke_model(
             accept="application/json",
             contentType="application/json"
         )
+        print(response)
 
         a = response.get('body').read()
-        # print(a)
-        # print(type(a))
         b = a.decode('utf-8')
         response_body = json.loads(b)
         print(response_body)
