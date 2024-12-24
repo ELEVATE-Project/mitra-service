@@ -86,17 +86,17 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
         # print("\n\nconversation: ", conversation)
         tool_to_use = get_end_story_tools()
 
-        # response_json = handle_bedrock_model(
-        #     system_prompt = prompt_to_use, messages = messages, tools=tool_to_use,
+        response_json = handle_bedrock_model(
+            system_prompt = prompt_to_use, messages = messages, tools=tool_to_use,
+            temperature=company_bot.bot_temperature, max_token=8192, top_p=company_bot.filter_score,
+            model_name='meta.llama3-1-405b-instruct-v1:0'
+        )
+
+        # response_json = handle_bedrock_invoke_model(
+        #     system_prompt=prompt_to_use, messages=messages, tools=tool_to_use,
         #     temperature=company_bot.bot_temperature, max_token=2048, top_p=company_bot.filter_score,
         #     model_name='meta.llama3-1-70b-instruct-v1:0'
         # )
-
-        response_json = handle_bedrock_invoke_model(
-            system_prompt=prompt_to_use, messages=messages, tools=tool_to_use,
-            temperature=company_bot.bot_temperature, max_token=2048, top_p=company_bot.filter_score,
-            model_name='meta.llama3-1-70b-instruct-v1:0'
-        )
 
         response_json = response_json.replace('\n', '').replace('\t', '').replace(
             '\r', '').replace('\\n', '').replace('\\t', '').replace('\\r', '')
