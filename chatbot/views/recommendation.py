@@ -34,7 +34,7 @@ def generate_recommendation(request):
     try:
 
         decoded = jwt.decode(access_token, options={"verify_signature": False})
-        print(decoded)
+        # print(decoded)
         if decoded:
             user_id = decoded.get('data', {}).get('id')
         else:
@@ -42,7 +42,7 @@ def generate_recommendation(request):
 
         limit = int(limit) if limit else 1
 
-        print(f"user_id={user_id} page={page} limit={limit} language={language}")
+        # print(f"user_id={user_id} page={page} limit={limit} language={language}")
 
         try:
             current_profile = Profile.objects.get(userid=user_id)
