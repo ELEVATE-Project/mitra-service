@@ -1,10 +1,7 @@
 import os
-
 from rest_framework.decorators import api_view
 import requests
 from django.http import JsonResponse
-from rest_framework.pagination import LimitOffsetPagination
-
 from chatbot.models import Profile
 from chatbot.serializer.profile_serializer import ProfileSerializer
 from shikshalokam.models import Project, ProjectCreatedBy
@@ -18,11 +15,10 @@ recommendation_base_url = os.getenv("RECOMMENDATION_BASE_URL")
 @api_view(["POST"])
 def generate_recommendation(request):
     body = request.query_params
-    page = body.get("page")
     limit = body.get("limit")
+    page = body.get("page", 1)
     language = body.get("language")
     access_token = request.headers.get("X-auth-token")
-    paginator = LimitOffsetPagination()
 
     default_response = {
         'result': {
@@ -40,7 +36,6 @@ def generate_recommendation(request):
         else:
             return JsonResponse(default_response, status=200, safe=False)
 
-        limit = int(limit) if limit else 1
 
         # print(f"user_id={user_id} page={page} limit={limit} language={language}")
 
@@ -67,7 +62,20 @@ def generate_recommendation(request):
         if results:
             matched_projects = results.get('matched_projects')
         count = len(matched_projects)
-        paginated_projects = paginator.paginate_queryset(matched_projects, request)
+
+        if limit:
+            page = int(page)
+            limit = int(limit)
+            print("limit: ", limit)
+            print("page: ", page)
+            start_index = (page - 1) * limit
+            end_index = start_index + limit
+            paginated_projects = matched_projects[start_index:end_index]
+        else:
+            paginated_projects = matched_projects
+
+
+        # paginated_projects = paginator.paginate_queryset(matched_projects, request)
 
         return JsonResponse({
             'result': {

@@ -1,11 +1,6 @@
 from rest_framework.decorators import api_view
-import os
 from django.http import HttpResponse
-from chatbot.models import Profile, Story
-from chatbot.pdf.story_first_page import get_first_page_html
-from chatbot.pdf.story_images_page import get_story_images_page_html
-from chatbot.pdf.story_secondpage import get_story_secondpage_html
-from chatbot.pdf.story_thirdpage import get_thirdpage_html
+from chatbot.models import Story
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 from chatbot.utils.shikshalokam_story_utils import get_story_html
 from django.core.files.base import ContentFile
