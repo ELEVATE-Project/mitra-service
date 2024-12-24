@@ -88,7 +88,7 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
 
         response_json = handle_bedrock_model(
             system_prompt = prompt_to_use, messages = messages, tools=tool_to_use,
-            temperature=0.5, max_token=2048, top_p=0.9
+            temperature=company_bot.bot_temperature, max_token=2048, top_p=company_bot.filter_score
         )
 
         response_json = response_json.replace('\n', '').replace('\t', '').replace(

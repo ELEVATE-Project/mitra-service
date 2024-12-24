@@ -174,6 +174,9 @@ def handle_bedrock_model(
             request_payload['inferenceConfig'] = inference_config
         if tools:
             request_payload['toolConfig'] = tools.get('toolConfig')
+
+        print("inferenceConfig: ", request_payload['inferenceConfig'])
+        print("toolConfig: ", request_payload['toolConfig'])
         response = bedrock_runtime.converse(**request_payload)
 
         # print("Response:", response)
