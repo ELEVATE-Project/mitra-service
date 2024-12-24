@@ -182,7 +182,7 @@ def handle_bedrock_model(
 
         response = bedrock_runtime.converse(**request_payload)
 
-        # print("Response:", response)
+        print("Response:", response)
 
         content = response['output']['message']['content'][0]
         content_tool = content.get('toolUse')
