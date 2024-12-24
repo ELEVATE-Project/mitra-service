@@ -40,7 +40,7 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
-        for field in ['categories', 'recommended_for']:
+        for field in ['categories', 'recommended_for', 'keywords']:
             try:
                 representation[field] = json.loads(getattr(instance, field)) if getattr(instance, field) else []
             except json.JSONDecodeError:
@@ -49,7 +49,7 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     def to_internal_value(self, data):
         internal_value = super().to_internal_value(data)
-        for field in ['categories', 'recommended_for']:
+        for field in ['categories', 'recommended_for', 'keywords']:
             if field in data:
                 internal_value[field] = json.dumps(data[field])
         return internal_value

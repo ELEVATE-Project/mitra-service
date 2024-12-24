@@ -98,7 +98,7 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
 
         response_json = handle_bedrock_model(
             system_prompt = prompt_to_use, messages = messages, tools=tool_to_use,
-            temperature=0.0, max_token=2048
+            temperature=0.5, max_token=2048, top_p=0.9
         )
         response_json = response_json.replace('\n', '').replace('\t', '').replace(
             '\r', '').replace('\\n', '').replace('\\t', '').replace('\\r', '')
@@ -127,6 +127,7 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
 
         problem_statement = response_json.get('problem_statement', '')
         print('problem_statement: ', problem_statement)
+
 
         if company_slug == 'shikshalokamstaging':
             duration = response_json.get('duration', '')
