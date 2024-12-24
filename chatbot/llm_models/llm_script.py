@@ -232,8 +232,6 @@ def handle_bedrock_invoke_model(system_prompt=None,
         # model_id = 'meta.llama3-2-3b-instruct-v1:0'
 
     print("USING MODEL ID: ", model_id)
-
-    print("Messages: ", messages)
     try:
         messages.append(system_prompt)
         formatted_prompt = f"""
@@ -244,11 +242,12 @@ def handle_bedrock_invoke_model(system_prompt=None,
         """
 
         body = json.dumps({
-            "prompt": json.dumps(formatted_prompt),
+            "prompt": formatted_prompt,
             "max_gen_len": max_token,
             "temperature": temperature,
             "top_p": top_p
         })
+        print(body)
 
         bedrock_runtime = boto3.client(
             service_name='bedrock-runtime',
