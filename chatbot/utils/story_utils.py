@@ -88,7 +88,8 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
 
         response_json = handle_bedrock_model(
             system_prompt = prompt_to_use, messages = messages, tools=tool_to_use,
-            temperature=company_bot.bot_temperature, max_token=8192, top_p=company_bot.filter_score
+            temperature=company_bot.bot_temperature, max_token=2048, top_p=company_bot.filter_score,
+            model_name='meta.llama3-1-70b-instruct-v1:0'
         )
 
         response_json = response_json.replace('\n', '').replace('\t', '').replace(
@@ -266,7 +267,7 @@ def get_end_story_tools():
                                     },
                                     "content": {
                                         "type": "string",
-                                        "description": "Content of the story. MAKE SURE CONTENT GENERATED IS AROUND 600 WORDS. Also give the story in 2-3 paragraphs."
+                                        "description": "Content of the story. MAKE SURE CONTENT GENERATED IS AROUND 600 WORDS"
                                     },
                                     "problem_statement": {
                                         "type": "string",
