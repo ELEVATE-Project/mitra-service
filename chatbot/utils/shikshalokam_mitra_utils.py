@@ -42,7 +42,6 @@ def create_project_utils(
 
     request_body = {
         "program": {
-            "conversation": conversation,
             "name": user_problem_statement,
             "startDate": start_date,
             "source": {
@@ -52,6 +51,7 @@ def create_project_utils(
         },
         "projects": [
             {
+                "conversation": conversation,
                 "duration": f"{project_duration_weeks} week",
                 "endDate": end_date,
                 "source": chunks,
