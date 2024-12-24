@@ -87,7 +87,7 @@ def get_thirdpage_html(profile, story):
 
     address_string = ", ".join(filter(None, address_components))
     title = (
-        f"Peer Learning Groups: {story.title or ''} {address_string} "
+        f"{story.title or ''} {address_string} "
         f"{profile.first_name or ''}'s initiative"
     )
 

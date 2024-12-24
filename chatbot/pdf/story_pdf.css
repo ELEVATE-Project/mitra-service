@@ -53,13 +53,17 @@
     font-family: 'Open Sans', sans-serif;
     font-style: normal;
     font-weight: 400;
-    font-size: 2.4rem;
-    line-height: 0px;
+    font-size: 2rem;
     text-align: center;
     letter-spacing: normal;
     color: #000;
-    line-height: 2.5rem;
-    margin: 0 50px;
+    line-height: 3.3rem;
+    margin: 10px 70px;
+
+    text-decoration: underline;
+    text-decoration-color: #4192A6;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 16px;
   }
 
   .story-nagaland-logo-div {
@@ -390,7 +394,8 @@
         margin-top: 10px;
     }
     .story-second-page-section ol li {
-        margin-bottom: 5px;
+        margin-bottom: 10px;
+        list-style-position: inside;
     }
 
 

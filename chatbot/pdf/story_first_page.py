@@ -21,7 +21,6 @@ def get_first_page_html(profile, story):
                 <div class="story-company-div-fmt1 page-break">
                     <div class="story-logo-div2">
                         <div class=story-nagaland-logo-div>
-                            <p class="story-company-text-fmt1">Peer Learning Groups</p>
                             <p class="story-title-fmt1">{title}</p>
                         </div>
                         <div class="nagaland-image-div"> 
