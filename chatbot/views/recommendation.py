@@ -19,9 +19,6 @@ def generate_recommendation(request):
     page = body.get("page", 1)
     language = body.get("language")
     access_token = request.headers.get("X-auth-token")
-    page = int(page)
-    limit = int(limit)
-    print("limit: ", limit)
 
     default_response = {
         'result': {
@@ -67,6 +64,10 @@ def generate_recommendation(request):
         count = len(matched_projects)
 
         if limit:
+            page = int(page)
+            limit = int(limit)
+            print("limit: ", limit)
+            print("page: ", page)
             start_index = (page - 1) * limit
             end_index = start_index + limit
             paginated_projects = matched_projects[start_index:end_index]
