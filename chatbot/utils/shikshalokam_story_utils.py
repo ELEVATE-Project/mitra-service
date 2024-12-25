@@ -104,8 +104,8 @@ def get_story_html(story, profile):
 
         """
     html_content += get_first_page_html(story=story, profile=profile)
-    html_content += get_story_images_page_html(story=story)
     html_content += get_story_secondpage_html(story=story)
+    html_content += get_story_images_page_html(story=story)
     html_content += get_thirdpage_html(story=story, profile=profile)
     html_content += f"""
 
@@ -137,7 +137,11 @@ def update_story_pdf(access_token, session, flow):
         story_media.file = pdf_content
         story_media.include_in_story = False
         story_media.save()
-
+        print("StoryMedia updated and saved successfully.")
+        print(f"Updated name: {story_media.name}")
+        print(f"Updated file path: {story_media.file}")
+        print(f"Include in story: {story_media.include_in_story}")
+        print(f"Include in story: {story_media.get_public_url()}")
         chat_session = ChatSession.objects.get(session=session)
         project_id = chat_session.project_id
 
@@ -150,7 +154,9 @@ def update_story_pdf(access_token, session, flow):
         )
 
         print("upload_response_json: ", upload_response_json)
-        story_media_objects = StoryMedia.objects.filter(story=story).exclude(media_type=MediaTypeChoices.PDF)
+        story_media_objects = StoryMedia.objects.filter(
+            story=story, include_in_story=True
+        ).exclude(media_type=MediaTypeChoices.PDF)
 
         attachments = [
             {
