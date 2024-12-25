@@ -1,4 +1,6 @@
+import json
 import os
+import re
 import traceback
 import requests
 from django.core.files.base import ContentFile
@@ -104,8 +106,8 @@ def get_story_html(story, profile):
 
         """
     html_content += get_first_page_html(story=story, profile=profile)
-    html_content += get_story_images_page_html(story=story)
     html_content += get_story_secondpage_html(story=story)
+    html_content += get_story_images_page_html(story=story)
     html_content += get_thirdpage_html(story=story, profile=profile)
     html_content += f"""
 
@@ -120,9 +122,11 @@ def update_story_pdf(access_token, session, flow):
 
     try:
         story = Story.objects.get(session=session)
+        update_story_content(story)
         profile = story.author
         print("profile: ", profile)
         print("story: ", story.title)
+        print("story format: ", story.formatted_content)
         html_content = get_story_html(story=story, profile=profile)
 
         pdf_generated = generate_pdf_with_gotenberg(html_content)
@@ -133,11 +137,19 @@ def update_story_pdf(access_token, session, flow):
         print("pdf_content type: ", type(pdf_content))
 
         story_media = StoryMedia.objects.get(story=story, media_type=MediaTypeChoices.PDF)
+
+        # if story_media.file:
+        #     story_media.file.storage.delete(story_media.file.name)
+
         story_media.name = pdf_file_name
-        story_media.file = pdf_content
+        story_media.file.save(pdf_file_name, pdf_content)
         story_media.include_in_story = False
         story_media.save()
-
+        print("StoryMedia updated and saved successfully.")
+        print(f"Updated name: {story_media.name}")
+        print(f"Updated file path: {story_media.file}")
+        print(f"Include in story: {story_media.include_in_story}")
+        print(f"Public url: {story_media.get_public_url()}")
         chat_session = ChatSession.objects.get(session=session)
         project_id = chat_session.project_id
 
@@ -150,7 +162,9 @@ def update_story_pdf(access_token, session, flow):
         )
 
         print("upload_response_json: ", upload_response_json)
-        story_media_objects = StoryMedia.objects.filter(story=story).exclude(media_type=MediaTypeChoices.PDF)
+        story_media_objects = StoryMedia.objects.filter(
+            story=story, include_in_story=True
+        ).exclude(media_type=MediaTypeChoices.PDF)
 
         attachments = [
             {
@@ -236,3 +250,23 @@ def update_story_pdf(access_token, session, flow):
         print("An unexpected error occurred: %s", e)
         traceback.print_exc()
         raise
+
+
+def update_story_content(story):
+    try:
+        formatted_data = json.loads(story.formatted_content)
+    except (json.JSONDecodeError, TypeError):
+        print("Invalid or missing formatted_content")
+        return
+
+    accumulated_text = ""
+    for block in formatted_data:
+        if block.get("type") == "paragraph" and "data" in block and "text" in block["data"]:
+            # accumulated_text += block["data"]["text"] + "\n"
+            plain_text = re.sub(r'<[^>]+>', '', block["data"]["text"])
+            accumulated_text += plain_text + "\n"
+
+    print("\nold content: ", story.content)
+    print("\naccumulated_text: ", accumulated_text)
+    story.content = accumulated_text.strip()
+    story.save()

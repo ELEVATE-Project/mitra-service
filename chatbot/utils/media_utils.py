@@ -1,3 +1,4 @@
+import base64
 import os
 import requests
 from chatbot.models import StoryMedia, MediaTypeChoices
@@ -89,17 +90,22 @@ def handle_cloud_response(results, session_value, story=None, instance=None):
         file_info = results.get(session_value, {}).get("files", [])[0]
         source_path = file_info["payload"]["sourcePath"]
         file_data = instance.get("base64_str")
+        print('source path: ', source_path)
+
+        binary_data = base64.b64decode(file_data)
 
         update_story_media_source_path(file_name, source_path)
+        print('file_info["url"]: ', file_info["url"])
 
         response = requests.put(
             file_info["url"],
-            data=file_data,
+            data=binary_data,
             headers={
                 "Content-Type": "multipart/form-data",
                 "Access-Control-Allow-Origin": "*"
             }
         )
+        print('cloud response: ', response)
 
         if response.status_code == 200:
             print(f"File uploaded successfully: {file_name}")
@@ -158,11 +164,13 @@ def upload_to_cloud(session_value, access_token, story=None, instance=None):
         file_names = [file.name for file in get_file_names_for_session(session_value)]
 
     data = prepare_request_data(session_value, file_names)
-    print("upload data: ", data)
+    print("presigned: upload data: ", data)
     response = None
     try:
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()
+
+        print('response text: ', response.json())
 
         results = response.json().get("result", {})
         with transaction.atomic():

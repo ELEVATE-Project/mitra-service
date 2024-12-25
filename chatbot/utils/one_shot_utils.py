@@ -1,7 +1,6 @@
 import json
-
 from chatbot.llm_models.llm_script import handle_bedrock_model
-from chatbot.pompts.one_shot_prompt import get_remaining_stage_prompt
+from chatbot.models import CompanyBot
 
 
 def get_remaining_strands(messages):
@@ -33,7 +32,16 @@ def get_remaining_strands(messages):
         }
     }
 
-    one_shot_prompt = get_remaining_stage_prompt()
+    company_bot = CompanyBot.objects.get(route='/oneshot_assistant')
+    bot_context = company_bot.context
+
+    one_shot_prompt = [
+        {
+            'text': bot_context
+        }
+    ]
+
+    print("one_shot_prompt: ",one_shot_prompt)
 
     response = handle_bedrock_model(
         system_prompt=one_shot_prompt, messages=messages

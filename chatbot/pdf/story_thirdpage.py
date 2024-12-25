@@ -45,7 +45,8 @@ def split_content_based_on_words(content, max_words_per_page=400):
 
     for element in soup.find_all(["p", "br"]):  # Limit to <p> and <br>
         if element.name == "p":
-            text = element.get_text(strip=True)
+            # text = element.get_text(strip=True)
+            text = element.decode_contents()
             words = text.split()  # Split paragraph into words
             paragraph_word_count = len(words)
 
