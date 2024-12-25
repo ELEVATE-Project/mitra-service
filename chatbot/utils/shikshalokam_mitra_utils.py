@@ -18,7 +18,8 @@ def create_project_utils(
     project_duration_weeks,
     user_action_steps,
     chunks,
-    session=None
+    session=None,
+    status="completed"
 ):
     url = f"https://{base_url}/userProjects/add"
 
@@ -56,7 +57,7 @@ def create_project_utils(
                 "endDate": end_date,
                 "source": chunks,
                 "startDate": start_date,
-                "status": "completed",
+                "status": status,
                 "tasks": [
                     {
                         "isDeletable": False,
