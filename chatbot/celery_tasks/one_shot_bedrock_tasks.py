@@ -11,7 +11,7 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
     chat_session = ChatSession.objects.get(session=session_id)
     profile = Profile.objects.get(id=profile_id)
     ai_user = Profile.objects.get(id=1)
-    company_bot = CompanyBot.objects.get(company=profile.company, route='/')
+    company_bot = CompanyBot.objects.get(company=profile.company, route='/oneshot_bot')
 
     messages=[]
     # Bedrock wants user to initiate message first so skipping into mssg
