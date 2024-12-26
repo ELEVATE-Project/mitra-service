@@ -75,7 +75,7 @@ def save_shikshalokam_story(
         }
 
         response = requests.put(url, headers=headers, json=request_body)
-        print("response: ", response)
+        print("response: ", response.json())
         response.raise_for_status()
 
         print(f"Story successfully saved to Shikshalokam: {response.status_code}")
