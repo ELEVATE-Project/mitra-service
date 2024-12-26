@@ -52,7 +52,7 @@ def create_project_utils(
         },
         "projects": [
             {
-                "conversations": conversation,
+                "conversation": conversation,
                 "duration": f"{project_duration_weeks} week",
                 "endDate": end_date,
                 "source": chunks,
