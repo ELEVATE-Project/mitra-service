@@ -61,7 +61,7 @@ class OneShotBedrockConsumer(BaseConsumer):
                 defaults={
                     'profile': profile,
                     'current_step': 1,
-                    'company_bot': CompanyBot.objects.get(company=profile.company, route='/'),
+                    'company_bot': CompanyBot.objects.get(company=profile.company, route='/oneshot_bot'),
                     'session_status': ChatStatus.IN_PROGRESS,
                     'project_id': self.project_id,
                     'user_id': user_id,
