@@ -155,7 +155,7 @@ def handle_bedrock_model(
     print("USING MODEL ID: ", model_id)
     if max_token:
         inference_config['maxTokens'] = max_token
-    if temperature:
+    if temperature is not None:
         inference_config['temperature'] = temperature
     if top_p:
         inference_config['topP'] = top_p
@@ -192,6 +192,7 @@ def handle_bedrock_model(
             if isinstance(content_tool, str):
                 final_output = json.loads(content_tool)
             else:
+
                 final_output = content_tool
         elif not tools:
             content_text = content.get('text')
