@@ -1,3 +1,5 @@
+import json
+
 from chatbot.models import Profile
 from shikshalokam.models import Project, Category, ProjectTemplate, Task
 from django.db import transaction
@@ -11,44 +13,17 @@ def update_project_in_db(project_data):
                 with transaction.atomic():
                     current_project = Project.objects.get(project_id=project_id)
 
-                    categories = project_data.get("categories")
-                    category_map = {}
-                    if categories:
-                        for category_data in categories:
-                            category_id = category_data.get("_id")
-                            if category_id:
-                                category, _ = Category.objects.update_or_create(
-                                    category_id=category_id,
-                                    defaults={'name': category_data.get("name")}
-                                )
-                                category_map[category_id] = category
-
-                    project_template_id = project_data.get("projectTemplateId")
-                    if project_template_id:
-                        project_template_defaults = {
-                            'title': project_data.get('templateTitle'),
-                            'description': project_data.get('templateDescription'),
-                        }
-
-                        if 'categoryId' in project_data:
-                            category_id = project_data['categoryId']
-                            project_template_defaults['category'] = category_map.get(category_id)
-
-                        project_template, _ = ProjectTemplate.objects.update_or_create(
-                            template_id=project_template_id,
-                            defaults=project_template_defaults
-                        )
-
                     current_project.project_status = project_data.get('status', current_project.project_status)
-                    current_project.recommended_for = project_data.get('recommendedFor',
-                                                                       current_project.recommended_for)
-                    current_project.expected_title = project_data.get('title', current_project.expected_title)
+                    current_project.categories = json.dumps(project_data.get('categories', current_project.categories))
+                    current_project.template_id = project_data.get('projectTemplateId', current_project.template_id)
+                    current_project.recommended_for = json.dumps(project_data.get('recommendedFor',
+                                                                       current_project.recommended_for))
+                    current_project.actual_title = project_data.get('title', current_project.actual_title)
+                    current_project.description = project_data.get('description', current_project.description)
                     current_project.program_id = project_data.get('programId', current_project.program_id)
                     current_project.program_name = project_data.get(
-                        'programInformation', {}).get("name", current_project.program_name)
-
-                    if project_template_id:
-                        current_project.project_template = project_template
+                        'programInformation', {}
+                    ).get("name", current_project.program_name)
 
                     current_project.save()
 
@@ -64,10 +39,11 @@ def update_project_in_db(project_data):
                                         'task_name': task_data.get("name"),
                                         'task_status': task_data.get("status"),
                                         'description': task_data.get("description"),
+                                        'source': json.dumps(task_data.get("source")),
                                     }
                                 )
 
-                print("Categories, template, project, and tasks updated successfully.")
+                print("Project, and tasks updated successfully.")
             except Project.DoesNotExist:
                 print(f"Project with ID {project_id} does not exist.")
             except Exception as e:
@@ -82,15 +58,22 @@ def update_profile_in_db(profile_data, user_id):
 
         if profile_data and current_profile:
             current_profile.email = profile_data.get('email', current_profile.email)
-            current_profile.name = profile_data.get('name', current_profile.name)
-            current_profile.preferred_language = (
-                profile_data.get('preferred_language', {}).get('value', current_profile.preferred_language)
-            )
-            current_profile.organization = profile_data.get('organization', {}).get('name', current_profile.organization)
-            current_profile.block = profile_data.get('block', {}).get('label', current_profile.block)
-            current_profile.state = profile_data.get('state', {}).get('label', current_profile.state)
-            current_profile.district = profile_data.get('district', {}).get('label', current_profile.district)
-            current_profile.designation = profile_data.get('user_roles', current_profile.designation)
+            current_profile.first_name = profile_data.get('name', current_profile.first_name)
+            print("email: ", profile_data.get('email'))
+            print("first_name: ", profile_data.get('name'))
+
+            preferred_language = profile_data.get('preferred_language', {}).get('value')
+            if preferred_language:
+                print("preferred_language: ", preferred_language)
+                if not current_profile.other_params:
+                    current_profile.other_params = {}
+                current_profile.other_params['preferred_language'] = preferred_language
+
+            current_profile.org_associated = profile_data.get('organization', {}).get(
+                'name', current_profile.org_associated)
+            current_profile.designation = json.dumps(profile_data.get('user_roles', current_profile.designation))
+            print("organization: ", profile_data.get('organization', {}).get('name'))
+            print("designation: ",  json.dumps(profile_data.get('user_roles')))
 
             current_profile.save()
 
