@@ -67,7 +67,8 @@ def duplicate_project_view(request):
 
         if project_template_id:
             response = import_project_from_library_utils(
-                access_token=access_token, program_name=program_name, project_template_id=project_template_id
+                access_token=access_token, program_name=program_name, project_template_id=project_template_id,
+                program_id=program_id
             )
         else:
             response = create_project_utils(

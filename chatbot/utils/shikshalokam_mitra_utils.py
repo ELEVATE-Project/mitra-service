@@ -149,7 +149,7 @@ def create_mitra_project_utils(
         return {"status": "error", "message": f"An error occurred: {str(e)}"}
 
 
-def import_project_from_library_utils(access_token, program_name, project_template_id):
+def import_project_from_library_utils(access_token, program_name, project_template_id, program_id):
     url = f"https://{base_url}/userProjects/importFromLibrary/{project_template_id}"
 
     headers = {
@@ -157,7 +157,8 @@ def import_project_from_library_utils(access_token, program_name, project_templa
     }
 
     request_body = {
-        "programName": program_name
+        "programName": program_name,
+        "programId": program_id
     }
 
     print("req body: ", request_body)
