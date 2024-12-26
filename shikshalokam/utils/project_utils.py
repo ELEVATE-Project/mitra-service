@@ -12,7 +12,7 @@ def update_project_status_utils(project_id, access_token, flow):
             return {'message': 'This api has no effect in the current flow', 'status': 200}
 
         url = f"https://{base_url}/userProjects/update/{project_id}"
-
+        print("using url: ", url)
         headers = {
             "X-auth-token": access_token,
         }
