@@ -12,7 +12,7 @@ import jwt
 recommendation_base_url = os.getenv("RECOMMENDATION_BASE_URL")
 
 
-@api_view(["POST"])
+@api_view(["GET"])
 def generate_recommendation(request):
     body = request.query_params
     limit = body.get("limit")
