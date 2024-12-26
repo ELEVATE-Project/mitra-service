@@ -60,7 +60,7 @@ def create_project_utils(
                 "status": status,
                 "tasks": [
                     {
-                        "isDeletable": False,
+                        "isDeletable": True,
                         "name": step,
                         "source": {
                             "model": "llama3.1",
