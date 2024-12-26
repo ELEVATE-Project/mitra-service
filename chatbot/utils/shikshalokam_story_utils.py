@@ -69,6 +69,7 @@ def save_shikshalokam_story(
         print("request_body: ", request_body)
 
         url = f"https://{base_url}/userProjects/addStory/{project_id}"
+        print("Using url: ", url)
 
         headers = {
             "X-auth-token": access_token,
@@ -232,6 +233,7 @@ def update_story_pdf(access_token, session, flow):
 
 
         url = f"https://{base_url}/userProjects/addStory/{project_id}"
+        print("Using url: ", url)
 
         headers = {
             "X-auth-token": access_token,
