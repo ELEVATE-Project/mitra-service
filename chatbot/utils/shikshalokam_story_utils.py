@@ -238,10 +238,10 @@ def update_story_pdf(access_token, session, flow):
         }
 
         response = requests.put(url, headers=headers, json=request_body)
-        print("response: ", response)
+        print("response: ", response.json())
         response.raise_for_status()
 
-        print(f"Story successfully saved to Shikshalokam: {response.status_code}")
+        print(f"Story successfully updated to Shikshalokam: {response.status_code}")
 
     except requests.exceptions.RequestException as e:
         print("Failed to save story to Shikshalokam: %s", e)
