@@ -8,7 +8,7 @@ from shikshalokam.models.project_vernacular_model import ProjectVernacular
 def ingest_project_template(file_path):
     # file_path = 'shikshalokam/scripts/projectTemplateJson.json'
     json_data = load_json(file_path)
-    results = json_data.get('result')
+    results = json_data
 
     if not results:
         print("No projects found in the provided JSON file.")
@@ -98,7 +98,7 @@ def ingest_project_template(file_path):
 def ingest_task_data(file_path):
     # file_path = 'shikshalokam/scripts/TemplateTask.json'
     json_data = load_json(file_path)
-    results = json_data.get('result')
+    results = json_data
 
     if not results:
         print("No tasks found in the provided JSON file.")
