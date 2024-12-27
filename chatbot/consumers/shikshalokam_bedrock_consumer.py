@@ -9,6 +9,7 @@ from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_
 from chatbot.celery_tasks.shikshalokam_bedrock_tasks import get_shikshalokam_bedrock_response
 import jwt
 
+
 class ShikshalokamBedrockConsumer(BaseConsumer):
 
     session_id = None
@@ -18,6 +19,7 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
     route = None
 
     def disconnect(self, code):
+        print('Websocket closed')
         chat_session = ChatSession.objects.filter(session=self.session_id)
         if chat_session.exists():
             c = chat_session[0]
