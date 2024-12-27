@@ -4,6 +4,7 @@ import requests
 from django.http import JsonResponse
 from chatbot.models import Profile
 from chatbot.serializer.profile_serializer import ProfileSerializer
+from chatbot.utils.profile_utils import create_profile_utils
 from shikshalokam.models import Project, ProjectCreatedBy
 from shikshalokam.serializer import ProjectSerializer
 import jwt
@@ -41,8 +42,16 @@ def generate_recommendation(request):
 
         try:
             current_profile = Profile.objects.get(userid=user_id)
+            print("got a profile: ", current_profile)
         except Profile.DoesNotExist:
-            return JsonResponse(default_response, status=200, safe=False)
+            print("profile does not exist so creating one")
+            try:
+                create_profile_utils(access_token=access_token)
+                current_profile = Profile.objects.get(userid=user_id)
+                print("Profile successfully created and retrieved.")
+            except Profile.DoesNotExist:
+                print("Failed to create or retrieve profile.")
+                return JsonResponse(default_response, status=200, safe=False)
 
         projects = Project.objects.filter(generated_by=ProjectCreatedBy.EXPERT_VETTED)
         project_serialized = ProjectSerializer(projects, many=True).data
