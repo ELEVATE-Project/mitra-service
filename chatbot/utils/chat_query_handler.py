@@ -4,13 +4,13 @@ from typing import List
 from chatbot.llm_models.llm_script import handle_bedrock_model
 
 DATABASE_INTERFACE_BEARER_TOKEN = os.getenv('DATABASE_INTERFACE_BEARER_TOKEN')
-
+base_url = os.getenv('VECTOR_DB_BASE_URL')
 
 def query_database(query_prompt: str, priority_filter: str, limit: int):
     """
     Query vector database to retrieve chunk with user's input questions.
     """
-    url = "https://demo-mitra.shikshalokam.org/api/query/"
+    url = f"https://{base_url}/api/query/"
     headers = {
         "Content-Type": "application/json",
         "accept": "application/json",
@@ -23,9 +23,9 @@ def query_database(query_prompt: str, priority_filter: str, limit: int):
         data["priority_filter"] = priority_filter
     print("DATA: ", data)
     response = requests.post(url, json=data, headers=headers)
-
     if response.status_code == 200:
         result = response.json()
+        print("response: ", result)
         # process the result
         return result
     else:
