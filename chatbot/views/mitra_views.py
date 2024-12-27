@@ -27,7 +27,7 @@ def paraphrase_view(request):
 
     paraphrased_output = get_mitra_paraphrase_utils(paraphrase_problem=user_input)
 
-    if language !='en':
+    if language !='en' and paraphrased_output.lower() != 'no':
         paraphrased_output = call_ai4bharat_translation_api(
             source_language='en', target_language=language, message_body=paraphrased_output
         )

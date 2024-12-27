@@ -16,6 +16,7 @@ def get_mitra_paraphrase_utils(paraphrase_problem):
         system_prompt=prompt, messages=messages, max_token=2048,
         temperature=0.0
     )
+    print("response: ", response)
     response = response.get('paraphrased_challenge')
     return response
 
