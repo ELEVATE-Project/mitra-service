@@ -34,6 +34,7 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
         self.close()
 
     def receive(self, text_data):
+        print(text_data)
         text_data_json = json.loads(text_data)
         message_type = text_data_json.get('type', None)
 
@@ -101,4 +102,11 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
                 get_shikshalokam_bedrock_response.delay(self.channel_name, self.session_id, self.profile_id, self.route)
         except Exception as e:
             print(e)
+            traceback.print_exc()
+
+    def connect(self):
+        try:
+            print('Attempting to connect to websocket')
+            super().connect()
+        except Exception:
             traceback.print_exc()
