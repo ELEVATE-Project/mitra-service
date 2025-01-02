@@ -18,6 +18,7 @@ def create_project_utils(
     project_duration_weeks,
     user_action_steps,
     chunks,
+    project_objective,
     session=None,
     status="completed"
 ):
@@ -33,13 +34,12 @@ def create_project_utils(
 
     start_date = start_date.isoformat()
     end_date = end_date.isoformat()
+    conversation = []
     if session:
         company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
         ai_user = Profile.objects.get(id=1)
 
-        conversation = get_conversation(company_chats=company_chats, ai_user=ai_user)
-    else:
-        conversation = []
+        conversation = get_stored_conversation(company_chats=company_chats, ai_user=ai_user)
 
     request_body = {
         "program": {
@@ -68,7 +68,8 @@ def create_project_utils(
                         },
                     } for step in user_action_steps
                 ],
-                "title": project_title
+                "title": project_title,
+                "description": project_objective
             }
         ]
     }
@@ -201,3 +202,44 @@ def get_conversation(company_chats, ai_user):
     print("\n\nconversation: ", conversation)
 
     return conversation
+
+
+def get_stored_conversation(company_chats, ai_user):
+    conversation=[]
+    for chat in company_chats:
+        if chat.receiver == ai_user:
+            user_message = chat.message
+            if chat.translated_message is not None and chat.translated_message != '':
+                user_message = chat.translated_message
+            conversation.append({
+                'user': user_message,
+                'timestamp': chat.created_at,
+            })
+        else:
+            conversation.append({
+                'bot': chat.message,
+                'timestamp': chat.created_at,
+            })
+
+    return conversation
+
+def get_stored_chathistory(company_chats, ai_user):
+    chat_history=[]
+    for chat in company_chats:
+        if chat.receiver == ai_user:
+            user_message = chat.message
+            if chat.translated_message is not None and chat.translated_message != '':
+                user_message = chat.translated_message
+            chat_history.append({
+                'user': user_message,
+                'timestamp': chat.created_at,
+                'event': chat.status
+            })
+        else:
+            chat_history.append({
+                'bot': chat.message,
+                'timestamp': chat.created_at,
+                'event': chat.status
+            })
+
+    return chat_history

@@ -198,7 +198,7 @@ def create_project_view(request):
         access_token=access_token, user_problem_statement=user_problem_statement,
         user_action_steps=user_action_steps, project_title=project_title,
         project_duration_weeks=project_duration, chunks=chunks, session=session,
-        status='started'
+        project_objective=project_objective, status='started'
     )
 
     project_id = response.get('projectId')

@@ -6,6 +6,7 @@ from chatbot.models import (Profile, CompanyChat, CompanyBot, StoryLanguageChoic
                                                 StoryStatusChoices, ChatSession, ChatStatus, LLMModel)
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.story_models import Story
+from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
 from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
 from chatbot.utils.story_llama_utils import (get_company_end_context, create_project,
                                                                  get_company_context)
@@ -41,8 +42,6 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
         print(story_prompt)
 
         messages=[]
-        chat_history=[]
-        conversation=[]
         prompt_to_use = [
             {
                 'text': story_prompt
@@ -59,27 +58,10 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
                     'role': 'user',
                     'content': [{'text': user_message}]
                 })
-                conversation.append({
-                    "botResponse": "",
-                    "timestamp": chat.created_at.isoformat(),
-                    "userMessage": user_message
-                })
-                chat_history.append({
-                    "details": "",
-                    "event": chat.status,
-                    "timestamp": chat.created_at.isoformat()
-                })
             else:
                 messages.append({
                     'role': 'assistant',
                     'content': [{'text': user_message}]
-                })
-                if conversation and len(conversation)>0:
-                    conversation[-1]["botResponse"] = user_message
-                chat_history.append({
-                    "details": "",
-                    "event": chat.status,
-                    "timestamp": chat.created_at.isoformat()
                 })
 
         # print("\n\nchat_history: ", chat_history)
@@ -170,11 +152,13 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
 
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=['session_status'])
+        conversation = get_stored_conversation(company_chats=company_chats, ai_user=ai_user)
+        chat_history = get_stored_chathistory(company_chats=company_chats, ai_user=ai_user)
 
         save_shikshalokam_story(
-            story=story, chat_history=chat_history, access_token=access_token,
+            story=story, access_token=access_token,
             problem_statement=problem_statement, project_id=project_id, session=session,
-            profile=profile, conversation=conversation, flow=flow
+            profile=profile, conversation=conversation, flow=flow, chat_history=chat_history
         )
 
         return story.id, story.content

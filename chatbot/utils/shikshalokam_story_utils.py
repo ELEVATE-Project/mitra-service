@@ -11,7 +11,7 @@ from chatbot.pdf.story_secondpage import get_story_secondpage_html
 from chatbot.pdf.story_thirdpage import get_thirdpage_html
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 from chatbot.utils.media_utils import upload_to_cloud
-
+from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
 
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
@@ -183,34 +183,10 @@ def update_story_pdf(access_token, session, flow):
         company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
         ai_user = Profile.objects.get(id=1)
 
-        chat_history = []
-        conversation = []
-
         if company_chats and company_chats[0].receiver != ai_user:
             company_chats.pop(0)
-        for chat in company_chats:
-            user_message = chat.message
-            if chat.receiver == ai_user:
-                if chat.translated_message is not None and chat.translated_message != '':
-                    user_message = chat.translated_message
-                conversation.append({
-                    "botResponse": "",
-                    "timestamp": chat.created_at.isoformat(),
-                    "userMessage": user_message
-                })
-                chat_history.append({
-                    "details": "",
-                    "event": chat.status,
-                    "timestamp": chat.created_at.isoformat()
-                })
-            else:
-                if conversation and len(conversation) > 0:
-                    conversation[-1]["botResponse"] = user_message
-                chat_history.append({
-                    "details": "",
-                    "event": chat.status,
-                    "timestamp": chat.created_at.isoformat()
-                })
+        conversation = get_stored_conversation(company_chats=company_chats, ai_user=ai_user)
+        chat_history = get_stored_chathistory(company_chats=company_chats, ai_user=ai_user)
 
         request_body = {
             "story": {
