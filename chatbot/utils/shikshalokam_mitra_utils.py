@@ -213,12 +213,12 @@ def get_stored_conversation(company_chats, ai_user):
                 user_message = chat.translated_message
             conversation.append({
                 'user': user_message,
-                'timestamp': chat.created_at,
+                'timestamp': chat.created_at.strftime('%Y-%m-%d %H:%M:%S'),
             })
         else:
             conversation.append({
                 'bot': chat.message,
-                'timestamp': chat.created_at,
+                'timestamp': chat.created_at.strftime('%Y-%m-%d %H:%M:%S'),
             })
 
     return conversation
@@ -232,13 +232,13 @@ def get_stored_chathistory(company_chats, ai_user):
                 user_message = chat.translated_message
             chat_history.append({
                 'user': user_message,
-                'timestamp': chat.created_at,
+                'timestamp': chat.created_at.strftime('%Y-%m-%d %H:%M:%S'),
                 'event': chat.status
             })
         else:
             chat_history.append({
                 'bot': chat.message,
-                'timestamp': chat.created_at,
+                'timestamp': chat.created_at.strftime('%Y-%m-%d %H:%M:%S'),
                 'event': chat.status
             })
 
