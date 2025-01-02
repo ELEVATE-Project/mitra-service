@@ -41,7 +41,10 @@ def generate_recommendation(request):
         # print(f"user_id={user_id} page={page} limit={limit} language={language}")
 
         try:
+            res_profile = create_profile_utils(access_token=access_token)
+            print("res_profile: ", res_profile)
             current_profile = Profile.objects.get(userid=user_id)
+
             print("got a profile: ", current_profile)
         except Profile.DoesNotExist:
             print("profile does not exist so creating one")

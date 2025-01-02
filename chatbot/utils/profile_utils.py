@@ -11,35 +11,12 @@ base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
 
 def create_profile_utils(access_token):
-    url = f"https://{base_url}/profile/read"
-
-    headers = {
-        "X-auth-token": access_token,
-    }
 
     try:
-        response = requests.get(url, headers=headers)
-        if response.status_code == 401:
-            return {
-                'success': False,
-                'status_code': 401,
-                'message': 'Access token is invalid or expired.'
-            }
-        elif response.status_code != 200:
-            return {
-                'success': False,
-                'status_code': response.status_code,
-                'message': f"API returned an error: {response.text}"
-            }
+        json_response = get_profile_detail(access_token=access_token)
 
-        json_response = response.json()
-        print("json_response: ", json_response)
         if not json_response or "result" not in json_response:
-            return {
-                'success': False,
-                'status_code': 400,
-                'message': 'Invalid response from the API.'
-            }
+            return json_response
 
         result = json_response.get("result")
         email = result.get('email')
@@ -102,3 +79,43 @@ def create_profile_utils(access_token):
             'message': f"An unexpected error occurred: {e}"
         }
 
+
+def get_profile_detail(access_token):
+    url = f"https://{base_url}/profile/read"
+
+    headers = {
+        "X-auth-token": access_token,
+    }
+
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 401:
+            return {
+                'success': False,
+                'status_code': 401,
+                'message': 'Access token is invalid or expired.'
+            }
+        elif response.status_code != 200:
+            return {
+                'success': False,
+                'status_code': response.status_code,
+                'message': f"API returned an error: {response.text}"
+            }
+
+        json_response = response.json()
+        print("json_response: ", json_response)
+
+        if not json_response or "result" not in json_response:
+            return {
+                'success': False,
+                'status_code': 400,
+                'message': 'Invalid response from the API.'
+            }
+        return json_response
+
+    except Exception as e:
+        return {
+            'success': False,
+            'status_code': 500,
+            'message': f"An unexpected error occurred: {e}"
+        }
