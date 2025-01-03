@@ -11,10 +11,14 @@ class CompanySerializer(serializers.ModelSerializer):
 
 class CompanyBotSerializer(serializers.ModelSerializer):
     company = CompanySerializer(read_only=True)
+    statemachine_length = serializers.SerializerMethodField()
 
     class Meta:
         model = CompanyBot
         fields = '__all__'
+
+    def get_statemachine_length(self, obj):
+        return obj.companystatemachine_set.count()
 
 
 class CompanyStateMachineSerializer(serializers.ModelSerializer):

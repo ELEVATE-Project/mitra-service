@@ -17,6 +17,7 @@ def paraphrase_view(request):
     body = request.data
     user_input = body.get('user_input')
     language = body.get('language')
+    should_paraphrase_text = body.get('paraphrase_text')
     print("User Input: ", user_input)
 
     if language !='en':
@@ -25,7 +26,9 @@ def paraphrase_view(request):
         )
         print("user_translated_message: ", user_input)
 
-    paraphrased_output = get_mitra_paraphrase_utils(paraphrase_problem=user_input)
+    paraphrased_output = get_mitra_paraphrase_utils(
+        paraphrase_problem=user_input, should_paraphrase_text=should_paraphrase_text
+    )
 
     if language !='en' and paraphrased_output.lower() != 'no':
         paraphrased_output = call_ai4bharat_translation_api(
