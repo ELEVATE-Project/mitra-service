@@ -35,6 +35,7 @@ def ai4bharat_text_speech(request):
             'ulcaApiKey': ai4bharat_api_key
         }
 
+        print("url: ", api_url)
         response = requests.post(api_url, json=payload, headers=headers, timeout=10)
         if response.status_code == 200:
             audio_data = response.json()

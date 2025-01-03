@@ -6,6 +6,7 @@ ai4bharat_api_key = os.getenv("BHASHANI_API_KEY")
 
 def call_ai4bharat_translation_api(source_language, target_language, message_body):
     api_url = 'https://demo-api.models.ai4bharat.org/inference/translation/v2'
+    print("url: ", api_url)
     print("\n\nTranslation message body req data: ", message_body)
     payload = {
         "controlConfig": {"dataTracking": True},
