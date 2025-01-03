@@ -94,9 +94,10 @@ def ai4bharat_asr(request):
             'referer': 'https://models.ai4bharat.org/',
             'ulcaApiKey': ai4bharat_api_key
         }
-
+        print("url: ", api_url)
         response = requests.post(api_url, json=payload, headers=headers, timeout=10)
         print("Response: ", response)
+        print("Response content: ", response.text)
         if response.status_code == 200:
             audio_data = response.json()
             print("json response: ", audio_data)
