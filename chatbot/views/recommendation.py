@@ -56,7 +56,7 @@ def generate_recommendation(request):
                 print("Failed to create or retrieve profile.")
                 return JsonResponse(default_response, status=200, safe=False)
 
-        projects = Project.objects.filter(generated_by=ProjectCreatedBy.EXPERT_VETTED)
+        projects = Project.objects.exclude(author=current_profile)
         project_serialized = ProjectSerializer(projects, many=True).data
         current_profile_serialized = ProfileSerializer(current_profile).data
 

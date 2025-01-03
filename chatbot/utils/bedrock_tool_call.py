@@ -20,7 +20,7 @@ def get_bedrock_tool_call_response(
     print("Length: ", len(company_chat))
     chunks = []
 
-    if user_problem_statement:
+    if user_problem_statement and len(company_chat)<2:
         chat_session.current_step += 2
         chat_session.save()
         state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)

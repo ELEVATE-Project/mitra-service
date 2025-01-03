@@ -35,7 +35,7 @@ def ai4bharat_text_speech(request):
             'ulcaApiKey': ai4bharat_api_key
         }
 
-        response = requests.post(api_url, json=payload, headers=headers)
+        response = requests.post(api_url, json=payload, headers=headers, timeout=10)
         if response.status_code == 200:
             audio_data = response.json()
             # Ensure audio_data is a dictionary and contains 'audio'
@@ -95,7 +95,7 @@ def ai4bharat_asr(request):
             'ulcaApiKey': ai4bharat_api_key
         }
 
-        response = requests.post(api_url, json=payload, headers=headers)
+        response = requests.post(api_url, json=payload, headers=headers, timeout=10)
         print("Response: ", response)
         if response.status_code == 200:
             audio_data = response.json()
@@ -144,11 +144,13 @@ def ai4bharat_text_translation(request):
         else:
             return Response({
                 'status': 'error',
-                'message': 'Translation failed or unexpected response from AI4Bharat API'
+                'message': 'Translation failed or unexpected response from AI4Bharat API',
+                'transcript': message_body
             }, status=500)
 
     except Exception as e:
         return Response({
             'status': 'error',
-            'message': str(e)
+            'message': str(e),
+            'transcript': request.data.get('message_body')
         }, status=500)
