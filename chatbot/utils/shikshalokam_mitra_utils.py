@@ -78,6 +78,7 @@ def create_project_utils(
 
     try:
         response = requests.post(url, headers=headers, json=request_body)
+        print("response: ", response.json())
         response.raise_for_status()
         json_response = response.json()
         print("json_response: ", json_response)
