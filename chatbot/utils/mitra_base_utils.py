@@ -26,7 +26,7 @@ def get_mitra_paraphrase_utils(paraphrase_problem, should_paraphrase_text):
     if validation_response.lower() == 'no':
         return validation_response
     if not should_paraphrase_text:
-        return "NO"
+        return validation_response
     print('paraphrase_prompt: ', paraphrase_prompt)
     paraphrase_response = handle_bedrock_model(
         system_prompt=paraphrase_prompt, messages=messages, max_token=2048,
