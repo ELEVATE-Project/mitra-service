@@ -9,7 +9,10 @@ from chatbot.models.company_models import CompanyStateMachine
 channel_layer = get_channel_layer()
 
 
-def get_bedrock_tool_call_response(system_prompt, messages, company_bot, session_id, channel_name, route, profile_id):
+def get_bedrock_tool_call_response(
+        system_prompt, messages, company_bot, session_id, channel_name, route, profile_id,
+        user_problem_statement
+):
 
     chat_session = ChatSession.objects.get(session=session_id)
     current_step = chat_session.current_step
@@ -17,7 +20,26 @@ def get_bedrock_tool_call_response(system_prompt, messages, company_bot, session
     print("Length: ", len(company_chat))
     chunks = []
 
-    if company_chat and len(company_chat)<2:
+    if user_problem_statement and len(company_chat)<2:
+        chat_session.current_step += 2
+        chat_session.save()
+        state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
+        pre_context = company_bot.pre_context
+        if pre_context:
+            pre_context = pre_context.format(problem_statement=user_problem_statement)
+        bot_question = pre_context + " " + state_machine.bot_question
+
+        translated_message = translate_and_send_message(
+            accumulated_message=bot_question, current_channel_name=channel_name,
+            current_step_number=chat_session.current_step, finish_reason="stop", route=route
+        )
+
+        save_in_company_db(
+            session_id, profile_id, 'AI', bot_question, chunks, ChatStatus.IN_PROGRESS, translated_message
+        )
+        print("skipping stages bot_question: ", bot_question)
+        return bot_question
+    elif company_chat and len(company_chat)<2:
         chat_session.current_step += 1
         chat_session.save()
         state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)

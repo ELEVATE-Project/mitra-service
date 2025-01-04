@@ -2,19 +2,21 @@ import json
 import traceback
 import random
 import string
+
+from chatbot.llm_models.story_tools import get_end_story_tools, get_story_content_tools
 from chatbot.models import (Profile, CompanyChat, CompanyBot, StoryLanguageChoices,
-                                                StoryStatusChoices, ChatSession, ChatStatus, LLMModel)
+                                                StoryStatusChoices, ChatSession, ChatStatus)
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.story_models import Story
+from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
 from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
-from chatbot.utils.story_llama_utils import (get_company_end_context, create_project,
-                                                                 get_company_context)
-from chatbot.llm_models.llm_script import handle_bedrock_model, handle_bedrock_invoke_model
+from chatbot.utils.story_llama_utils import create_project
+from chatbot.llm_models.llm_script import handle_bedrock_model
 from jinja2 import Template
 
 
-def create_story_object(profile_id, session, access_token, flow, model=None):
+def create_story_object(profile_id, session, access_token, flow, language='en', model=None):
     try:
         profile = Profile.objects.get(id=profile_id)
         company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
@@ -31,18 +33,24 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
         tag_context = template.render(context_data)
 
         end_context = company_bot.end_context
-        story_prompt = f"""
+        content_prompt = f"""
             {context}
-            
             {tag_context}
-            
+        """
+        story_prompt = f"""
             {end_context}
+            {tag_context}
         """
         print('-------------------------------')
         print(story_prompt)
 
         messages=[]
-        prompt_to_use = [
+        formatted_content_prompt = [
+            {
+                'text': content_prompt
+            },
+        ]
+        formatted_story_prompt = [
             {
                 'text': story_prompt
             },
@@ -64,55 +72,81 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
                     'content': [{'text': user_message}]
                 })
 
-        # print("\n\nchat_history: ", chat_history)
-        # print("\n\nconversation: ", conversation)
-        tool_to_use = get_end_story_tools()
-
-        response_json = handle_bedrock_model(
-            system_prompt = prompt_to_use, messages = messages, tools=tool_to_use,
+        # print("Message: ", messages)
+        tool_story = get_end_story_tools()
+        tool_content = get_story_content_tools()
+        print("\n----------")
+        response_json_content = handle_bedrock_model(
+            system_prompt = formatted_content_prompt, messages = messages, tools=tool_content,
             temperature=company_bot.bot_temperature, max_token=4096, top_p=company_bot.filter_score,
-            model_name='meta.llama3-1-405b-instruct-v1:0'
+            model_name='meta.llama3-1-8b-instruct-v1:0'
         )
+        print("\n\nresponse_json_content: ", response_json_content)
+        response_json_story = handle_bedrock_model(
+            system_prompt = formatted_story_prompt, messages = messages, tools=tool_story,
+            temperature=company_bot.bot_temperature, max_token=4096, top_p=company_bot.filter_score,
+            model_name='meta.llama3-1-8b-instruct-v1:0'
+        )
+        print("\n\nresponse_json_story: ", response_json_story)
 
-        # response_json = handle_bedrock_invoke_model(
-        #     system_prompt=prompt_to_use, messages=messages, tools=tool_to_use,
-        #     temperature=company_bot.bot_temperature, max_token=2048, top_p=company_bot.filter_score,
-        #     model_name='meta.llama3-1-70b-instruct-v1:0'
-        # )
+        print("\n----------")
 
-        response_json = response_json.replace('\n', '').replace('\t', '').replace(
-            '\r', '').replace('\\n', '').replace('\\t', '').replace('\\r', '')
-        if '{' in response_json:
-            response_json = response_json[response_json.index('{'):]
-        print("\nBEFORE LOADS: ", response_json)
-        if isinstance(response_json, str):
-            response_json = json.loads(response_json)
-        print("AFTER LOADS: ", response_json)
-        print("TYPE response_json: ", type(response_json))
+        response_json_content = format_response_json(response=response_json_content)
+        response_json_story = format_response_json(response=response_json_story)
 
-        title = response_json.get('title', '')
+        title = response_json_story.get('title', '')
         print('title: ', title)
-        content = response_json.get('content', '')
-        print('content: ', content)
-        tweet = response_json.get('tweet', '')
+        tweet = response_json_story.get('tweet', '')
         print('tweet: ', tweet)
-        objective = response_json.get('objective', '')
+        objective = response_json_story.get('objective', '')
         print('objective: ', objective)
-        action_steps =  response_json.get('action_steps', '')
+        action_steps = response_json_story.get('action_steps', '')
         print('action_steps: ', action_steps)
-        impact =  response_json.get('impact', '')
+        impact = response_json_story.get('impact', '')
         print('impact: ', impact)
-        micro_improvement =  response_json.get('micro_improvement', '')
+        micro_improvement = response_json_story.get('micro_improvement', '')
         print('micro_improvement: ', micro_improvement)
-
-        problem_statement = response_json.get('problem_statement', '')
+        problem_statement = response_json_story.get('problem_statement', '')
         print('problem_statement: ', problem_statement)
 
-
-        duration = response_json.get('duration', '')
+        duration = response_json_story.get('duration', '')
         other_params = {
             'duration': duration
         }
+
+        content = response_json_content.get('content', '')
+        print('content: ', content)
+        blurb = response_json_content.get('blurb', '')
+        print('blurb: ', blurb)
+
+        if language != 'en':
+            title = call_ai4bharat_translation_api(
+                source_language='en', target_language=language, message_body=title
+            )
+            tweet = call_ai4bharat_translation_api(
+                source_language='en', target_language=language, message_body=tweet
+            )
+            objective = call_ai4bharat_translation_api(
+                source_language='en', target_language=language, message_body=objective
+            )
+            action_steps = call_ai4bharat_translation_api(
+                source_language='en', target_language=language, message_body=action_steps
+            )
+            impact = call_ai4bharat_translation_api(
+                source_language='en', target_language=language, message_body=impact
+            )
+            micro_improvement = call_ai4bharat_translation_api(
+                source_language='en', target_language=language, message_body=micro_improvement
+            )
+            problem_statement = call_ai4bharat_translation_api(
+                source_language='en', target_language=language, message_body=problem_statement
+            )
+            content = call_ai4bharat_translation_api(
+                source_language='en', target_language=language, message_body=content
+            )
+            blurb = call_ai4bharat_translation_api(
+                source_language='en', target_language=language, message_body=blurb
+            )
 
         if profile:
             address = ProfileAddress.objects.filter(profile=profile).first()
@@ -137,7 +171,8 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
             language=StoryLanguageChoices.ENGLISH,
             stage=StoryStatusChoices.COMPLETED,
             other_params=other_params,
-            location=location
+            location=location,
+            blurb=blurb
         )
 
         story.save()
@@ -148,7 +183,7 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
         chat_session = ChatSession.objects.get(session=session)
         project_id = chat_session.project_id
 
-        create_project(response_json, story, profile, problem_statement, project_id)
+        create_project(response_json_story, story, profile, problem_statement, project_id)
 
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=['session_status'])
@@ -162,9 +197,24 @@ def create_story_object(profile_id, session, access_token, flow, model=None):
         )
 
         return story.id, story.content
+
     except Exception as e:
         traceback.print_exc()
         return "", ""
+
+
+def format_response_json(response):
+    response_json = response.replace('\n', '').replace('\t', '').replace(
+        '\r', '').replace('\\n', '').replace('\\t', '').replace('\\r', '')
+    if '{' in response_json:
+        response_json = response_json[response_json.index('{'):]
+    print("\nBEFORE LOADS: ", response_json)
+    if isinstance(response_json, str):
+        response_json = json.loads(response_json)
+    print("AFTER LOADS: ", response_json)
+    print("TYPE response_json: ", type(response_json))
+
+    return response_json
 
 
 def get_formatted_story(story):
@@ -193,85 +243,3 @@ def generate_random_string(length):
     characters = string.ascii_letters + string.digits
     rs = ''.join(random.choice(characters) for _ in range(length))
     return rs
-
-
-def get_end_story_tools():
-    tool = {
-        "toolConfig": {
-            "tools": [
-                {
-                    "toolSpec": {
-                        "name": "get_story_output",
-                        "description": "Generate a detailed narrative output in a valid JSON format containing specific fields.",
-                        "inputSchema": {
-                            "json": {
-                                "type": "object",
-                                "properties": {
-                                    "title": {
-                                        "type": "string",
-                                        "description": "Title of the story"
-                                    },
-                                    "objective": {
-                                        "type": "string",
-                                        "description": "Objective of the micro improvement"
-                                    },
-                                    "action_steps": {
-                                        "type": "string",
-                                        "description": "5 Action steps taken by the user to implement the micro improvement"
-                                    },
-                                    "impact": {
-                                        "type": "string",
-                                        "description": "Impact created from this micro improvement"
-                                    },
-                                    "micro_improvement": {
-                                        "type": "string",
-                                        "description": "Why is this micro-improvement important"
-                                    },
-                                    "resource_name": {
-                                        "type": "string",
-                                        "description": "Learning resources name that you want the stakeholders to see while doing the project"
-                                    },
-                                    "resource_link": {
-                                        "type": "string",
-                                        "description": "Learning resources link that you want the stakeholders to see while doing the project"
-                                    },
-                                    "duration": {
-                                        "type": "string",
-                                        "description": "Total time span of the project, from start to end"
-                                    },
-                                    "keywords": {
-                                        "type": "string",
-                                        "description": "Keywords improve search ability, tag this Improvement project with appropriate keywords"
-                                    },
-                                    "status": {
-                                        "type": "string",
-                                        "description": "The current state of the project, such as 'STARTED,' 'inPROGRESS,' or 'SUBMITTED'"
-                                    },
-                                    "project_start_date": {
-                                        "type": "string",
-                                        "description": "Starting date of the project if any"
-                                    },
-                                    "project_end_date": {
-                                        "type": "string",
-                                        "description": "Completion date of project if any"
-                                    },
-                                    "content": {
-                                        "type": "string",
-                                        "description": "Content of the story. MAKE SURE CONTENT GENERATED IS AROUND 600 WORDS"
-                                    },
-                                    "problem_statement": {
-                                        "type": "string",
-                                        "description": "The challenge faced by the user and what they wanted to solve"
-                                    }
-                                },
-                                "required": ["title", "objective", "action_steps", "impact", "micro_improvement",
-                                             "duration", "status", "content", "problem_statement"]
-                            }
-                        }
-                    }
-                }
-            ]
-        }
-    }
-
-    return tool

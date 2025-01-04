@@ -86,10 +86,10 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
                     },
                 )
 
-                if self.route != '/':
+                if self.route != 'en':
                     translated_message = call_ai4bharat_translation_api(
                         message_body=text_data_json['text'], target_language='en',
-                        source_language='hi'
+                        source_language=self.route
                     )
                 else:
                     translated_message = None
@@ -99,7 +99,9 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
                 print(f"channel_name: {self.channel_name}, session_id: {self.session_id}, profile_id: {self.profile_id}, "
                       f"route: {self.route}")
 
-                get_shikshalokam_bedrock_response.delay(self.channel_name, self.session_id, self.profile_id, self.route)
+                get_shikshalokam_bedrock_response.delay(
+                    self.channel_name, self.session_id, self.profile_id, self.route, self.project_id
+                )
         except Exception as e:
             print(e)
             traceback.print_exc()

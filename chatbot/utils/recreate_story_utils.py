@@ -3,7 +3,8 @@ from chatbot.llm_models.llm_script import handle_openai_model
 from chatbot.models import (Profile, CompanyChat, CompanyBot, StoryLanguageChoices,
                                                 StoryStatusChoices, LLMModel)
 from chatbot.models.story_models import Story
-from chatbot.utils.story_utils import get_company_context, get_formatted_story
+from chatbot.utils.story_llama_utils import get_company_context
+from chatbot.utils.story_utils import get_formatted_story
 
 
 def re_create_story_object(profile_id, session):
