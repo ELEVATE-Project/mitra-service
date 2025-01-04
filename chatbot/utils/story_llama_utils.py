@@ -3,6 +3,7 @@ import secrets
 import traceback
 from datetime import datetime
 from chatbot.models.geo_models import ProfileAddress
+from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
 from shikshalokam.models import Project, ProjectStatus
 
 
@@ -92,17 +93,20 @@ def get_company_content_prompt():
     """
 
 
-def create_project(response_json, story, profile, problem_statement, project_id):
+def create_project(response_json, title, objective, story, profile, problem_statement, project_id, language):
     try:
-        title = response_json.get('title', '')
-        objective = response_json.get('objective', '')
         resource_name = response_json.get('resource_name', '')
         resource_link = response_json.get('resource_link', '')
         duration = response_json.get('duration', '')
         keywords = response_json.get('keywords', '')
         project_start_date = parse_datetime(response_json.get('project_start_date', ''))
         project_end_date = parse_datetime(response_json.get('project_end_date', ''))
-
+        keywords = call_ai4bharat_translation_api(
+            source_language='en', target_language=language, message_body=keywords
+        )
+        resource_name = call_ai4bharat_translation_api(
+            source_language='en', target_language=language, message_body=resource_name
+        )
         if not Project.objects.filter(project_id=project_id).exists():
             project_id = generate_random_hex()
 

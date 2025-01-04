@@ -183,7 +183,10 @@ def create_story_object(profile_id, session, access_token, flow, language='en', 
         chat_session = ChatSession.objects.get(session=session)
         project_id = chat_session.project_id
 
-        create_project(response_json_story, story, profile, problem_statement, project_id)
+        create_project(
+            response_json=response_json_story,title=title, objective=objective, story=story,
+            profile=profile, problem_statement=problem_statement, project_id=project_id, language=language
+        )
 
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=['session_status'])
