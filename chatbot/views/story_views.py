@@ -23,6 +23,7 @@ def end_story(request):
         model = request.data.get('model', None)
         access_token = request.data.get('access_token', None)
         flow = request.data.get('flow')
+        language = request.data.get('language', 'en')
 
         print("profile_id:", profile_id)
         print("session:", session)
@@ -35,7 +36,7 @@ def end_story(request):
         else:
             id, content = create_story_object(
                 profile_id=profile_id, session=session, model=model,
-                access_token=access_token, flow=flow
+                access_token=access_token, flow=flow, language=language
             )
             return Response({
                 'status': 'ok',

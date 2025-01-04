@@ -14,8 +14,7 @@ from chatbot.views.mitra_views import paraphrase_view, generate_objectives_view,
     generate_title_view, create_project_view, update_project_status_view
 from chatbot.views.recommendation import generate_recommendation
 from chatbot.views.story_views import end_story, StoryListCreateView, StoryBySessionView, \
-    StoryRetrieveUpdateDestroyView, story_recreate_view, StoryMediaListCreateView, StoryMediaRetrieveUpdateDestroyView
-from shikshalokam.utils.project_utils import update_project_status_utils
+    StoryRetrieveUpdateDestroyView, StoryMediaListCreateView, StoryMediaRetrieveUpdateDestroyView
 
 app_name = "chatbot"
 

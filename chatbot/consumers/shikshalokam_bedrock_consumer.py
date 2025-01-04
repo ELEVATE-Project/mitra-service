@@ -86,10 +86,10 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
                     },
                 )
 
-                if self.route != '/':
+                if self.route != 'en':
                     translated_message = call_ai4bharat_translation_api(
                         message_body=text_data_json['text'], target_language='en',
-                        source_language='hi'
+                        source_language=self.route
                     )
                 else:
                     translated_message = None

@@ -9,16 +9,15 @@ channel_layer = get_channel_layer()
 
 def translate_and_send_message(accumulated_message, current_channel_name, current_step_number, finish_reason, route):
 
-    if route != '/':
-        target_language_code = get_language_code_from_route(route)
-        print("target_language_code: ", target_language_code)
+    if route != 'en':
+        print("target_language_code: ", route)
         translated_messages = call_ai4bharat_translation_api(
-            message_body=accumulated_message, target_language=target_language_code,
+            message_body=accumulated_message, target_language=route,
             source_language='en'
         )
         if translated_messages is None:
             translated_messages = call_ai4bharat_translation_api(
-                message_body=accumulated_message, target_language=target_language_code,
+                message_body=accumulated_message, target_language=route,
                 source_language='en'
             )
         if translated_messages:
@@ -55,9 +54,3 @@ def translate_and_send_message(accumulated_message, current_channel_name, curren
             },
         )
         return None
-
-def get_language_code_from_route(route):
-    for choice in RouteLanguageChoices:
-        if choice.label == route:
-            return choice.value
-    return RouteLanguageChoices.ENGLISH.value
