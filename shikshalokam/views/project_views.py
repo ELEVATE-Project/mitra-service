@@ -71,10 +71,22 @@ def duplicate_project_view(request):
                 program_id=program_id
             )
         else:
+            if original_project.actual_problem_statement:
+                user_problem_statement = original_project.actual_problem_statement
+                project_title = original_project.actual_problem_statement
+                project_duration_weeks = original_project.actual_problem_statement
+                project_objective = original_project.actual_problem_statement
+            else:
+                user_problem_statement = original_project.expected_problem_statement
+                project_title = original_project.expected_problem_statement
+                project_duration_weeks = original_project.expected_problem_statement
+                project_objective = original_project.expected_problem_statement
+
             response = create_project_utils(
-                access_token=access_token, user_problem_statement=original_project.expected_problem_statement,
-                user_action_steps=user_action_steps, project_title=original_project.expected_title,
-                project_duration_weeks=duration, chunks=original_project.project_source
+                access_token=access_token, user_problem_statement=user_problem_statement,
+                user_action_steps=user_action_steps, project_title=project_title,
+                project_duration_weeks=project_duration_weeks, chunks=original_project.project_source,
+                project_objective=project_objective
             )
 
         print("response: ", response)
