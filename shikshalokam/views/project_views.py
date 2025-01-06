@@ -73,15 +73,15 @@ def duplicate_project_view(request):
         else:
             if original_project.actual_problem_statement:
                 user_problem_statement = original_project.actual_problem_statement
-                project_title = original_project.actual_problem_statement
-                project_duration_weeks = original_project.actual_problem_statement
-                project_objective = original_project.actual_problem_statement
+                project_title = original_project.actual_title
+                project_duration_weeks = original_project.actual_duration
+                project_objective = original_project.actual_objective
                 print("Actual_duration_weeks: ", project_duration_weeks)
             else:
                 user_problem_statement = original_project.expected_problem_statement
-                project_title = original_project.expected_problem_statement
-                project_duration_weeks = original_project.expected_problem_statement
-                project_objective = original_project.expected_problem_statement
+                project_title = original_project.expected_title
+                project_duration_weeks = original_project.expected_duration
+                project_objective = original_project.expected_objective
                 print("Expected_duration_weeks: ", project_duration_weeks)
             print("project_duration_weeks: ", project_duration_weeks)
             response = create_project_utils(
