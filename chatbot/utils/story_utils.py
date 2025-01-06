@@ -211,6 +211,9 @@ def format_response_json(response):
         '\r', '').replace('\\n', '').replace('\\t', '').replace('\\r', '')
     if '{' in response_json:
         response_json = response_json[response_json.index('{'):]
+    last_char = response_json[-1]
+    if last_char != '}':
+        response_json += '}'
     print("\nBEFORE LOADS: ", response_json)
     if isinstance(response_json, str):
         response_json = json.loads(response_json)
