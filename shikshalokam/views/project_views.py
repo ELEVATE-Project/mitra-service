@@ -80,7 +80,7 @@ def duplicate_project_view(request):
             else:
                 user_problem_statement = original_project.expected_problem_statement
                 project_title = original_project.expected_title
-                project_duration_weeks = int(original_project.expected_duration)
+                project_duration_weeks = original_project.expected_duration
                 project_objective = original_project.expected_objective
                 print("Expected_duration_weeks: ", project_duration_weeks)
             print("project_duration_weeks: ", project_duration_weeks)

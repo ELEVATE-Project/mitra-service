@@ -1,4 +1,6 @@
 import os
+import re
+
 import requests
 from datetime import timedelta, timezone
 from pydantic_core._pydantic_core import ValidationError
@@ -27,10 +29,12 @@ def create_project_utils(
     headers = {
         "X-auth-token": access_token,
     }
+    numeric_duration = extract_numeric(project_duration_weeks)
+    print("numeric_duration: ", numeric_duration)
     start_date = now()
     start_date = start_date.astimezone(tz=timezone.utc)
 
-    end_date = (start_date + timedelta(weeks=project_duration_weeks))
+    end_date = (start_date + timedelta(weeks=numeric_duration))
 
     start_date = start_date.isoformat()
     end_date = end_date.isoformat()
@@ -100,6 +104,13 @@ def create_project_utils(
     except ValueError as e:
         print(f"Validation error: {e}")
         return None
+
+
+def extract_numeric(value):
+    if value:
+        match = re.search(r'\d+', str(value))
+        return int(match.group()) if match else None
+    return None
 
 
 def create_mitra_project_utils(
