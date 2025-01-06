@@ -138,8 +138,10 @@ def duplicate_project_view(request):
 
         serialized_project = ProjectSerializer(duplicate_project).data
         print("Serialized project: ", serialized_project)
-        return JsonResponse(response.get('original_response'), status=200, safe=False)
-
+        if project_template_id:
+            return JsonResponse(response, status=200, safe=False)
+        else:
+            return JsonResponse(response.get('original_response'), status=200, safe=False)
 
     except ObjectDoesNotExist:
         traceback.print_exc()
