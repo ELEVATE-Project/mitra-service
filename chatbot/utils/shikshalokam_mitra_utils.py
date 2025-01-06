@@ -23,7 +23,6 @@ def create_project_utils(
     project_objective,
     session=None,
     status="completed",
-    is_duplicated_api=False
 ):
     url = f"https://{base_url}/userProjects/add"
 
