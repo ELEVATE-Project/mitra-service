@@ -22,7 +22,8 @@ def create_project_utils(
     chunks,
     project_objective,
     session=None,
-    status="completed"
+    status="completed",
+    is_duplicated_api=False
 ):
     url = f"https://{base_url}/userProjects/add"
 
@@ -96,6 +97,8 @@ def create_project_utils(
         program_id = json_response["result"].get("programId")
         project_id = json_response["result"].get('projects')[0].get("_id")
 
+        if is_duplicated_api:
+            return response
         return {
             "programId": program_id,
             "projectId": project_id
