@@ -97,9 +97,8 @@ def create_project_utils(
         program_id = json_response["result"].get("programId")
         project_id = json_response["result"].get('projects')[0].get("_id")
 
-        if is_duplicated_api:
-            return response
         return {
+            "original_response": response,
             "programId": program_id,
             "projectId": project_id
         }

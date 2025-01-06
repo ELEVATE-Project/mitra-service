@@ -138,7 +138,7 @@ def duplicate_project_view(request):
 
         serialized_project = ProjectSerializer(duplicate_project).data
         print("Serialized project: ", serialized_project)
-        return JsonResponse(response, status=200, safe=False)
+        return JsonResponse(response.get('original_response'), status=200, safe=False)
 
 
     except ObjectDoesNotExist:
