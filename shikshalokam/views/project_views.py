@@ -60,11 +60,6 @@ def duplicate_project_view(request):
         original_project = Project.objects.prefetch_related('task__evidence').get(id=project_id)
         user_action_steps = [task.task_name for task in original_project.task.all()]
 
-        try:
-            duration = int(original_project.expected_duration) if original_project.expected_duration else None
-        except ValueError:
-            duration = None
-
         if project_template_id:
             response = import_project_from_library_utils(
                 access_token=access_token, program_name=program_name, project_template_id=project_template_id,

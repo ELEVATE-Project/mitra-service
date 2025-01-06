@@ -197,6 +197,12 @@ def create_project_view(request):
     print("project_title: ", project_title)
     print("profile_id: ", profile_id)
 
+    if not chunks:
+        return Response({
+            'status': 'error',
+            'message': 'Project source cant be empty',
+        }, status=500)
+
     response = create_project_utils(
         access_token=access_token, user_problem_statement=user_problem_statement,
         user_action_steps=user_action_steps, project_title=project_title,

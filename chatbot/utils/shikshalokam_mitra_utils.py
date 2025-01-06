@@ -45,6 +45,9 @@ def create_project_utils(
 
         conversation = get_stored_conversation(company_chats=company_chats, ai_user=ai_user)
 
+    if not chunks:
+        chunks = {'relevant_texts': []}
+
     request_body = {
         "program": {
             "name": user_problem_statement,
