@@ -97,7 +97,7 @@ def create_project_utils(
         project_id = json_response["result"].get('projects')[0].get("_id")
 
         return {
-            "original_response": response,
+            "original_response": json_response,
             "programId": program_id,
             "projectId": project_id
         }
