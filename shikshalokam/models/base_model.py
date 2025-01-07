@@ -94,6 +94,8 @@ class Project(models.Model):
     project_source = models.TextField(null=True, blank=True)
     program_source = models.TextField(null=True, blank=True)
 
+    wishlist = models.BooleanField(default=False)
+
     resource_name = models.CharField(max_length=1000, null=True, blank=True)
     resource_link = models.CharField(max_length=2000, null=True, blank=True)
 
