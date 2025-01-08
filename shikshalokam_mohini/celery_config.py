@@ -10,5 +10,6 @@ app.autodiscover_tasks([
     'chatbot.celery_tasks.shikshalokam_bedrock_tasks',
     'chatbot.celery_tasks.one_shot_bedrock_tasks',
     'chatbot.celery_tasks.common_chat_tasks',
+    'chatbot.celery_tasks.reflection_bedrock_tasks',
     'chatbot.utils.story_utils',
 ])
