@@ -8,7 +8,7 @@ from shikshalokam.models import Project
 
 
 @shared_task
-def get_shikshalokam_bedrock_response(channel_name, session_id, profile_id, route, project_id):
+def get_shikshalokam_bedrock_response(channel_name, session_id, profile_id, route):
     print(session_id)
     try:
         company_chats = CompanyChat.objects.filter(session=session_id).order_by('created_at')
@@ -19,8 +19,6 @@ def get_shikshalokam_bedrock_response(channel_name, session_id, profile_id, rout
         state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
         system_context = company_bot.context
         introductory_message = company_bot.introductory_message
-        user_project = Project.objects.filter(project_id=project_id).first()
-        user_problem_statement = user_project.expected_problem_statement if user_project else None
 
         prompt_to_use = [
             {
@@ -87,11 +85,9 @@ def get_shikshalokam_bedrock_response(channel_name, session_id, profile_id, rout
                     'role': 'assistant',
                     "content": [{'text': chat.message}]
                 })
-        print("user_problem_statement: ", user_problem_statement)
         response = get_bedrock_tool_call_response(
             system_prompt=prompt_to_use, messages=messages, company_bot=company_bot, session_id=session_id,
-            channel_name=channel_name, route=route, profile_id=profile_id,
-            user_problem_statement=user_problem_statement
+            channel_name=channel_name, route=route, profile_id=profile_id
         )
 
         return response
