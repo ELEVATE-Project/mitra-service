@@ -22,10 +22,8 @@ def get_mitra_paraphrase_utils(paraphrase_problem, should_paraphrase_text):
         temperature=0.0
     )
     print("validation_response: ", validation_response)
-    validation_response = validation_response.get('is_validated')
-    if validation_response.lower() == 'no':
-        return validation_response
-    if not should_paraphrase_text:
+    is_validated = validation_response.get('is_validated')
+    if is_validated.lower() == 'no' or not should_paraphrase_text:
         return validation_response
     print('paraphrase_prompt: ', paraphrase_prompt)
     paraphrase_response = handle_bedrock_model(
