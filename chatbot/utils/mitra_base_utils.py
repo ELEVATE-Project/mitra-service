@@ -52,7 +52,7 @@ def generate_objective_utils(user_problem_statement):
 
     response, chunks, chunks_response = ask(
         messages=messages, user_question=user_problem_statement, temperature=company_bot.bot_temperature,
-        priority_filter="p1", top_k=company_bot.top_k, prompt=prompt
+        priority_filter="p1", top_k=company_bot.top_k, prompt=prompt, filter_score=company_bot.filter_score
     )
 
     response = response.get('objective_list')
