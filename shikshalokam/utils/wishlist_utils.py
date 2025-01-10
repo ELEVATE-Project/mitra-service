@@ -11,13 +11,15 @@ def add_project_wishlist(project, access_token):
     headers = {
         "X-auth-token": access_token,
     }
-
+    title = project.actual_title if project.actual_title else project.expected_title
+    objective = project.actual_objective if project.actual_objective else project.expected_objective
+    duration = project.actual_duration if project.actual_duration else project.expected_duration
     request_body = {
-        "title": project.actual_title,
+        "title": title,
         "referenceFrom": project.generated_by,
-        "description": project.actual_objective,
+        "description": objective,
         "metaInformation": {
-            "duration": project.actual_duration
+            "duration": duration
         }
     }
 
