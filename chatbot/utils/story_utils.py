@@ -14,6 +14,8 @@ from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
 from chatbot.utils.story_llama_utils import create_project
 from chatbot.llm_models.llm_script import handle_bedrock_model
 from jinja2 import Template
+from shikshalokam.models import Project
+from shikshalokam.utils.project_utils import get_project_formatted_data
 
 
 def create_story_object(profile_id, session, access_token, flow, language='en', model=None):
@@ -22,6 +24,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en', 
         company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
         ai_user = Profile.objects.get(id=1)
         company_bot = CompanyBot.objects.get(route='/story')
+        reflection_bot = CompanyBot.objects.get(route='/reflection')
         context = company_bot.context
         address = ProfileAddress.objects.filter(profile=profile)
         context_data = {
@@ -33,13 +36,27 @@ def create_story_object(profile_id, session, access_token, flow, language='en', 
         tag_context = template.render(context_data)
 
         end_context = company_bot.end_context
+
+        chat_session = ChatSession.objects.get(session=session)
+        project_id = chat_session.project_id
+
+        if flow != 'login' and project_id:
+            reflection_end_context = reflection_bot.end_context
+            user_project = Project.objects.filter(project_id=project_id).first()
+            project_data = get_project_formatted_data(user_project=user_project)
+            project_data = reflection_end_context.format(**project_data)
+        else:
+            project_data = ''
+
         content_prompt = f"""
             {context}
             {tag_context}
+            {project_data}
         """
         story_prompt = f"""
             {end_context}
             {tag_context}
+            {project_data}
         """
         print('-------------------------------')
         print(story_prompt)
@@ -179,9 +196,6 @@ def create_story_object(profile_id, session, access_token, flow, language='en', 
         formatted_content = get_formatted_story(story)
         story.formatted_content = formatted_content
         story.save(update_fields=['formatted_content'])
-
-        chat_session = ChatSession.objects.get(session=session)
-        project_id = chat_session.project_id
 
         create_project(
             response_json=response_json_story,title=title, objective=objective, story=story,

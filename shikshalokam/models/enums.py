@@ -28,3 +28,7 @@ class ProjectCreatedBy(models.TextChoices):
     AI_GENERATED = 'AI_GENERATED', _('AI_GENERATED')
     EXPERT_VETTED = 'EXPERT_VETTED', _('EXPERT_VETTED')
 
+class PriorityChoices(models.TextChoices):
+    P1 = 'P1', _('P1')
+    P2 = 'P2', _('P2')
+    P3 = 'P3', _('P3')

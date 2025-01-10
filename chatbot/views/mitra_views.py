@@ -30,7 +30,7 @@ def paraphrase_view(request):
         paraphrase_problem=user_input, should_paraphrase_text=should_paraphrase_text
     )
 
-    if language !='en' and paraphrased_output.lower() != 'no':
+    if language !='en' and isinstance(paraphrased_output, str) and paraphrased_output.lower() != 'no':
         paraphrased_output = call_ai4bharat_translation_api(
             source_language='en', target_language=language, message_body=paraphrased_output
         )

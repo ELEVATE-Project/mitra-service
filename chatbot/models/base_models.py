@@ -62,20 +62,50 @@ class CompanyBot(models.Model):
         upload_path = f"{folder_name}/{filename}"
         return upload_path
 
-    name = models.CharField(max_length=100)
-    company = models.ForeignKey(Company, on_delete=models.CASCADE)
+    name = models.CharField(max_length=100, help_text="Enter the name of the bot.")
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE, help_text="Select the company this bot belongs to."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    context = models.TextField()
-    bot_temperature = models.FloatField(default=0)
-    top_k = models.IntegerField(default=2, validators=[MinValueValidator(1)])
-    llm_model = models.CharField(max_length=100, choices=LLMModel.choices, default=LLMModel.GPT3_5)
-    filter_score = models.FloatField(default=0.8)
-    end_context = models.TextField(null=True, blank=True)
-    introductory_message = models.CharField(max_length=1000, null=True, blank=True)
+    context = models.TextField(help_text="Provide the bot's main prompt or description of its purpose.")
+    bot_temperature = models.FloatField(
+        default=0,
+        help_text="Set the temperature for controlling response randomness (0-1). Lower values produce more "
+                  "deterministic responses."
+    )
+    top_k = models.IntegerField(
+        default=2, validators=[MinValueValidator(1)],
+        help_text="Set the top-k value for the bot's response selection. This defines how many top options to consider "
+                  "for each response."
+    )
+    llm_model = models.CharField(
+        max_length=100, choices=LLMModel.choices, default=LLMModel.GPT3_5,
+        help_text="Select the LLM model to be used by the bot (e.g., GPT-4o, GPT-4)."
+    )
+    filter_score = models.FloatField(
+        default=0.8,
+        help_text="Set the filter score for bot response selection (0-1). Responses below this score will be "
+                  "filtered out."
+    )
+    end_context = models.TextField(
+        null=True, blank=True,
+        help_text="Provide additional prompt or context to append at the end of the main prompt to guide the "
+                  "conversation"
+    )
+    introductory_message = models.CharField(
+        max_length=1000, null=True, blank=True,
+        help_text="Provide an introductory message that the bot will present when the conversation starts."
+    )
     abrupt_introductory_message = models.CharField(max_length=1000, null=True, blank=True)
-    tag_context = models.TextField(null=True, blank=True)
-    route = models.CharField(max_length=100, default='/')
+    tag_context = models.TextField(
+        null=True, blank=True,
+        help_text="Provide any information or context related to variables (like Python-bound variables) that will be "
+                  "inserted into the prompt."
+    )
+    route = models.CharField(
+        max_length=100, default='/', help_text="Specify the route or API endpoint for interacting with the bot."
+    )
 
     retell_agent_id = models.CharField(max_length=255, null=True, blank=True, verbose_name="Voicebot call id")
     agent_provider = models.CharField(max_length=255, null=True, blank=True, verbose_name="Voicebot call provider")
@@ -85,11 +115,18 @@ class CompanyBot(models.Model):
     bot_type = models.CharField(max_length=30, choices=CompanyBotTypeChoices.choices,
                                 default=CompanyBotTypeChoices.SIMPLE)
     llm_key = models.CharField(max_length=255, null=True, blank=True)
-    dynamic_context = models.TextField(null=True, blank=True)
+    dynamic_context = models.TextField(
+        null=True, blank=True,
+        help_text="Provide dynamic context that can be adjusted during the bot's interactions, such as "
+                  "personalized data."
+    )
     dynamic_context_type = models.CharField(max_length=20, choices=CompanyBotDynamicContextType.choices,
                                             null=True, blank=True)
     whatsapp_number = models.CharField(max_length=20, null=True, blank=True)
-    pre_context = models.TextField(null=True, blank=True)
+    pre_context = models.TextField(
+        null=True, blank=True, help_text="Provide pre-context that will be set before the main prompt to shape the "
+                                         "conversation."
+    )
     history = HistoricalRecords()
 
     def __str__(self):

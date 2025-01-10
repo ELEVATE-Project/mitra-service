@@ -64,7 +64,7 @@ def call_bedrock_api(prompt, messages, temperature, chunks: List[str]):
     return response
 
 
-def ask(messages, user_question, temperature, priority_filter, top_k, prompt):
+def ask(messages, user_question, temperature, priority_filter, top_k, prompt, filter_score):
     """
     Handle user's questions.
     """
@@ -73,18 +73,14 @@ def ask(messages, user_question, temperature, priority_filter, top_k, prompt):
     chunks = []
     if chunks_response and chunks_response["relevant_texts"]:
         for result in chunks_response["relevant_texts"]:
-            if (
-                    "qdrant_recommendation_text" in result
-                    and result["qdrant_recommendation_text"] is not None
-                    and len(result["qdrant_recommendation_text"]) > 20
+            print(f"relevance_score: {result['relevance_score']} filter_score: {filter_score}")
+            if ("qdrant_recommendation_text" in result and result["qdrant_recommendation_text"] is not None
+                and len(result["qdrant_recommendation_text"]) > 20 and result["relevance_score"] >= filter_score
             ):
                 chunks.append(result["qdrant_recommendation_text"])
 
-            elif (
-                    "translated_text" in result
-                    and result["translated_text"] is not None
-                    and len(result["translated_text"]) > 20
-            ):
+            elif ("translated_text" in result and result["translated_text"] is not None
+                  and len(result["translated_text"]) > 20):
                 chunks.append(result["translated_text"])
     print("\nCHUNKS: ", chunks)
     chunks = []

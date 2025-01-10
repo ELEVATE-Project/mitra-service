@@ -22,10 +22,8 @@ def get_mitra_paraphrase_utils(paraphrase_problem, should_paraphrase_text):
         temperature=0.0
     )
     print("validation_response: ", validation_response)
-    validation_response = validation_response.get('is_validated')
-    if validation_response.lower() == 'no':
-        return validation_response
-    if not should_paraphrase_text:
+    is_validated = validation_response.get('is_validated')
+    if is_validated.lower() == 'no' or not should_paraphrase_text:
         return validation_response
     print('paraphrase_prompt: ', paraphrase_prompt)
     paraphrase_response = handle_bedrock_model(
@@ -54,7 +52,7 @@ def generate_objective_utils(user_problem_statement):
 
     response, chunks, chunks_response = ask(
         messages=messages, user_question=user_problem_statement, temperature=company_bot.bot_temperature,
-        priority_filter="p1", top_k=company_bot.top_k, prompt=prompt
+        priority_filter="p1", top_k=company_bot.top_k, prompt=prompt, filter_score=company_bot.filter_score
     )
 
     response = response.get('objective_list')

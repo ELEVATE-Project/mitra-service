@@ -9,7 +9,7 @@ from chatbot.models.company_models import CompanyStateMachine
 channel_layer = get_channel_layer()
 
 
-def get_bedrock_tool_call_response(
+def get_reflection_bedrock_tool_response(
         system_prompt, messages, company_bot, session_id, channel_name, route, profile_id
 ):
 
@@ -19,30 +19,30 @@ def get_bedrock_tool_call_response(
     print("Length: ", len(company_chat))
     chunks = []
 
-
-    if company_chat and len(company_chat)<2:
-        chat_session.current_step += 1
-        chat_session.save()
-        state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
-        bot_question = state_machine.bot_question
-
-        translated_message = translate_and_send_message(
-            accumulated_message=bot_question, current_channel_name=channel_name,
-            current_step_number=chat_session.current_step, finish_reason="stop", route=route
-        )
-
-        save_in_company_db(
-            session_id, profile_id, 'AI', bot_question, chunks, ChatStatus.IN_PROGRESS, translated_message
-        )
-        print("asking first bot_question: ", bot_question)
-        return bot_question
-
+    # if user_problem_statement and len(company_chat)<2:
+    #     chat_session.current_step += 2
+    #     chat_session.save()
+    #     state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
+    #     pre_context = company_bot.pre_context
+    #     if pre_context:
+    #         pre_context = pre_context.format(problem_statement=user_problem_statement)
+    #     bot_question = pre_context + " " + state_machine.bot_question
+    #
+    #     translated_message = translate_and_send_message(
+    #         accumulated_message=bot_question, current_channel_name=channel_name,
+    #         current_step_number=chat_session.current_step, finish_reason="stop", route=route
+    #     )
+    #
+    #     save_in_company_db(
+    #         session_id, profile_id, 'AI', bot_question, chunks, ChatStatus.IN_PROGRESS, translated_message
+    #     )
+    #     print("skipping stages bot_question: ", bot_question)
+    #     return bot_question
 
     response = handle_bedrock_model(
         system_prompt=system_prompt, messages=messages
     )
     print("response_body bedrock: ", response)
-
 
     is_function_call = False
     if isinstance(response, dict):
@@ -50,7 +50,6 @@ def get_bedrock_tool_call_response(
         if tool_use_id:
             is_function_call = True
     print("is_function_call: ", is_function_call)
-
 
     if is_function_call:
         print("its func call")
