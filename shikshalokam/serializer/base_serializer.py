@@ -4,6 +4,7 @@ from rest_framework import serializers
 
 from chatbot.serializer.profile_serializer import ProfileSerializer
 from shikshalokam.models.base_model import Project, Task, Category, ProjectTemplate, Evidence
+from shikshalokam.models.wishlist_model import ProjectWishlist
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -31,6 +32,12 @@ class EvidenceSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class ProjectWishlistSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectWishlist
+        fields = '__all__'
+
+
 class ProjectSerializer(serializers.ModelSerializer):
     project_template = ProjectTemplateSerializer(read_only=True)
     task = TaskSerializer(many=True, read_only=True)
@@ -40,6 +47,15 @@ class ProjectSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)
+
+        user = self.context.get('author')
+        print("author: ", user)
+        print("project: ", instance)
+        if user and instance:
+            in_wishlist = ProjectWishlist.objects.filter(author=user, project=instance).exists()
+            print("wishlist: ", in_wishlist)
+            representation['wishlist'] = in_wishlist
+
         for field in ['categories', 'recommended_for', 'keywords']:
             try:
                 representation[field] = json.loads(getattr(instance, field)) if getattr(instance, field) else []

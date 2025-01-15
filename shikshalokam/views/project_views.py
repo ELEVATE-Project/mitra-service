@@ -12,6 +12,8 @@ from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework.response import Response
 import jwt
+from rest_framework.exceptions import AuthenticationFailed
+
 
 class ProjectListCreateView(generics.ListCreateAPIView):
     queryset = Project.objects.prefetch_related('task__evidence').select_related(
@@ -22,14 +24,35 @@ class ProjectListCreateView(generics.ListCreateAPIView):
     filterset_fields = ['id', 'project_id', 'program_id']
 
 
+    def get_user_from_token(self, request):
+        access_token = request.headers.get("X-auth-token")
+        if access_token:
+            decoded = jwt.decode(access_token, options={"verify_signature": False})
+            print(decoded)
+            if decoded:
+                try:
+                    user_id = decoded.get('data', {}).get('id')
+                    if not user_id:
+                        raise AuthenticationFailed('Invalid token: user_id missing')
+                    return Profile.objects.get(userid=user_id)
+                except jwt.ExpiredSignatureError:
+                    raise AuthenticationFailed('Token has expired')
+                except jwt.InvalidTokenError:
+                    raise AuthenticationFailed('Invalid token')
+                except Profile.DoesNotExist:
+                    raise AuthenticationFailed('User not found')
+
+
     def list(self, request, *args, **kwargs):
+        user = self.get_user_from_token(request)
+
         queryset = self.filter_queryset(self.get_queryset())
 
         if queryset.count() == 1:
-            serializer = self.get_serializer(queryset.first())
+            serializer = self.get_serializer(queryset.first(), context={'request': request, 'author': user})
             return Response(serializer.data)
 
-        serializer = self.get_serializer(queryset, many=True)
+        serializer = self.get_serializer(queryset, many=True, context={'request': request, 'author': user})
         return Response(serializer.data)
 
 
