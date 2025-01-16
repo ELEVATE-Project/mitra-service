@@ -25,7 +25,7 @@ def end_story(request):
         project_id = request.data.get('project_id', None)
         print("profile_id:", profile_id)
         print("session:", session)
-        if profile_id is None or session is None or access_token is None:
+        if profile_id is None or session is None:
             return Response({
                 'status': 'error',
                 'message': 'profile id or session or access_token is mandatory'
