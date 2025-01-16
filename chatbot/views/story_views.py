@@ -87,8 +87,8 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
             print("response: ", response)
             print("response status_code: ", response.status_code)
 
-            if response.status_code == status.HTTP_201_CREATED:
-                upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
+            # if response.status_code == status.HTTP_201_CREATED:
+            #     upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
             return response
 
         except Exception as e:
@@ -139,9 +139,9 @@ class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
             print("response: ", response)
             print("response status_code: ", response.status_code)
 
-            if response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]:
+            # if response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]:
                 # Pass response.data directly as the instance
-                upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
+                # upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
 
             return response
         except Exception as e:
