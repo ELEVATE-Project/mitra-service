@@ -16,11 +16,15 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from rest_framework.documentation import include_docs_urls
+
 
 admin.site.site_header = 'Mohini Admin Panel'
 
+
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('docs/', include_docs_urls(title='API Documentation')),
     path('api/shikshalokam/', include('shikshalokam.urls')),
     path("", include("chatbot.urls", namespace="chatbot")),
 ]
