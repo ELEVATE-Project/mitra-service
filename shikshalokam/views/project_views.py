@@ -105,7 +105,7 @@ def duplicate_project_view(request):
             response = create_project_utils(
                 access_token=access_token, user_problem_statement=user_problem_statement,
                 user_action_steps=user_action_steps, project_title=project_title,
-                project_duration_weeks=project_duration_weeks, chunks=original_project.project_source,
+                project_duration_weeks=project_duration_weeks, original_project=original_project,
                 project_objective=project_objective, status='started'
             )
 

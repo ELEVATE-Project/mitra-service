@@ -19,8 +19,9 @@ def create_project_utils(
     project_title,
     project_duration_weeks,
     user_action_steps,
-    chunks,
     project_objective,
+    original_project=None,
+    chunks=None,
     session=None,
     status="completed",
 ):
@@ -35,7 +36,6 @@ def create_project_utils(
     start_date = start_date.astimezone(tz=timezone.utc)
 
     end_date = (start_date + timedelta(weeks=numeric_duration))
-
     start_date = start_date.isoformat()
     end_date = end_date.isoformat()
     conversation = []
@@ -45,6 +45,11 @@ def create_project_utils(
 
         conversation = get_stored_conversation(company_chats=company_chats, ai_user=ai_user)
 
+    if original_project:
+        chunks = original_project.project_source
+        chunks['project_id'] = original_project.project_id
+        if original_project.template_id:
+            chunks['template_id'] = original_project.template_id
     if not chunks:
         chunks = {'relevant_texts': []}
 
