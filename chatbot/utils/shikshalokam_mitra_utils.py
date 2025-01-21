@@ -47,14 +47,12 @@ def create_project_utils(
 
     if original_project:
         chunks = original_project.project_source
-        print("before chunks: ", chunks)
         if chunks:
             chunks = chunks.rstrip('}')
             chunks += f', "project_id": "{original_project.project_id}"'
             if original_project.template_id:
                 chunks += f', "template_id": "{original_project.template_id}"'
             chunks += '}'
-            print("after chunks: ", chunks)
     if not chunks:
         chunks = {"relevant_texts": []}
 
@@ -110,7 +108,8 @@ def create_project_utils(
         return {
             "original_response": json_response,
             "programId": program_id,
-            "projectId": project_id
+            "projectId": project_id,
+            "chunks": chunks
         }
 
     except requests.exceptions.RequestException as e:

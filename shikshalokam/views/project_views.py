@@ -131,11 +131,12 @@ def duplicate_project_view(request):
                     field.name: getattr(original_project, field.name)
                     for field in Project._meta.fields
                     if field.name not in ['id', 'author', 'project_id', 'program_id', 'created_at', 'updated_at',
-                                          'history', 'program_name', 'generated_by']
+                                          'history', 'program_name', 'generated_by', 'project_source']
                 },
                 'program_id': program_id,
                 'program_name': program_name,
                 'author': new_author,
+                'project_source': response.get('chunks')
             }
         )
         if created:
