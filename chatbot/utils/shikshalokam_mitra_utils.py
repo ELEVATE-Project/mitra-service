@@ -55,9 +55,6 @@ def create_project_utils(
                 chunks += f', "template_id": "{original_project.template_id}"'
             chunks += '}'
             print("after chunks: ", chunks)
-        chunks["project_id"] = original_project.project_id
-        if original_project.template_id:
-            chunks["template_id"] = original_project.template_id
     if not chunks:
         chunks = {"relevant_texts": []}
 
