@@ -49,7 +49,11 @@ def create_project_utils(
         chunks = original_project.project_source
         print("before chunks: ", chunks)
         if chunks:
-            chunks= json.loads(chunks)
+            chunks = chunks.rstrip('}')
+            chunks += f', "project_id": "{original_project.project_id}"'
+            if original_project.template_id:
+                chunks += f', "template_id": "{original_project.template_id}"'
+            chunks += '}'
             print("after chunks: ", chunks)
         chunks["project_id"] = original_project.project_id
         if original_project.template_id:
