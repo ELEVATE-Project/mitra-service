@@ -97,7 +97,6 @@ class CompanyBot(models.Model):
         max_length=1000, null=True, blank=True,
         help_text="Provide an introductory message that the bot will present when the conversation starts."
     )
-    abrupt_introductory_message = models.CharField(max_length=1000, null=True, blank=True)
     tag_context = models.TextField(
         null=True, blank=True,
         help_text="Provide any information or context related to variables (like Python-bound variables) that will be "
@@ -107,10 +106,6 @@ class CompanyBot(models.Model):
         max_length=100, default='/', help_text="Specify the route or API endpoint for interacting with the bot."
     )
 
-    retell_agent_id = models.CharField(max_length=255, null=True, blank=True, verbose_name="Voicebot call id")
-    agent_provider = models.CharField(max_length=255, null=True, blank=True, verbose_name="Voicebot call provider")
-
-    twilio_queue = models.CharField(max_length=255, null=True, blank=True, verbose_name="Call schedule key")
     voice = models.ForeignKey(Voice, on_delete=models.SET_NULL, null=True, blank=True)
     bot_type = models.CharField(max_length=30, choices=CompanyBotTypeChoices.choices,
                                 default=CompanyBotTypeChoices.SIMPLE)
@@ -122,7 +117,6 @@ class CompanyBot(models.Model):
     )
     dynamic_context_type = models.CharField(max_length=20, choices=CompanyBotDynamicContextType.choices,
                                             null=True, blank=True)
-    whatsapp_number = models.CharField(max_length=20, null=True, blank=True)
     pre_context = models.TextField(
         null=True, blank=True, help_text="Provide pre-context that will be set before the main prompt to shape the "
                                          "conversation."
@@ -209,8 +203,6 @@ class CompanyChat(models.Model):
     feedback = models.CharField(max_length=20, choices=FeedbackChoices.choices, null=True, blank=True)
     source = models.CharField(max_length=20, choices=CompanyChatSourceChoices.choices,
                               default=CompanyChatSourceChoices.WEB)
-    source_msg_id = models.CharField(max_length=256, null=True, blank=True)
-    whatsapp_message_id = models.CharField(max_length=255, null=True, blank=True)
     message_type = models.CharField(max_length=20, null=True, blank=True)
     stage = models.CharField(max_length=500, choices=ChatStageChoices.choices, null=True, blank=True)
 

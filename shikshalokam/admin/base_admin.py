@@ -18,16 +18,16 @@ class CategoryAdmin(admin.ModelAdmin):
         obj.save()
 
 
-@admin.register(ProjectTemplate)
-class ProjectTemplateAdmin(admin.ModelAdmin):
-    list_display = ('title', 'created_at', )
-    list_filter = (CustomAdvanceDateFilter, 'template_id' )
-    search_fields = ('title', )
-
-    def save_model(self, request, obj, form, change):
-        if not obj.pk:
-            obj.created_by = request.user
-        obj.save()
+# @admin.register(ProjectTemplate)
+# class ProjectTemplateAdmin(admin.ModelAdmin):
+#     list_display = ('title', 'created_at', )
+#     list_filter = (CustomAdvanceDateFilter, 'template_id' )
+#     search_fields = ('title', )
+#
+#     def save_model(self, request, obj, form, change):
+#         if not obj.pk:
+#             obj.created_by = request.user
+#         obj.save()
 
 
 @admin.register(Project)
