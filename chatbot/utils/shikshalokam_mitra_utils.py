@@ -47,6 +47,8 @@ def create_project_utils(
 
     if original_project:
         chunks = original_project.project_source
+        if chunks:
+            chunks= json.loads(chunks)
         chunks['project_id'] = original_project.project_id
         if original_project.template_id:
             chunks['template_id'] = original_project.template_id
