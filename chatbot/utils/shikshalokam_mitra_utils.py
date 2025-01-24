@@ -1,14 +1,14 @@
 import os
 import re
-
 import requests
 from datetime import timedelta, timezone
 from pydantic_core._pydantic_core import ValidationError
 from django.utils.timezone import now
 from chatbot.models import Profile, CompanyChat
 import json
-
 from shikshalokam.models import Project, Task
+import ast
+
 
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
@@ -47,18 +47,18 @@ def create_project_utils(
 
     if original_project:
         chunks = original_project.project_source
-        if chunks:
-            chunks = chunks.rstrip('}')
-            chunks += f', "projectId": "{original_project.project_id}"'
-            if original_project.template_id:
-                chunks += f', "projectTemplateId": "{original_project.template_id}"'
-            chunks += '}'
-            chunks = json.loads(json.dumps(chunks))
+        chunks = chunks.strip('{}')
+        chunks = ast.literal_eval('{' + chunks + '}')
+        print(type(chunks))
+        chunks["projectId"]= original_project.project_id
+        if original_project.template_id:
+            chunks["projectTemplateId"]= original_project.template_id
 
     if not chunks:
         chunks = {"relevant_texts": []}
 
     print("final chunks: ", chunks)
+    print("final chunks type: ", type(chunks))
     request_body = {
         "program": {
             "name": user_problem_statement,
@@ -92,7 +92,7 @@ def create_project_utils(
         ]
     }
 
-    print("req body: ", request_body)
+    # print("req body: ", request_body)
 
     try:
         response = requests.post(url, headers=headers, json=request_body)
