@@ -49,10 +49,12 @@ def create_project_utils(
         chunks = original_project.project_source
         if chunks:
             chunks = chunks.rstrip('}')
-            chunks += f', "project_id": "{original_project.project_id}"'
+            chunks += f', "projectId": "{original_project.project_id}"'
             if original_project.template_id:
-                chunks += f', "template_id": "{original_project.template_id}"'
+                chunks += f', "projectTemplateId": "{original_project.template_id}"'
             chunks += '}'
+            chunks = json.loads(json.dumps(chunks))
+
     if not chunks:
         chunks = {"relevant_texts": []}
 
