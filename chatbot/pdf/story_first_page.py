@@ -86,7 +86,6 @@ def get_first_page_html(profile, story):
                 <div class="story-details-div">
                     <p class="story-title">{title}</p>
                     <p class="story-author">{author}</p>
-                    <a href="https://demo.shikshalokam.org" class="story-link">https://demo.shikshalokam.org</a>
                 </div>
             </div>
         """
