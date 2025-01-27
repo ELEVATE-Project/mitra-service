@@ -7,7 +7,9 @@ from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_
 channel_layer = get_channel_layer()
 
 
-def translate_and_send_message(accumulated_message, current_channel_name, current_step_number, finish_reason, route):
+def translate_and_send_message(
+        accumulated_message, current_channel_name, current_step_number, finish_reason, route, extra_content=None
+):
 
     if route != 'en':
         print("target_language_code: ", route)
@@ -33,7 +35,8 @@ def translate_and_send_message(accumulated_message, current_channel_name, curren
                     "msg": translated_messages,
                     "source": "bot",
                     "finish_reason": finish_reason,
-                    "step": current_step_number
+                    "step": current_step_number,
+                    "extra_content": extra_content
                 },
             },
         )
@@ -49,7 +52,8 @@ def translate_and_send_message(accumulated_message, current_channel_name, curren
                     "msg": accumulated_message,
                     "source": "bot",
                     "finish_reason": finish_reason,
-                    "step": current_step_number
+                    "step": current_step_number,
+                    "extra_content": extra_content
                 },
             },
         )

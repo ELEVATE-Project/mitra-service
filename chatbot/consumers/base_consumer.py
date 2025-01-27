@@ -29,13 +29,15 @@ class BaseConsumer(WebsocketConsumer):
         chat_session = ChatSession.objects.filter(session=session_id).first()
         profile = Profile.objects.get(id=profile_id)
         company_bot = CompanyBot.objects.get(company=profile.company, route='/')
-        state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
+        state_machine = CompanyStateMachine.objects.filter(
+            company_bot=company_bot, step=chat_session.current_step
+        ).first()
 
         existing_chats = CompanyChat.objects.filter(session=session_id)
 
         if existing_chats.count() == 0:
             return ChatStatus.STARTED
-        elif state_machine.name != 'APPRECIATION' and is_disconnected:
+        elif state_machine and state_machine.name != 'APPRECIATION' and is_disconnected:
             return ChatStatus.PAUSED
         elif existing_chats.exists():
             last_chat = existing_chats.last()

@@ -1,3 +1,5 @@
+import re
+
 import requests
 import json
 import os
@@ -200,10 +202,15 @@ def handle_bedrock_model(
             json_start = content_text.find('{')
             if json_start != -1:
                 json_str = content_text[json_start:]
+                json_str = json_str.replace('\n', '').replace('\r', '').strip()
+                while json_str and (json_str.endswith("'") or json_str.endswith('"') or json_str.endswith(',')):
+                    json_str = json_str[:-1].strip()
+                if not json_str.endswith("}"):
+                    json_str = json_str + "}"
+                print("json_str: ", json_str)
                 try:
                     final_output = json.loads(json_str)
-                    # print("final_output JSON:", final_output)
-                    # print("final_output JSON type: ", type(final_output))
+                    print("Loads final_output: ", final_output)
                 except json.JSONDecodeError as e:
                     print(f"Error decoding JSON: {e}")
                     return None
