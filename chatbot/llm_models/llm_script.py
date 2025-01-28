@@ -8,6 +8,7 @@ from langfuse.decorators import observe
 from langfuse.openai import openai
 from chatbot.models import LLMModel
 import boto3
+import json_repair
 
 
 validate = URLValidator()
@@ -205,11 +206,8 @@ def handle_bedrock_model(
                 json_str = json_str.replace('\n', '').replace('\r', '').strip()
                 while json_str and (json_str.endswith("'") or json_str.endswith('"') or json_str.endswith(',')):
                     json_str = json_str[:-1].strip()
-                if not json_str.endswith("}"):
-                    json_str = json_str + "}"
-                print("json_str: ", json_str)
                 try:
-                    final_output = json.loads(json_str)
+                    final_output = json_repair.repair_json(json_str, return_objects=True)
                     print("Loads final_output: ", final_output)
                 except json.JSONDecodeError as e:
                     print(f"Error decoding JSON: {e}")

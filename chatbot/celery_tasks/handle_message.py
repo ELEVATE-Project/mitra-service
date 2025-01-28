@@ -11,7 +11,7 @@ def translate_and_send_message(
         accumulated_message, current_channel_name, current_step_number, finish_reason, route, extra_content=None
 ):
 
-    if route != 'en':
+    if route != 'en' and accumulated_message and accumulated_message!= '':
         print("target_language_code: ", route)
         translated_messages = call_ai4bharat_translation_api(
             message_body=accumulated_message, target_language=route,

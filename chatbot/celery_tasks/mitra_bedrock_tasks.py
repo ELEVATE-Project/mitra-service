@@ -47,17 +47,20 @@ def get_mitra_bedrock_response(channel_name, session_id, profile_id, route):
         if response:
             message = response.get("message", "")
             problem_statement = response.get("problem_statement", "")
-
-            problem_statement = call_ai4bharat_translation_api(
-                message_body=problem_statement, target_language=route,
-                source_language='en'
-            )
+            if route != 'en':
+                problem_statement = call_ai4bharat_translation_api(
+                    message_body=problem_statement, target_language=route,
+                    source_language='en'
+                )
 
             extra_content = {
                 "problem_statement": problem_statement,
-                "should_move_forward": response.get("should_move_forward", False),
+                "should_move_forward": response.get("should_move_forward", 'no'),
                 "validation": response.get("validation", "")
             }
+
+            if response.get("should_move_forward") == 'yes':
+                message = ''
 
             translated_message = translate_and_send_message(
                 accumulated_message=message, current_channel_name=channel_name,
