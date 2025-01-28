@@ -1,7 +1,5 @@
 import django_filters
 from rest_framework import generics
-from rest_framework.decorators import authentication_classes
-from chatbot.auth import ProfileJWTAuthentication
 from chatbot.filter.drf_filter import ChatSessionProfileFilter
 from chatbot.models import ChatSession
 from chatbot.models.base_models import CompanyChat, CompanyBot, Profile
@@ -26,7 +24,7 @@ class CompanyBotListCreateView(generics.ListCreateAPIView):
     queryset = CompanyBot.objects.all()
     serializer_class = CompanyBotSerializer
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend]
-    filterset_fields = ['name', 'company__name', 'llm_model', 'company__slug']
+    filterset_fields = ['name', 'company__name', 'llm_model', 'company__slug', 'route']
 
 
 class CompanyBotRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):
