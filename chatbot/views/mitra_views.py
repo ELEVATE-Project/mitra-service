@@ -193,6 +193,7 @@ def create_project_view(request):
     project_objective = body.get('user_objective')
     profile_id = body.get('profile_id')
     chunks = body.get('chunks')
+    language = body.get('language')
 
     print("project_title: ", project_title)
     print("profile_id: ", profile_id)
@@ -226,7 +227,8 @@ def create_project_view(request):
             user_action_steps=user_action_steps,
             project_id=project_id,
             program_id=program_id,
-            chunks=chunks
+            chunks=chunks,
+            language=language
         )
 
         print("Result: ", result)
