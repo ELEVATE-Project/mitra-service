@@ -47,8 +47,11 @@ def create_project_utils(
 
     if original_project:
         chunks = original_project.project_source
-        chunks = chunks.strip('{}')
-        chunks = ast.literal_eval('{' + chunks + '}')
+        if not chunks:
+            chunks = {}
+        else:
+            chunks = chunks.strip('{}')
+            chunks = ast.literal_eval('{' + chunks + '}')
         print(type(chunks))
         chunks["projectId"]= original_project.project_id
         if original_project.template_id:
