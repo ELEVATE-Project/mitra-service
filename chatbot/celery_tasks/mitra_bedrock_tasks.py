@@ -39,8 +39,10 @@ def get_mitra_bedrock_response(channel_name, session_id, profile_id, route):
                     "content": [{'text': chat.message}]
                 })
 
+        tool_content = get_bedrock_content_tools()
+
         response = handle_bedrock_model(
-            system_prompt=prompt_to_use, messages=messages
+            system_prompt=prompt_to_use, messages=messages, is_json_response=True, tools=tool_content
         )
         print("response_body bedrock: ", response)
 
@@ -67,11 +69,56 @@ def get_mitra_bedrock_response(channel_name, session_id, profile_id, route):
                 current_step_number=1, finish_reason="stop", route=route,
                 extra_content=extra_content
             )
-            save_in_company_db(
-                session_id, profile_id, 'AI', response, None, ChatStatus.IN_PROGRESS,
-                translated_message
-            )
+            if message != '':
+                save_in_company_db(
+                    session_id, profile_id, 'AI', message, None, ChatStatus.IN_PROGRESS,
+                    translated_message
+                )
         return response
     except Exception as e:
         print(e)
         traceback.print_exc()
+
+
+def get_bedrock_content_tools():
+    tool = {
+        "toolConfig": {
+            "tools": [
+                {
+                    "toolSpec": {
+                        "name": "get_problem_statement_output",
+                        "description": "Generate a structured problem statement output in valid JSON format.",
+                        "inputSchema": {
+                            "json": {
+                                "type": "object",
+                                "properties": {
+                                    "message": {
+                                        "type": "string",
+                                        "description": "The bot's response message guiding the user through problem "
+                                                       "identification."
+                                    },
+                                    "problem_statement": {
+                                        "type": "string",
+                                        "description": "The refined problem statement based on user input."
+                                    },
+                                    "should_move_forward": {
+                                        "type": "string",
+                                        "enum": ["yes", "no"],
+                                        "description": "Indicates whether the process should continue."
+                                    },
+                                    "validation": {
+                                        "type": "string",
+                                        "enum": ["OUT_OF_SCOPE", "NO_PROBLEM_STATEMENT", ""],
+                                        "description": "Validation result for the problem statement."
+                                    }
+                                },
+                                "required": ["message", "problem_statement", "should_move_forward"]
+                            }
+                        }
+                    }
+                }
+            ]
+        }
+    }
+    return tool
+

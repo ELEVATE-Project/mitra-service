@@ -1,5 +1,3 @@
-import re
-
 import requests
 import json
 import os
@@ -9,6 +7,7 @@ from langfuse.openai import openai
 from chatbot.models import LLMModel
 import boto3
 import json_repair
+from retrying import retry
 
 
 validate = URLValidator()
@@ -127,11 +126,14 @@ def handle_openai_model(
     else:
         return response
 
+def retry_if_result_none(result):
+    return result is None
 
 @observe()
+@retry(stop_max_attempt_number=2, retry_on_result=retry_if_result_none)
 def handle_bedrock_model(
         system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
-        model_name=None, region_name='us-west-2', tools=None
+        model_name=None, region_name='us-west-2', tools=None, is_json_response=False
 ):
     bedrock_runtime = boto3.client(
         service_name='bedrock-runtime',
@@ -147,11 +149,6 @@ def handle_bedrock_model(
 
         # 'meta.llama3-1-70b-instruct-v1:0'
 
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-
     inference_config = {}
     additional_model_fields = {}
 
@@ -165,10 +162,7 @@ def handle_bedrock_model(
     if messages and messages[-1]['role'] == 'assistant':
         messages.pop()
 
-    # print("Prompt: ", json.dumps(system_prompt))
-    # print("Messages: ", json.dumps(messages))
     try:
-
         request_payload = {
             'modelId': model_id,
             'messages': messages,
@@ -191,15 +185,12 @@ def handle_bedrock_model(
         content = response['output']['message']['content'][0]
         content_tool = content.get('toolUse')
         if content_tool:
-            # print("content_tool: ", content_tool)
             if isinstance(content_tool, str):
-                final_output = json.loads(content_tool)
+                final_output = json_repair.repair_json(content_tool, return_objects=True)
             else:
-
                 final_output = content_tool
         elif not tools:
             content_text = content.get('text')
-            # print("content_text: ", content_text)
             json_start = content_text.find('{')
             if json_start != -1:
                 json_str = content_text[json_start:]
@@ -212,18 +203,30 @@ def handle_bedrock_model(
                 except json.JSONDecodeError as e:
                     print(f"Error decoding JSON: {e}")
                     return None
+            elif is_json_response:
+                return None
             else:
                 return content_text
         else:
             content_text = content.get('text')
-            # print("content_text: ", content_text)
-            final_output = content_text
-            # print("final_output: ", final_output)
+            if is_json_response:
+                try:
+                    final_output = json_repair.repair_json(content_text, return_objects=True)
+                    print("Loads final_output: ", final_output)
+                    print("Loads type: ", type(final_output))
+                    if isinstance(final_output, str):
+                        return None
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding JSON: {e}")
+                    return None
+            else:
+                final_output = content_text
 
-        return  final_output
+        return final_output
 
     except Exception as e:
         print(f"Error processing request: {e}")
+        return None
 
 
 @observe()

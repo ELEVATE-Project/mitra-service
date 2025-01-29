@@ -16,6 +16,7 @@ from chatbot.llm_models.llm_script import handle_bedrock_model
 from jinja2 import Template
 from shikshalokam.models import Project
 from shikshalokam.utils.project_utils import get_project_formatted_data
+import json_repair
 
 
 def create_story_object(profile_id, session, access_token, flow, language='en', model=None):
@@ -230,8 +231,8 @@ def format_response_json(response):
         response_json += '}'
     print("\nBEFORE LOADS: ", response_json)
     if isinstance(response_json, str):
-        response_json = json.loads(response_json)
-    print("AFTER LOADS: ", response_json)
+        response_json = json_repair.repair_json(response_json, return_objects=True)
+        print("AFTER LOADS: ", response_json)
     print("TYPE response_json: ", type(response_json))
 
     return response_json

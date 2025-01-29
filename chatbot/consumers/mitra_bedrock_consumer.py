@@ -94,6 +94,8 @@ class MitraBedrockConsumer(BaseConsumer):
                 print(f"channel_name: {self.channel_name}, session_id: {self.session_id}, profile_id: {self.profile_id}, "
                       f"route: {self.route}")
 
+                self.route = self.route.strip()
+
                 get_mitra_bedrock_response.delay(
                     self.channel_name, self.session_id, self.profile_id, self.route
                 )
