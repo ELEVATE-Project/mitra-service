@@ -11,7 +11,8 @@ from chatbot.views.drf_views import CompanyChatListCreateView, CompanyChatRetrie
     ProfileRetrieveUpdateDestroyView, ChatSessionListCreateView, ChatSessionRetrieveUpdateDestroyView, \
     ChatSessionRetrieveUpdateDestroyViewSession
 from chatbot.views.mitra_views import paraphrase_view, generate_objectives_view, generate_action_list_view, \
-    generate_title_view, create_project_view, update_project_status_view
+    generate_title_view, create_project_view, update_project_status_view, validate_actions_view, \
+    validate_objectives_view
 from chatbot.views.recommendation import generate_recommendation
 from chatbot.views.story_views import end_story, StoryListCreateView, StoryBySessionView, \
     StoryRetrieveUpdateDestroyView, StoryMediaListCreateView, StoryMediaRetrieveUpdateDestroyView
@@ -62,6 +63,8 @@ urlpatterns = [
 
     path('api/paraphrase/', paraphrase_view, name="paraphrase"),
     path('api/generate-objective/', generate_objectives_view, name="generate-objectives"),
+    path('api/validate-objective/', validate_objectives_view, name="validate-objectives"),
+    path('api/validate-actions/', validate_actions_view, name="validate-actions"),
     path('api/generate-action-list/', generate_action_list_view, name="generate-action-list"),
     path('api/generate-title/', generate_title_view, name="generate-title"),
     path('api/save-company-chat/', save_chats_view, name="save-company-chat"),

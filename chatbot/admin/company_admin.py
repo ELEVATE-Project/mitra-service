@@ -138,7 +138,7 @@ class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
 @admin.register(ChatSession)
 class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
     list_display = ('session', 'get_first_name', 'created_at')
-    list_filter = ('session', 'title', ChatSessionFilter, 'project_id')
+    list_filter = ('session', 'title', ChatSessionFilter, 'project_id', 'session_status')
     search_fields = ('session', 'title', 'profile__first_name')
     raw_id_fields = ('profile',)
 
