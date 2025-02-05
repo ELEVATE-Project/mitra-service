@@ -1,5 +1,6 @@
 from chatbot.views.gotenberg_view import generate_pdf_view
 from chatbot.views.kafka_views import sync_user_project_view
+from chatbot.views.location_views import get_location_view
 from chatbot.views.profile_views import create_profile_views
 from django.urls import path
 from chatbot.views import api_views
@@ -9,7 +10,7 @@ from chatbot.views.chat_view import save_chats_view, create_chatsession
 from chatbot.views.drf_views import CompanyChatListCreateView, CompanyChatRetrieveUpdateDestroyView, \
     CompanyBotListCreateView, CompanyBotRetrieveUpdateDestroyView, ProfileListCreateView, \
     ProfileRetrieveUpdateDestroyView, ChatSessionListCreateView, ChatSessionRetrieveUpdateDestroyView, \
-    ChatSessionRetrieveUpdateDestroyViewSession
+    ChatSessionRetrieveUpdateDestroyViewSession, BotVernacularListCreateView, BotVernacularRetrieveUpdateDestroyView
 from chatbot.views.mitra_views import paraphrase_view, generate_objectives_view, generate_action_list_view, \
     generate_title_view, create_project_view, update_project_status_view, validate_actions_view, \
     validate_objectives_view
@@ -39,6 +40,10 @@ urlpatterns = [
     path('api/companybot/', CompanyBotListCreateView.as_view(), name='companybot-list-create'),
     path('api/companybot/<int:pk>/', CompanyBotRetrieveUpdateDestroyView.as_view(),
          name='companybot-retrieve-update-destroy'),
+
+    path('api/bot_vernacular/', BotVernacularListCreateView.as_view(), name='bot_vernacular-list-create'),
+    path('api/bot_vernacular/<int:pk>/', BotVernacularRetrieveUpdateDestroyView.as_view(),
+         name='bot_vernacular-retrieve-update-destroy'),
 
     path('api/story/', StoryListCreateView.as_view(), name='story-list-create'),
     path('api/get-story/', StoryBySessionView.as_view(), name='story-by-session'),
@@ -75,5 +80,6 @@ urlpatterns = [
     path('api/generate-recommendation/', generate_recommendation, name='generate-recommendation'),
     path('api/update-project-status/', update_project_status_view, name='update-project-status'),
     path('api/sync-user-project/', sync_user_project_view, name='sync-user-project'),
+    path('api/get-location/', get_location_view, name='get-location'),
 
 ]
