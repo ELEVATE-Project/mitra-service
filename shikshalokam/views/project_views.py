@@ -105,7 +105,7 @@ def duplicate_project_view(request):
             response = create_project_utils(
                 access_token=access_token, user_problem_statement=user_problem_statement,
                 user_action_steps=user_action_steps, project_title=project_title,
-                project_duration_weeks=project_duration_weeks, chunks=original_project.project_source,
+                project_duration_weeks=project_duration_weeks, original_project=original_project,
                 project_objective=project_objective, status='started'
             )
 
@@ -113,14 +113,21 @@ def duplicate_project_view(request):
         if not response:
             return JsonResponse({'message': 'Error in Shikshalokam Project API'}, status=500, safe=False)
 
+        temp_project_source = None
         if project_template_id:
             project_id = response.get('result', {}).get('_id')
             program_id = response.get('result', {}).get('programId')
+            if original_project.template_id:
+                temp_project_source = {
+                    "projectTemplateId": original_project.template_id
+                }
         else:
             project_id = response.get('projectId')
             program_id = response.get('programId')
+            temp_project_source = response.get('chunks')
 
         print(f"project_id: {project_id}")
+        print("Got Chunks: ", temp_project_source)
         if not project_id:
             return JsonResponse({'message': 'Error in Shikshalokam Project API'}, status=500, safe=False)
 
@@ -131,11 +138,12 @@ def duplicate_project_view(request):
                     field.name: getattr(original_project, field.name)
                     for field in Project._meta.fields
                     if field.name not in ['id', 'author', 'project_id', 'program_id', 'created_at', 'updated_at',
-                                          'history', 'program_name', 'generated_by']
+                                          'history', 'program_name', 'generated_by', 'project_source']
                 },
                 'program_id': program_id,
                 'program_name': program_name,
                 'author': new_author,
+                'project_source': response.get('chunks')
             }
         )
         if created:

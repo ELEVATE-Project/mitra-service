@@ -7,6 +7,7 @@ from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot
 from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
 from chatbot.celery_tasks.reflection_bedrock_tasks import get_reflection_bedrock_response
 import jwt
+from shikshalokam.utils.project_utils import check_and_save_project
 
 
 class ReflectionBedrockConsumer(BaseConsumer):
@@ -45,6 +46,9 @@ class ReflectionBedrockConsumer(BaseConsumer):
                 self.access_token = text_data_json.get('access_token')
                 self.route = text_data_json.get('route')
                 profile = Profile.objects.get(id=self.profile_id)
+                check_and_save_project(
+                    project_id=self.project_id, access_token=self.access_token, profile=profile
+                )
                 print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
                       f"route: {self.route}")
                 print(f"Received project_id: {self.project_id} and access_token: {self.access_token}")

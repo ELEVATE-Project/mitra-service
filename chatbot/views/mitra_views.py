@@ -6,8 +6,7 @@ from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from chatbot.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_objective_utils, \
-    generate_action_list_utils, generate_title_utils
-from shikshalokam.models import Project
+    generate_action_list_utils, generate_title_utils, validate_objective_utils, validate_actions_utils
 from shikshalokam.utils.project_utils import update_project_status_utils
 from django.http import JsonResponse
 
@@ -76,6 +75,46 @@ def generate_objectives_view(request):
         'status': 'ok',
         'objective_list': objective_list,
         'chunks': chunk_response
+    }, status=200)
+
+
+@api_view(['POST'])
+def validate_objectives_view(request):
+    body = request.data
+    user_input = body.get('user_input')
+    language = body.get('language')
+    print("User Input: ", user_input)
+
+    if language !='en':
+        user_input = call_ai4bharat_translation_api(
+            source_language=language, target_language='en', message_body=user_input
+        )
+        print("user_translated_message: ", user_input)
+
+    response = validate_objective_utils(user_input=user_input)
+    return Response({
+        'status': 'ok',
+        'result': response,
+    }, status=200)
+
+
+@api_view(['POST'])
+def validate_actions_view(request):
+    body = request.data
+    user_input = body.get('user_input')
+    language = body.get('language')
+    print("User Input: ", user_input)
+
+    if language !='en':
+        user_input = call_ai4bharat_translation_api(
+            source_language=language, target_language='en', message_body=user_input
+        )
+        print("user_translated_message: ", user_input)
+
+    response = validate_actions_utils(user_input=user_input)
+    return Response({
+        'status': 'ok',
+        'result': response,
     }, status=200)
 
 
@@ -193,6 +232,7 @@ def create_project_view(request):
     project_objective = body.get('user_objective')
     profile_id = body.get('profile_id')
     chunks = body.get('chunks')
+    language = body.get('language')
 
     print("project_title: ", project_title)
     print("profile_id: ", profile_id)
@@ -226,7 +266,8 @@ def create_project_view(request):
             user_action_steps=user_action_steps,
             project_id=project_id,
             program_id=program_id,
-            chunks=chunks
+            chunks=chunks,
+            language=language
         )
 
         print("Result: ", result)

@@ -1,14 +1,14 @@
 import os
 import re
-
 import requests
 from datetime import timedelta, timezone
 from pydantic_core._pydantic_core import ValidationError
 from django.utils.timezone import now
 from chatbot.models import Profile, CompanyChat
 import json
-
 from shikshalokam.models import Project, Task
+import ast
+
 
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
@@ -19,8 +19,9 @@ def create_project_utils(
     project_title,
     project_duration_weeks,
     user_action_steps,
-    chunks,
     project_objective,
+    original_project=None,
+    chunks=None,
     session=None,
     status="completed",
 ):
@@ -35,7 +36,6 @@ def create_project_utils(
     start_date = start_date.astimezone(tz=timezone.utc)
 
     end_date = (start_date + timedelta(weeks=numeric_duration))
-
     start_date = start_date.isoformat()
     end_date = end_date.isoformat()
     conversation = []
@@ -45,9 +45,23 @@ def create_project_utils(
 
         conversation = get_stored_conversation(company_chats=company_chats, ai_user=ai_user)
 
-    if not chunks:
-        chunks = {'relevant_texts': []}
+    if original_project:
+        chunks = original_project.project_source
+        if not chunks:
+            chunks = {}
+        else:
+            chunks = chunks.strip('{}')
+            chunks = ast.literal_eval('{' + chunks + '}')
+        print(type(chunks))
+        chunks["projectId"]= original_project.project_id
+        if original_project.template_id:
+            chunks["projectTemplateId"]= original_project.template_id
 
+    if not chunks:
+        chunks = {"relevant_texts": []}
+
+    print("final chunks: ", chunks)
+    print("final chunks type: ", type(chunks))
     request_body = {
         "program": {
             "name": user_problem_statement,
@@ -81,7 +95,7 @@ def create_project_utils(
         ]
     }
 
-    print("req body: ", request_body)
+    # print("req body: ", request_body)
 
     try:
         response = requests.post(url, headers=headers, json=request_body)
@@ -99,7 +113,8 @@ def create_project_utils(
         return {
             "original_response": json_response,
             "programId": program_id,
-            "projectId": project_id
+            "projectId": project_id,
+            "chunks": chunks
         }
 
     except requests.exceptions.RequestException as e:
@@ -119,7 +134,8 @@ def extract_numeric(value):
 
 def create_mitra_project_utils(
         chunks, actual_problem_statement, project_title, project_duration,
-        project_objective, user_action_steps, project_id, program_id, profile
+        project_objective, user_action_steps, project_id, program_id, profile,
+        language
 ):
     try:
 
@@ -141,7 +157,8 @@ def create_mitra_project_utils(
             program_source={
                 "model": "llama3.1",
                 "provider": "Bedrock"
-            }
+            },
+            project_language=language
         )
 
         for action in user_action_steps:

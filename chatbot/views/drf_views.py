@@ -1,10 +1,10 @@
 import django_filters
 from rest_framework import generics
 from chatbot.filter.drf_filter import ChatSessionProfileFilter
-from chatbot.models import ChatSession
+from chatbot.models import ChatSession, BotVernacular
 from chatbot.models.base_models import CompanyChat, CompanyBot, Profile
 from chatbot.serializer.base_serializer import ChatSessionSerializer
-from chatbot.serializer.company_serializer import CompanyBotSerializer
+from chatbot.serializer.company_serializer import CompanyBotSerializer, BotVernacularSerializer
 from chatbot.serializer.profile_serializer import ProfileSerializer, CompanyChatSerializer
 
 
@@ -30,6 +30,18 @@ class CompanyBotListCreateView(generics.ListCreateAPIView):
 class CompanyBotRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):
     queryset = CompanyBot.objects.all()
     serializer_class = CompanyBotSerializer
+
+
+class BotVernacularListCreateView(generics.ListCreateAPIView):
+    queryset = BotVernacular.objects.all()
+    serializer_class = BotVernacularSerializer
+    filter_backends = [django_filters.rest_framework.DjangoFilterBackend]
+    filterset_fields = ['company_bot', 'language', 'company_bot__route']
+
+
+class BotVernacularRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):
+    queryset = BotVernacular.objects.all()
+    serializer_class = BotVernacularSerializer
 
 
 class ProfileListCreateView(generics.ListCreateAPIView):

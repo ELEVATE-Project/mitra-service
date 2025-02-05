@@ -61,10 +61,8 @@ class CompanyBotAdmin(SimpleHistoryAdmin):
                 form.base_fields['company'].queryset = form.base_fields['company'].queryset.filter(
                     id=profile[0].company.id)
             form.base_fields = {field_name: form.base_fields[field_name] for field_name in form.base_fields
-                                if field_name not in ['llm_model', 'retell_agent_id', 'twilio_queue',
-                                                      'llm_key', 'agent_provider']}
-        form.base_fields = {field_name: form.base_fields[field_name] for field_name in form.base_fields
-                            if field_name not in ['agent_provider']}
+                                if field_name not in ['llm_model', 'llm_key']}
+        form.base_fields = {field_name: form.base_fields[field_name] for field_name in form.base_fields}
         return form
 
     def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
@@ -140,7 +138,7 @@ class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
 @admin.register(ChatSession)
 class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
     list_display = ('session', 'get_first_name', 'created_at')
-    list_filter = ('session', 'title', ChatSessionFilter, 'project_id')
+    list_filter = ('session', 'title', ChatSessionFilter, 'project_id', 'session_status')
     search_fields = ('session', 'title', 'profile__first_name')
     raw_id_fields = ('profile',)
 

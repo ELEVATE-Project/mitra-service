@@ -125,6 +125,7 @@ def create_project(response_json, title, objective, story, profile, problem_stat
                 "resource_link": resource_link,
                 "project_start_date": project_start_date,
                 "project_end_date": project_end_date,
+                "project_language": language
             }
         )
 
