@@ -3,7 +3,7 @@ from celery import shared_task
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.celery_tasks.handle_message import translate_and_send_message
 from chatbot.llm_models.llm_script import handle_bedrock_model
-from chatbot.models import CompanyChat, Profile, CompanyBot, ChatStatus
+from chatbot.models import CompanyChat, Profile, CompanyBot, ChatStatus, BotVernacular
 from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
 
 
@@ -40,10 +40,19 @@ def get_mitra_bedrock_response(channel_name, session_id, profile_id, route):
                 })
 
         tool_content = get_bedrock_content_tools()
+        try:
+            response = handle_bedrock_model(
+                system_prompt=prompt_to_use, messages=messages, is_json_response=True, tools=tool_content
+            )
+        except Exception:
+            bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=route).first()
+            error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
+            translated_message = translate_and_send_message(
+                accumulated_message=error_message, current_channel_name=channel_name,
+                current_step_number=1, finish_reason="stop", route=route,
+            )
+            return translated_message
 
-        response = handle_bedrock_model(
-            system_prompt=prompt_to_use, messages=messages, is_json_response=True, tools=tool_content
-        )
         print("response_body bedrock: ", response)
 
         if response:

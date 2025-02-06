@@ -13,6 +13,7 @@ from retrying import retry
 validate = URLValidator()
 AWS_KEY = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+llm_retry_number = int(os.getenv('LLM_RETRY_NUMBER'))
 
 
 @observe()
@@ -130,7 +131,7 @@ def retry_if_result_none(result):
     return result is None
 
 @observe()
-@retry(stop_max_attempt_number=2, retry_on_result=retry_if_result_none)
+@retry(stop_max_attempt_number=llm_retry_number, retry_on_result=retry_if_result_none, wrap_exception=True)
 def handle_bedrock_model(
         system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
         model_name=None, region_name='us-west-2', tools=None, is_json_response=False
