@@ -190,7 +190,7 @@ def handle_bedrock_model(
                 final_output = json_repair.repair_json(content_tool, return_objects=True)
             else:
                 final_output = content_tool
-        elif not tools:
+        else:
             content_text = content.get('text')
             json_start = content_text.find('{')
             if json_start != -1:
@@ -208,20 +208,6 @@ def handle_bedrock_model(
                 return None
             else:
                 return content_text
-        else:
-            content_text = content.get('text')
-            if is_json_response:
-                try:
-                    final_output = json_repair.repair_json(content_text, return_objects=True)
-                    print("Loads final_output: ", final_output)
-                    print("Loads type: ", type(final_output))
-                    if isinstance(final_output, str):
-                        return None
-                except json.JSONDecodeError as e:
-                    print(f"Error decoding JSON: {e}")
-                    return None
-            else:
-                final_output = content_text
 
         return final_output
 

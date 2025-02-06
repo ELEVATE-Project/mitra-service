@@ -5,7 +5,7 @@ import string
 
 from chatbot.llm_models.story_tools import get_end_story_tools, get_story_content_tools
 from chatbot.models import (Profile, CompanyChat, CompanyBot, StoryLanguageChoices,
-                                                StoryStatusChoices, ChatSession, ChatStatus)
+                            StoryStatusChoices, ChatSession, ChatStatus, BotVernacular)
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.story_models import Story
 from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
@@ -93,24 +93,28 @@ def create_story_object(profile_id, session, access_token, flow, language='en', 
         # print("Message: ", messages)
         tool_story = get_end_story_tools()
         tool_content = get_story_content_tools()
-        print("\n----------")
-        response_json_content = handle_bedrock_model(
-            system_prompt = formatted_content_prompt, messages = messages, tools=tool_content,
-            temperature=company_bot.bot_temperature, max_token=4096, top_p=company_bot.filter_score,
-            model_name='meta.llama3-1-8b-instruct-v1:0'
-        )
-        print("\n\nresponse_json_content: ", response_json_content)
-        response_json_story = handle_bedrock_model(
-            system_prompt = formatted_story_prompt, messages = messages, tools=tool_story,
-            temperature=company_bot.bot_temperature, max_token=4096, top_p=company_bot.filter_score,
-            model_name='meta.llama3-1-8b-instruct-v1:0'
-        )
-        print("\n\nresponse_json_story: ", response_json_story)
+        try:
+            print("\n----------")
+            response_json_content = handle_bedrock_model(
+                system_prompt = formatted_content_prompt, messages = messages, tools=tool_content,
+                temperature=company_bot.bot_temperature, max_token=4096, top_p=company_bot.filter_score,
+                model_name='meta.llama3-1-8b-instruct-v1:0'
+            )
+            print("\n\nresponse_json_content: ", response_json_content)
+            response_json_story = handle_bedrock_model(
+                system_prompt = formatted_story_prompt, messages = messages, tools=tool_story,
+                temperature=company_bot.bot_temperature, max_token=4096, top_p=company_bot.filter_score,
+                model_name='meta.llama3-1-8b-instruct-v1:0'
+            )
+            print("\n\nresponse_json_story: ", response_json_story)
+            print("\n----------")
+        except Exception:
+            bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
+            error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
+            return "", "", error_message
 
-        print("\n----------")
-
-        response_json_content = format_response_json(response=response_json_content)
-        response_json_story = format_response_json(response=response_json_story)
+        # response_json_content = format_response_json(response=response_json_content)
+        # response_json_story = format_response_json(response=response_json_story)
 
         title = response_json_story.get('title', '')
         print('title: ', title)
@@ -214,11 +218,11 @@ def create_story_object(profile_id, session, access_token, flow, language='en', 
             profile=profile, conversation=conversation, flow=flow, chat_history=chat_history
         )
 
-        return story.id, story.content
+        return story.id, story.content, ""
 
     except Exception as e:
         traceback.print_exc()
-        return "", ""
+        return "", "", f"{e}"
 
 
 def format_response_json(response):

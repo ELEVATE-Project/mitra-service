@@ -43,7 +43,7 @@ class ChatSession(models.Model):
         Given below is the conversation between the user and the assistant.
         Please provide the title of the conversation in 3-4 words.
         The response must only be in JSON format, without any additional text.
-        Return the output in the following JSON format:
+        Return the output in the following VALID JSON format:
         {
           "title": "Title of the conversation"
         }

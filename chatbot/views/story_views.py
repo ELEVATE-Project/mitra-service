@@ -1,4 +1,3 @@
-import traceback
 from chatbot.models import Story, StoryMedia, ChatSession
 from chatbot.serializer.story_serializer import StoryCreateSerializer, StoryRetrieveSerializer, \
     StoryMediaRetrieveSerializer, StoryFullSerializer
@@ -7,8 +6,7 @@ from chatbot.utils.shikshalokam_story_utils import update_story_pdf
 from chatbot.utils.story_utils import create_story_object
 import django_filters
 from rest_framework import generics, status
-from rest_framework.decorators import api_view, authentication_classes
-from chatbot.auth import ProfileJWTAuthentication
+from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from chatbot.models.media_models import ProfileMedia
 from chatbot.serializer.profile_serializer import ProfileMediaSerializer
@@ -17,36 +15,39 @@ from chatbot.utils.recreate_story_utils import re_create_story_object
 
 @api_view(['POST'])
 def end_story(request):
-    try:
-        profile_id = request.data['profile_id']
-        session = request.data['session']
-        model = request.data.get('model', None)
-        access_token = request.data.get('access_token', None)
-        flow = request.data.get('flow')
-        language = request.data.get('language', 'en')
+    profile_id = request.data['profile_id']
+    session = request.data['session']
+    model = request.data.get('model', None)
+    access_token = request.data.get('access_token', None)
+    flow = request.data.get('flow')
+    language = request.data.get('language', 'en')
 
-        print("profile_id:", profile_id)
-        print("session:", session)
-        print("access_token:", access_token)
-        if profile_id is None or session is None:
-            return Response({
-                'status': 'error',
-                'message': 'profile id or session is mandatory'
-            }, status=400)
-        else:
-            id, content = create_story_object(
-                profile_id=profile_id, session=session, model=model,
-                access_token=access_token, flow=flow, language=language
-            )
-            return Response({
-                'status': 'ok',
-                'message': 'Story created',
-                'id': id,
-                'content': content
-            }, status=200)
-    except Exception as e:
-        print(e)
-        traceback.print_exc()
+    print("profile_id:", profile_id)
+    print("session:", session)
+    print("access_token:", access_token)
+    if profile_id is None or session is None:
+        return Response({
+            'status': 'error',
+            'message': 'profile id or session is mandatory'
+        }, status=400)
+    else:
+        id, content, error_msg = create_story_object(
+            profile_id=profile_id, session=session, model=model,
+            access_token=access_token, flow=flow, language=language
+        )
+        if error_msg and error_msg != "":
+            chat_session = ChatSession.objects.get(session=session)
+            print("chat_session.current_step: ", chat_session.current_step)
+            chat_session.current_step = chat_session.current_step-1
+            chat_session.save()
+
+        return Response({
+            'status': 'ok',
+            'message': 'Story created',
+            'id': id,
+            'content': content,
+            'error_message': error_msg
+        }, status=200)
 
 
 class StoryListCreateView(generics.ListCreateAPIView):
