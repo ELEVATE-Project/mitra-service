@@ -113,14 +113,21 @@ def duplicate_project_view(request):
         if not response:
             return JsonResponse({'message': 'Error in Shikshalokam Project API'}, status=500, safe=False)
 
+        temp_project_source = None
         if project_template_id:
             project_id = response.get('result', {}).get('_id')
             program_id = response.get('result', {}).get('programId')
+            if original_project.template_id:
+                temp_project_source = {
+                    "projectTemplateId": original_project.template_id
+                }
         else:
             project_id = response.get('projectId')
             program_id = response.get('programId')
+            temp_project_source = response.get('chunks')
 
         print(f"project_id: {project_id}")
+        print("Got Chunks: ", temp_project_source)
         if not project_id:
             return JsonResponse({'message': 'Error in Shikshalokam Project API'}, status=500, safe=False)
 

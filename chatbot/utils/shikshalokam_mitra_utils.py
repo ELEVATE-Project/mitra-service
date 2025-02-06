@@ -47,8 +47,11 @@ def create_project_utils(
 
     if original_project:
         chunks = original_project.project_source
-        chunks = chunks.strip('{}')
-        chunks = ast.literal_eval('{' + chunks + '}')
+        if not chunks:
+            chunks = {}
+        else:
+            chunks = chunks.strip('{}')
+            chunks = ast.literal_eval('{' + chunks + '}')
         print(type(chunks))
         chunks["projectId"]= original_project.project_id
         if original_project.template_id:
@@ -131,7 +134,8 @@ def extract_numeric(value):
 
 def create_mitra_project_utils(
         chunks, actual_problem_statement, project_title, project_duration,
-        project_objective, user_action_steps, project_id, program_id, profile
+        project_objective, user_action_steps, project_id, program_id, profile,
+        language
 ):
     try:
 
@@ -153,7 +157,8 @@ def create_mitra_project_utils(
             program_source={
                 "model": "llama3.1",
                 "provider": "Bedrock"
-            }
+            },
+            project_language=language
         )
 
         for action in user_action_steps:

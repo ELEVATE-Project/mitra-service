@@ -90,6 +90,7 @@ class Project(models.Model):
                                     default=ProjectCreatedBy.AI_GENERATED)
 
     other_params = models.JSONField(null=True, blank=True)
+    project_language = models.CharField(max_length=100, null=True, blank=True)
 
     project_source = models.TextField(null=True, blank=True)
     program_source = models.TextField(null=True, blank=True)

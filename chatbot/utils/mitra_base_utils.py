@@ -93,3 +93,50 @@ def generate_title_utils(input_data):
     )
     response = response.get('title')
     return response
+
+
+def validate_objective_utils(user_input):
+    try:
+        company_bot = CompanyBot.objects.get(route='/objective')
+        prompt = company_bot.end_context
+        messages = [{
+            'role': 'user',
+            'content': [{'text': f"{user_input}"}]
+        }]
+
+        prompt = [{'text': prompt}]
+
+        response = handle_bedrock_model(
+            system_prompt=prompt, messages=messages, max_token=2048,
+            temperature=0.0
+        )
+
+        response = response.get('within_scope')
+        return response
+    except Exception as e:
+        print("Got error : ", e)
+        return False
+
+
+def validate_actions_utils(user_input):
+    try:
+        print('user_input: ', user_input)
+        company_bot = CompanyBot.objects.get(route='/action_list')
+        prompt = company_bot.end_context
+        messages = [{
+            'role': 'user',
+            'content': [{'text': f"{user_input}"}]
+        }]
+
+        prompt = [{'text': prompt}]
+
+        response = handle_bedrock_model(
+            system_prompt=prompt, messages=messages, max_token=2048,
+            temperature=0.0
+        )
+
+        response = response.get('within_scope')
+        return response
+    except Exception as e:
+        print("Got error : ", e)
+        return False
