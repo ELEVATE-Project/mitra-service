@@ -8,7 +8,7 @@ from chatbot.views.chat_view import save_chats_view, create_chatsession
 from chatbot.views.drf_views import CompanyChatListCreateView, CompanyChatRetrieveUpdateDestroyView, \
     CompanyBotListCreateView, CompanyBotRetrieveUpdateDestroyView, ProfileListCreateView, \
     ProfileRetrieveUpdateDestroyView, ChatSessionListCreateView, ChatSessionRetrieveUpdateDestroyView, \
-    ChatSessionRetrieveUpdateDestroyViewSession
+    ChatSessionRetrieveUpdateDestroyViewSession, BotVernacularListCreateView, BotVernacularRetrieveUpdateDestroyView
 from chatbot.views.mitra_views import paraphrase_view, generate_objectives_view, generate_action_list_view, \
     generate_title_view, create_project_view
 from chatbot.views.story_views import end_story, StoryListCreateView, StoryBySessionView, \
@@ -38,6 +38,10 @@ urlpatterns = [
     path('api/companybot/<int:pk>/', CompanyBotRetrieveUpdateDestroyView.as_view(),
          name='companybot-retrieve-update-destroy'),
 
+    path('api/bot_vernacular/', BotVernacularListCreateView.as_view(), name='bot_vernacular-list-create'),
+    path('api/bot_vernacular/<int:pk>/', BotVernacularRetrieveUpdateDestroyView.as_view(),
+         name='bot_vernacular-retrieve-update-destroy'),
+
     path('api/story/', StoryListCreateView.as_view(), name='story-list-create'),
     path('api/get-story/', StoryBySessionView.as_view(), name='story-by-session'),
     path('api/story/<int:pk>/', StoryRetrieveUpdateDestroyView.as_view(),
@@ -57,7 +61,6 @@ urlpatterns = [
          name='chatsession-retrieve-update-destroy'),
     path('api/chatsession/<str:session>/', ChatSessionRetrieveUpdateDestroyViewSession.as_view(),
          name='chatsession-retrieve-update-destroy'),
-
 
     path('api/paraphrase/', paraphrase_view, name="paraphrase"),
     path('api/generate-objective/', generate_objectives_view, name="generate-objectives"),
