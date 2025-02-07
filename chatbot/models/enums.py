@@ -61,6 +61,7 @@ class MediaTypeChoices(models.TextChoices):
     CSV = 'text/csv', _('CSV')
     JPEG = 'image/jpeg', _('JPEG')
     PNG = 'image/png', _('PNG')
+    SVG = 'image/svg+xml', _('SVG')
 
 
 class VoiceProviderChoices(models.TextChoices):

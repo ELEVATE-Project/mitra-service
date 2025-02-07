@@ -1,3 +1,4 @@
+from chatbot.views.location_views import get_location_view
 from chatbot.views.profile_views import create_profile_views
 from django.urls import path
 from chatbot.views import api_views
@@ -66,5 +67,5 @@ urlpatterns = [
     path('api/create-chatsession/', create_chatsession, name="create-chatsession"),
     path('api/create-profile/', create_profile_views, name="create-profile"),
     path('api/create-project/', create_project_view, name="create-project"),
-
+    path('api/get-location/', get_location_view, name='get-location'),
 ]
