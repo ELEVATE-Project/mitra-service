@@ -12,7 +12,6 @@ import json_repair
 validate = URLValidator()
 AWS_KEY = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
-llm_retry_number = int(os.getenv('LLM_RETRY_NUMBER'))
 
 
 @observe()
