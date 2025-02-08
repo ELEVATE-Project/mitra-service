@@ -27,14 +27,23 @@ def call_ai4bharat_translation_api(source_language, target_language, message_bod
     }
 
     try:
-        response = requests.post(api_url, json=payload, headers=headers)
+        response = requests.post(api_url, json=payload, headers=headers, timeout=10)
         if response.status_code == 200:
             translated_data = response.json()
             if isinstance(translated_data, dict) and 'output' in translated_data:
                 translated_message = translated_data['output'][0].get('target', '')
                 print("translated_message: ", translated_message)
-                return translated_message
-        return None
+                return {
+                    'status': 200,
+                    'content': translated_message
+                }
+        return {
+            'status': 200,
+            'content': message_body
+        }
     except Exception as e:
         print(f"Error during translation API call: {str(e)}")
-        return None
+        return {
+            'status': 500,
+            'content': f"Error during translation API call: {str(e)}"
+        }

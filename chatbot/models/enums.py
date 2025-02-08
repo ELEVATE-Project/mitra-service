@@ -132,3 +132,26 @@ class RouteLanguageChoices(models.TextChoices):
     ENGLISH = 'en', _('/')
     HINDI = 'hi', _('/hindi')
     KANNADA = 'kn', _('/kannada')
+
+
+class VoiceProvider(models.TextChoices):
+    GOOGLE = 'GOOGLE', _('GOOGLE')
+    AI4Bharat = 'AI4Bharat', _('AI4Bharat')
+
+
+class VoiceType(models.TextChoices):
+    SpeechToText = 'SpeechToText', _('Speech To Text')
+    TextToText = 'TextToText', _('Text To Text')
+    TextToSpeech = 'TextToSpeech', _('Text To Speech')
+
+
+class LanguageMapping:
+    MAPPING = {
+        "en": {"IN": "en-IN", "US": "en-US"},
+        "hi": {"IN": "hi-IN"},
+        "kn": {"IN": "kn-IN"},
+    }
+
+    @classmethod
+    def get_mapped_language(cls, language_code: str, region: str = "IN") -> str:
+        return cls.MAPPING.get(language_code, {}).get(region, f"{language_code}-IN")

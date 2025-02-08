@@ -2,8 +2,7 @@ from chatbot.views.location_views import get_location_view
 from chatbot.views.profile_views import create_profile_views
 from django.urls import path
 from chatbot.views import api_views
-from chatbot.views.bhashini_views import ai4bharat_text_speech, ai4bharat_asr, \
-    ai4bharat_text_translation
+from chatbot.views.bhashini_views import text_speech_view, speech_text, text_translation_view
 from chatbot.views.chat_view import save_chats_view, create_chatsession
 from chatbot.views.drf_views import CompanyChatListCreateView, CompanyChatRetrieveUpdateDestroyView, \
     CompanyBotListCreateView, CompanyBotRetrieveUpdateDestroyView, ProfileListCreateView, \
@@ -26,9 +25,9 @@ urlpatterns = [
     path('api/end-story/', end_story, name='end-story'),
 
 
-    path('api/ai4bharat/', ai4bharat_text_speech, name='ai4bharat_text_speech'),
-    path('api/ai4bharat/asr', ai4bharat_asr, name='ai4bharat_asr'),
-    path('api/ai4bharat/translate', ai4bharat_text_translation, name='ai4bharat_text_translation'),
+    path('api/text_to_speech/', text_speech_view, name='text_speech_view'),
+    path('api/asr/', speech_text, name='speech_text'),
+    path('api/text_translate/', text_translation_view, name='text_translation_view'),
 
     path('api/companychat/', CompanyChatListCreateView.as_view(), name='companychat-list-create'),
     path('api/companychat/<int:pk>/', CompanyChatRetrieveUpdateDestroyView.as_view(),

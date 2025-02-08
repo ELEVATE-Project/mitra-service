@@ -5,31 +5,13 @@ from django.utils import timezone
 from django.core.validators import MinValueValidator
 from django.contrib.auth.hashers import make_password
 from simple_history.models import HistoricalRecords
-from chatbot.models.enums import VoiceProviderChoices, EntityStatus, \
-    LLMModel, GenderChoices, ProfileType, ChatStatus, FeedbackChoices, \
-    LanguageChoices, CompanyBotTypeChoices, CompanyBotDynamicContextType, CompanyChatSourceChoices, \
-    ChatStageChoices
-
+from chatbot.models.enums import (
+    EntityStatus, LLMModel, GenderChoices, ProfileType, ChatStatus,
+    FeedbackChoices, CompanyBotTypeChoices, CompanyBotDynamicContextType, CompanyChatSourceChoices,
+    ChatStageChoices, VoiceProvider, VoiceType
+)
 
 S3_BASE_URL = os.getenv('S3_BASE_URL')
-
-
-# Create your models here.
-
-
-class Voice(models.Model):
-    name = models.CharField(max_length=100)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    sample_link = models.URLField(null=True, blank=True)
-    language = models.CharField(max_length=100, null=True, blank=True,
-                                choices=LanguageChoices.choices, default=LanguageChoices.INDIAN_ENGLISH)
-    provider_code = models.CharField(max_length=100, null=True, blank=True)
-    provider = models.CharField(max_length=100, null=True, blank=True,
-                                choices=VoiceProviderChoices.choices, default=VoiceProviderChoices.AWS)
-
-    def __str__(self):
-        return self.name
 
 
 class Company(models.Model):
@@ -73,22 +55,14 @@ class CompanyBot(models.Model):
     filter_score = models.FloatField(default=0.8)
     end_context = models.TextField(null=True, blank=True)
     introductory_message = models.CharField(max_length=1000, null=True, blank=True)
-    abrupt_introductory_message = models.CharField(max_length=1000, null=True, blank=True)
     tag_context = models.TextField(null=True, blank=True)
     route = models.CharField(max_length=100, default='/')
-
-    retell_agent_id = models.CharField(max_length=255, null=True, blank=True, verbose_name="Voicebot call id")
-    agent_provider = models.CharField(max_length=255, null=True, blank=True, verbose_name="Voicebot call provider")
-
-    twilio_queue = models.CharField(max_length=255, null=True, blank=True, verbose_name="Call schedule key")
-    voice = models.ForeignKey(Voice, on_delete=models.SET_NULL, null=True, blank=True)
     bot_type = models.CharField(max_length=30, choices=CompanyBotTypeChoices.choices,
                                 default=CompanyBotTypeChoices.SIMPLE)
     llm_key = models.CharField(max_length=255, null=True, blank=True)
     dynamic_context = models.TextField(null=True, blank=True)
     dynamic_context_type = models.CharField(max_length=20, choices=CompanyBotDynamicContextType.choices,
                                             null=True, blank=True)
-    whatsapp_number = models.CharField(max_length=20, null=True, blank=True)
     pre_context = models.TextField(null=True, blank=True)
     history = HistoricalRecords()
 
@@ -191,3 +165,23 @@ class CompanyChat(models.Model):
         if not self.created_at:
             self.created_at = timezone.now()
         super(CompanyChat, self).save(*args, **kwargs)
+
+
+class Voice(models.Model):
+    company_bot = models.ForeignKey(CompanyBot, on_delete=models.SET_NULL, null=True, blank=True)
+    type = models.CharField(max_length=300, choices=VoiceType.choices, null=True, blank=True)
+    provider = models.CharField(max_length=300, null=True, blank=True,
+                                choices=VoiceProvider.choices, default=VoiceProvider.AI4Bharat)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.provider}-{self.type}"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['company_bot']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['type']),
+            models.Index(fields=['provider']),
+        ]
