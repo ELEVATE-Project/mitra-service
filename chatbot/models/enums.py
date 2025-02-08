@@ -11,16 +11,17 @@ class ChatStatus(models.TextChoices):
 
 
 class LLMModel(models.TextChoices):
-    GPT3_5 = 'gpt-3.5-turbo', _('GPT3.5')
-    GPT3_5_16K = 'gpt-3.5-turbo-16k', _('GPT3.5-16k')
     GPT4 = 'gpt-4', _('GPT4')
     GPT4_128K = 'gpt-4-1106-preview', _('GPT4-128k')
     GPT4_TURBO = 'gpt-4-turbo', _('GPT4_TURBO')
-    GPT3_5_TURBO_0125 = 'gpt-3.5-turbo-0125', _('GPT3_5_TURBO_0125')
     LLAMA_3_8B_8192 = 'llama3-8b-8192', _('LLAMA_3_8B_8192')
     LLAMA_3_70B_8192 = 'llama3-70b-8192', _('LLAMA_3_70B_8192')
     LLAMA_3_1_70B_VERSATILE = 'llama-3.1-70b-versatile', _('LLAMA_3_1_70B_VERSATILE')
     LLAMA_3_1_8B_INSTANT = 'llama-3.1-8b-instant', _('LLAMA_3_1_8B_INSTANT')
+    LLAMA_3_1_70B_INSTRUCT = 'meta.llama3-1-70b-instruct-v1:0', _('LLAMA_3_1_70B_INSTRUCT')
+    LLAMA_3_1_8B_INSTRUCT = 'meta.llama3-1-8b-instruct-v1:0', _('LLAMA_3_1_8B_INSTRUCT')
+    LLAMA_3_3_70B_INSTRUCT = 'us.meta.llama3-3-70b-instruct-v1:0', _('LLAMA_3_3_70B_INSTRUCT')
+    LLAMA_3_3_8B_INSTRUCT = 'us.meta.llama3-3-8b-instruct-v1:0', _('LLAMA_3_3_8B_INSTRUCT')
     MIXTRAL_8X70B_32768 = 'mixtral-8x7b-32768', _('MIXTRAL_8X70B_32768')
     GPT4_O = 'gpt-4o', _('GPT4_O')
     GPT4_O_MINI = 'gpt-4o-mini', _('GPT4_O_MINI')

@@ -23,7 +23,8 @@ def get_one_shot_bedrock_tool_call_response(system_prompt, messages, company_bot
 
         translated_message = translate_and_send_message(
             accumulated_message=bot_question, current_channel_name=channel_name,
-            current_step_number=chat_session.current_step, finish_reason="stop", route=route
+            current_step_number=chat_session.current_step, finish_reason="stop", route=route,
+            company_bot=company_bot
         )
 
         save_in_company_db(
@@ -33,8 +34,8 @@ def get_one_shot_bedrock_tool_call_response(system_prompt, messages, company_bot
         return bot_question
 
     response = handle_bedrock_model(
-        system_prompt=system_prompt, messages=messages
-        # , tools=tool
+        system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
+        temperature=company_bot.bot_temperature, max_token=company_bot.max_token
     )
     print("response_body bedrock: ", response)
 
@@ -43,7 +44,7 @@ def get_one_shot_bedrock_tool_call_response(system_prompt, messages, company_bot
     is_function_call = False
     if isinstance(response, dict):
         tool_use_id = response.get('toolUseId', None)
-        if tool_use_id:
+        if tool_use_id or response.get('name') == 'get_state_information':
             is_function_call = True
     print("is_function_call: ", is_function_call)
 
@@ -69,7 +70,8 @@ def get_one_shot_bedrock_tool_call_response(system_prompt, messages, company_bot
 
         translated_message = translate_and_send_message(
             accumulated_message=bot_question, current_channel_name=channel_name,
-            current_step_number=chat_session.current_step, finish_reason="stop", route=route
+            current_step_number=chat_session.current_step, finish_reason="stop", route=route,
+            company_bot=company_bot
         )
         print("chat_status: ", chat_status)
 
@@ -81,7 +83,8 @@ def get_one_shot_bedrock_tool_call_response(system_prompt, messages, company_bot
     else:
         translated_message = translate_and_send_message(
             accumulated_message=response, current_channel_name=channel_name,
-            current_step_number=current_step, finish_reason="stop", route=route
+            current_step_number=current_step, finish_reason="stop", route=route,
+            company_bot=company_bot
         )
         save_in_company_db(
             session_id, profile_id, 'AI', response, chunks, ChatStatus.IN_PROGRESS, translated_message

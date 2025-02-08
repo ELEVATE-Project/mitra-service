@@ -25,7 +25,8 @@ def get_bedrock_tool_call_response(system_prompt, messages, company_bot, session
 
         translated_message = translate_and_send_message(
             accumulated_message=bot_question, current_channel_name=channel_name,
-            current_step_number=chat_session.current_step, finish_reason="stop", route=route
+            current_step_number=chat_session.current_step, finish_reason="stop", route=route,
+            company_bot=company_bot
         )
 
         save_in_company_db(
@@ -36,7 +37,8 @@ def get_bedrock_tool_call_response(system_prompt, messages, company_bot, session
 
 
     response = handle_bedrock_model(
-        system_prompt=system_prompt, messages=messages
+        system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
+        temperature=company_bot.bot_temperature, max_token=company_bot.max_token
     )
     print("response_body bedrock: ", response)
 
@@ -58,7 +60,8 @@ def get_bedrock_tool_call_response(system_prompt, messages, company_bot, session
 
         translated_message = translate_and_send_message(
             accumulated_message=bot_question, current_channel_name=channel_name,
-            current_step_number=chat_session.current_step, finish_reason="stop", route=route
+            current_step_number=chat_session.current_step, finish_reason="stop", route=route,
+            company_bot=company_bot
         )
 
         name_machine = state_machine.name
@@ -76,7 +79,8 @@ def get_bedrock_tool_call_response(system_prompt, messages, company_bot, session
         print("its not a  func call")
         translated_message = translate_and_send_message(
             accumulated_message=response, current_channel_name=channel_name,
-            current_step_number=current_step, finish_reason="stop", route=route
+            current_step_number=current_step, finish_reason="stop", route=route,
+            company_bot=company_bot
         )
         save_in_company_db(
             session_id, profile_id, 'AI', response, chunks, ChatStatus.IN_PROGRESS, translated_message

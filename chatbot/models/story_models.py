@@ -13,6 +13,7 @@ class Story(models.Model):
     title = models.CharField(max_length=1000)
     author = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True)
     content = models.TextField(null=True, blank=True)
+    blurb = models.TextField(null=True, blank=True)
     tweet = models.TextField(null=True, blank=True)
     session = models.CharField(max_length=255, unique=True)
     objective = models.TextField(null=True, blank=True)

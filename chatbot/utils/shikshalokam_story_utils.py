@@ -1,51 +1,125 @@
+import json
 import os
+import re
 import traceback
-import requests
+from django.core.files.base import ContentFile
+from chatbot.models import StoryMedia, MediaTypeChoices, CompanyChat, Profile, Story, ChatSession
+from chatbot.pdf.story_first_page import get_first_page_html
+from chatbot.pdf.story_images_page import get_story_images_page_html
+from chatbot.pdf.story_secondpage import get_story_secondpage_html
+from chatbot.pdf.story_thirdpage import get_thirdpage_html
+from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 
 
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
 
-def save_shikshalokam_story(story, problem_statement, chat_history, access_token, project_id, session):
+def save_shikshalokam_story(
+        story, profile
+):
     try:
-        upload_response_json = {} #upload_to_cloud(session_value=session, access_token=access_token, story=story)
-        attachments = upload_response_json.get('attachments')
-        print("attachments: ", attachments)
+        html_content = get_story_html(story=story, profile=profile)
 
-        pdf_information = upload_response_json.get('pdfInformation')
-        print("pdf_information: ", pdf_information)
+        pdf_generated = generate_pdf_with_gotenberg(html_content)
+        pdf_file_name = story.title
+        pdf_file_name = f"{pdf_file_name}.pdf"
+        pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
+        print("pdf_content: ", pdf_content)
+        print("pdf_content type: ", type(pdf_content))
+        StoryMedia.objects.create(
+            name=pdf_file_name,
+            file=pdf_content,
+            story=story,
+            include_in_story=False,
+            media_type=MediaTypeChoices.PDF
+        )
 
-
-        request_body = {
-            "story": {
-                "title": story.title,
-                "problemStatement": problem_statement,
-                "objective": story.objective,
-                "timeline": "",
-                "actionSteps": story.action_steps or [],
-                "resources": [],
-                "impact": story.impact,
-                "summary": story.content,
-                "authorName": story.author.first_name if story.author else "",
-                "location": story.location or "",
-                "conversation": [],
-                "chatHistory": chat_history,
-                "attachments": attachments,
-                "pdfInformation": pdf_information,
-            }
-        }
-        print("request_body: ", request_body)
-
-        url = f"https://{base_url}/project/userProjects/addStory/{project_id}"
-
-        headers = {
-            "X-auth-token": access_token,
-        }
-
-        response = requests.post(url, headers=headers, json=request_body)
-        response.raise_for_status()
-
-        print(f"Story successfully saved to Shikshalokam: {response.status_code}")
     except Exception as e:
         traceback.print_exc()
         print(f"Failed to save story to Shikshalokam: {str(e)}")
+
+
+def get_story_html(story, profile):
+    css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/story_pdf.css"))
+
+    with open(css_path, 'r') as css_file:
+        inline_css = css_file.read()
+    html_content = f"""
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <meta charset="utf-8" />
+                    <link rel="preconnect" href="https://fonts.googleapis.com">
+                    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+                    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Urbanist:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+                    <style>
+                    #header, #footer {{ padding: 0 !important; }}
+                    {inline_css}
+                    </style>
+                </head>
+             <body>
+
+        """
+    html_content += get_first_page_html(story=story, profile=profile)
+    html_content += get_story_secondpage_html(story=story)
+    html_content += get_story_images_page_html(story=story)
+    html_content += get_thirdpage_html(story=story, profile=profile)
+    html_content += f"""
+
+            </body>
+        </html>
+        """
+
+    return html_content
+
+
+def update_story_pdf(session):
+
+    try:
+        story = Story.objects.get(session=session)
+        update_story_content(story)
+        profile = story.author
+        print("profile: ", profile)
+        print("story: ", story.title)
+        print("story format: ", story.formatted_content)
+        html_content = get_story_html(story=story, profile=profile)
+
+        pdf_generated = generate_pdf_with_gotenberg(html_content)
+        pdf_file_name = story.title
+        pdf_file_name = f"{pdf_file_name}.pdf"
+        pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
+        print("pdf_content: ", pdf_content)
+        print("pdf_content type: ", type(pdf_content))
+
+        story_media = StoryMedia.objects.get(story=story, media_type=MediaTypeChoices.PDF)
+
+        story_media.name = pdf_file_name
+        story_media.file.save(pdf_file_name, pdf_content)
+        story_media.include_in_story = False
+        story_media.save()
+        print("StoryMedia updated and saved successfully.")
+
+    except Exception as e:
+        print("An unexpected error occurred: %s", e)
+        traceback.print_exc()
+        raise
+
+
+def update_story_content(story):
+    try:
+        formatted_data = json.loads(story.formatted_content)
+    except (json.JSONDecodeError, TypeError):
+        print("Invalid or missing formatted_content")
+        return
+
+    accumulated_text = ""
+    for block in formatted_data:
+        if block.get("type") == "paragraph" and "data" in block and "text" in block["data"]:
+            # accumulated_text += block["data"]["text"] + "\n"
+            plain_text = re.sub(r'<[^>]+>', '', block["data"]["text"])
+            accumulated_text += plain_text + "\n"
+
+    print("\nold content: ", story.content)
+    print("\naccumulated_text: ", accumulated_text)
+    story.content = accumulated_text.strip()
+    story.save()

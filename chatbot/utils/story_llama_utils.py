@@ -3,7 +3,8 @@ import secrets
 import traceback
 from datetime import datetime
 from chatbot.models.geo_models import ProfileAddress
-from shikshalokam.models import Project
+from chatbot.utils.audio_provider_utils import text_translate_provider
+from shikshalokam.models import Project, ProjectStatus
 
 
 def get_company_context(profile, company):
@@ -32,7 +33,6 @@ def get_company_context(profile, company):
 
 
 def get_company_end_context(slug):
-
     if slug == 'shikshalokamstaging':
         return """
             Make sure to use SIMPLE AT A HIGH SCHOOL LEVEL ENGLISH.
@@ -51,14 +51,15 @@ def get_company_end_context(slug):
                 "status": "The current state of the project, such as 'STARTED,' 'inPROGRESS,' or 'SUBMITTED'.",
                 "project_start_date": "Starting date of the project if any.",
                 "project_end_date": "Completion date of project if any.",
-                "content": "Content of the story. Make sure content generated is of 600 words.",
+                "content": "Content of the story. Make sure content generated is around 600 words.",
+                "problem_statement": "The challenge faced by the user and what they wanted to solve."
             }
-            
+
             Ensure all JSON fields are properly formatted. If certain information is not explicitly provided in 
             the conversation, use reasonable inferences or leave the field empty.
-            
+
             Respond only with valid JSON. Do not write an introduction or summary.
-            
+
         """
     else:
         return """
@@ -91,33 +92,48 @@ def get_company_content_prompt():
     """
 
 
-def create_project(response_json, story, profile):
+def create_project(response_json, title, objective, story, profile, problem_statement, language, voice_provider):
     try:
-        title = response_json.get('title', '')
-        objective = response_json.get('objective', '')
         resource_name = response_json.get('resource_name', '')
         resource_link = response_json.get('resource_link', '')
         duration = response_json.get('duration', '')
-        status = response_json.get('status', '')
         keywords = response_json.get('keywords', '')
         project_start_date = parse_datetime(response_json.get('project_start_date', ''))
         project_end_date = parse_datetime(response_json.get('project_end_date', ''))
+        if language != 'en':
+            keywords = translate_field(
+                voice_provider=voice_provider, message_body=keywords, target_language=language
+            )
 
-        random_hex = generate_random_hex()
-        project = Project(
-            story=story,
-            author=profile,
-            title=title,
-            objective=objective,
-            duration=duration,
-            project_status=status,
-            project_id=random_hex,
-            keywords=keywords,
-            resource_name=resource_name,
-            resource_link=resource_link,
-            project_start_date=project_start_date,
-            project_end_date=project_end_date,
+            resource_name = translate_field(
+                voice_provider=voice_provider, message_body=resource_name, target_language=language
+            )
+
+        project_id = generate_random_hex()
+
+        project, created = Project.objects.update_or_create(
+            project_id=project_id,
+            defaults={
+                "story": story,
+                "author": profile,
+                "title": title,
+                "objective": objective,
+                "duration": duration,
+                "project_status": ProjectStatus.SUBMITTED,
+                "problem_statement": problem_statement,
+                "keywords": keywords,
+                "resource_name": resource_name,
+                "resource_link": resource_link,
+                "project_start_date": project_start_date,
+                "project_end_date": project_end_date,
+            }
         )
+
+        if created:
+            print("A new project was created.")
+        else:
+            print("The existing project was updated.")
+
         project.save()
         return story.id, story.content
 
@@ -138,6 +154,7 @@ def parse_datetime(date_str):
         pass
     return None
 
+
 def validate_json(response_content):
     if isinstance(response_content, dict):
         return response_content
@@ -146,3 +163,14 @@ def validate_json(response_content):
     except json.JSONDecodeError:
         print('Invalid JSON response:', response_content)
         return response_content
+
+
+def translate_field(voice_provider, message_body, target_language, source_language="en"):
+    response = text_translate_provider(
+        voice_provider=voice_provider, message_body=message_body, target_language=target_language,
+        source_language=source_language
+    )
+    if response.get('status') == 200:
+        return response.get('content')
+    else:
+        return message_body

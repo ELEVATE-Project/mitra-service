@@ -2,61 +2,65 @@ import json
 import traceback
 import random
 import string
+from chatbot.llm_models.story_tools import get_end_story_tools, get_story_content_tools
 from chatbot.models import (Profile, CompanyChat, CompanyBot, StoryLanguageChoices,
-                                                StoryStatusChoices, ChatSession, ChatStatus, LLMModel)
+                            StoryStatusChoices, ChatSession, ChatStatus, Voice, VoiceType)
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.story_models import Story
 from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
-from chatbot.utils.story_llama_utils import (get_company_end_context, create_project,
-                                                                 get_company_context)
+from chatbot.utils.story_llama_utils import create_project, translate_field
 from chatbot.llm_models.llm_script import handle_bedrock_model
+from jinja2 import Template
 
 
-DEFAULT_PROMPT = """
-            Based on the detailed interview you've conducted with a field staff member, 
-            craft a SIMPLE STORY OF MORE THAN 600 TOKENS AT A HIGH SCHOOL ENGLISH LEVEL IN HUMANS OF NEW YORK STYLE that captures the
-            journey of the highlighted beneficiary. The story should flow naturally. 
-            THINGS TO INCORPORATE:
-            1. USE PRESENT TENSE
-            2. DO NOT USE CLICHE BEGINNINGS
-            3. DO NOT ADD FLUFF DO NOT USE FLOWERY LANGUAGE.
-            4. DO NOT ADD ANY INFORMATION FROM YOUR END IF NOT PROVIDED.
-"""
-
-
-def create_story_object(profile_id, session, access_token, problem_statement, project_id, model=None):
+def create_story_object(profile_id, session, language='en'):
     try:
         profile = Profile.objects.get(id=profile_id)
-        company = profile.company
-        company_slug = company.slug
-        company_context = get_company_context(profile, company)
         company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
-        # if len(company_chats) <= 10:
-        #     return "", ""
         ai_user = Profile.objects.get(id=1)
-        company_bot = CompanyBot.objects.filter(company=profile.company)
-        if company_bot.count() > 0:
-            company_bot = company_bot[0]
-            end_context = company_bot.end_context
-            if end_context is None or end_context == "":
-                end_context = DEFAULT_PROMPT
-        else:
-            end_context = DEFAULT_PROMPT
-        end_context += company_context
-        extra_context = get_company_end_context(company_slug)
-        # content_prompt = get_company_content_prompt()
-        end_context += extra_context
-        # end_context += content_prompt
+        company_bot = CompanyBot.objects.get(route='/story')
+        context = company_bot.context
+        address = ProfileAddress.objects.filter(profile=profile)
+        context_data = {
+            "profile": profile,
+            "address": address if address else [{}]
+        }
+        template = Template(company_bot.tag_context)
+
+        tag_context = template.render(context_data)
+
+        end_context = company_bot.end_context
+
+        chat_session = ChatSession.objects.get(session=session)
+
+        project_data = ''
+
+        content_prompt = f"""
+            {context}
+            {tag_context}
+            {project_data}
+        """
+        story_prompt = f"""
+            {end_context}
+            {tag_context}
+            {project_data}
+        """
         print('-------------------------------')
-        print(end_context)
+        print(story_prompt)
 
         messages=[]
-        chat_history=[]
-        prompt_to_use = [
+        formatted_content_prompt = [
             {
-                'text': end_context
+                'text': content_prompt
             },
         ]
+        formatted_story_prompt = [
+            {
+                'text': story_prompt
+            },
+        ]
+        if company_chats and company_chats[0].receiver != ai_user:
+            company_chats.pop(0)
         for chat in company_chats:
             user_message = chat.message
             if chat.receiver == ai_user:
@@ -66,60 +70,97 @@ def create_story_object(profile_id, session, access_token, problem_statement, pr
                     'role': 'user',
                     'content': [{'text': user_message}]
                 })
-                chat_history.append({
-                    'role': 'user',
-                    'content': [{'text': user_message, 'created_at': chat.created_at}]
-                })
             else:
                 messages.append({
                     'role': 'assistant',
                     'content': [{'text': user_message}]
                 })
-                chat_history.append({
-                    'role': 'assistant',
-                    'content': [{'text': user_message, 'created_at': chat.created_at}]
-                })
 
-        if messages and messages[0].get('role') == 'bot':
-            messages.pop(0)
-        tool_to_use = get_end_story_tools()
-
-        response_json = handle_bedrock_model(
-            system_prompt = prompt_to_use, messages = messages, tools=tool_to_use,
-            temperature=0.0, max_token=2048
+        # print("Message: ", messages)
+        tool_story = get_end_story_tools()
+        tool_content = get_story_content_tools()
+        print("\n----------")
+        response_json_content = handle_bedrock_model(
+            system_prompt = formatted_content_prompt, messages = messages, tools=tool_content,
+            temperature=company_bot.bot_temperature, max_token=company_bot.max_token, top_p=company_bot.filter_score,
+            model_name=company_bot.llm_model
         )
-        response_json = response_json.replace('\n', '').replace('\t', '').replace(
-            '\r', '').replace('\\n', '').replace('\\t', '').replace('\\r', '')
-        if '{' in response_json:
-            response_json = response_json[response_json.index('{'):]
-        print("\nBEFORE LOADS: ", response_json)
-        if isinstance(response_json, str):
-            response_json = json.loads(response_json)
-        print("response_json: ", response_json)
-        print("TYPE response_json: ", type(response_json))
+        if response_json_content:
+            if response_json_content.get('parameters'):
+                response_json_content = response_json_content.get('parameters')
+            elif response_json_content.get('input'):
+                response_json_content = response_json_content.get('input')
+        print("\n\nresponse_json_content: ", response_json_content)
+        response_json_story = handle_bedrock_model(
+            system_prompt = formatted_story_prompt, messages = messages, tools=tool_story,
+            temperature=company_bot.bot_temperature, max_token=company_bot.max_token, top_p=company_bot.filter_score,
+            model_name=company_bot.llm_model
+        )
+        if response_json_content:
+            if response_json_story.get('parameters'):
+                response_json_story = response_json_story.get('parameters')
+            elif response_json_story.get('input'):
+                response_json_story = response_json_story.get('input')
+        print("\n\nresponse_json_story: ", response_json_story)
 
-        title = response_json.get('title', '')
+        print("\n----------")
+
+        title = response_json_story.get('title', '')
         print('title: ', title)
-        content = response_json.get('content', '')
-        print('content: ', content)
-        tweet = response_json.get('tweet', '')
+        tweet = response_json_story.get('tweet', '')
         print('tweet: ', tweet)
-        objective = response_json.get('objective', '')
+        objective = response_json_story.get('objective', '')
         print('objective: ', objective)
-        action_steps =  response_json.get('action_steps', '')
+        action_steps = response_json_story.get('action_steps', '')
         print('action_steps: ', action_steps)
-        impact =  response_json.get('impact', '')
+        impact = response_json_story.get('impact', '')
         print('impact: ', impact)
-        micro_improvement =  response_json.get('micro_improvement', '')
+        micro_improvement = response_json_story.get('micro_improvement', '')
         print('micro_improvement: ', micro_improvement)
+        problem_statement = response_json_story.get('problem_statement', '')
+        print('problem_statement: ', problem_statement)
 
-        if company_slug == 'shikshalokamstaging':
-            duration = response_json.get('duration', '')
-            other_params = {
-                'duration': duration
-            }
-        else:
-            other_params = {}
+        duration = response_json_story.get('duration', '')
+        other_params = {
+            'duration': duration
+        }
+
+        content = response_json_content.get('content', '')
+        print('content: ', content)
+        blurb = response_json_content.get('blurb', '')
+        print('blurb: ', blurb)
+
+        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+
+        if language != 'en':
+            title = translate_field(
+                voice_provider=voice_provider, message_body=title, target_language=language
+            )
+
+            tweet = translate_field(
+                voice_provider=voice_provider, message_body=tweet, target_language=language
+            )
+            objective = translate_field(
+                voice_provider=voice_provider, message_body=objective, target_language=language
+            )
+            action_steps = translate_field(
+                voice_provider=voice_provider, message_body=action_steps, target_language=language
+            )
+            impact = translate_field(
+                voice_provider=voice_provider, message_body=impact, target_language=language
+            )
+            micro_improvement = translate_field(
+                voice_provider=voice_provider, message_body=micro_improvement, target_language=language
+            )
+            problem_statement = translate_field(
+                voice_provider=voice_provider, message_body=problem_statement, target_language=language
+            )
+            content = translate_field(
+                voice_provider=voice_provider, message_body=content, target_language=language
+            )
+            blurb = translate_field(
+                voice_provider=voice_provider, message_body=blurb, target_language=language
+            )
 
         if profile:
             address = ProfileAddress.objects.filter(profile=profile).first()
@@ -144,24 +185,48 @@ def create_story_object(profile_id, session, access_token, problem_statement, pr
             language=StoryLanguageChoices.ENGLISH,
             stage=StoryStatusChoices.COMPLETED,
             other_params=other_params,
-            location=location
+            location=location,
+            blurb=blurb
         )
 
         story.save()
         formatted_content = get_formatted_story(story)
         story.formatted_content = formatted_content
         story.save(update_fields=['formatted_content'])
-        if company_slug == 'shikshalokamstaging':
-            create_project(response_json, story, profile)
 
-        chat_session = ChatSession.objects.get(session=session)
+        create_project(
+            response_json=response_json_story,title=title, objective=objective, story=story,
+            profile=profile, problem_statement=problem_statement, language=language, voice_provider=voice_provider
+        )
+
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=['session_status'])
+        save_shikshalokam_story(
+            story=story, profile=profile
+        )
 
         return story.id, story.content
+
     except Exception as e:
         traceback.print_exc()
         return "", ""
+
+
+def format_response_json(response):
+    response_json = response.replace('\n', '').replace('\t', '').replace(
+        '\r', '').replace('\\n', '').replace('\\t', '').replace('\\r', '')
+    if '{' in response_json:
+        response_json = response_json[response_json.index('{'):]
+    last_char = response_json[-1]
+    if last_char != '}':
+        response_json += '}'
+    print("\nBEFORE LOADS: ", response_json)
+    if isinstance(response_json, str):
+        response_json = json.loads(response_json)
+    print("AFTER LOADS: ", response_json)
+    print("TYPE response_json: ", type(response_json))
+
+    return response_json
 
 
 def get_formatted_story(story):
@@ -190,58 +255,3 @@ def generate_random_string(length):
     characters = string.ascii_letters + string.digits
     rs = ''.join(random.choice(characters) for _ in range(length))
     return rs
-
-
-def get_end_story_tools():
-    tool = {
-        "toolConfig": {
-            "tools": [
-                {
-                    "toolSpec": {
-                        "name": "get_story_output",
-                        "description": "Generate a detailed narrative output in a valid JSON format containing specific fields.",
-                        "inputSchema": {
-                            "json": {
-                                "type": "object",
-                                "properties": {
-                                    "author_name": {
-                                        "type": "string",
-                                        "description": "Name of the author."
-                                    },
-                                    "state": {
-                                        "type": "string",
-                                        "description": "The user's state."
-                                    },
-                                    "district": {
-                                        "type": "string",
-                                        "description": "The user's district."
-                                    },
-                                    "block": {
-                                        "type": "string",
-                                        "description": "The user's block."
-                                    },
-                                    "conversation_data": {
-                                        "type": "string",
-                                        "description": "Text of the conversation to create the narrative from."
-                                    },
-                                    "start_date": {
-                                        "type": "string",
-                                        "description": "Starting date of the project if any.",
-                                        "format": "date"
-                                    },
-                                    "end_date": {
-                                        "type": "string",
-                                        "description": "Completion date of the project if any.",
-                                        "format": "date"
-                                    }
-                                },
-                                "required": ["author_name", "state", "district", "block", "conversation_data"]
-                            }
-                        }
-                    }
-                }
-            ]
-        }
-    }
-
-    return tool

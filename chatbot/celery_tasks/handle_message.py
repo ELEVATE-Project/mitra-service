@@ -1,28 +1,26 @@
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
-from chatbot.models import RouteLanguageChoices
-from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
-
+from chatbot.models import RouteLanguageChoices, Voice, VoiceType
+from chatbot.utils.audio_provider_utils import text_translate_provider
 
 channel_layer = get_channel_layer()
 
 
-def translate_and_send_message(accumulated_message, current_channel_name, current_step_number, finish_reason, route):
+def translate_and_send_message(
+        accumulated_message, current_channel_name, current_step_number, finish_reason, route, company_bot
+):
 
     if route != '/':
         target_language_code = get_language_code_from_route(route)
         print("target_language_code: ", target_language_code)
-        translated_messages = call_ai4bharat_translation_api(
-            message_body=accumulated_message, target_language=target_language_code,
+        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+
+        response = text_translate_provider(
+            voice_provider=voice_provider, message_body=accumulated_message, target_language=target_language_code,
             source_language='en'
         )
-        if translated_messages is None:
-            translated_messages = call_ai4bharat_translation_api(
-                message_body=accumulated_message, target_language=target_language_code,
-                source_language='en'
-            )
-        if translated_messages:
-            translated_messages+= " "
+        if response.get('status') == 200:
+            translated_messages =  response.get('content')
         else:
             translated_messages = accumulated_message
 

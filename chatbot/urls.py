@@ -1,3 +1,4 @@
+from chatbot.views.gotenberg_view import generate_pdf_view
 from chatbot.views.location_views import get_location_view
 from chatbot.views.profile_views import create_profile_views
 from django.urls import path
@@ -45,7 +46,7 @@ urlpatterns = [
     path('api/get-story/', StoryBySessionView.as_view(), name='story-by-session'),
     path('api/story/<int:pk>/', StoryRetrieveUpdateDestroyView.as_view(),
          name='story-retrieve-update-destroy'),
-    path('api/story-re-create/', story_recreate_view, name='story_recreate_view'),
+    # path('api/story-re-create/', story_recreate_view, name='story_recreate_view'),
 
     path('api/storymedia/', StoryMediaListCreateView.as_view(), name='story-media-list-create'),
     path('api/storymedia/<int:pk>/', StoryMediaRetrieveUpdateDestroyView.as_view(),
@@ -70,4 +71,5 @@ urlpatterns = [
     path('api/create-profile/', create_profile_views, name="create-profile"),
     path('api/create-project/', create_project_view, name="create-project"),
     path('api/get-location/', get_location_view, name='get-location'),
+    path('api/generate-pdf/', generate_pdf_view, name='generate_pdf'),
 ]

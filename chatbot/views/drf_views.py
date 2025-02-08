@@ -26,7 +26,7 @@ class CompanyBotListCreateView(generics.ListCreateAPIView):
     queryset = CompanyBot.objects.all()
     serializer_class = CompanyBotSerializer
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend]
-    filterset_fields = ['name', 'company__name', 'llm_model', 'company__slug']
+    filterset_fields = ['name', 'company__name', 'llm_model', 'company__slug', 'route']
 
 
 class CompanyBotRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):

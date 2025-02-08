@@ -69,6 +69,7 @@ class Project(models.Model):
     duration = models.CharField(max_length=1000, null=True, blank=True)
     project_status = models.CharField(max_length=100, choices=ProjectStatus.choices, null=True, blank=True)
     other_params = models.JSONField(null=True, blank=True)
+    problem_statement = models.TextField(null=True, blank=True)
 
     resource_name = models.CharField(max_length=1000, null=True, blank=True)
     resource_link = models.CharField(max_length=2000, null=True, blank=True)

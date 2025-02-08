@@ -3,6 +3,7 @@ from chatbot.models import Story, StoryMedia
 from chatbot.serializer.story_serializer import StoryCreateSerializer, StoryRetrieveSerializer, \
     StoryMediaRetrieveSerializer, StoryFullSerializer
 from chatbot.utils.media_utils import upload_to_cloud
+from chatbot.utils.shikshalokam_story_utils import update_story_pdf
 from chatbot.utils.story_utils import create_story_object
 import django_filters
 from rest_framework import generics, status
@@ -19,12 +20,10 @@ def end_story(request):
     try:
         profile_id = request.data['profile_id']
         session = request.data['session']
-        model = request.data.get('model', None)
-        access_token = request.data.get('access_token', None)
-        problem_statement = request.data.get('problem_statement', None)
-        project_id = request.data.get('project_id', None)
+        language = request.data['language']
         print("profile_id:", profile_id)
         print("session:", session)
+        print("language:", language)
         if profile_id is None or session is None:
             return Response({
                 'status': 'error',
@@ -32,9 +31,7 @@ def end_story(request):
             }, status=400)
         else:
             id, content = create_story_object(
-                profile_id=profile_id, session=session, model=model,
-                access_token=access_token, problem_statement=problem_statement,
-                project_id=project_id
+                profile_id=profile_id, session=session, language=language
             )
             return Response({
                 'status': 'ok',
@@ -59,6 +56,35 @@ class StoryListCreateView(generics.ListCreateAPIView):
 class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Story.objects.all()
     serializer_class = StoryRetrieveSerializer
+
+    def partial_update(self, request, *args, **kwargs):
+        """
+        Handle PATCH requests for partial updates.
+        """
+        print("Updating (PATCH)")
+        return self.handle_update_logic(request, *args, **kwargs, is_partial=True)
+
+
+    def handle_update_logic(self, request, *args, **kwargs):
+        """
+        Shared PATCH requests.
+        """
+        is_partial = kwargs.pop('is_partial', False)
+        session_value = request.data.get('session')
+        print("session_value: ", session_value)
+
+        try:
+            if is_partial:
+                response = super().partial_update(request, *args, **kwargs)
+                if response and response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]:
+                    print("response.data: ", response.data.get('session'))
+                    update_story_pdf(session=session_value)
+
+                return response
+        except Exception as e:
+            print("Error occurred: ", str(e))
+            raise
+
 
 
 # @authentication_classes([ProfileJWTAuthentication])
