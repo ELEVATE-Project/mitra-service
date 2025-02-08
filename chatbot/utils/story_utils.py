@@ -2,7 +2,6 @@ import json
 import traceback
 import random
 import string
-from chatbot.llm_models.story_tools import get_end_story_tools, get_story_content_tools
 from chatbot.models import (Profile, CompanyChat, CompanyBot, StoryLanguageChoices,
                             StoryStatusChoices, ChatSession, ChatStatus, Voice, VoiceType)
 from chatbot.models.geo_models import ProfileAddress
@@ -11,6 +10,7 @@ from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
 from chatbot.utils.story_llama_utils import create_project, translate_field
 from chatbot.llm_models.llm_script import handle_bedrock_model
 from jinja2 import Template
+import json_repair
 
 
 def create_story_object(profile_id, session, language='en'):
@@ -77,8 +77,10 @@ def create_story_object(profile_id, session, language='en'):
                 })
 
         # print("Message: ", messages)
-        tool_story = get_end_story_tools()
-        tool_content = get_story_content_tools()
+        tool_context = company_bot.tool_context
+        tool_context = json_repair.repair_json(tool_context, return_objects=True)
+        tool_story = tool_context.get('story_tool')
+        tool_content = tool_context.get('content_tool')
         print("\n----------")
         response_json_content = handle_bedrock_model(
             system_prompt = formatted_content_prompt, messages = messages, tools=tool_content,
@@ -136,7 +138,6 @@ def create_story_object(profile_id, session, language='en'):
             title = translate_field(
                 voice_provider=voice_provider, message_body=title, target_language=language
             )
-
             tweet = translate_field(
                 voice_provider=voice_provider, message_body=tweet, target_language=language
             )

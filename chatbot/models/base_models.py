@@ -65,6 +65,7 @@ class CompanyBot(models.Model):
     dynamic_context_type = models.CharField(max_length=20, choices=CompanyBotDynamicContextType.choices,
                                             null=True, blank=True)
     pre_context = models.TextField(null=True, blank=True)
+    tool_context= models.TextField(null=True, blank=True)
     history = HistoricalRecords()
 
     def __str__(self):

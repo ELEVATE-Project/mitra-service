@@ -1,9 +1,9 @@
-import datetime
 import json
 from django.db import models
 from chatbot.models import CompanyChat, Profile, CompanyBot, ChatStatus, LLMModel, Voice, VoiceType
 from chatbot.llm_models.llm_script import handle_bedrock_model
 from chatbot.utils.audio_provider_utils import text_translate_provider
+import json_repair
 
 
 class ChatSession(models.Model):
@@ -22,12 +22,11 @@ class ChatSession(models.Model):
     def save_title(self, language='en'):
         company_chats = CompanyChat.objects.filter(session=self.session).order_by('created_at')
         messages = self._get_bedrock_format_message(chats=company_chats)
-        tool_to_use = self._get_bedrock_tools()
         company_bot = CompanyBot.objects.filter(route='/mohini_title').first()
         prompt = self._get_prompt(company_bot=company_bot)
 
         json_output = self._handle_bedrock_model(
-            prompt=prompt, messages=messages, tools=tool_to_use, company_bot=company_bot
+            prompt=prompt, messages=messages, company_bot=company_bot
         )
         if json_output:
             if isinstance(json_output, str):
@@ -78,52 +77,22 @@ class ChatSession(models.Model):
             model = self.company_bot.llm_model if self.company_bot.llm_model else model
         return model
 
-    def _handle_bedrock_model(self, prompt, messages, tools, company_bot):
-        print("Using Bedrock")
+    def _handle_bedrock_model(self, prompt, messages, company_bot):
+        tool = company_bot.tool_context
+        if tool and isinstance(tool, str):
+            tool = json_repair.repair_json(tool, return_objects=True)
         response_json = handle_bedrock_model(
             system_prompt=prompt, messages=messages, model_name=company_bot.llm_model,
             temperature=company_bot.bot_temperature, max_token=company_bot.max_token,
-            tools=tools
+            tools=tool
         )
 
         if response_json:
-            print("pre: ", response_json)
             if response_json.get('parameters'):
                 response_json = response_json.get('parameters')
             elif response_json.get('input'):
                 response_json = response_json.get('input')
-        print("post: ", response_json)
         return response_json
-
-    def _get_bedrock_tools(self):
-        tool = {
-            "toolConfig": {
-                "tools": [
-                    {
-                        "toolSpec": {
-                            "name": "generate_conversation_title",
-                            "description": "Generate a concise 3-4 word title for the conversation.",
-                            "inputSchema": {
-                                "json": {
-                                    "type": "object",
-                                    "properties": {
-                                        "title": {
-                                            "type": "string",
-                                            "description": (
-                                                "Summary of the conversation. "
-                                                "Output should be in JSON format with a 'title' field containing a concise, 3-4 word title."
-                                            )
-                                        }
-                                    },
-                                    "required": ["title"]
-                                }
-                            }
-                        }
-                    }
-                ]
-            }
-        }
-        return tool
 
     def _parse_response(self, response):
         response_str = str(response.content, encoding="utf-8")
