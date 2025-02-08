@@ -46,7 +46,7 @@ def get_bedrock_tool_call_response(system_prompt, messages, company_bot, session
     is_function_call = False
     if isinstance(response, dict):
         tool_use_id = response.get('toolUseId', None)
-        if tool_use_id:
+        if tool_use_id or response.get('name') == 'get_state_information':
             is_function_call = True
     print("is_function_call: ", is_function_call)
 
