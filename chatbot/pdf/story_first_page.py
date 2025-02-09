@@ -37,11 +37,8 @@ def get_first_page_html(profile, story):
                         <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/nagaland_samagra_logo.png" 
                             class="story-logo1-fmt1" alt="pdf_bg1">
                         </img>
-                        <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/shikshalokam_logo_pdf.png" 
+                        <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/shikshagrahaLogo.png" 
                             class="story-logo2-fmt1" alt="pdf_bg1">
-                        </img>
-                        <img src="https://static-media.gritworks.ai/fe-images/PNG/GritWorks/grit-crop-logo.png" 
-                            class="story-logo3-fmt1" alt="pdf_bg1">
                         </img>
                     </div>
                 </div>

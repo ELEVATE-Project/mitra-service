@@ -112,7 +112,7 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
             response = super().create(request, *args, **kwargs)
             print("response: ", response)
             print("response status_code: ", response.status_code)
-
+            update_story_pdf(session=session_value)
             # if response.status_code == status.HTTP_201_CREATED:
             #     upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
             return response
@@ -164,6 +164,7 @@ class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
 
             print("response: ", response)
             print("response status_code: ", response.status_code)
+            update_story_pdf(session=session_value)
 
             # if response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]:
                 # Pass response.data directly as the instance
