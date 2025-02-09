@@ -30,7 +30,7 @@ class ChatSession(models.Model):
         )
         if json_output:
             if isinstance(json_output, str):
-                json_output = json.loads(json_output)
+                json_output = json_repair.repair_json(json_output, return_objects=True)
             output_title = json_output.get('title')
             if language != 'en':
                 voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
@@ -96,8 +96,8 @@ class ChatSession(models.Model):
 
     def _parse_response(self, response):
         response_str = str(response.content, encoding="utf-8")
-        response_json = json.loads(response_str)
+        response_json = json_repair.repair_json(response_str, return_objects=True)
         response_content = response_json['choices'][0]['message']['content']
         cleaned_content = (response_content.replace('\n', '').replace('\t', '').replace('\r', '')
                            .replace('\\n', '').replace('\\t', '').replace('\\r', ''))
-        return json.loads(cleaned_content)
+        return json_repair.repair_json(cleaned_content, return_objects=True)
