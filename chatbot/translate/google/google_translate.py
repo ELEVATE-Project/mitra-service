@@ -19,7 +19,7 @@ def translate_text(
         response = client.translate_text(
             request={
                 "parent": parent,
-                "contents": [text + '(female)'],
+                "contents": [text],
                 "mime_type": "text/plain",
                 "source_language_code": source_language_code,
                 "target_language_code": target_language_code,
