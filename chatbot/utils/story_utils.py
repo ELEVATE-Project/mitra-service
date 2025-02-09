@@ -232,14 +232,14 @@ def format_response_json(response):
 
 def get_formatted_story(story):
     res = [
-        {
-            'id': generate_random_string(10),
-            'type': 'paragraph',
-            'data':
-                {
-                    'text': story.title,
-                }
-        },
+        # {
+        #     'id': generate_random_string(10),
+        #     'type': 'paragraph',
+        #     'data':
+        #         {
+        #             'text': story.title,
+        #         }
+        # },
         {
             'id': generate_random_string(10),
             'type': 'paragraph',
