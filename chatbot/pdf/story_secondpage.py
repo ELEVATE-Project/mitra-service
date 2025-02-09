@@ -24,7 +24,7 @@ def get_story_secondpage_html(story):
         <div class="story-second-page-section">
             <h2>Action Steps</h2>
             <ol style="list-style-type: none; padding: 0; margin: 0;">
-                {'<li>' + '</li><li>'.join(step.strip() for step in action_steps[0].split(',') if step.strip()) + '</li>'}
+                {'<li>' + '</li><li>'.join(step.strip() for step in action_steps[0].split(';') if step.strip()) + '</li>'}
             </ol>
         </div>
         <div class="story-second-page-section">
