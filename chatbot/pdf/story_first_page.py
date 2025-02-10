@@ -31,12 +31,6 @@ def get_first_page_html(profile, story):
 
                 <div class=story-firstpage-bottom-div>
                     <div class=story-firstpage-bottom-in-div>
-                        <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/nagaland_govt_logo.png" 
-                            class="story-logo-fmt1" alt="pdf_bg1">
-                        </img>
-                        <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/nagaland_samagra_logo.png" 
-                            class="story-logo1-fmt1" alt="pdf_bg1">
-                        </img>
                         <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/shikshagrahaLogo.png" 
                             class="story-logo2-fmt1" alt="pdf_bg1">
                         </img>
