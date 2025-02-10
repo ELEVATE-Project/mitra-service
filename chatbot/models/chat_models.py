@@ -82,12 +82,11 @@ class ChatSession(models.Model):
         tool = company_bot.tool_context
         if tool and isinstance(tool, str):
             tool = json_repair.repair_json(tool, return_objects=True)
-        # response_json = handle_bedrock_model(
-        #     system_prompt=prompt, messages=messages, model_name=company_bot.llm_model,
-        #     temperature=company_bot.bot_temperature, max_token=company_bot.max_token,
-        #     tools=tool
-        # )
-        response_json = "This is sample title"
+        response_json = handle_bedrock_model(
+            system_prompt=prompt, messages=messages, model_name=company_bot.llm_model,
+            temperature=company_bot.bot_temperature, max_token=company_bot.max_token,
+            tools=tool
+        )
 
         if response_json and isinstance(response_json, dict):
             if response_json.get('parameters'):
