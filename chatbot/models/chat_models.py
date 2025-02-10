@@ -28,21 +28,22 @@ class ChatSession(models.Model):
         json_output = self._handle_bedrock_model(
             prompt=prompt, messages=messages, company_bot=company_bot
         )
-        if json_output:
+        try:
             if isinstance(json_output, str):
                 json_output = json_repair.repair_json(json_output, return_objects=True)
             output_title = json_output.get('title')
-            if language != 'en':
-                voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+        except Exception as e:
+            print("Error: ", e)
+            output_title = 'MI Story'
+        if language != 'en':
+            voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
 
-                response = text_translate_provider(
-                    voice_provider=voice_provider, message_body=output_title, target_language=language,
-                    source_language='en'
-                )
-                if response.get('status') == 200:
-                    output_title = response.get('content')
-        else:
-            output_title = 'Project'
+            response = text_translate_provider(
+                voice_provider=voice_provider, message_body=output_title, target_language=language,
+                source_language='en'
+            )
+            if response.get('status') == 200:
+                output_title = response.get('content')
 
         self.title = output_title
         self.save()
@@ -81,13 +82,14 @@ class ChatSession(models.Model):
         tool = company_bot.tool_context
         if tool and isinstance(tool, str):
             tool = json_repair.repair_json(tool, return_objects=True)
-        response_json = handle_bedrock_model(
-            system_prompt=prompt, messages=messages, model_name=company_bot.llm_model,
-            temperature=company_bot.bot_temperature, max_token=company_bot.max_token,
-            tools=tool
-        )
+        # response_json = handle_bedrock_model(
+        #     system_prompt=prompt, messages=messages, model_name=company_bot.llm_model,
+        #     temperature=company_bot.bot_temperature, max_token=company_bot.max_token,
+        #     tools=tool
+        # )
+        response_json = "This is sample title"
 
-        if response_json:
+        if response_json and isinstance(response_json, dict):
             if response_json.get('parameters'):
                 response_json = response_json.get('parameters')
             elif response_json.get('input'):
