@@ -40,16 +40,18 @@ def get_bedrock_tool_call_response(system_prompt, messages, company_bot, session
         system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
         temperature=company_bot.bot_temperature, max_token=company_bot.max_token
     )
+
     print("response_body bedrock: ", response)
+    if response is None:
+        response = 'Can you repeat again?'
 
-
+    print("Response: ", response)
     is_function_call = False
     if isinstance(response, dict):
         # tool_use_id = response.get('toolUseId', None)
         # if tool_use_id or response.get('name') == 'get_state_information':
         is_function_call = True
     print("is_function_call: ", is_function_call)
-
 
     if is_function_call:
         print("its func call")

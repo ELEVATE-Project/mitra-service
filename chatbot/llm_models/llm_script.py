@@ -179,10 +179,7 @@ def handle_bedrock_model(
         print("Response:", response)
 
         content_arr = response['output']['message']['content']
-        if len(content_arr) == 0:
-            content = 'Can you repeat again?'
-        else:
-            content = content_arr[0]
+        content = content_arr[0]
         content_tool = content.get('toolUse')
         if content_tool:
             if isinstance(content_tool, str):

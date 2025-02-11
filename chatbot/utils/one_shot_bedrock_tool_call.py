@@ -38,7 +38,8 @@ def get_one_shot_bedrock_tool_call_response(system_prompt, messages, company_bot
         temperature=company_bot.bot_temperature, max_token=company_bot.max_token
     )
     print("response_body bedrock: ", response)
-
+    if response is None:
+        response = 'Can you repeat again?'
 
     print("Response: ", response)
     is_function_call = False
