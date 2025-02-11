@@ -16,27 +16,26 @@ def get_first_page_html(profile, story):
     author = profile.first_name or ""
 
     html = f"""
-        <div class="story-company-div-fmt1 page-break">
-            <div class="story-logo-div2">
-                <div class=story-nagaland-logo-div>
-                    <p class="story-title-fmt1">{title}</p>
-                </div>
-                <div class="nagaland-image-div"> 
-                    <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/pdf_page1_logo_fmt1.png" 
-                        class="story-bg1-fmt1" alt="pdf_bg1">
+    <div class="story-company-div-fmt1 page-break">
+        <div class="story-logo-div2">
+            <div class=story-firstpage-bottom-div>
+                <div class=story-firstpage-bottom-in-div>
+                    <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/shikshagrahaLogo.png" 
+                        class="story-logo2-fmt1" alt="pdf_bg1">
                     </img>
-                    </div>
-                <p class="story-author-fmt1">{author}</p>
-                <p class="story-school-fmt1">{address_string}</p>
-
-                <div class=story-firstpage-bottom-div>
-                    <div class=story-firstpage-bottom-in-div>
-                        <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/shikshagrahaLogo.png" 
-                            class="story-logo2-fmt1" alt="pdf_bg1">
-                        </img>
-                    </div>
                 </div>
             </div>
+            <h1 style="font-size: 2.8rem; margin: 20px 0; color: #333; font-weight: bold; text-align: center;">{title}</h1>
+            <div class="nagaland-image-div"> 
+                <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/pdf_page1_logo_fmt1.png" 
+                    class="story-bg1-fmt1" alt="pdf_bg1">
+                </img>
+                </div>
+            <div style="margin-top: 15px; text-align: center;">
+                <p style="font-size: 1.2rem; margin: 5px 0; color: #555;">{author}</p>
+                <p style="font-size: 1rem; color: #666; margin: 5px 0;">{address_string}</p>
+            </div>
         </div>
+    </div>
     """
     return html
