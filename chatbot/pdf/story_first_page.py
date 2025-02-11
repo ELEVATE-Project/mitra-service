@@ -18,14 +18,15 @@ def get_first_page_html(profile, story):
     html = f"""
     <div class="story-company-div-fmt1 page-break">
         <div class="story-logo-div2">
-            <div class=story-firstpage-bottom-div>
-                <div class=story-firstpage-bottom-in-div>
+            <div style="width: 100%; margin-top: 40px;">
+                <div style="display: flex; justify-content: center;">
                     <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/shikshagrahaLogo.png" 
-                        class="story-logo2-fmt1" alt="pdf_bg1">
-                    </img>
+                        style="width: 300px; height: auto; object-fit: contain;"
+                        alt="Bottom Logo">
                 </div>
             </div>
-            <h1 style="font-size: 2.8rem; margin: 20px 0; color: #333; font-weight: bold; text-align: center;">{title}</h1>
+
+            <h2 style="font-size: 2.8rem; margin: 20px 0; color: #333; font-weight: bold; text-align: center;">{title}</h2>
             <div class="nagaland-image-div"> 
                 <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/pdf_page1_logo_fmt1.png" 
                     class="story-bg1-fmt1" alt="pdf_bg1">
