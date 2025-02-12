@@ -141,7 +141,7 @@ def create_story_object(profile_id, session, language='en'):
         response_json_story = asyncio.run(
             validate_story_llm(
                 formatted_content_prompt=validate_content_prompt, formatted_story_prompt=validate_story_prompt,
-                messages=messages, tool_content=tool_content, tool_story=tool_story, company_bot=company_bot
+                messages=messages, tool_content=tool_content, tool_story=tool_story, company_bot=validate_bot
             )
         )
         print("\n\nvalidated_result: ", response_json_story)
