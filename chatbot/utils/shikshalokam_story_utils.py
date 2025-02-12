@@ -22,6 +22,8 @@ def save_shikshalokam_story(
 
         pdf_generated = generate_pdf_with_gotenberg(html_content)
         pdf_file_name = story.title
+        if not pdf_file_name or pdf_file_name == '':
+            pdf_file_name = 'mi_story'
         pdf_file_name = f"{pdf_file_name}.pdf"
         pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
         print("pdf_content: ", pdf_content)
@@ -88,6 +90,8 @@ def update_story_pdf(session):
 
         pdf_generated = generate_pdf_with_gotenberg(html_content)
         pdf_file_name = story.title
+        if not pdf_file_name or pdf_file_name == '':
+            pdf_file_name = 'mi_story'
         pdf_file_name = f"{pdf_file_name}.pdf"
         pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
         print("pdf_content: ", pdf_content)
