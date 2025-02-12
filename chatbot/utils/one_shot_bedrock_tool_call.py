@@ -39,7 +39,7 @@ def get_one_shot_bedrock_tool_call_response(system_prompt, messages, company_bot
     )
     print("response_body bedrock: ", response)
     if response is None:
-        response = 'Can you repeat again?'
+        response = 'I am sorry, I could not understood completely. Could you rephrase this please?'
 
     print("Response: ", response)
     is_function_call = False
