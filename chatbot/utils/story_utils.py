@@ -11,6 +11,8 @@ from chatbot.utils.story_llama_utils import create_project, translate_field
 from chatbot.llm_models.llm_script import handle_bedrock_model
 from jinja2 import Template
 import json_repair
+import asyncio
+import functools
 
 
 def create_story_object(profile_id, session, language='en'):
@@ -19,6 +21,7 @@ def create_story_object(profile_id, session, language='en'):
         company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
         ai_user = Profile.objects.get(id=1)
         company_bot = CompanyBot.objects.get(route='/story')
+        validate_bot = CompanyBot.objects.get(route='/story_validation')
         context = company_bot.context
         address = ProfileAddress.objects.filter(profile=profile)
         context_data = {
@@ -26,7 +29,6 @@ def create_story_object(profile_id, session, language='en'):
             "address": address if address else [{}]
         }
         template = Template(company_bot.tag_context)
-
         tag_context = template.render(context_data)
 
         end_context = company_bot.end_context
@@ -45,6 +47,7 @@ def create_story_object(profile_id, session, language='en'):
             {tag_context}
             {project_data}
         """
+
         print('-------------------------------')
         print(story_prompt)
 
@@ -59,6 +62,7 @@ def create_story_object(profile_id, session, language='en'):
                 'text': story_prompt
             },
         ]
+
         if company_chats and company_chats[0].receiver != ai_user:
             company_chats.pop(0)
         for chat in company_chats:
@@ -82,29 +86,66 @@ def create_story_object(profile_id, session, language='en'):
         tool_story = tool_context.get('story_tool')
         tool_content = tool_context.get('content_tool')
         print("\n----------")
-        response_json_content = handle_bedrock_model(
-            system_prompt = formatted_content_prompt, messages = messages, tools=tool_content,
-            temperature=company_bot.bot_temperature, max_token=company_bot.max_token, top_p=company_bot.filter_score,
-            model_name=company_bot.llm_model
+        response_json_content, response_json_story = asyncio.run(
+            generate_story_llm(
+                formatted_content_prompt=formatted_content_prompt, formatted_story_prompt=formatted_story_prompt,
+                messages=messages, tool_content=tool_content, tool_story=tool_story, company_bot=company_bot
+            )
         )
-        if response_json_content:
-            if response_json_content.get('parameters'):
-                response_json_content = response_json_content.get('parameters')
-            elif response_json_content.get('input'):
-                response_json_content = response_json_content.get('input')
         print("\n\nresponse_json_content: ", response_json_content)
-        response_json_story = handle_bedrock_model(
-            system_prompt = formatted_story_prompt, messages = messages, tools=tool_story,
-            temperature=company_bot.bot_temperature, max_token=company_bot.max_token, top_p=company_bot.filter_score,
-            model_name=company_bot.llm_model
-        )
-        if response_json_content:
-            if response_json_story.get('parameters'):
-                response_json_story = response_json_story.get('parameters')
-            elif response_json_story.get('input'):
-                response_json_story = response_json_story.get('input')
         print("\n\nresponse_json_story: ", response_json_story)
+        validate_context_data = {
+            "story_json_output": response_json_story,
+        }
+        validate_template = Template(validate_bot.tag_context)
+        validate_tag_context = validate_template.render(validate_context_data)
 
+        validate_story_prompt = f"""
+            {validate_bot.end_context}
+            {validate_tag_context}
+            {tag_context}
+            {project_data}
+        """
+
+        validate_context_data = {
+            "story_json_output": response_json_content,
+        }
+        validate_tag_context = validate_template.render(validate_context_data)
+
+        validate_content_prompt = f"""
+            {validate_bot.context}
+            {validate_tag_context}
+            {tag_context}
+            {project_data}
+        """
+
+        validate_content_prompt = [
+            {
+                'text': validate_content_prompt
+            },
+        ]
+        validate_story_prompt = [
+            {
+                'text': validate_story_prompt
+            },
+        ]
+
+        tool_context = validate_bot.tool_context
+        tool_context = json_repair.repair_json(tool_context, return_objects=True)
+        tool_story = tool_context.get('story_tool')
+        tool_content = tool_context.get('content_tool')
+        print("------------------------------------------")
+        print("\n\nvalidate_content_prompt: ", validate_content_prompt)
+        print("\n\nvalidate_story_prompt: ", validate_story_prompt)
+        print("------------------------------------------")
+        response_json_story = asyncio.run(
+            validate_story_llm(
+                formatted_content_prompt=validate_content_prompt, formatted_story_prompt=validate_story_prompt,
+                messages=messages, tool_content=tool_content, tool_story=tool_story, company_bot=company_bot
+            )
+        )
+        print("\n\nvalidated_result: ", response_json_story)
+        print("\n\ntype validated_result: ", type(response_json_story))
         print("\n----------")
 
         title = response_json_story.get('title', '')
@@ -127,9 +168,9 @@ def create_story_object(profile_id, session, language='en'):
             'duration': duration
         }
 
-        content = response_json_content.get('content', '')
+        content = response_json_story.get('content', '')
         print('content: ', content)
-        blurb = response_json_content.get('blurb', '')
+        blurb = response_json_story.get('blurb', '')
         print('blurb: ', blurb)
 
         voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
@@ -251,3 +292,101 @@ def generate_random_string(length):
     characters = string.ascii_letters + string.digits
     rs = ''.join(random.choice(characters) for _ in range(length))
     return rs
+
+
+async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, messages, tool_content, tool_story,
+                             company_bot):
+    async def func1():
+        print("Running func1")
+        return await asyncio.to_thread(
+            functools.partial(
+                handle_bedrock_model,
+                system_prompt=formatted_content_prompt,
+                messages=messages,
+                tools=tool_content,
+                temperature=company_bot.bot_temperature,
+                max_token=company_bot.max_token,
+                top_p=company_bot.filter_score,
+                model_name=company_bot.llm_model
+            )
+        )
+
+    async def func2():
+        print("Running func2")
+        return await asyncio.to_thread(
+            functools.partial(
+                handle_bedrock_model,
+                system_prompt=formatted_story_prompt,
+                messages=messages,
+                tools=tool_story,
+                temperature=company_bot.bot_temperature,
+                max_token=company_bot.max_token,
+                top_p=company_bot.filter_score,
+                model_name=company_bot.llm_model
+            )
+        )
+
+    response_json_content, response_json_story = await asyncio.gather(func1(), func2())
+    print("response_json_content: ", response_json_content)
+    print("response_json_story: ", response_json_story)
+    for response in [response_json_content, response_json_story]:
+        if response and isinstance(response, dict):
+            extracted_data = response.pop("parameters", response.pop("input", None))
+            if extracted_data and isinstance(extracted_data, dict):
+                response.clear()
+                response.update(extracted_data)
+
+    return response_json_content, response_json_story
+
+
+async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, messages, tool_content, tool_story,
+                             company_bot):
+    async def func1():
+        print("Running func1")
+        return await asyncio.to_thread(
+            functools.partial(
+                handle_bedrock_model,
+                system_prompt=formatted_content_prompt,
+                messages=messages,
+                tools=tool_content,
+                temperature=company_bot.bot_temperature,
+                max_token=company_bot.max_token,
+                top_p=company_bot.filter_score,
+                model_name=company_bot.llm_model
+            )
+        )
+
+    async def func2():
+        print("Running func2")
+        return await asyncio.to_thread(
+            functools.partial(
+                handle_bedrock_model,
+                system_prompt=formatted_story_prompt,
+                messages=messages,
+                tools=tool_story,
+                temperature=company_bot.bot_temperature,
+                max_token=company_bot.max_token,
+                top_p=company_bot.filter_score,
+                model_name=company_bot.llm_model
+            )
+        )
+
+    response_json_content, response_json_story = await asyncio.gather(func1(), func2())
+    print("response_json_content: ", response_json_content)
+    print("response_json_story: ", response_json_story)
+    for response in [response_json_content, response_json_story]:
+        if response and isinstance(response, dict):
+            extracted_data = response.pop("parameters", response.pop("input", None))
+            if extracted_data and isinstance(extracted_data, dict):
+                response.clear()
+                response.update(extracted_data)
+
+    response_json_content = response_json_content.get('final_answer')
+    response_json_content = json_repair.repair_json(response_json_content, return_objects=True)
+
+    response_json_story = response_json_story.get('final_answer')
+    response_json_story = json_repair.repair_json(response_json_story, return_objects=True)
+
+    combined_result = {**response_json_content, **response_json_story}
+
+    return combined_result
