@@ -138,7 +138,7 @@ def create_story_object(profile_id, session, language='en'):
         print("\n\nvalidate_content_prompt: ", validate_content_prompt)
         print("\n\nvalidate_story_prompt: ", validate_story_prompt)
         print("------------------------------------------")
-        response_json_story = asyncio.run(
+        response_json_story, combined_reason = asyncio.run(
             validate_story_llm(
                 formatted_content_prompt=validate_content_prompt, formatted_story_prompt=validate_story_prompt,
                 messages=messages, tool_content=tool_content, tool_story=tool_story, company_bot=validate_bot
@@ -146,6 +146,7 @@ def create_story_object(profile_id, session, language='en'):
         )
         print("\n\nvalidated_result: ", response_json_story)
         print("\n\ntype validated_result: ", type(response_json_story))
+        print("\n\ncombined_reason: ", combined_reason)
         print("\n----------")
 
         title = response_json_story.get('title', '')
@@ -172,6 +173,7 @@ def create_story_object(profile_id, session, language='en'):
         print('content: ', content)
         blurb = response_json_story.get('blurb', '')
         print('blurb: ', blurb)
+        content = clean_escaped_text(text=content)
 
         voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
 
@@ -228,7 +230,8 @@ def create_story_object(profile_id, session, language='en'):
             stage=StoryStatusChoices.COMPLETED,
             other_params=other_params,
             location=location,
-            blurb=blurb
+            blurb=blurb,
+            validation_logs=combined_reason
         )
 
         story.save()
@@ -381,12 +384,26 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
                 response.clear()
                 response.update(extracted_data)
 
+    reason_content = response_json_content.get('reason')
     response_json_content = response_json_content.get('final_answer')
     response_json_content = json_repair.repair_json(response_json_content, return_objects=True)
 
+    reason_story = response_json_story.get('reason')
     response_json_story = response_json_story.get('final_answer')
     response_json_story = json_repair.repair_json(response_json_story, return_objects=True)
 
     combined_result = {**response_json_content, **response_json_story}
+    combined_reason = {
+        "reason_content": reason_content,
+        "reason_story": reason_story
+    }
 
-    return combined_result
+    return combined_result, combined_reason
+
+
+def clean_escaped_text(text):
+    text = text.replace("\\'", "")# \'  →  '
+    text = text.replace('\\"', '')# \"  →  "
+    text = text.replace("\\\\", "") # \\  →  \
+    print("Text: ", text)
+    return text

@@ -33,6 +33,7 @@ class Story(models.Model):
 
     client_created_at = models.DateTimeField(null=True, blank=True)
     client_updated_at = models.DateTimeField(null=True, blank=True)
+    validation_logs = models.TextField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
