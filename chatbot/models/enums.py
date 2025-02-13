@@ -10,6 +10,11 @@ class ChatStatus(models.TextChoices):
     RESUME = 'RESUME', _('RESUME')
 
 
+class LLMProvider(models.TextChoices):
+    BEDROCK = 'bedrock', _('BEDROCK')
+    BEDROCK_CONVERSE = 'bedrock/converse', _('BEDROCK_CONVERSE')
+    OPENAI = 'openai', _('OPENAI')
+
 class LLMModel(models.TextChoices):
     GPT4 = 'gpt-4', _('GPT4')
     GPT4_128K = 'gpt-4-1106-preview', _('GPT4-128k')
