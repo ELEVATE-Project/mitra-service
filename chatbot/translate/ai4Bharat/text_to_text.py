@@ -1,4 +1,5 @@
 import os
+import traceback
 import requests
 
 ai4bharat_api_key = os.getenv("BHASHANI_API_KEY")
@@ -43,6 +44,7 @@ def call_ai4bharat_translation_api(source_language, target_language, message_bod
         }
     except Exception as e:
         print(f"Error during translation API call: {str(e)}")
+        traceback.print_exc()
         return {
             'status': 500,
             'content': f"Error during translation API call: {str(e)}"

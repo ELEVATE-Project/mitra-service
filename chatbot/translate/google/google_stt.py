@@ -1,3 +1,4 @@
+import traceback
 from typing import List
 from google.cloud.speech_v2 import SpeechClient
 from google.cloud.speech_v2.types import cloud_speech
@@ -27,6 +28,7 @@ def transcribe_multiple_languages_v2(
             response = client.recognize(request=request)
         except Exception as e:
             print(f"Error during API request: {e}")
+            traceback.print_exc()
             return {
                 'status': 500,
                 'content': f"Error during API request: {e}"
@@ -46,6 +48,7 @@ def transcribe_multiple_languages_v2(
 
     except Exception as e:
         print(f"Error processing file: {e}")
+        traceback.print_exc()
         return {
             'status': 500,
             'content': f"Error processing file: {e}"

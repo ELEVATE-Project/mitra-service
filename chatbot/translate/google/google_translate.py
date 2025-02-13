@@ -1,3 +1,4 @@
+import traceback
 from google.cloud import translate
 
 
@@ -34,6 +35,7 @@ def translate_text(
 
     except Exception as e:
         print(f"Error during translation API call: {str(e)}")
+        traceback.print_exc()
         return {
             'status': 500,
             'content': f"Error during translation API call: {str(e)}"

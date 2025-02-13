@@ -1,4 +1,5 @@
 import os
+import traceback
 import requests
 from rest_framework.response import Response
 
@@ -49,6 +50,7 @@ def ai4bharat_text_speech(text, gender, source_language):
             }
 
     except Exception as e:
+        traceback.print_exc()
         return {
             'status': 500,
             'content': str(e)

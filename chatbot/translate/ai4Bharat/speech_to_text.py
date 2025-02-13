@@ -1,4 +1,5 @@
 import os
+import traceback
 import requests
 
 
@@ -55,6 +56,7 @@ def ai4bharat_speech_text(base64, audio_format, source_language):
             }
 
     except Exception as e:
+        traceback.print_exc()
         return {
             'status': 500,
             'content': str(e)

@@ -5,8 +5,9 @@ Note: ssml must be well-formed according to:
     https://www.w3.org/TR/speech-synthesis/
 """
 import base64
-
+import traceback
 from google.cloud import texttospeech
+
 
 def google_text_to_speech(message, language_code):
     try:
@@ -34,6 +35,7 @@ def google_text_to_speech(message, language_code):
 
     except Exception as e:
         print(f"Error while processing: {e}")
+        traceback.print_exc()
         return {
             'status': 500,
             'content': f"Error while processing: {e}"
