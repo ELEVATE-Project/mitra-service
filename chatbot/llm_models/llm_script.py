@@ -1,5 +1,3 @@
-from typing import Optional
-import copy
 import requests
 import json
 import os
@@ -179,47 +177,6 @@ def handle_bedrock_model(
         response = bedrock_runtime.converse(**request_payload)
 
         print("Response:", response)
-
-        print("########")
-        try:
-            llm_message = []
-            if system_prompt is not None and len(system_prompt) > 0:
-                llm_message = [
-                    {
-                        "role": "system",
-                        "content": "\n".join(list(map(lambda x: x["text"], copy.deepcopy(system_prompt))))
-                    }
-                ]
-
-            if messages is not None:
-                messages_cpy = list(map(lambda x: {
-                    "role": x["role"],
-                    "content": x["content"][0]["text"]
-                }, copy.deepcopy(messages)))
-                llm_message += messages_cpy
-
-            print(tools, type(tools))
-            bedrock_llm = LLM(
-                model="bedrock/converse/meta.llama3-1-8b-instruct-v1:0",
-                temperature=temperature,
-                top_p=top_p,
-                max_tokens=max_token,
-                llm_env_conf={
-                    "AWS_REGION": "us-west-2"
-                },
-                tools=tools
-            )
-            print(json.dumps(llm_message), "LLM_MESSAGE")
-            content_llm = bedrock_llm.prompt(llm_message)
-            print(
-                json.dumps(content_llm['choices'][0]
-                           ['message']['content']), "Content LLM"
-            )
-
-        except Exception as e:
-            print("Error in LLM Output")
-            print(e)
-        print("########")
 
         content_arr = response['output']['message']['content']
         content = content_arr[0]
