@@ -8,7 +8,7 @@ from simple_history.models import HistoricalRecords
 from chatbot.models.enums import (
     EntityStatus, LLMModel, GenderChoices, ProfileType, ChatStatus,
     FeedbackChoices, CompanyBotTypeChoices, CompanyBotDynamicContextType, CompanyChatSourceChoices,
-    ChatStageChoices, VoiceProvider, VoiceType
+    ChatStageChoices, VoiceProvider, VoiceType, LLMProvider
 )
 
 S3_BASE_URL = os.getenv('S3_BASE_URL')
@@ -52,6 +52,10 @@ class CompanyBot(models.Model):
     bot_temperature = models.FloatField(default=0)
     top_k = models.IntegerField(default=2, validators=[MinValueValidator(1)])
     llm_model = models.CharField(max_length=100, choices=LLMModel.choices, default=LLMModel.GPT4_O_MINI)
+    provider = models.CharField(
+        max_length=100, choices=LLMProvider.choices, default=LLMProvider.OPENAI)
+    provider_keys = models.TextField(
+        default="", max_length=1000, null=False, blank=True)
     max_token = models.IntegerField(default=2048, validators=[MinValueValidator(1)])
     filter_score = models.FloatField(default=0.8)
     end_context = models.TextField(null=True, blank=True)

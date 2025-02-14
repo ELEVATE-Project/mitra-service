@@ -172,7 +172,7 @@ def handle_bedrock_model(
             request_payload['toolConfig'] = tools.get('toolConfig')
             print("toolConfig: ", request_payload['toolConfig'])
 
-        print("messages: ", request_payload['messages'])
+        print("bedrock request payload: ", json.dumps(request_payload))
 
         response = bedrock_runtime.converse(**request_payload)
 
