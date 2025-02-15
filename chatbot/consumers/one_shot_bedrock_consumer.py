@@ -2,10 +2,11 @@ import json
 from asgiref.sync import async_to_sync
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.base_consumer import BaseConsumer
-from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot
-from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
+from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType
 from chatbot.celery_tasks.one_shot_bedrock_tasks import get_one_shot_bedrock_response
+from chatbot.utils.audio_provider_utils import text_translate_provider
 import jwt
+
 
 class OneShotBedrockConsumer(BaseConsumer):
 
@@ -21,7 +22,7 @@ class OneShotBedrockConsumer(BaseConsumer):
             c = chat_session[0]
         else:
             c = ChatSession(session=self.session_id)
-        c.save_title()
+        c.save_title(self.route)
         company_chat_status = self.determine_company_chat_status(
             session_id=self.session_id, profile_id=self.profile_id, is_disconnected=True
         )
@@ -82,10 +83,17 @@ class OneShotBedrockConsumer(BaseConsumer):
             )
 
             if self.route != 'en':
-                translated_message = call_ai4bharat_translation_api(
-                    message_body=text_data_json['text'], target_language='en',
+                company_bot = CompanyBot.objects.filter(route='/oneshot_bot').first()
+                voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+
+                response = text_translate_provider(
+                    voice_provider=voice_provider, message_body=text_data_json['text'], target_language='en',
                     source_language=self.route
                 )
+                if response.get('status') == 200:
+                    translated_message = response.get('content')
+                else:
+                    translated_message = text_data_json['text']
             else:
                 translated_message = None
             save_in_company_db(self.session_id, self.profile_id, 'User', text_data_json['text'],

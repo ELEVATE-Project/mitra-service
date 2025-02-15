@@ -2,7 +2,6 @@ from rest_framework import serializers
 from chatbot.models import BotVernacular
 from chatbot.models.base_models import CompanyBot, Company
 from chatbot.models.company_models import CompanyStateMachine
-from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
 
 
 class CompanySerializer(serializers.ModelSerializer):

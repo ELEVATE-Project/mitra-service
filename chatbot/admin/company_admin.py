@@ -6,7 +6,7 @@ from chatbot.filter.admin_filter import (CompanyChatCompanyFilter, ChatSessionFi
                                          ProfileStateFilter, ProfileCompanyChatFilter, ProfileEmailFilter)
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import Company, Profile, ProfileType, CompanyBot, CompanyChat, ChatSession, \
-    CompanyBotTypeChoices
+    CompanyBotTypeChoices, Voice
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.resources.resource import CompanyChatResource
 from chatbot.resources.company_resource import ChatSessionResource
@@ -14,6 +14,11 @@ from chatbot.resources.company_resource import ChatSessionResource
 
 class CompanyStateMachineAdmin(admin.TabularInline):
     model = CompanyStateMachine
+    extra = 1
+
+
+class VoiceProviderAdmin(admin.TabularInline):
+    model = Voice
     extra = 1
 
 
@@ -37,7 +42,7 @@ class CompanyAdmin(admin.ModelAdmin):
 class CompanyBotAdmin(SimpleHistoryAdmin):
     list_display = ('name', 'company', 'context')
     list_filter = ('company', )
-    inlines = []
+    inlines = [VoiceProviderAdmin]
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -60,8 +65,7 @@ class CompanyBotAdmin(SimpleHistoryAdmin):
             if company_field:
                 form.base_fields['company'].queryset = form.base_fields['company'].queryset.filter(
                     id=profile[0].company.id)
-            form.base_fields = {field_name: form.base_fields[field_name] for field_name in form.base_fields
-                                if field_name not in ['llm_model', 'llm_key']}
+            form.base_fields = {field_name: form.base_fields[field_name] for field_name in form.base_fields}
         form.base_fields = {field_name: form.base_fields[field_name] for field_name in form.base_fields}
         return form
 
@@ -71,14 +75,15 @@ class CompanyBotAdmin(SimpleHistoryAdmin):
             obj = self.model.objects.get(pk=object_id)
             if obj.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
                 # If the bot_type is 'state machine', include the inline.
-                self.inlines = [CompanyStateMachineAdmin]
+                self.inlines = [VoiceProviderAdmin, CompanyStateMachineAdmin]
+
             else:
                 # Otherwise, no inlines.
-                self.inlines = []
+                self.inlines = [VoiceProviderAdmin]
         else:
             # For the add form, decide if you want the inline to be shown or not.
             # This example assumes not.
-            self.inlines = []
+            self.inlines = [VoiceProviderAdmin]
         return super().changeform_view(request, object_id, form_url, extra_context)
 
 

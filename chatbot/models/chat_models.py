@@ -1,8 +1,8 @@
-import datetime
-import json
 from django.db import models
-from chatbot.models import CompanyChat, Profile, CompanyBot, ChatStatus, LLMModel
+from chatbot.models import CompanyChat, Profile, CompanyBot, ChatStatus, LLMModel, Voice, VoiceType
 from chatbot.llm_models.llm_script import handle_bedrock_model
+from chatbot.utils.audio_provider_utils import text_translate_provider
+import json_repair
 
 
 class ChatSession(models.Model):
@@ -20,45 +20,37 @@ class ChatSession(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    def save_title(self):
+    def save_title(self, language='en'):
         company_chats = CompanyChat.objects.filter(session=self.session).order_by('created_at')
-        prompt = self._get_prompt()
-        print(f"Leng:  {len(company_chats)} for session {self.session}")
         messages = self._get_bedrock_format_message(chats=company_chats)
-        tool_to_use = self._get_bedrock_tools()
+        company_bot = CompanyBot.objects.filter(route='/mohini_title').first()
+        prompt = self._get_prompt(company_bot=company_bot)
 
-        json_output = self._handle_bedrock_model(prompt=prompt, messages=messages, tools=tool_to_use)
-        if json_output:
+        json_output = self._handle_bedrock_model(
+            prompt=prompt, messages=messages, company_bot=company_bot
+        )
+        try:
             if isinstance(json_output, str):
-                json_output = json.loads(json_output)
+                json_output = json_repair.repair_json(json_output, return_objects=True)
             output_title = json_output.get('title')
-        else:
-            output_title = 'Project'
+        except Exception as e:
+            print("Error: ", e)
+            output_title = 'MI Story'
+        if language != 'en':
+            voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+
+            response = text_translate_provider(
+                voice_provider=voice_provider, message_body=output_title, target_language=language,
+                source_language='en'
+            )
+            if response.get('status') == 200:
+                output_title = response.get('content')
 
         self.title = output_title
         self.save()
 
-    def _get_prompt(self):
-        prompt = """
-        Given below is the conversation between the user and the assistant.
-        Please provide the title of the conversation in 3-4 words.
-        The response must only be in JSON format, without any additional text.
-        Return the output in the following VALID JSON format:
-        {
-          "title": "Title of the conversation"
-        }
-
-        **Example:**
-
-        **Conversation:**
-        User: "How do I bake a cake?"
-        Assistant: "To bake a cake, you need to follow these steps..."
-
-        **Expected Output:**
-        {
-          "title": "Baking a cake"
-        }
-        """
+    def _get_prompt(self, company_bot):
+        prompt = company_bot.context
 
         return [{'text': prompt}]
 
@@ -87,51 +79,27 @@ class ChatSession(models.Model):
             model = self.company_bot.llm_model if self.company_bot.llm_model else model
         return model
 
-    def _handle_bedrock_model(self, prompt, messages, tools):
-        print("Using Bedrock")
-
-        json_output = handle_bedrock_model(
-            system_prompt=prompt, messages=messages, max_token=2048,
-            temperature=0.0
-            # , tools=tools
+    def _handle_bedrock_model(self, prompt, messages, company_bot):
+        tool = company_bot.tool_context
+        if tool and isinstance(tool, str):
+            tool = json_repair.repair_json(tool, return_objects=True)
+        response_json = handle_bedrock_model(
+            system_prompt=prompt, messages=messages, model_name=company_bot.llm_model,
+            temperature=company_bot.bot_temperature, max_token=company_bot.max_token,
+            tools=tool
         )
 
-        return json_output
-
-    def _get_bedrock_tools(self):
-        tool = {
-            "toolConfig": {
-                "tools": [
-                    {
-                        "toolSpec": {
-                            "name": "generate_conversation_title",
-                            "description": "Generate a concise 3-4 word title for the conversation.",
-                            "inputSchema": {
-                                "json": {
-                                    "type": "object",
-                                    "properties": {
-                                        "conversation_summary": {
-                                            "type": "string",
-                                            "description": (
-                                                "Summary of the conversation. "
-                                                "Output should be in JSON format with a 'title' field containing a concise, 3-4 word title."
-                                            )
-                                        }
-                                    },
-                                    "required": ["conversation_summary"]
-                                }
-                            }
-                        }
-                    }
-                ]
-            }
-        }
-        return tool
+        if response_json and isinstance(response_json, dict):
+            if response_json.get('parameters'):
+                response_json = response_json.get('parameters')
+            elif response_json.get('input'):
+                response_json = response_json.get('input')
+        return response_json
 
     def _parse_response(self, response):
         response_str = str(response.content, encoding="utf-8")
-        response_json = json.loads(response_str)
+        response_json = json_repair.repair_json(response_str, return_objects=True)
         response_content = response_json['choices'][0]['message']['content']
         cleaned_content = (response_content.replace('\n', '').replace('\t', '').replace('\r', '')
                            .replace('\\n', '').replace('\\t', '').replace('\\r', ''))
-        return json.loads(cleaned_content)
+        return json_repair.repair_json(cleaned_content, return_objects=True)

@@ -65,31 +65,7 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
             """
         },
         {
-            'text': """
-            Given the following functions, please respond with a JSON for a function call with its proper arguments 
-            that best answers the given prompt.
-            Respond in the format {"name": function name, "parameters": dictionary of argument name and its value}. 
-            Do not use variables.
-            
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_state_information",
-                    "description": "Get the information of the state you want to be in",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "state_name": {
-                                "type": "string",
-                                "description": "Name of the next state provided in the context."
-                            }
-                        },
-                        "required": ["state_name"]
-                    }
-                }
-            }
-
-            """
+            'text': company_bot.tool_context
         }
     ]
 

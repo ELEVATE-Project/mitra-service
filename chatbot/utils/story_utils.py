@@ -2,30 +2,30 @@ import json
 import traceback
 import random
 import string
-
-from chatbot.llm_models.story_tools import get_end_story_tools, get_story_content_tools
 from chatbot.models import (Profile, CompanyChat, CompanyBot, StoryLanguageChoices,
-                            StoryStatusChoices, ChatSession, ChatStatus, BotVernacular)
+                            StoryStatusChoices, ChatSession, ChatStatus, Voice, VoiceType)
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.story_models import Story
-from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
 from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
-from chatbot.utils.story_llama_utils import create_project
+from chatbot.utils.story_llama_utils import create_project, translate_field
 from chatbot.llm_models.llm_script import handle_bedrock_model
-from jinja2 import Template
 from shikshalokam.models import Project
 from shikshalokam.utils.project_utils import get_project_formatted_data
+from jinja2 import Template
 import json_repair
+import asyncio
+import functools
 
 
-def create_story_object(profile_id, session, access_token, flow, language='en', model=None):
+def create_story_object(profile_id, session, access_token, flow, language='en'):
     try:
         profile = Profile.objects.get(id=profile_id)
         company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
         ai_user = Profile.objects.get(id=1)
         company_bot = CompanyBot.objects.get(route='/story')
         reflection_bot = CompanyBot.objects.get(route='/reflection')
+        validate_bot = CompanyBot.objects.get(route='/story_validation')
         context = company_bot.context
         address = ProfileAddress.objects.filter(profile=profile)
         context_data = {
@@ -91,30 +91,73 @@ def create_story_object(profile_id, session, access_token, flow, language='en', 
                 })
 
         # print("Message: ", messages)
-        tool_story = get_end_story_tools()
-        tool_content = get_story_content_tools()
-        try:
-            print("\n----------")
-            response_json_content = handle_bedrock_model(
-                system_prompt = formatted_content_prompt, messages = messages, tools=tool_content,
-                temperature=company_bot.bot_temperature, max_token=4096, top_p=company_bot.filter_score,
-                model_name='meta.llama3-1-8b-instruct-v1:0'
+        tool_context = company_bot.tool_context
+        tool_context = json_repair.repair_json(tool_context, return_objects=True)
+        tool_story = tool_context.get('story_tool')
+        tool_content = tool_context.get('content_tool')
+        print("\n----------")
+        response_json_content, response_json_story = asyncio.run(
+            generate_story_llm(
+                formatted_content_prompt=formatted_content_prompt, formatted_story_prompt=formatted_story_prompt,
+                messages=messages, tool_content=tool_content, tool_story=tool_story, company_bot=company_bot
             )
-            print("\n\nresponse_json_content: ", response_json_content)
-            response_json_story = handle_bedrock_model(
-                system_prompt = formatted_story_prompt, messages = messages, tools=tool_story,
-                temperature=company_bot.bot_temperature, max_token=4096, top_p=company_bot.filter_score,
-                model_name='meta.llama3-1-8b-instruct-v1:0'
-            )
-            print("\n\nresponse_json_story: ", response_json_story)
-            print("\n----------")
-        except Exception:
-            bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
-            error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
-            return "", "", error_message
+        )
+        print("\n\nresponse_json_content: ", response_json_content)
+        print("\n\nresponse_json_story: ", response_json_story)
+        validate_context_data = {
+            "story_json_output": response_json_story,
+        }
+        validate_template = Template(validate_bot.tag_context)
+        validate_tag_context = validate_template.render(validate_context_data)
 
-        # response_json_content = format_response_json(response=response_json_content)
-        # response_json_story = format_response_json(response=response_json_story)
+        validate_story_prompt = f"""
+            {validate_bot.end_context}
+            {validate_tag_context}
+            {tag_context}
+            {project_data}
+        """
+
+        validate_context_data = {
+            "story_json_output": response_json_content,
+        }
+        validate_tag_context = validate_template.render(validate_context_data)
+
+        validate_content_prompt = f"""
+            {validate_bot.context}
+            {validate_tag_context}
+            {tag_context}
+            {project_data}
+        """
+
+        validate_content_prompt = [
+            {
+                'text': validate_content_prompt
+            },
+        ]
+        validate_story_prompt = [
+            {
+                'text': validate_story_prompt
+            },
+        ]
+
+        tool_context = validate_bot.tool_context
+        tool_context = json_repair.repair_json(tool_context, return_objects=True)
+        tool_story = tool_context.get('story_tool')
+        tool_content = tool_context.get('content_tool')
+        print("------------------------------------------")
+        print("\n\nvalidate_content_prompt: ", validate_content_prompt)
+        print("\n\nvalidate_story_prompt: ", validate_story_prompt)
+        print("------------------------------------------")
+        response_json_story, combined_reason = asyncio.run(
+            validate_story_llm(
+                formatted_content_prompt=validate_content_prompt, formatted_story_prompt=validate_story_prompt,
+                messages=messages, tool_content=tool_content, tool_story=tool_story, company_bot=validate_bot
+            )
+        )
+        print("\n\nvalidated_result: ", response_json_story)
+        print("\n\ntype validated_result: ", type(response_json_story))
+        print("\n\ncombined_reason: ", combined_reason)
+        print("\n----------")
 
         title = response_json_story.get('title', '')
         print('title: ', title)
@@ -136,38 +179,41 @@ def create_story_object(profile_id, session, access_token, flow, language='en', 
             'duration': duration
         }
 
-        content = response_json_content.get('content', '')
+        content = response_json_story.get('content', '')
         print('content: ', content)
-        blurb = response_json_content.get('blurb', '')
+        blurb = response_json_story.get('blurb', '')
         print('blurb: ', blurb)
+        content = clean_escaped_text(text=content)
+
+        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
 
         if language != 'en':
-            title = call_ai4bharat_translation_api(
-                source_language='en', target_language=language, message_body=title
+            title = translate_field(
+                voice_provider=voice_provider, message_body=title, target_language=language
             )
-            tweet = call_ai4bharat_translation_api(
-                source_language='en', target_language=language, message_body=tweet
+            tweet = translate_field(
+                voice_provider=voice_provider, message_body=tweet, target_language=language
             )
-            objective = call_ai4bharat_translation_api(
-                source_language='en', target_language=language, message_body=objective
+            objective = translate_field(
+                voice_provider=voice_provider, message_body=objective, target_language=language
             )
-            action_steps = call_ai4bharat_translation_api(
-                source_language='en', target_language=language, message_body=action_steps
+            action_steps = translate_field(
+                voice_provider=voice_provider, message_body=action_steps, target_language=language
             )
-            impact = call_ai4bharat_translation_api(
-                source_language='en', target_language=language, message_body=impact
+            impact = translate_field(
+                voice_provider=voice_provider, message_body=impact, target_language=language
             )
-            micro_improvement = call_ai4bharat_translation_api(
-                source_language='en', target_language=language, message_body=micro_improvement
+            micro_improvement = translate_field(
+                voice_provider=voice_provider, message_body=micro_improvement, target_language=language
             )
-            problem_statement = call_ai4bharat_translation_api(
-                source_language='en', target_language=language, message_body=problem_statement
+            problem_statement = translate_field(
+                voice_provider=voice_provider, message_body=problem_statement, target_language=language
             )
-            content = call_ai4bharat_translation_api(
-                source_language='en', target_language=language, message_body=content
+            content = translate_field(
+                voice_provider=voice_provider, message_body=content, target_language=language
             )
-            blurb = call_ai4bharat_translation_api(
-                source_language='en', target_language=language, message_body=blurb
+            blurb = translate_field(
+                voice_provider=voice_provider, message_body=blurb, target_language=language
             )
 
         if profile:
@@ -194,7 +240,8 @@ def create_story_object(profile_id, session, access_token, flow, language='en', 
             stage=StoryStatusChoices.COMPLETED,
             other_params=other_params,
             location=location,
-            blurb=blurb
+            blurb=blurb,
+            validation_logs=combined_reason
         )
 
         story.save()
@@ -204,7 +251,8 @@ def create_story_object(profile_id, session, access_token, flow, language='en', 
 
         create_project(
             response_json=response_json_story,title=title, objective=objective, story=story,
-            profile=profile, problem_statement=problem_statement, project_id=project_id, language=language
+            profile=profile, problem_statement=problem_statement, project_id=project_id, language=language,
+            voice_provider=voice_provider
         )
 
         chat_session.session_status = ChatStatus.COMPLETED
@@ -243,24 +291,19 @@ def format_response_json(response):
 
 
 def get_formatted_story(story):
-    res = [
-        {
-            'id': generate_random_string(10),
-            'type': 'paragraph',
-            'data':
-                {
-                    'text': story.title,
-                }
-        },
-        {
-            'id': generate_random_string(10),
-            'type': 'paragraph',
-            'data':
-                {
-                    'text': story.content,
-                }
-        }
-    ]
+    story_paragraphs = story.content.split("\n")
+    res = []
+    for paragraph in story_paragraphs:
+        res.append(
+            {
+                'id': generate_random_string(10),
+                'type': 'paragraph',
+                'data':
+                    {
+                        'text': paragraph,
+                    }
+            }
+        )
     return json.dumps(res)
 
 
@@ -268,3 +311,115 @@ def generate_random_string(length):
     characters = string.ascii_letters + string.digits
     rs = ''.join(random.choice(characters) for _ in range(length))
     return rs
+
+
+async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, messages, tool_content, tool_story,
+                             company_bot):
+    async def func1():
+        print("Running func1")
+        return await asyncio.to_thread(
+            functools.partial(
+                handle_bedrock_model,
+                system_prompt=formatted_content_prompt,
+                messages=messages,
+                tools=tool_content,
+                temperature=company_bot.bot_temperature,
+                max_token=company_bot.max_token,
+                top_p=company_bot.filter_score,
+                model_name=company_bot.llm_model
+            )
+        )
+
+    async def func2():
+        print("Running func2")
+        return await asyncio.to_thread(
+            functools.partial(
+                handle_bedrock_model,
+                system_prompt=formatted_story_prompt,
+                messages=messages,
+                tools=tool_story,
+                temperature=company_bot.bot_temperature,
+                max_token=company_bot.max_token,
+                top_p=company_bot.filter_score,
+                model_name=company_bot.llm_model
+            )
+        )
+
+    response_json_content, response_json_story = await asyncio.gather(func1(), func2())
+    print("response_json_content: ", response_json_content)
+    print("response_json_story: ", response_json_story)
+    for response in [response_json_content, response_json_story]:
+        if response and isinstance(response, dict):
+            extracted_data = response.pop("parameters", response.pop("input", None))
+            if extracted_data and isinstance(extracted_data, dict):
+                response.clear()
+                response.update(extracted_data)
+
+    return response_json_content, response_json_story
+
+
+async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, messages, tool_content, tool_story,
+                             company_bot):
+    async def func1():
+        print("Running func1")
+        return await asyncio.to_thread(
+            functools.partial(
+                handle_bedrock_model,
+                system_prompt=formatted_content_prompt,
+                messages=messages,
+                tools=tool_content,
+                temperature=company_bot.bot_temperature,
+                max_token=company_bot.max_token,
+                top_p=company_bot.filter_score,
+                model_name=company_bot.llm_model
+            )
+        )
+
+    async def func2():
+        print("Running func2")
+        return await asyncio.to_thread(
+            functools.partial(
+                handle_bedrock_model,
+                system_prompt=formatted_story_prompt,
+                messages=messages,
+                tools=tool_story,
+                temperature=company_bot.bot_temperature,
+                max_token=company_bot.max_token,
+                top_p=company_bot.filter_score,
+                model_name=company_bot.llm_model
+            )
+        )
+
+    response_json_content, response_json_story = await asyncio.gather(func1(), func2())
+    print("response_json_content: ", response_json_content)
+    print("response_json_story: ", response_json_story)
+    for response in [response_json_content, response_json_story]:
+        if response and isinstance(response, dict):
+            extracted_data = response.pop("parameters", response.pop("input", None))
+            if extracted_data and isinstance(extracted_data, dict):
+                response.clear()
+                response.update(extracted_data)
+
+    reason_content = response_json_content.get('reason')
+    response_json_content = response_json_content.get('final_answer')
+    response_json_content = json_repair.repair_json(response_json_content, return_objects=True)
+
+    reason_story = response_json_story.get('reason')
+    response_json_story = response_json_story.get('final_answer')
+    response_json_story = json_repair.repair_json(response_json_story, return_objects=True)
+
+    combined_result = {**response_json_content, **response_json_story}
+    combined_reason = {
+        "reason_content": reason_content,
+        "reason_story": reason_story
+    }
+
+    return combined_result, combined_reason
+
+
+def clean_escaped_text(text):
+    text = text.replace("\\'", "")# \'  →  '
+    text = text.replace('\\"', '')# \"  →  "
+    text = text.replace("\\\\", "") # \\  →  \
+    print("Text: ", text)
+    return text

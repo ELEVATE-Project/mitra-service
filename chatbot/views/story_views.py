@@ -1,3 +1,4 @@
+import traceback
 from chatbot.models import Story, StoryMedia, ChatSession
 from chatbot.serializer.story_serializer import StoryCreateSerializer, StoryRetrieveSerializer, \
     StoryMediaRetrieveSerializer, StoryFullSerializer
@@ -15,40 +16,43 @@ from chatbot.utils.recreate_story_utils import re_create_story_object
 
 @api_view(['POST'])
 def end_story(request):
-    profile_id = request.data['profile_id']
-    session = request.data['session']
-    model = request.data.get('model', None)
-    access_token = request.data.get('access_token', None)
-    flow = request.data.get('flow')
-    language = request.data.get('language', 'en')
+    try:
+        profile_id = request.data['profile_id']
+        session = request.data['session']
+        model = request.data.get('model', None)
+        access_token = request.data.get('access_token', None)
+        flow = request.data.get('flow')
+        language = request.data.get('language', 'en')
 
-    print("profile_id:", profile_id)
-    print("session:", session)
-    print("access_token:", access_token)
-    if profile_id is None or session is None:
-        return Response({
-            'status': 'error',
-            'message': 'profile id or session is mandatory'
-        }, status=400)
-    else:
-        id, content, error_msg = create_story_object(
-            profile_id=profile_id, session=session, model=model,
-            access_token=access_token, flow=flow, language=language
-        )
-        if error_msg and error_msg != "":
-            chat_session = ChatSession.objects.get(session=session)
-            print("chat_session.current_step: ", chat_session.current_step)
-            chat_session.current_step = chat_session.current_step-1
-            chat_session.save()
+        print("profile_id:", profile_id)
+        print("session:", session)
+        print("access_token:", access_token)
+        if profile_id is None or session is None:
+            return Response({
+                'status': 'error',
+                'message': 'profile id or session is mandatory'
+            }, status=400)
+        else:
+            id, content, error_msg = create_story_object(
+                profile_id=profile_id, session=session, model=model,
+                access_token=access_token, flow=flow, language=language
+            )
+            if error_msg and error_msg != "":
+                chat_session = ChatSession.objects.get(session=session)
+                print("chat_session.current_step: ", chat_session.current_step)
+                chat_session.current_step = chat_session.current_step-1
+                chat_session.save()
 
-        return Response({
-            'status': 'ok',
-            'message': 'Story created',
-            'id': id,
-            'content': content,
-            'error_message': error_msg
-        }, status=200)
-
+            return Response({
+                'status': 'ok',
+                'message': 'Story created',
+                'id': id,
+                'content': content,
+                'error_message': error_msg
+            }, status=200)
+    except Exception as e:
+        print(e)
+        traceback.print_exc()
 
 class StoryListCreateView(generics.ListCreateAPIView):
     queryset = Story.objects.all()
@@ -67,7 +71,6 @@ class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
         """
         print("Updating (PATCH)")
         return self.handle_update_logic(request, *args, **kwargs, is_partial=True)
-
 
     def handle_update_logic(self, request, *args, **kwargs):
         """
@@ -95,7 +98,6 @@ class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
             print("Error occurred: ", str(e))
             raise
 
-
 class StoryMediaListCreateView(generics.ListCreateAPIView):
     queryset = StoryMedia.objects.all()
     serializer_class = StoryMediaRetrieveSerializer
@@ -122,6 +124,9 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
             response = super().create(request, *args, **kwargs)
             print("response: ", response)
             print("response status_code: ", response.status_code)
+            update_story_pdf(
+                access_token=access_token, session=session_value, flow=flow
+            )
 
             if (response.status_code == status.HTTP_201_CREATED and access_token not in [None, "", "null"]
                     and session_value and flow != 'login'):
@@ -141,6 +146,53 @@ class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
+
+    def partial_update(self, request, *args, **kwargs):
+        """
+        Handle PATCH requests for partial updates.
+        """
+        print("Updating (PATCH)")
+        return self.handle_update_logic(request, *args, **kwargs, is_partial=True)
+
+    def update(self, request, *args, **kwargs):
+        """
+        Handle PUT requests for full updates.
+        """
+        print("Updating (PUT)")
+        return self.handle_update_logic(request, *args, **kwargs, is_partial=False)
+
+    def handle_update_logic(self, request, *args, **kwargs):
+        """
+        Shared logic for PUT and PATCH requests.
+        """
+        is_partial = kwargs.pop('is_partial', False)  # Safely extract the flag
+        session_value = request.data.get('session')
+        access_token = request.data.get('access_token')
+        flow = request.data.get('flow')
+        print("session_value: ", session_value)
+        print("flow: ", flow)
+        print("access_token: ", access_token)
+
+        try:
+            if is_partial:
+                response = super().partial_update(request, *args, **kwargs)
+            else:
+                response = super().update(request, *args, **kwargs)
+
+            print("response: ", response)
+            print("response status_code: ", response.status_code)
+            update_story_pdf(
+                access_token=access_token, session=session_value, flow=flow
+            )
+
+            if response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]:
+                # Pass response.data directly as the instance
+                upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
+
+            return response
+        except Exception as e:
+            print("Error occurred: ", str(e))
+            raise
 
 
 class ProfileMediaListCreateView(generics.ListCreateAPIView):

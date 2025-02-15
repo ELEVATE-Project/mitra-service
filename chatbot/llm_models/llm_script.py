@@ -106,17 +106,17 @@ def handle_openai_model(
     }
 
     if max_token:
-        request_data["max_tokens"]: max_token
+        request_data["max_tokens"]= max_token
     if temperature:
-        request_data['temperature']: temperature
+        request_data['temperature']= temperature
     if is_json_response:
         request_data["response_format"] = {"type": "json_object"}
     if stream:
         request_data["stream"] = stream
     if tools:
-        request_data["tools"]: tools
+        request_data["tools"]= tools
         if tool_choice:
-            request_data["tool_choice"]: tool_choice
+            request_data["tool_choice"]= tool_choice
 
     response = client.chat.completions.create(**request_data)
 
@@ -177,13 +177,14 @@ def handle_bedrock_model(
             request_payload['toolConfig'] = tools.get('toolConfig')
             print("toolConfig: ", request_payload['toolConfig'])
 
-        print("messages: ", request_payload['messages'])
+        print("bedrock request payload: ", json.dumps(request_payload))
 
         response = bedrock_runtime.converse(**request_payload)
 
         print("Response:", response)
 
-        content = response['output']['message']['content'][0]
+        content_arr = response['output']['message']['content']
+        content = content_arr[0]
         content_tool = content.get('toolUse')
         if content_tool:
             if isinstance(content_tool, str):
@@ -201,6 +202,7 @@ def handle_bedrock_model(
                 try:
                     final_output = json_repair.repair_json(json_str, return_objects=True)
                     print("Loads final_output: ", final_output)
+                    print("type final_output: ", type(final_output))
                 except json.JSONDecodeError as e:
                     print(f"Error decoding JSON: {e}")
                     return None
@@ -217,7 +219,7 @@ def handle_bedrock_model(
 
 
 @observe()
-def handle_bedrock_invoke_model(system_prompt=None,
+def handle_bedrock_invoke_model(
         messages=None, max_token=None, temperature=None, top_p=None,
         model_name=None, region_name='us-west-2', tools=None
 ):
@@ -229,17 +231,12 @@ def handle_bedrock_invoke_model(system_prompt=None,
         # model_id = 'meta.llama3-2-3b-instruct-v1:0'
 
     print("USING MODEL ID: ", model_id)
+
+    print("Messages: ", messages)
     try:
-        messages.append(system_prompt)
-        formatted_prompt = f"""
-        <|begin_of_text|><|start_header_id|>user<|end_header_id|>
-        {messages}
-        <|eot_id|>
-        <|start_header_id|>assistant<|end_header_id|>
-        """
 
         body = json.dumps({
-            "prompt": formatted_prompt,
+            "prompt": json.dumps(messages),
             "max_gen_len": max_token,
             "temperature": temperature,
             "top_p": top_p
