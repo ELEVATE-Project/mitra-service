@@ -53,6 +53,8 @@ def text_translate_provider(voice_provider, message_body, target_language, sourc
         )
     elif voice_provider.provider == VoiceProvider.GOOGLE:
         secret = load_secrets()
+        print("target: ", target_language)
+        print("LanguageMapping.get_mapped_language(target_language): ", LanguageMapping.get_mapped_language(target_language))
         response = translate_text(
             project_id=secret.get('project_id'), text=message_body,
             source_language_code=LanguageMapping.get_mapped_language(source_language),

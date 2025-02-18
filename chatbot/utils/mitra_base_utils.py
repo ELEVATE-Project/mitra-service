@@ -1,8 +1,7 @@
-import json
-
 from chatbot.llm_models.llm_script import handle_bedrock_model
 from chatbot.models import CompanyBot
 from chatbot.utils.chat_query_handler import ask
+from jinja2 import Template
 
 
 def get_mitra_paraphrase_utils(paraphrase_problem, should_paraphrase_text):
@@ -118,14 +117,23 @@ def validate_objective_utils(user_input):
         return False
 
 
-def validate_actions_utils(user_input):
+def validate_actions_utils(user_input, user_objective, problem_statement):
     try:
         print('user_input: ', user_input)
         company_bot = CompanyBot.objects.get(route='/action_list')
         prompt = company_bot.end_context
+
+        context_data = {
+            "actionList": user_input,
+            "objective": user_objective,
+            "problem_statement": problem_statement
+        }
+        template = Template(company_bot.tag_context)
+        tag_context = template.render(context_data)
+
         messages = [{
             'role': 'user',
-            'content': [{'text': f"{user_input}"}]
+            'content': [{'text': f"{tag_context}"}]
         }]
 
         prompt = [{'text': prompt}]

@@ -1,14 +1,16 @@
 import json
-
-from chatbot.models import Profile
+from chatbot.models import Profile, CompanyBot, Voice, VoiceType, BotVernacular
 from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
+from chatbot.utils.audio_provider_utils import text_translate_provider
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_mitra_project_utils
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from chatbot.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_objective_utils, \
     generate_action_list_utils, generate_title_utils, validate_objective_utils, validate_actions_utils
+from chatbot.utils.story_llama_utils import translate_field
 from shikshalokam.utils.project_utils import update_project_status_utils
 from django.http import JsonResponse
+import json_repair
 
 
 @api_view(['POST'])
@@ -19,9 +21,12 @@ def paraphrase_view(request):
     should_paraphrase_text = body.get('paraphrase_text')
     print("User Input: ", user_input)
 
-    if language !='en':
-        user_input = call_ai4bharat_translation_api(
-            source_language=language, target_language='en', message_body=user_input
+    company_bot = CompanyBot.objects.get(route='/paraphrase')
+    voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+    if language != 'en':
+        user_input = translate_field(
+            voice_provider=voice_provider, message_body=user_input, target_language=language,
+            source_language='en'
         )
         print("user_translated_message: ", user_input)
 
@@ -30,8 +35,9 @@ def paraphrase_view(request):
     )
 
     if language !='en' and isinstance(paraphrased_output, str) and paraphrased_output.lower() != 'no':
-        paraphrased_output = call_ai4bharat_translation_api(
-            source_language='en', target_language=language, message_body=paraphrased_output
+        paraphrased_output = translate_field(
+            voice_provider=voice_provider, message_body=user_input, target_language=paraphrased_output,
+            source_language='en'
         )
         print("llm_translated_message: ", paraphrased_output)
 
@@ -49,21 +55,25 @@ def generate_objectives_view(request):
     language = body.get('language')
     print("User Input: ", user_input)
 
-    if language !='en':
-        user_input = call_ai4bharat_translation_api(
-            source_language=language, target_language='en', message_body=user_input
+    company_bot = CompanyBot.objects.get(route='/objective')
+    voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+    if language != 'en':
+        user_input = translate_field(
+            voice_provider=voice_provider, message_body=user_input, target_language=language,
+            source_language='en'
         )
         print("user_translated_message: ", user_input)
 
     objective_list, chunk_response = generate_objective_utils(user_problem_statement=user_input)
     translated_list = None
     if language !='en':
-        translated_list = call_ai4bharat_translation_api(
-            source_language='en', target_language=language, message_body=json.dumps(objective_list)
+        translated_list = translate_field(
+            voice_provider=voice_provider, message_body=json.dumps(objective_list), target_language=language,
+            source_language='en'
         )
         if isinstance(translated_list, str):
             try:
-                translated_list = json.loads(translated_list)
+                translated_list = json_repair.repair_json(translated_list, return_objects=True)
             except Exception as e:
                 print(e)
         print("llm_translated_message: ", translated_list)
@@ -85,16 +95,27 @@ def validate_objectives_view(request):
     language = body.get('language')
     print("User Input: ", user_input)
 
+    company_bot = CompanyBot.objects.get(route='/objective')
+    bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
+    error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
     if language !='en':
-        user_input = call_ai4bharat_translation_api(
-            source_language=language, target_language='en', message_body=user_input
+        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+        user_input = translate_field(
+            voice_provider=voice_provider, message_body=user_input, target_language=language,
+            source_language='en'
+        )
+        error_message = translate_field(
+            voice_provider=voice_provider, message_body=error_message, target_language=language,
+            source_language='en'
         )
         print("user_translated_message: ", user_input)
+        print("error_translated_message: ", error_message)
 
     response = validate_objective_utils(user_input=user_input)
     return Response({
         'status': 'ok',
         'result': response,
+        'error_message': error_message
     }, status=200)
 
 
@@ -102,19 +123,46 @@ def validate_objectives_view(request):
 def validate_actions_view(request):
     body = request.data
     user_input = body.get('user_input')
+    user_objective = body.get('user_objective')
     language = body.get('language')
+    problem_statement = body.get('problem_statement')
     print("User Input: ", user_input)
+    print("User Objective: ", user_objective)
+    print("User Problem Statement: ", problem_statement)
 
+    company_bot = CompanyBot.objects.get(route='/action_list')
+    bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
+    error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
     if language !='en':
-        user_input = call_ai4bharat_translation_api(
-            source_language=language, target_language='en', message_body=user_input
+        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+        user_input = translate_field(
+            voice_provider=voice_provider, message_body=user_input, target_language=language,
+            source_language='en'
+        )
+        user_objective = translate_field(
+            voice_provider=voice_provider, message_body=user_objective, target_language=language,
+            source_language='en'
+        )
+        problem_statement = translate_field(
+            voice_provider=voice_provider, message_body=problem_statement, target_language=language,
+            source_language='en'
+        )
+        error_message = translate_field(
+            voice_provider=voice_provider, message_body=error_message, target_language=language,
+            source_language='en'
         )
         print("user_translated_message: ", user_input)
+        print("user_translated_objective: ", user_objective)
+        print("user_translated_problem_statement: ", problem_statement)
+        print("error_translated_message: ", error_message)
 
-    response = validate_actions_utils(user_input=user_input)
+    response = validate_actions_utils(
+        user_input=user_input, user_objective=user_objective, problem_statement=problem_statement
+    )
     return Response({
         'status': 'ok',
         'result': response,
+        'error_message': error_message
     }, status=200)
 
 
@@ -127,14 +175,18 @@ def generate_action_list_view(request):
     print("User Problem Statement: ", user_problem_statement)
     print("User Objective: ", user_objective)
 
-    if language !='en':
-        user_problem_statement = call_ai4bharat_translation_api(
-            source_language=language, target_language='en', message_body=user_problem_statement
+    company_bot = CompanyBot.objects.get(route='/action_list')
+    voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+    if language != 'en':
+        user_problem_statement = translate_field(
+            voice_provider=voice_provider, message_body=user_problem_statement, target_language=language,
+            source_language='en'
+        )
+        user_objective = translate_field(
+            voice_provider=voice_provider, message_body=user_objective, target_language=language,
+            source_language='en'
         )
         print("user_problem_statement: ", user_problem_statement)
-        user_objective = call_ai4bharat_translation_api(
-            source_language=language, target_language='en', message_body=user_objective
-        )
         print("user_objective: ", user_objective)
 
     input_data = {
@@ -150,14 +202,14 @@ def generate_action_list_view(request):
         for action_item in action_list:
             action_steps = action_item.get('actionSteps', [])
             if action_steps:
-                translated_steps = call_ai4bharat_translation_api(
-                    source_language='en', target_language=language,
-                    message_body=json.dumps(action_steps)
+                translated_steps =translate_field(
+                    voice_provider=voice_provider, message_body=json.dumps(action_steps), target_language=language,
+                    source_language='en'
                 )
 
                 if isinstance(translated_steps, str):
                     try:
-                        translated_steps = json.loads(translated_steps)
+                        translated_steps = json_repair.repair_json(translated_steps, return_objects=True)
                     except Exception as e:
                         print("Error parsing translated steps: ", e)
                         translated_steps = action_steps
@@ -182,20 +234,24 @@ def generate_title_view(request):
     user_action_list = body.get('user_action_list')
     language = body.get('language')
 
-    if language !='en':
-        user_problem_statement = call_ai4bharat_translation_api(
-            source_language=language, target_language='en', message_body=user_problem_statement
+    company_bot = CompanyBot.objects.get(route='/action_list')
+    if language != 'en':
+        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+        user_problem_statement = translate_field(
+            voice_provider=voice_provider, message_body=user_problem_statement, target_language=language,
+            source_language='en'
+        )
+        user_objective = translate_field(
+            voice_provider=voice_provider, message_body=user_objective, target_language=language,
+            source_language='en'
+        )
+        user_action_list =  translate_field(
+            voice_provider=voice_provider, message_body=user_action_list, target_language=language,
+            source_language='en'
         )
         print("user_problem_statement: ", user_problem_statement)
-        user_objective = call_ai4bharat_translation_api(
-            source_language=language, target_language='en', message_body=user_objective
-        )
         print("user_objective: ", user_objective)
-        user_action_list = call_ai4bharat_translation_api(
-            source_language=language, target_language='en', message_body=user_action_list
-        )
         print("user_action_list: ", user_action_list)
-
 
     input_data = {
         "user_problem_statement": user_problem_statement,
