@@ -3,9 +3,10 @@ from celery import shared_task
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.celery_tasks.handle_message import translate_and_send_message
 from chatbot.llm_models.llm_script import handle_bedrock_model
-from chatbot.models import CompanyChat, Profile, CompanyBot, ChatStatus, BotVernacular
-from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
+from chatbot.models import CompanyChat, Profile, CompanyBot, ChatStatus, BotVernacular, Voice, VoiceType
 import json_repair
+
+from chatbot.utils.story_llama_utils import translate_field
 
 
 @shared_task
@@ -65,8 +66,9 @@ def get_mitra_bedrock_response(channel_name, session_id, profile_id, route):
         if response:
             problem_statement = response.get("problem_statement", "")
             if route != 'en':
-                problem_statement = call_ai4bharat_translation_api(
-                    message_body=problem_statement, target_language=route,
+                voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+                problem_statement = translate_field(
+                    voice_provider=voice_provider, message_body=problem_statement, target_language=route,
                     source_language='en'
                 )
 

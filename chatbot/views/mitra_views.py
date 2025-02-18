@@ -1,7 +1,5 @@
 import json
 from chatbot.models import Profile, CompanyBot, Voice, VoiceType, BotVernacular
-from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
-from chatbot.utils.audio_provider_utils import text_translate_provider
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_mitra_project_utils
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -235,8 +233,8 @@ def generate_title_view(request):
     language = body.get('language')
 
     company_bot = CompanyBot.objects.get(route='/action_list')
+    voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
     if language != 'en':
-        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
         user_problem_statement = translate_field(
             voice_provider=voice_provider, message_body=user_problem_statement, target_language=language,
             source_language='en'
@@ -262,8 +260,9 @@ def generate_title_view(request):
     title = generate_title_utils(input_data=input_data)
 
     if language != 'en':
-        title = call_ai4bharat_translation_api(
-            source_language='en', target_language=language, message_body=title
+        title = translate_field(
+            voice_provider=voice_provider, message_body=title, target_language=language,
+            source_language='en'
         )
         print("llm_translated_message: ", title)
 
