@@ -40,7 +40,8 @@ def get_mitra_bedrock_tool_response(
 
         translated_message = translate_and_send_message(
             accumulated_message=bot_question, current_channel_name=channel_name,
-            current_step_number=chat_session.current_step, finish_reason="stop", route=route
+            current_step_number=chat_session.current_step, finish_reason="stop", route=route,
+            company_bot=company_bot
         )
 
         name_machine = state_machine.name
@@ -58,7 +59,8 @@ def get_mitra_bedrock_tool_response(
         print("its not a  func call")
         translated_message = translate_and_send_message(
             accumulated_message=response, current_channel_name=channel_name,
-            current_step_number=current_step, finish_reason="stop", route=route
+            current_step_number=current_step, finish_reason="stop", route=route,
+            company_bot=company_bot
         )
         save_in_company_db(
             session_id, profile_id, 'AI', response, chunks, ChatStatus.IN_PROGRESS, translated_message

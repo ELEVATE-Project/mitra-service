@@ -30,18 +30,14 @@ def end_story(request):
         if profile_id is None or session is None:
             return Response({
                 'status': 'error',
-                'message': 'profile id or session is mandatory'
+                'message': 'profile id or session is mandatory',
+                'error_message': 'profile id or session is mandatory'
             }, status=400)
         else:
             id, content, error_msg = create_story_object(
-                profile_id=profile_id, session=session, model=model,
+                profile_id=profile_id, session=session,
                 access_token=access_token, flow=flow, language=language
             )
-            if error_msg and error_msg != "":
-                chat_session = ChatSession.objects.get(session=session)
-                print("chat_session.current_step: ", chat_session.current_step)
-                chat_session.current_step = chat_session.current_step-1
-                chat_session.save()
 
             return Response({
                 'status': 'ok',
@@ -53,6 +49,12 @@ def end_story(request):
     except Exception as e:
         print(e)
         traceback.print_exc()
+        return Response({
+            'status': 'error',
+            'message': '',
+            'error_message': f'{e}'
+        }, status=500)
+
 
 class StoryListCreateView(generics.ListCreateAPIView):
     queryset = Story.objects.all()

@@ -3,7 +3,7 @@ import traceback
 import random
 import string
 from chatbot.models import (Profile, CompanyChat, CompanyBot, StoryLanguageChoices,
-                            StoryStatusChoices, ChatSession, ChatStatus, Voice, VoiceType)
+                            StoryStatusChoices, ChatSession, ChatStatus, Voice, VoiceType, BotVernacular)
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.story_models import Story
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
@@ -19,11 +19,19 @@ import functools
 
 
 def create_story_object(profile_id, session, access_token, flow, language='en'):
+    error_message = ""
+    voice_provider=None
     try:
         profile = Profile.objects.get(id=profile_id)
         company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
         ai_user = Profile.objects.get(id=1)
         company_bot = CompanyBot.objects.get(route='/story')
+        bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
+        if bot_vernacular:
+            error_message = bot_vernacular.error_message
+        else:
+            error_message = "Please try again!"
+
         reflection_bot = CompanyBot.objects.get(route='/reflection')
         validate_bot = CompanyBot.objects.get(route='/story_validation')
         context = company_bot.context
@@ -269,8 +277,14 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         return story.id, story.content, ""
 
     except Exception as e:
+        print("Error msg in except: ", error_message)
+        print("voice_provider in except: ", voice_provider)
+        if voice_provider and error_message and language != 'en':
+            error_message=translate_field(
+                voice_provider=voice_provider, message_body=error_message, target_language=language
+            )
         traceback.print_exc()
-        return "", "", f"{e}"
+        return "", "", error_message
 
 
 def format_response_json(response):

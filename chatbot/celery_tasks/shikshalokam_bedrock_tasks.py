@@ -1,6 +1,6 @@
 import traceback
 from celery import shared_task
-from chatbot.models import CompanyChat, Profile, CompanyBot, ChatSession
+from chatbot.models import CompanyChat, Profile, CompanyBot, ChatSession, BotVernacular
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.bedrock_tool_call import get_bedrock_tool_call_response
 
@@ -16,7 +16,7 @@ def get_shikshalokam_bedrock_response(channel_name, session_id, profile_id, rout
         company_bot = CompanyBot.objects.get(company=profile.company, route='/')
         state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
         system_context = company_bot.context
-        introductory_message = company_bot.introductory_message
+        bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=route).first()
 
         prompt_to_use = [
             {
@@ -37,7 +37,18 @@ def get_shikshalokam_bedrock_response(channel_name, session_id, profile_id, rout
             }
         ]
 
-        messages=[]
+        messages=[
+            {
+                'role': 'user',
+                'content': [{'text': 'Hello'}]
+            },
+            {
+                'role': 'assistant',
+                'content': [{
+                    'text': bot_vernacular.introductory_message
+                }]
+            }
+        ]
         # Bedrock wants user to initiate message first so skipping into mssg
         for chat in company_chats:
             if chat.receiver == ai_user:
