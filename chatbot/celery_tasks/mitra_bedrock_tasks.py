@@ -77,9 +77,15 @@ def get_mitra_bedrock_response(channel_name, session_id, profile_id, route):
                 "should_move_forward": response.get("should_move_forward", 'no'),
                 "validation": response.get("validation", "")
             }
+            end_context = company_bot.end_context
+            end_context = json_repair.repair_json(end_context, return_objects=True)
 
             if response.get("should_move_forward") == 'yes':
                 message = ''
+            elif response.get("validation") == 'NO_PROBLEM_STATEMENT':
+                message = end_context.get('NO_PROBLEM_STATEMENT', message)
+            elif response.get("validation") == 'OUT_OF_SCOPE':
+                message = end_context.get('OUT_OF_SCOPE', message)
 
             translated_message = translate_and_send_message(
                 accumulated_message=message, current_channel_name=channel_name,
