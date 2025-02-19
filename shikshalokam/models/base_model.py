@@ -62,14 +62,27 @@ class Project(models.Model):
     author = models.ForeignKey(Profile, on_delete=models.CASCADE, null=False, blank=False, related_name="project")
 
     title = models.CharField(max_length=1000, null=True, blank=True)
+    expected_title = models.CharField(max_length=1000, null=True, blank=True)
+    actual_title = models.CharField(max_length=1000, null=True, blank=True)
+
     project_id = models.CharField(max_length=255, unique=True)
     recommended_for = models.CharField(max_length=400, null=True, blank=True)
     keywords = models.TextField(null=True, blank=True)
+
     objective = models.TextField(null=True, blank=True)
+    expected_objective = models.TextField(null=True, blank=True)
+    actual_objective = models.TextField(null=True, blank=True)
+
+    expected_duration = models.CharField(max_length=1000, null=True, blank=True)
+    actual_duration = models.CharField(max_length=1000, null=True, blank=True)
     duration = models.CharField(max_length=1000, null=True, blank=True)
+
     project_status = models.CharField(max_length=100, choices=ProjectStatus.choices, null=True, blank=True)
     other_params = models.JSONField(null=True, blank=True)
+
     problem_statement = models.TextField(null=True, blank=True)
+    expected_problem_statement = models.TextField(null=True, blank=True)
+    actual_problem_statement = models.TextField(null=True, blank=True)
 
     resource_name = models.CharField(max_length=1000, null=True, blank=True)
     resource_link = models.CharField(max_length=2000, null=True, blank=True)
