@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('chatbot', '0011_remove_companybot_abrupt_introductory_message_and_more'),
+        ('chatbot', '0012_story_blurb'),
     ]
 
     operations = [

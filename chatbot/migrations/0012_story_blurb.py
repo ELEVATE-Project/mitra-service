@@ -10,9 +10,4 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='story',
-            name='blurb',
-            field=models.TextField(blank=True, null=True),
-        ),
     ]
