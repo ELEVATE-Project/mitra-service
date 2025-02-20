@@ -27,7 +27,7 @@ def get_story_secondpage_html(story):
         <h1>Report of Micro Improvement</h1>
         <div class="story-second-page-section">
             <h2>Problem Statement</h2>
-            <p>{project.problem_statement or "No problem statement provided."}</p>
+            <p>{project.actual_problem_statement or "No problem statement provided."}</p>
         </div>
         <div class="story-second-page-section">
             <h2>Objective</h2>

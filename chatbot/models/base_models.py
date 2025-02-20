@@ -51,6 +51,7 @@ class CompanyBot(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     context = models.TextField(help_text="Provide the bot's main prompt or description of its purpose.")
+    max_token = models.IntegerField(default=2048, validators=[MinValueValidator(1)])
     bot_temperature = models.FloatField(
         default=0,
         help_text="Set the temperature for controlling response randomness (0-1). Lower values produce more "
@@ -211,7 +212,7 @@ class Voice(models.Model):
     type = models.CharField(max_length=300, choices=VoiceType.choices, null=True, blank=True)
     provider = models.CharField(max_length=300, null=True, blank=True,
                                 choices=VoiceProvider.choices, default=VoiceProvider.AI4Bharat)
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, null=True, blank=True)
     sample_link = models.URLField(null=True, blank=True)
     language = models.CharField(max_length=100, null=True, blank=True)
     provider_code = models.CharField(max_length=100, null=True, blank=True)

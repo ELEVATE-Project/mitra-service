@@ -110,6 +110,8 @@ def create_project(response_json, title, objective, story, profile, problem_stat
             resource_name = translate_field(
                 voice_provider=voice_provider, message_body=resource_name, target_language=language
             )
+        if not project_id:
+            project_id = generate_random_hex()
 
         project, created = Project.objects.update_or_create(
             project_id=project_id,

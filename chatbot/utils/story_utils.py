@@ -32,7 +32,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         else:
             error_message = "Please try again!"
 
-        reflection_bot = CompanyBot.objects.get(route='/reflection')
+        reflection_bot = CompanyBot.objects.filter(route='/reflection').first()
         validate_bot = CompanyBot.objects.get(route='/story_validation')
         context = company_bot.context
         address = ProfileAddress.objects.filter(profile=profile)
@@ -49,7 +49,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         chat_session = ChatSession.objects.get(session=session)
         project_id = chat_session.project_id
 
-        if flow != 'login' and project_id:
+        if flow != 'login' and project_id and reflection_bot:
             reflection_end_context = reflection_bot.end_context
             user_project = Project.objects.filter(project_id=project_id).first()
             project_data = get_project_formatted_data(user_project=user_project)
