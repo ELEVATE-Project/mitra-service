@@ -62,7 +62,7 @@ class CompanyBot(models.Model):
                   "for each response."
     )
     llm_model = models.CharField(
-        max_length=100, choices=LLMModel.choices, default=LLMModel.GPT3_5,
+        max_length=100, choices=LLMModel.choices, default=LLMModel.GPT4_O_MINI,
         help_text="Select the LLM model to be used by the bot (e.g., GPT-4o, GPT-4)."
     )
     filter_score = models.FloatField(
