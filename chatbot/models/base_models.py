@@ -5,31 +5,13 @@ from django.utils import timezone
 from django.core.validators import MinValueValidator
 from django.contrib.auth.hashers import make_password
 from simple_history.models import HistoricalRecords
-from chatbot.models.enums import VoiceProviderChoices, EntityStatus, \
-    LLMModel, GenderChoices, ProfileType, ChatStatus, FeedbackChoices, \
-    LanguageChoices, CompanyBotTypeChoices, CompanyBotDynamicContextType, CompanyChatSourceChoices, \
-    ChatStageChoices
-
+from chatbot.models.enums import (
+    EntityStatus, LLMModel, GenderChoices, ProfileType, ChatStatus,
+    FeedbackChoices, CompanyBotTypeChoices, CompanyBotDynamicContextType, CompanyChatSourceChoices,
+    ChatStageChoices, VoiceProvider, VoiceType, LanguageChoices
+)
 
 S3_BASE_URL = os.getenv('S3_BASE_URL')
-
-
-# Create your models here.
-
-
-class Voice(models.Model):
-    name = models.CharField(max_length=100)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    sample_link = models.URLField(null=True, blank=True)
-    language = models.CharField(max_length=100, null=True, blank=True,
-                                choices=LanguageChoices.choices, default=LanguageChoices.INDIAN_ENGLISH)
-    provider_code = models.CharField(max_length=100, null=True, blank=True)
-    provider = models.CharField(max_length=100, null=True, blank=True,
-                                choices=VoiceProviderChoices.choices, default=VoiceProviderChoices.AWS)
-
-    def __str__(self):
-        return self.name
 
 
 class Company(models.Model):
@@ -69,6 +51,7 @@ class CompanyBot(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     context = models.TextField(help_text="Provide the bot's main prompt or description of its purpose.")
+    max_token = models.IntegerField(default=2048, validators=[MinValueValidator(1)])
     bot_temperature = models.FloatField(
         default=0,
         help_text="Set the temperature for controlling response randomness (0-1). Lower values produce more "
@@ -80,7 +63,7 @@ class CompanyBot(models.Model):
                   "for each response."
     )
     llm_model = models.CharField(
-        max_length=100, choices=LLMModel.choices, default=LLMModel.GPT3_5,
+        max_length=100, choices=LLMModel.choices, default=LLMModel.GPT4_O_MINI,
         help_text="Select the LLM model to be used by the bot (e.g., GPT-4o, GPT-4)."
     )
     filter_score = models.FloatField(
@@ -105,8 +88,6 @@ class CompanyBot(models.Model):
     route = models.CharField(
         max_length=100, default='/', help_text="Specify the route or API endpoint for interacting with the bot."
     )
-
-    voice = models.ForeignKey(Voice, on_delete=models.SET_NULL, null=True, blank=True)
     bot_type = models.CharField(max_length=30, choices=CompanyBotTypeChoices.choices,
                                 default=CompanyBotTypeChoices.SIMPLE)
     llm_key = models.CharField(max_length=255, null=True, blank=True)
@@ -121,6 +102,7 @@ class CompanyBot(models.Model):
         null=True, blank=True, help_text="Provide pre-context that will be set before the main prompt to shape the "
                                          "conversation."
     )
+    tool_context = models.TextField(null=True, blank=True)
     history = HistoricalRecords()
 
     def __str__(self):
@@ -203,6 +185,8 @@ class CompanyChat(models.Model):
     feedback = models.CharField(max_length=20, choices=FeedbackChoices.choices, null=True, blank=True)
     source = models.CharField(max_length=20, choices=CompanyChatSourceChoices.choices,
                               default=CompanyChatSourceChoices.WEB)
+    source_msg_id = models.CharField(max_length=256, null=True, blank=True)
+    whatsapp_message_id = models.CharField(max_length=255, null=True, blank=True)
     message_type = models.CharField(max_length=20, null=True, blank=True)
     stage = models.CharField(max_length=500, choices=ChatStageChoices.choices, null=True, blank=True)
 
@@ -221,3 +205,28 @@ class CompanyChat(models.Model):
         if not self.created_at:
             self.created_at = timezone.now()
         super(CompanyChat, self).save(*args, **kwargs)
+
+
+class Voice(models.Model):
+    company_bot = models.ForeignKey(CompanyBot, on_delete=models.SET_NULL, null=True, blank=True)
+    type = models.CharField(max_length=300, choices=VoiceType.choices, null=True, blank=True)
+    provider = models.CharField(max_length=300, null=True, blank=True,
+                                choices=VoiceProvider.choices, default=VoiceProvider.AI4Bharat)
+    name = models.CharField(max_length=100, null=True, blank=True)
+    sample_link = models.URLField(null=True, blank=True)
+    language = models.CharField(max_length=100, null=True, blank=True)
+    provider_code = models.CharField(max_length=100, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.provider}-{self.type}"
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['company_bot']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['type']),
+            models.Index(fields=['provider']),
+        ]

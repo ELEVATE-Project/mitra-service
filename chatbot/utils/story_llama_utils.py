@@ -3,7 +3,7 @@ import secrets
 import traceback
 from datetime import datetime
 from chatbot.models.geo_models import ProfileAddress
-from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
+from chatbot.utils.audio_provider_utils import text_translate_provider
 from shikshalokam.models import Project, ProjectStatus
 
 
@@ -33,7 +33,6 @@ def get_company_context(profile, company):
 
 
 def get_company_end_context(slug):
-
     if slug == 'shikshalokamstaging':
         return """
             Make sure to use SIMPLE AT A HIGH SCHOOL LEVEL ENGLISH.
@@ -55,12 +54,13 @@ def get_company_end_context(slug):
                 "content": "Content of the story. Make sure content generated is around 600 words.",
                 "problem_statement": "The challenge faced by the user and what they wanted to solve."
             }
-            
+
+
             Ensure all JSON fields are properly formatted. If certain information is not explicitly provided in 
             the conversation, use reasonable inferences or leave the field empty.
-            
+
             Respond only with valid JSON. Do not write an introduction or summary.
-            
+
         """
     else:
         return """
@@ -93,7 +93,8 @@ def get_company_content_prompt():
     """
 
 
-def create_project(response_json, title, objective, story, profile, problem_statement, project_id, language):
+def create_project(response_json, title, objective, story, profile, problem_statement, project_id, language,
+                   voice_provider):
     try:
         resource_name = response_json.get('resource_name', '')
         resource_link = response_json.get('resource_link', '')
@@ -101,13 +102,15 @@ def create_project(response_json, title, objective, story, profile, problem_stat
         keywords = response_json.get('keywords', '')
         project_start_date = parse_datetime(response_json.get('project_start_date', ''))
         project_end_date = parse_datetime(response_json.get('project_end_date', ''))
-        keywords = call_ai4bharat_translation_api(
-            source_language='en', target_language=language, message_body=keywords
-        )
-        resource_name = call_ai4bharat_translation_api(
-            source_language='en', target_language=language, message_body=resource_name
-        )
-        if not Project.objects.filter(project_id=project_id).exists():
+        if language != 'en':
+            keywords = translate_field(
+                voice_provider=voice_provider, message_body=keywords, target_language=language
+            )
+
+            resource_name = translate_field(
+                voice_provider=voice_provider, message_body=resource_name, target_language=language
+            )
+        if not project_id:
             project_id = generate_random_hex()
 
         project, created = Project.objects.update_or_create(
@@ -154,6 +157,7 @@ def parse_datetime(date_str):
         pass
     return None
 
+
 def validate_json(response_content):
     if isinstance(response_content, dict):
         return response_content
@@ -162,3 +166,14 @@ def validate_json(response_content):
     except json.JSONDecodeError:
         print('Invalid JSON response:', response_content)
         return response_content
+
+
+def translate_field(voice_provider, message_body, target_language, source_language="en"):
+    response = text_translate_provider(
+        voice_provider=voice_provider, message_body=message_body, target_language=target_language,
+        source_language=source_language
+    )
+    if response.get('status') == 200:
+        return response.get('content')
+    else:
+        return message_body

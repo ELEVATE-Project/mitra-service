@@ -6,6 +6,7 @@ from rest_framework.response import Response
 
 
 location_auth = os.getenv('LOCATION_AUTH')
+location_base_url = os.getenv('LOCATION_BASE_URL')
 
 
 @api_view(['GET'])
@@ -15,7 +16,7 @@ def get_location_view(request):
 
     parent_id = params.get('parentId')
 
-    url = "https://dev.sunbirdsaas.com/api/data/v1/location/search"
+    url = location_base_url
 
     filters = {"parentId": parent_id} if parent_id else {"type": "state"}
 
@@ -28,9 +29,10 @@ def get_location_view(request):
         'Authorization': f'Bearer ' + location_auth,
         'Content-Type': 'application/json'
     }
-
     response = requests.request("POST", url, headers=headers, data=payload)
+    print("res: ", response)
     json_response = response.json()
+    print("json_response: ", json_response)
     location_list = json_response.get('result').get('response')
 
     return Response({

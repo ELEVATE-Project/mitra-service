@@ -28,7 +28,8 @@ def get_bedrock_tool_call_response(
 
         translated_message = translate_and_send_message(
             accumulated_message=bot_question, current_channel_name=channel_name,
-            current_step_number=chat_session.current_step, finish_reason="stop", route=route
+            current_step_number=chat_session.current_step, finish_reason="stop", route=route,
+            company_bot=company_bot
         )
 
         save_in_company_db(
@@ -39,19 +40,24 @@ def get_bedrock_tool_call_response(
 
 
     response = handle_bedrock_model(
-        system_prompt=system_prompt, messages=messages
+        system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
+        temperature=company_bot.bot_temperature, max_token=company_bot.max_token
     )
+
     print("response_body bedrock: ", response)
+    if response is None:
+        response = 'I am sorry, I could not understood completely. Could you rephrase this please?'
 
-
+    print("Response: ", response)
     is_function_call = False
     if isinstance(response, dict):
-        tool_use_id = response.get('toolUseId', None)
-        if tool_use_id:
+        # tool_use_id = response.get('toolUseId', None)
+        # if tool_use_id or response.get('name') == 'get_state_information' or response.get('type') == 'function':
+        is_function_call = True
+    elif isinstance(response, str):
+        if 'get_state_information' in response:
             is_function_call = True
     print("is_function_call: ", is_function_call)
-
-
     if is_function_call:
         print("its func call")
         chat_session.current_step += 1
@@ -61,7 +67,8 @@ def get_bedrock_tool_call_response(
 
         translated_message = translate_and_send_message(
             accumulated_message=bot_question, current_channel_name=channel_name,
-            current_step_number=chat_session.current_step, finish_reason="stop", route=route
+            current_step_number=chat_session.current_step, finish_reason="stop", route=route,
+            company_bot=company_bot
         )
 
         name_machine = state_machine.name
@@ -79,7 +86,8 @@ def get_bedrock_tool_call_response(
         print("its not a  func call")
         translated_message = translate_and_send_message(
             accumulated_message=response, current_channel_name=channel_name,
-            current_step_number=current_step, finish_reason="stop", route=route
+            current_step_number=current_step, finish_reason="stop", route=route,
+            company_bot=company_bot
         )
         save_in_company_db(
             session_id, profile_id, 'AI', response, chunks, ChatStatus.IN_PROGRESS, translated_message

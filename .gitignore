@@ -3,5 +3,6 @@
 .idea
 shikshalokam_mohini/**/__pycache__/
 build/
+.envrc
 dist/
 **__pycache__/

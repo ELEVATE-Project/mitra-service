@@ -54,10 +54,9 @@ class ProjectTemplate(models.Model):
             models.Index(fields=['category']),
         ]
 
-#FOR FUTURE: WE SHOULD REMOVE ProjectTEMPLATE FK. ALSO REMOVE Learning Res name and link and keep fk.
+
 class Project(models.Model):
     story = models.ForeignKey(Story, related_name='project', on_delete=models.SET_NULL, null=True, blank=True)
-
     project_template = models.ForeignKey(ProjectTemplate, on_delete=models.CASCADE, related_name="project",
                                          null=True, blank=True)
     author = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True, related_name="project")
@@ -65,9 +64,11 @@ class Project(models.Model):
     categories = models.TextField(null=True, blank=True)
     description = models.TextField(null=True, blank=True)
 
+    title = models.CharField(max_length=1000, null=True, blank=True)
     expected_title = models.CharField(max_length=1000, null=True, blank=True)
     actual_title = models.CharField(max_length=1000, null=True, blank=True)
 
+    problem_statement = models.TextField(null=True, blank=True)
     expected_problem_statement = models.TextField(null=True, blank=True)
     actual_problem_statement = models.TextField(null=True, blank=True)
 
@@ -79,9 +80,11 @@ class Project(models.Model):
     recommended_for = models.TextField(null=True, blank=True)
     keywords = models.TextField(null=True, blank=True)
 
+    objective = models.TextField(null=True, blank=True)
     expected_objective = models.TextField(null=True, blank=True)
     actual_objective = models.TextField(null=True, blank=True)
 
+    duration = models.CharField(max_length=1000, null=True, blank=True)
     expected_duration = models.CharField(max_length=1000, null=True, blank=True)
     actual_duration = models.CharField(max_length=1000, null=True, blank=True)
 
@@ -104,17 +107,22 @@ class Project(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     history = HistoricalRecords()
 
     def __str__(self):
-        return self.actual_title if self.actual_title else "Unnamed Project"
+        return self.title if self.title else "Unnamed Project"
 
     class Meta:
         db_table = 'shikshalokam"."project'
         indexes = [
+            models.Index(fields=['title']),
+            models.Index(fields=['actual_title']),
             models.Index(fields=['project_id']),
             models.Index(fields=['recommended_for']),
             models.Index(fields=['keywords']),
+            models.Index(fields=['objective']),
+            models.Index(fields=['duration']),
             models.Index(fields=['project_status']),
             models.Index(fields=['resource_name']),
             models.Index(fields=['project_start_date']),

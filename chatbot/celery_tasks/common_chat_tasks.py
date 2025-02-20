@@ -15,16 +15,26 @@ def save_in_company_db(session_id, profile_id, initiated_by, message, chunks, st
     else:
         sender = Profile.objects.get(id=profile_id)
         receiver = Profile.objects.get(id=1)
-    company_chat = CompanyChat(
-        message=message,
-        translated_message=translated_message,
-        chunks=chunks,
-        sender=sender,
-        receiver=receiver,
-        session=session_id,
-        status=status,
-    )
-    company_chat.save()
+
+    last_chat = CompanyChat.objects.filter(session=session_id).order_by('-created_at').first()
+    print(last_chat)
+    if last_chat and last_chat.sender == sender:
+        last_chat.message = message
+        last_chat.translated_message = translated_message
+        last_chat.chunks = chunks
+        last_chat.status = status
+        last_chat.save()
+    else:
+        company_chat = CompanyChat(
+            message=message,
+            translated_message=translated_message,
+            chunks=chunks,
+            sender=sender,
+            receiver=receiver,
+            session=session_id,
+            status=status,
+        )
+        company_chat.save()
 
 
 @shared_task

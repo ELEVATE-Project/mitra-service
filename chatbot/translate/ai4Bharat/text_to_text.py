@@ -1,4 +1,5 @@
 import os
+import traceback
 import requests
 
 ai4bharat_api_key = os.getenv("BHASHANI_API_KEY")
@@ -6,8 +7,7 @@ ai4bharat_api_key = os.getenv("BHASHANI_API_KEY")
 
 def call_ai4bharat_translation_api(source_language, target_language, message_body):
     api_url = 'https://demo-api.models.ai4bharat.org/inference/translation/v2'
-    print("url: ", api_url)
-    print("\n\nTranslation message body req data: ", message_body)
+
     payload = {
         "controlConfig": {"dataTracking": True},
         "input": [{"source": message_body}],
@@ -29,14 +29,23 @@ def call_ai4bharat_translation_api(source_language, target_language, message_bod
 
     try:
         response = requests.post(api_url, json=payload, headers=headers, timeout=10)
-        print("response: ", response.text)
         if response.status_code == 200:
             translated_data = response.json()
             if isinstance(translated_data, dict) and 'output' in translated_data:
                 translated_message = translated_data['output'][0].get('target', '')
                 print("translated_message: ", translated_message)
-                return translated_message
-        return message_body
+                return {
+                    'status': 200,
+                    'content': translated_message
+                }
+        return {
+            'status': 200,
+            'content': message_body
+        }
     except Exception as e:
         print(f"Error during translation API call: {str(e)}")
-        return message_body
+        traceback.print_exc()
+        return {
+            'status': 500,
+            'content': f"Error during translation API call: {str(e)}"
+        }

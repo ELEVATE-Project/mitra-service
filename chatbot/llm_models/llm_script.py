@@ -6,6 +6,7 @@ from langfuse.decorators import observe
 from langfuse.openai import openai
 from chatbot.models import LLMModel
 import boto3
+import json_repair
 
 
 validate = URLValidator()
@@ -103,17 +104,17 @@ def handle_openai_model(
     }
 
     if max_token:
-        request_data["max_tokens"]: max_token
+        request_data["max_tokens"]= max_token
     if temperature:
-        request_data['temperature']: temperature
+        request_data['temperature']= temperature
     if is_json_response:
         request_data["response_format"] = {"type": "json_object"}
     if stream:
         request_data["stream"] = stream
     if tools:
-        request_data["tools"]: tools
+        request_data["tools"]= tools
         if tool_choice:
-            request_data["tool_choice"]: tool_choice
+            request_data["tool_choice"]= tool_choice
 
     response = client.chat.completions.create(**request_data)
 
@@ -128,7 +129,7 @@ def handle_openai_model(
 @observe()
 def handle_bedrock_model(
         system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
-        model_name=None, region_name='us-west-2', tools=None
+        model_name=None, region_name='us-west-2', tools=None, is_json_response=False
 ):
     bedrock_runtime = boto3.client(
         service_name='bedrock-runtime',
@@ -144,11 +145,6 @@ def handle_bedrock_model(
 
         # 'meta.llama3-1-70b-instruct-v1:0'
 
-    headers = {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-    }
-
     inference_config = {}
     additional_model_fields = {}
 
@@ -162,10 +158,7 @@ def handle_bedrock_model(
     if messages and messages[-1]['role'] == 'assistant':
         messages.pop()
 
-    # print("Prompt: ", json.dumps(system_prompt))
-    # print("Messages: ", json.dumps(messages))
     try:
-
         request_payload = {
             'modelId': model_id,
             'messages': messages,
@@ -173,56 +166,49 @@ def handle_bedrock_model(
         }
         if inference_config:
             request_payload['inferenceConfig'] = inference_config
-            print("inferenceConfig: ", request_payload['inferenceConfig'])
         if tools:
-            print("tools: ", tools)
             request_payload['toolConfig'] = tools.get('toolConfig')
-            print("toolConfig: ", request_payload['toolConfig'])
-
-        print("messages: ", request_payload['messages'])
-
         response = bedrock_runtime.converse(**request_payload)
 
         print("Response:", response)
 
-        content = response['output']['message']['content'][0]
+        content_arr = response['output']['message']['content']
+        content = content_arr[0]
         content_tool = content.get('toolUse')
         if content_tool:
-            # print("content_tool: ", content_tool)
             if isinstance(content_tool, str):
-                final_output = json.loads(content_tool)
+                final_output = json_repair.repair_json(content_tool, return_objects=True)
             else:
-
                 final_output = content_tool
-        elif not tools:
+        else:
             content_text = content.get('text')
-            # print("content_text: ", content_text)
             json_start = content_text.find('{')
             if json_start != -1:
                 json_str = content_text[json_start:]
+                json_str = json_str.replace('\n', '').replace('\r', '').strip()
+                while json_str and (json_str.endswith("'") or json_str.endswith('"') or json_str.endswith(',')):
+                    json_str = json_str[:-1].strip()
                 try:
-                    final_output = json.loads(json_str)
-                    # print("final_output JSON:", final_output)
-                    # print("final_output JSON type: ", type(final_output))
+                    final_output = json_repair.repair_json(json_str, return_objects=True)
+                    print("Loads final_output: ", final_output)
+                    print("type final_output: ", type(final_output))
                 except json.JSONDecodeError as e:
                     print(f"Error decoding JSON: {e}")
                     return None
+            elif is_json_response:
+                return None
             else:
                 return content_text
-        else:
-            content_text = content.get('text')
-            # print("content_text: ", content_text)
-            final_output = content_text
-            # print("final_output: ", final_output)
 
-        return  final_output
+        return final_output
 
     except Exception as e:
         print(f"Error processing request: {e}")
+        return None
 
 
 @observe()
-def handle_bedrock_invoke_model(system_prompt=None,
+def handle_bedrock_invoke_model(
         messages=None, max_token=None, temperature=None, top_p=None,
         model_name=None, region_name='us-west-2', tools=None
 ):
@@ -230,26 +216,20 @@ def handle_bedrock_invoke_model(system_prompt=None,
     if model_name:
         model_id = model_name
     else:
-        model_id = 'meta.llama3-1-70b-instruct-v1:0'
+        model_id = 'meta.llama3-1-8b-instruct-v1:0'
         # model_id = 'meta.llama3-2-3b-instruct-v1:0'
 
     print("USING MODEL ID: ", model_id)
+
+    print("Messages: ", messages)
     try:
-        messages.append(system_prompt)
-        formatted_prompt = f"""
-        <|begin_of_text|><|start_header_id|>user<|end_header_id|>
-        {messages}
-        <|eot_id|>
-        <|start_header_id|>assistant<|end_header_id|>
-        """
 
         body = json.dumps({
-            "prompt": formatted_prompt,
+            "prompt": json.dumps(messages),
             "max_gen_len": max_token,
             "temperature": temperature,
             "top_p": top_p
         })
-        print(body)
 
         bedrock_runtime = boto3.client(
             service_name='bedrock-runtime',
@@ -264,9 +244,10 @@ def handle_bedrock_invoke_model(system_prompt=None,
             accept="application/json",
             contentType="application/json"
         )
-        print(response)
 
         a = response.get('body').read()
+        # print(a)
+        # print(type(a))
         b = a.decode('utf-8')
         response_body = json.loads(b)
         print(response_body)

@@ -7,8 +7,7 @@ from chatbot.utils.shikshalokam_story_utils import update_story_pdf
 from chatbot.utils.story_utils import create_story_object
 import django_filters
 from rest_framework import generics, status
-from rest_framework.decorators import api_view, authentication_classes
-from chatbot.auth import ProfileJWTAuthentication
+from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from chatbot.models.media_models import ProfileMedia
 from chatbot.serializer.profile_serializer import ProfileMediaSerializer
@@ -31,22 +30,30 @@ def end_story(request):
         if profile_id is None or session is None:
             return Response({
                 'status': 'error',
-                'message': 'profile id or session is mandatory'
+                'message': 'profile id or session is mandatory',
+                'error_message': 'profile id or session is mandatory'
             }, status=400)
         else:
-            id, content = create_story_object(
-                profile_id=profile_id, session=session, model=model,
+            id, content, error_msg = create_story_object(
+                profile_id=profile_id, session=session,
                 access_token=access_token, flow=flow, language=language
             )
+
             return Response({
                 'status': 'ok',
                 'message': 'Story created',
                 'id': id,
-                'content': content
+                'content': content,
+                'error_message': error_msg
             }, status=200)
     except Exception as e:
         print(e)
         traceback.print_exc()
+        return Response({
+            'status': 'error',
+            'message': '',
+            'error_message': f'{e}'
+        }, status=500)
 
 
 class StoryListCreateView(generics.ListCreateAPIView):
@@ -66,7 +73,6 @@ class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
         """
         print("Updating (PATCH)")
         return self.handle_update_logic(request, *args, **kwargs, is_partial=True)
-
 
     def handle_update_logic(self, request, *args, **kwargs):
         """
@@ -94,7 +100,6 @@ class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
             print("Error occurred: ", str(e))
             raise
 
-
 class StoryMediaListCreateView(generics.ListCreateAPIView):
     queryset = StoryMedia.objects.all()
     serializer_class = StoryMediaRetrieveSerializer
@@ -121,6 +126,9 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
             response = super().create(request, *args, **kwargs)
             print("response: ", response)
             print("response status_code: ", response.status_code)
+            update_story_pdf(
+                access_token=access_token, session=session_value, flow=flow
+            )
 
             if (response.status_code == status.HTTP_201_CREATED and access_token not in [None, "", "null"]
                     and session_value and flow != 'login'):
@@ -140,6 +148,53 @@ class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
+
+    def partial_update(self, request, *args, **kwargs):
+        """
+        Handle PATCH requests for partial updates.
+        """
+        print("Updating (PATCH)")
+        return self.handle_update_logic(request, *args, **kwargs, is_partial=True)
+
+    def update(self, request, *args, **kwargs):
+        """
+        Handle PUT requests for full updates.
+        """
+        print("Updating (PUT)")
+        return self.handle_update_logic(request, *args, **kwargs, is_partial=False)
+
+    def handle_update_logic(self, request, *args, **kwargs):
+        """
+        Shared logic for PUT and PATCH requests.
+        """
+        is_partial = kwargs.pop('is_partial', False)  # Safely extract the flag
+        session_value = request.data.get('session')
+        access_token = request.data.get('access_token')
+        flow = request.data.get('flow')
+        print("session_value: ", session_value)
+        print("flow: ", flow)
+        print("access_token: ", access_token)
+
+        try:
+            if is_partial:
+                response = super().partial_update(request, *args, **kwargs)
+            else:
+                response = super().update(request, *args, **kwargs)
+
+            print("response: ", response)
+            print("response status_code: ", response.status_code)
+            update_story_pdf(
+                access_token=access_token, session=session_value, flow=flow
+            )
+
+            if response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]:
+                # Pass response.data directly as the instance
+                upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
+
+            return response
+        except Exception as e:
+            print("Error occurred: ", str(e))
+            raise
 
 
 class ProfileMediaListCreateView(generics.ListCreateAPIView):

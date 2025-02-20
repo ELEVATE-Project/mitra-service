@@ -1,61 +1,44 @@
 import os
-import requests
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
-
+from chatbot.models import CompanyBot, Voice, VoiceType
+from chatbot.utils.audio_provider_utils import text_speech_provider, speech_text_provider, text_translate_provider
 
 ai4bharat_api_key = os.getenv("BHASHANI_API_KEY")
 
 
 @api_view(['POST'])
-def ai4bharat_text_speech(request):
+def text_speech_view(request):
     try:
         body = request.data
         text = body.get('text', '')
         source_language = body.get('source_language', 'en')
         gender = body.get('gender', 'male')
+        route = body.get('route')
 
-        api_url = 'https://demo-api.models.ai4bharat.org/inference/tts'
+        if not route:
+            return Response({
+                'status': 'error',
+                'message': 'route is a required field'
+            }, status=500)
 
-        payload = {
-            "controlConfig": {"dataTracking": True},
-            "input": [{"source": text}],
-            "config": {
-                "gender": gender,
-                "language": {"sourceLanguage": source_language},
-            },
-        }
+        company_bot = CompanyBot.objects.filter(route=route).first()
+        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.SpeechToText).first()
 
-        headers = {
-            'accept': '*/*',
-            'content-type': 'application/json',
-            'origin': 'https://models.ai4bharat.org',
-            'referer': 'https://models.ai4bharat.org/',
-            'ulcaApiKey': ai4bharat_api_key
-        }
+        response = text_speech_provider(
+            voice_provider=voice_provider, text=text, gender=gender, source_language=source_language
+        )
 
-        print("url: ", api_url)
-        response = requests.post(api_url, json=payload, headers=headers, timeout=10)
-        if response.status_code == 200:
-            audio_data = response.json()
-            # Ensure audio_data is a dictionary and contains 'audio'
-            if isinstance(audio_data, dict) and 'audio' in audio_data:
-                audio_content = audio_data['audio'][0].get('audioContent', '')
-                return Response({
-                    'status': 'ok',
-                    'audio': audio_content
-                }, status=200)
-            else:
-                return Response({
-                    'status': 'error',
-                    'message': 'Unexpected response format from AI4Bharat API'
-                }, status=500)
+        if response.get('status') == 200:
+            return Response({
+                'status': 'ok',
+                'audio': response.get('content')
+            }, status=200)
         else:
             return Response({
                 'status': 'error',
-                'message': 'Failed to fetch audio from AI4Bharat API'
-            }, status=response.status_code)
+                'message': response.get('content')
+            }, status=response.get('status'))
 
     except Exception as e:
         return Response({
@@ -65,60 +48,38 @@ def ai4bharat_text_speech(request):
 
 
 @api_view(['POST'])
-def ai4bharat_asr(request):
+def speech_text(request):
     try:
         body = request.data
         base64 =  body.get('base_64')
         audio_format =  body.get('audio_format', 'wav')
         source_language = body.get('source_language', 'en')
+        route = body.get('route')
 
-        if source_language == 'en':
-            api_url = 'https://demo-api.models.ai4bharat.org/inference/asr/whisper'
-        else:
-            api_url = 'https://demo-api.models.ai4bharat.org/inference/asr/conformer'
+        if not route:
+            return Response({
+                'status': 'error',
+                'message': 'route is a required field'
+            }, status=500)
 
-        payload = {
-            "controlConfig": {"dataTracking": True},
-            "audio": [{"audioContent": base64}],
-            "config": {
-                "audioFormat": audio_format,
-                "language": {"sourceLanguage": source_language},
-                "samplingRate": 16000,
-            },
-            "transcriptionFormat": {"value": "transcript"}
-        }
+        company_bot = CompanyBot.objects.filter(route=route).first()
+        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.SpeechToText).first()
 
-        headers = {
-            'accept': '*/*',
-            'content-type': 'application/json',
-            'origin': 'https://models.ai4bharat.org',
-            'referer': 'https://models.ai4bharat.org/',
-            'ulcaApiKey': ai4bharat_api_key
-        }
-        print("url: ", api_url)
-        response = requests.post(api_url, json=payload, headers=headers, timeout=10)
-        print("Response: ", response)
-        print("Response content: ", response.text)
-        if response.status_code == 200:
-            audio_data = response.json()
-            print("json response: ", audio_data)
-            if isinstance(audio_data, dict) and 'output' in audio_data:
-                audio_content = audio_data['output'][0].get('source', '')
-                print("TRANSCRIPT: ", audio_content)
-                return Response({
-                    'status': 'ok',
-                    'transcript': audio_content
-                }, status=200)
-            else:
-                return Response({
-                    'status': 'error',
-                    'message': 'Unexpected response format from AI4Bharat API'
-                }, status=500)
+        response = speech_text_provider(
+            voice_provider=voice_provider, base64=base64, audio_format=audio_format,
+            source_language=source_language
+        )
+
+        if response.get('status') == 200:
+            return Response({
+                'status': 'ok',
+                'transcript': response.get('content')
+            }, status=200)
         else:
             return Response({
                 'status': 'error',
-                'message': 'Failed to fetch audio from AI4Bharat API'
-            }, status=response.status_code)
+                'message': response.get('content')
+            }, status=response.get('status'))
 
     except Exception as e:
         return Response({
@@ -128,31 +89,42 @@ def ai4bharat_asr(request):
 
 
 @api_view(['POST'])
-def ai4bharat_text_translation(request):
+def text_translation_view(request):
     try:
         body = request.data
         source_language =  body.get('source_language', 'en')
         target_language =  body.get('target_language', 'en')
         message_body = body.get('message_body')
 
-        translated_content = call_ai4bharat_translation_api(
-            source_language=source_language, target_language=target_language, message_body=message_body
+        route = body.get('route')
+
+        if not route:
+            return Response({
+                'status': 'error',
+                'message': 'route is a required field'
+            }, status=500)
+
+        company_bot = CompanyBot.objects.filter(route=route).first()
+        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.SpeechToText).first()
+
+        response = text_translate_provider(
+            voice_provider=voice_provider, message_body=message_body, target_language=target_language,
+            source_language=source_language
         )
-        if translated_content is not None:
+
+        if response.get('status') == 200:
             return Response({
                 'status': 'ok',
-                'transcript': translated_content
+                'transcript': response.get('content')
             }, status=200)
         else:
             return Response({
                 'status': 'error',
-                'message': 'Translation failed or unexpected response from AI4Bharat API',
-                'transcript': message_body
-            }, status=500)
+                'message': response.get('content')
+            }, status=response.get('status'))
 
     except Exception as e:
         return Response({
             'status': 'error',
-            'message': str(e),
-            'transcript': request.data.get('message_body')
+            'message': str(e)
         }, status=500)
