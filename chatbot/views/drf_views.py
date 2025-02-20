@@ -1,7 +1,5 @@
 import django_filters
 from rest_framework import generics
-from rest_framework.decorators import authentication_classes
-from chatbot.auth import ProfileJWTAuthentication
 from chatbot.filter.drf_filter import ChatSessionProfileFilter
 from chatbot.models import ChatSession, BotVernacular
 from chatbot.models.base_models import CompanyChat, CompanyBot, Profile
@@ -11,7 +9,7 @@ from chatbot.serializer.profile_serializer import ProfileSerializer, CompanyChat
 
 
 class CompanyChatListCreateView(generics.ListCreateAPIView):
-    queryset = CompanyChat.objects.all()
+    queryset = CompanyChat.objects.all().order_by('created_at')
     serializer_class = CompanyChatSerializer
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend]
     filterset_fields = ['message', 'sender', 'receiver', 'session', 'status']
@@ -62,7 +60,7 @@ class ChatSessionListCreateView(generics.ListCreateAPIView):
     queryset = ChatSession.objects.all()
     serializer_class = ChatSessionSerializer
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend, ChatSessionProfileFilter]
-    filterset_fields = ['session']
+    filterset_fields = ['session', 'project_id', 'user_id']
 
 
 class ChatSessionRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):

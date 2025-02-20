@@ -1,5 +1,4 @@
 import re
-
 from shikshalokam.models import Project
 
 

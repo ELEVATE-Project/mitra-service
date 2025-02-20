@@ -8,7 +8,7 @@ from simple_history.models import HistoricalRecords
 from chatbot.models.enums import (
     EntityStatus, LLMModel, GenderChoices, ProfileType, ChatStatus,
     FeedbackChoices, CompanyBotTypeChoices, CompanyBotDynamicContextType, CompanyChatSourceChoices,
-    ChatStageChoices, VoiceProvider, VoiceType, LLMProvider
+    ChatStageChoices, VoiceProvider, VoiceType, LanguageChoices
 )
 
 S3_BASE_URL = os.getenv('S3_BASE_URL')
@@ -44,32 +44,64 @@ class CompanyBot(models.Model):
         upload_path = f"{folder_name}/{filename}"
         return upload_path
 
-    name = models.CharField(max_length=100)
-    company = models.ForeignKey(Company, on_delete=models.CASCADE)
+    name = models.CharField(max_length=100, help_text="Enter the name of the bot.")
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE, help_text="Select the company this bot belongs to."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    context = models.TextField()
-    bot_temperature = models.FloatField(default=0)
-    top_k = models.IntegerField(default=2, validators=[MinValueValidator(1)])
-    llm_model = models.CharField(max_length=100, choices=LLMModel.choices, default=LLMModel.GPT4_O_MINI)
-    provider = models.CharField(
-        max_length=100, choices=LLMProvider.choices, default=LLMProvider.OPENAI)
-    provider_keys = models.TextField(
-        default="", max_length=1000, null=False, blank=True)
-    max_token = models.IntegerField(default=2048, validators=[MinValueValidator(1)])
-    filter_score = models.FloatField(default=0.8)
-    end_context = models.TextField(null=True, blank=True)
-    introductory_message = models.CharField(max_length=1000, null=True, blank=True)
-    tag_context = models.TextField(null=True, blank=True)
-    route = models.CharField(max_length=100, default='/')
+    context = models.TextField(help_text="Provide the bot's main prompt or description of its purpose.")
+    bot_temperature = models.FloatField(
+        default=0,
+        help_text="Set the temperature for controlling response randomness (0-1). Lower values produce more "
+                  "deterministic responses."
+    )
+    top_k = models.IntegerField(
+        default=2, validators=[MinValueValidator(1)],
+        help_text="Set the top-k value for the bot's response selection. This defines how many top options to consider "
+                  "for each response."
+    )
+    llm_model = models.CharField(
+        max_length=100, choices=LLMModel.choices, default=LLMModel.GPT3_5,
+        help_text="Select the LLM model to be used by the bot (e.g., GPT-4o, GPT-4)."
+    )
+    filter_score = models.FloatField(
+        default=0.8,
+        help_text="Set the filter score for bot response selection (0-1). Responses below this score will be "
+                  "filtered out."
+    )
+    end_context = models.TextField(
+        null=True, blank=True,
+        help_text="Provide additional prompt or context to append at the end of the main prompt to guide the "
+                  "conversation"
+    )
+    introductory_message = models.CharField(
+        max_length=1000, null=True, blank=True,
+        help_text="Provide an introductory message that the bot will present when the conversation starts."
+    )
+    tag_context = models.TextField(
+        null=True, blank=True,
+        help_text="Provide any information or context related to variables (like Python-bound variables) that will be "
+                  "inserted into the prompt."
+    )
+    route = models.CharField(
+        max_length=100, default='/', help_text="Specify the route or API endpoint for interacting with the bot."
+    )
     bot_type = models.CharField(max_length=30, choices=CompanyBotTypeChoices.choices,
                                 default=CompanyBotTypeChoices.SIMPLE)
     llm_key = models.CharField(max_length=255, null=True, blank=True)
-    dynamic_context = models.TextField(null=True, blank=True)
+    dynamic_context = models.TextField(
+        null=True, blank=True,
+        help_text="Provide dynamic context that can be adjusted during the bot's interactions, such as "
+                  "personalized data."
+    )
     dynamic_context_type = models.CharField(max_length=20, choices=CompanyBotDynamicContextType.choices,
                                             null=True, blank=True)
-    pre_context = models.TextField(null=True, blank=True)
-    tool_context= models.TextField(null=True, blank=True)
+    pre_context = models.TextField(
+        null=True, blank=True, help_text="Provide pre-context that will be set before the main prompt to shape the "
+                                         "conversation."
+    )
+    tool_context = models.TextField(null=True, blank=True)
     history = HistoricalRecords()
 
     def __str__(self):
@@ -89,6 +121,7 @@ class Profile(models.Model):
         return upload_path
 
     first_name = models.CharField(max_length=100)
+    userid = models.CharField(max_length=200, null=True, blank=True)
     last_name = models.CharField(max_length=100, null=True, blank=True)
     email = models.EmailField(max_length=100, null=False, blank=False)
     phone = models.CharField(max_length=20, null=True, blank=True)
@@ -104,7 +137,7 @@ class Profile(models.Model):
     location = models.CharField(max_length=1000, null=True, blank=True)
     caste = models.CharField(max_length=1000, null=True, blank=True)
     gender = models.CharField(max_length=1000, null=True, blank=True, choices=GenderChoices.choices)
-    designation = models.CharField(max_length=200, null=True, blank=True)
+    designation = models.TextField(null=True, blank=True)
     org_associated = models.CharField(max_length=1000, null=True, blank=True)
     product_interested = models.CharField(max_length=1000, null=True, blank=True)
     company_spoc = models.CharField(max_length=1000, null=True, blank=True)
@@ -178,6 +211,11 @@ class Voice(models.Model):
     type = models.CharField(max_length=300, choices=VoiceType.choices, null=True, blank=True)
     provider = models.CharField(max_length=300, null=True, blank=True,
                                 choices=VoiceProvider.choices, default=VoiceProvider.AI4Bharat)
+    name = models.CharField(max_length=100)
+    sample_link = models.URLField(null=True, blank=True)
+    language = models.CharField(max_length=100, null=True, blank=True)
+    provider_code = models.CharField(max_length=100, null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

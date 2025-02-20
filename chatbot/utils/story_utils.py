@@ -3,24 +3,36 @@ import traceback
 import random
 import string
 from chatbot.models import (Profile, CompanyChat, CompanyBot, StoryLanguageChoices,
-                            StoryStatusChoices, ChatSession, ChatStatus, Voice, VoiceType)
+                            StoryStatusChoices, ChatSession, ChatStatus, Voice, VoiceType, BotVernacular)
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.story_models import Story
+from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
 from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
 from chatbot.utils.story_llama_utils import create_project, translate_field
 from chatbot.llm_models.llm_script import handle_bedrock_model
+from shikshalokam.models import Project
+from shikshalokam.utils.project_utils import get_project_formatted_data
 from jinja2 import Template
 import json_repair
 import asyncio
 import functools
 
 
-def create_story_object(profile_id, session, language='en'):
+def create_story_object(profile_id, session, access_token, flow, language='en'):
+    error_message = ""
+    voice_provider=None
     try:
         profile = Profile.objects.get(id=profile_id)
         company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
         ai_user = Profile.objects.get(id=1)
         company_bot = CompanyBot.objects.get(route='/story')
+        bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
+        if bot_vernacular:
+            error_message = bot_vernacular.error_message
+        else:
+            error_message = "Please try again!"
+
+        reflection_bot = CompanyBot.objects.get(route='/reflection')
         validate_bot = CompanyBot.objects.get(route='/story_validation')
         context = company_bot.context
         address = ProfileAddress.objects.filter(profile=profile)
@@ -29,13 +41,21 @@ def create_story_object(profile_id, session, language='en'):
             "address": address if address else [{}]
         }
         template = Template(company_bot.tag_context)
+
         tag_context = template.render(context_data)
 
         end_context = company_bot.end_context
 
         chat_session = ChatSession.objects.get(session=session)
+        project_id = chat_session.project_id
 
-        project_data = ''
+        if flow != 'login' and project_id:
+            reflection_end_context = reflection_bot.end_context
+            user_project = Project.objects.filter(project_id=project_id).first()
+            project_data = get_project_formatted_data(user_project=user_project)
+            project_data = reflection_end_context.format(**project_data)
+        else:
+            project_data = ''
 
         content_prompt = f"""
             {context}
@@ -47,7 +67,6 @@ def create_story_object(profile_id, session, language='en'):
             {tag_context}
             {project_data}
         """
-
         print('-------------------------------')
         print(story_prompt)
 
@@ -62,7 +81,6 @@ def create_story_object(profile_id, session, language='en'):
                 'text': story_prompt
             },
         ]
-
         if company_chats and company_chats[0].receiver != ai_user:
             company_chats.pop(0)
         for chat in company_chats:
@@ -241,20 +259,32 @@ def create_story_object(profile_id, session, language='en'):
 
         create_project(
             response_json=response_json_story,title=title, objective=objective, story=story,
-            profile=profile, problem_statement=problem_statement, language=language, voice_provider=voice_provider
+            profile=profile, problem_statement=problem_statement, project_id=project_id, language=language,
+            voice_provider=voice_provider
         )
 
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=['session_status'])
+        conversation = get_stored_conversation(company_chats=company_chats, ai_user=ai_user)
+        chat_history = get_stored_chathistory(company_chats=company_chats, ai_user=ai_user)
+
         save_shikshalokam_story(
-            story=story, profile=profile
+            story=story, access_token=access_token,
+            problem_statement=problem_statement, project_id=project_id, session=session,
+            profile=profile, conversation=conversation, flow=flow, chat_history=chat_history
         )
 
-        return story.id, story.content
+        return story.id, story.content, ""
 
     except Exception as e:
+        print("Error msg in except: ", error_message)
+        print("voice_provider in except: ", voice_provider)
+        if voice_provider and error_message and language != 'en':
+            error_message=translate_field(
+                voice_provider=voice_provider, message_body=error_message, target_language=language
+            )
         traceback.print_exc()
-        return "", ""
+        return "", "", error_message
 
 
 def format_response_json(response):
@@ -267,8 +297,8 @@ def format_response_json(response):
         response_json += '}'
     print("\nBEFORE LOADS: ", response_json)
     if isinstance(response_json, str):
-        response_json = json.loads(response_json)
-    print("AFTER LOADS: ", response_json)
+        response_json = json_repair.repair_json(response_json, return_objects=True)
+        print("AFTER LOADS: ", response_json)
     print("TYPE response_json: ", type(response_json))
 
     return response_json

@@ -18,13 +18,13 @@ def create_profile_views(request):
 
     profile_details = create_profile_utils(access_token=access_token)
 
-    if not profile_details:
+    if not profile_details.get('success'):
         return Response({
             'status': 'error',
-            'message': 'Failed to fetch or create profile details.'
-        }, status=500)
+            'message': profile_details.get('message', 'Failed to fetch or create profile details.')
+        }, status=profile_details.get('status_code', 500))
 
     return Response({
         'status': 'ok',
-        'profile_details': profile_details
+        'profile_details': profile_details.get('data')
     }, status=200)

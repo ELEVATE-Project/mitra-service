@@ -50,19 +50,13 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
-    'access-control-allow-origin'
+    'access-control-allow-origin',
+    'x-auth-token'
 ]
 
 CORS_ALLOW_CREDENTIALS = True
 
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',
-    'http://localhost:9000',
-    'https://*.shikshalokam.org',
-    'https://*.gritworks.ai',
-    'https://demo-mitra.shikshalokam.org',
-    'https://mohini.shikshalokam.org'
-]
+CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS').split(',')
 
 CORS_ALLOWED_METHODS = [
     'GET',
@@ -72,15 +66,7 @@ CORS_ALLOWED_METHODS = [
     'OPTIONS'  # Include the OPTIONS method for preflight requests
 ]
 
-ALLOWED_HOSTS = [
-    'localhost',
-    'shikshalokam.org',
-    '.shikshalokam.org',
-    'demo-mitra.shikshalokam.org',
-    'mohini.shikshalokam.org',
-    'gritworks.ai',
-    '.gritworks.ai'
-]
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 
 
 # Application definition
@@ -227,7 +213,8 @@ INTERNAL_IPS = [
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
-CSRF_TRUSTED_ORIGINS = ['https://*.shikshalokam.org', 'https://*.127.0.0.1', 'https://*.gritworks.ai']
+CSRF_TRUSTED_ORIGINS = ['https://*.shikshalokam.org', 'https://*.127.0.0.1',
+                        'https://*.gritworks.ai', 'http://localhost:3000']
 
 STORAGES = {
     "default": {
@@ -299,4 +286,11 @@ JAZZMIN_SETTINGS = {
 
 JAZZMIN_UI_TWEAKS = {
     'navbar_fixed': True
+}
+
+REST_FRAMEWORK = {
+    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
+    'PAGE_SIZE': 100,
+    'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.coreapi.AutoSchema'
 }

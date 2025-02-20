@@ -9,13 +9,16 @@ from chatbot.models.company_models import CompanyStateMachine
 channel_layer = get_channel_layer()
 
 
-def get_bedrock_tool_call_response(system_prompt, messages, company_bot, session_id, channel_name, route, profile_id):
+def get_bedrock_tool_call_response(
+        system_prompt, messages, company_bot, session_id, channel_name, route, profile_id
+):
 
     chat_session = ChatSession.objects.get(session=session_id)
     current_step = chat_session.current_step
     company_chat = CompanyChat.objects.filter(session=session_id)
     print("Length: ", len(company_chat))
     chunks = []
+
 
     if company_chat and len(company_chat)<2:
         chat_session.current_step += 1

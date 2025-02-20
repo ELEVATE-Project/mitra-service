@@ -1,6 +1,7 @@
 from import_export.admin import ExportActionMixin, ImportMixin
 from django.contrib import admin
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
+from shikshalokam.models import LearningResources
 from shikshalokam.models.base_model import Project, Task, Evidence, ProjectTemplate, Category
 from shikshalokam.resource import ProjectResource
 
@@ -17,24 +18,24 @@ class CategoryAdmin(admin.ModelAdmin):
         obj.save()
 
 
-@admin.register(ProjectTemplate)
-class ProjectTemplateAdmin(admin.ModelAdmin):
-    list_display = ('title', 'created_at', )
-    list_filter = (CustomAdvanceDateFilter, 'template_id' )
-    search_fields = ('title', )
-
-    def save_model(self, request, obj, form, change):
-        if not obj.pk:
-            obj.created_by = request.user
-        obj.save()
+# @admin.register(ProjectTemplate)
+# class ProjectTemplateAdmin(admin.ModelAdmin):
+#     list_display = ('title', 'created_at', )
+#     list_filter = (CustomAdvanceDateFilter, 'template_id' )
+#     search_fields = ('title', )
+#
+#     def save_model(self, request, obj, form, change):
+#         if not obj.pk:
+#             obj.created_by = request.user
+#         obj.save()
 
 
 @admin.register(Project)
 class ProjectAdmin(ImportMixin, ExportActionMixin, admin.ModelAdmin):
     resource_class = ProjectResource
-    list_display = ('title', 'duration', 'project_status', 'created_at', )
-    list_filter = (CustomAdvanceDateFilter, 'project_id', 'project_status', 'author__company', 'author')
-    search_fields = ('title', )
+    list_display = ('project_id', 'actual_title', 'actual_duration', 'generated_by', 'created_at', )
+    list_filter = ('created_at', 'project_id', 'program_id', 'project_status', 'author__company', 'author', 'generated_by')
+    search_fields = ('actual_title', )
     raw_id_fields = ('author', 'story')
     # inlines = [TaskInline, EvidenceInline]
 
@@ -62,6 +63,8 @@ class TaskAdmin(admin.ModelAdmin):
     list_filter = (CustomAdvanceDateFilter, 'task_id', 'project__project_id')
     search_fields = ('task_name', )
 
+    raw_id_fields = ('project',)
+
     def save_model(self, request, obj, form, change):
         if not obj.pk:
             obj.created_by = request.user
@@ -73,6 +76,16 @@ class EvidenceAdmin(admin.ModelAdmin):
     list_display = ('evidence_link', 'created_at')
     list_filter = (CustomAdvanceDateFilter, 'task__task_name', 'project__project_id',)
     search_fields = ('evidence_link', )
+
+    def save_model(self, request, obj, form, change):
+        if not obj.pk:
+            obj.created_by = request.user
+        obj.save()
+
+@admin.register(LearningResources)
+class LearningResourcesAdmin(admin.ModelAdmin):
+    list_display = ('project', 'name', 'created_at')
+    list_filter = ('created_at', 'project',)
 
     def save_model(self, request, obj, form, change):
         if not obj.pk:
