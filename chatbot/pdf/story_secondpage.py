@@ -21,6 +21,7 @@ def get_story_secondpage_html(story):
             + "</ol>"
     )
     print("\n\nsteps_html: ", steps_html)
+    print("story.objective: ", story.objective)
 
     page_html = f"""
     <div class="story-second-page-container page-break">
