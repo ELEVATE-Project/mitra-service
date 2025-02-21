@@ -192,9 +192,10 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         blurb = response_json_story.get('blurb', '')
         print('blurb: ', blurb)
         content = clean_escaped_text(text=content)
+        print('clean content: ', content)
 
         voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
-
+        print("language used: ", language)
         if language != 'en':
             title = translate_field(
                 voice_provider=voice_provider, message_body=title, target_language=language

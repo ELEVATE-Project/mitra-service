@@ -31,7 +31,7 @@ def create_profile_utils(access_token):
 
 
         company = Company.objects.get(slug='shikshalokamstaging')
-
+        print("company: ", company)
         profile_data = {
             "email": email,
             "first_name": name,
@@ -47,6 +47,8 @@ def create_profile_utils(access_token):
             "state": state,
             "district": district,
         }
+        print("profile_data: ", profile_data)
+        print("address_data: ", address_data)
 
         profile, created = Profile.objects.update_or_create(
             userid=userid,
@@ -54,6 +56,8 @@ def create_profile_utils(access_token):
         )
 
         if address_data:
+            ProfileAddress.objects.filter(profile=profile).delete()
+
             ProfileAddress.objects.update_or_create(
                 profile=profile,
                 defaults=address_data
@@ -73,6 +77,7 @@ def create_profile_utils(access_token):
             'message': f"Error while making the API call: {e}"
         }
     except Exception as e:
+        print("e: ", e)
         return {
             'success': False,
             'status_code': 500,

@@ -68,6 +68,7 @@ class MediaTypeChoices(models.TextChoices):
     JPEG = 'image/jpeg', _('JPEG')
     PNG = 'image/png', _('PNG')
     SVG = 'image/svg+xml', _('SVG')
+    WEBP = 'image/webp', _('WEBP')
 
 
 class VoiceProviderChoices(models.TextChoices):

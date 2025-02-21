@@ -35,7 +35,7 @@ def get_story_secondpage_html(story):
         </div>
         <div class="story-second-page-section">
             <h2>Action Steps</h2>
-            {steps_html}
+            {steps_html or "No action steps provided"}
         </div>
         <div class="story-second-page-section">
             <h2>Impact</h2>
