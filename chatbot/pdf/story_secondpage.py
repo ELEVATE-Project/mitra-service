@@ -31,7 +31,7 @@ def get_story_secondpage_html(story):
         </div>
         <div class="story-second-page-section">
             <h2>Objective</h2>
-            <p>{story.objective or "No objective provided."}</p>
+            <p>{story.actual_objective or "No objective provided."}</p>
         </div>
         <div class="story-second-page-section">
             <h2>Action Steps</h2>
