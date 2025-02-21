@@ -24,7 +24,7 @@ def save_shikshalokam_story(
         html_content = get_story_html(story=story, profile=profile)
 
         pdf_generated = generate_pdf_with_gotenberg(html_content)
-        pdf_file_name = story.actual_title or story.expected_title or ""
+        pdf_file_name = story.title
         if not pdf_file_name or pdf_file_name == '':
             pdf_file_name = 'mi_story'
         pdf_file_name = f"{pdf_file_name}.pdf"
@@ -52,9 +52,9 @@ def save_shikshalokam_story(
 
         request_body = {
             "story": {
-                "title": pdf_file_name,
+                "title": story.title,
                 "problemStatement": problem_statement,
-                "objective": story.actual_objective,
+                "objective": story.objective,
                 "timeline": "",
                 "actionSteps": story.action_steps or [],
                 "resources": [],
@@ -89,7 +89,7 @@ def save_shikshalokam_story(
 
 def get_story_html(story, profile):
     css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/story_pdf.css"))
-    pdf_file_name = story.actual_title or story.expected_title or ""
+    pdf_file_name = story.title
     if not pdf_file_name or pdf_file_name == '':
         pdf_file_name = 'mi_story'
     with open(css_path, 'r') as css_file:
@@ -131,13 +131,13 @@ def update_story_pdf(access_token, session, flow):
         update_story_content(story)
         profile = story.author
         print("profile: ", profile)
+        print("story: ", story.title)
         print("story format: ", story.formatted_content)
         html_content = get_story_html(story=story, profile=profile)
 
         pdf_generated = generate_pdf_with_gotenberg(html_content)
-        pdf_file_name = story.actual_title or story.expected_title or ""
+        pdf_file_name = story.title
         pdf_file_name = f"{pdf_file_name}.pdf"
-        print("pdf_file_name: ", pdf_file_name)
         pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
         print("pdf_content: ", pdf_content)
         print("pdf_content type: ", type(pdf_content))
@@ -195,8 +195,8 @@ def update_story_pdf(access_token, session, flow):
 
         request_body = {
             "story": {
-                "title": pdf_file_name,
-                "objective": story.actual_objective,
+                "title": story.title,
+                "objective": story.objective,
                 "timeline": "",
                 "actionSteps": story.action_steps or [],
                 "resources": [],
