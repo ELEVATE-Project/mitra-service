@@ -2,7 +2,8 @@
 def get_first_page_html(profile, story):
     profile_addresses = profile.profile_address.all().first()
     current_state = profile_addresses.state if profile_addresses else ""
-
+    company_logo = profile.company.get_public_url()
+    print("logo: ", company_logo)
     address_components = [
         profile_addresses.district if profile_addresses and profile_addresses.district else "",
         profile_addresses.block if profile_addresses and profile_addresses.block else "",
@@ -20,7 +21,7 @@ def get_first_page_html(profile, story):
         <div class="story-logo-div2">
             <div style="width: 100%; margin-top: 40px;">
                 <div style="display: flex; justify-content: center;">
-                    <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/shikshagrahaLogo.png" 
+                    <img src="{company_logo}" 
                         style="width: 300px; height: auto; object-fit: contain;"
                         alt="Bottom Logo">
                 </div>

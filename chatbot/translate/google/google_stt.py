@@ -35,7 +35,11 @@ def transcribe_multiple_languages_v2(
             }
 
         transcripts = []
+        if not response or isinstance(response, str):
+            print("response: ", response)
         for res_result in response.results:
+            if not res_result or res_result.alternatives or len(res_result.alternatives) == 0:
+                print("res_result: ", res_result)
             transcript = res_result.alternatives[0].transcript
             transcripts.append(transcript)
             print(f"Transcript: {transcript}")

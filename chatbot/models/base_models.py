@@ -8,7 +8,7 @@ from simple_history.models import HistoricalRecords
 from chatbot.models.enums import (
     EntityStatus, LLMModel, GenderChoices, ProfileType, ChatStatus,
     FeedbackChoices, CompanyBotTypeChoices, CompanyBotDynamicContextType, CompanyChatSourceChoices,
-    ChatStageChoices, VoiceProvider, VoiceType, LanguageChoices
+    ChatStageChoices, VoiceProvider, VoiceType
 )
 
 S3_BASE_URL = os.getenv('S3_BASE_URL')
@@ -24,6 +24,7 @@ class Company(models.Model):
     name = models.CharField(max_length=100)
     slug = models.CharField(max_length=100, unique=True)
     status = models.CharField(max_length=20, choices=EntityStatus.choices)
+    logo = models.ImageField(upload_to=get_file_upload_path, max_length=1000, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -35,6 +36,9 @@ class Company(models.Model):
         indexes = [
             models.Index(fields=['slug']),
         ]
+
+    def get_public_url(self):
+        return f"{S3_BASE_URL}{self.logo.name}"
 
 
 class CompanyBot(models.Model):

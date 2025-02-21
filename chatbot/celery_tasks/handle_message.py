@@ -7,10 +7,11 @@ channel_layer = get_channel_layer()
 
 
 def translate_and_send_message(
-        accumulated_message, current_channel_name, current_step_number, finish_reason, route, company_bot
+        accumulated_message, current_channel_name, current_step_number, finish_reason, route, company_bot,
+        extra_content=None
 ):
 
-    if route != '/':
+    if route != 'en' and accumulated_message and accumulated_message!= '':
         target_language_code = get_language_code_from_route(route)
         print("target_language_code: ", target_language_code)
         voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
@@ -32,7 +33,8 @@ def translate_and_send_message(
                     "msg": translated_messages,
                     "source": "bot",
                     "finish_reason": finish_reason,
-                    "step": current_step_number
+                    "step": current_step_number,
+                    "extra_content": extra_content
                 },
             },
         )
@@ -48,7 +50,8 @@ def translate_and_send_message(
                     "msg": accumulated_message,
                     "source": "bot",
                     "finish_reason": finish_reason,
-                    "step": current_step_number
+                    "step": current_step_number,
+                    "extra_content": extra_content
                 },
             },
         )

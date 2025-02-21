@@ -18,7 +18,6 @@ def get_reflection_bedrock_response(channel_name, session_id, profile_id, route,
         company_bot = CompanyBot.objects.get(company=profile.company, route='/reflection')
         state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
         system_context = company_bot.context
-        introductory_message = company_bot.introductory_message
         user_project = Project.objects.filter(project_id=project_id).first()
         project_data = get_project_formatted_data(user_project=user_project)
 
@@ -40,37 +39,7 @@ def get_reflection_bedrock_response(channel_name, session_id, profile_id, route,
                 'text': f"""{company_bot.end_context}""".format(**project_data)
             },
             {
-                'text': """
-                Given the following functions, please respond with a JSON for a function call with its proper arguments 
-                that best answers the given prompt.
-                
-                Respond strictly in the format:
-                {"name": "function_name", "parameters": {"argument_name": "argument_value"}}. 
-                Do not use variables, placeholders, or additional conversational responses.
-                
-                If the next state is provided in the context (e.g., `state_name`), always respond with a function call to transition to the specified state. Do not engage in further dialog or ask follow-up questions in this step.
-                
-                Here is the function definition:
-                
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "get_state_information",
-                        "description": "Get the information of the state you want to be in",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {
-                                "state_name": {
-                                    "type": "string",
-                                    "description": "Name of the next state provided in the context."
-                                }
-                            },
-                            "required": ["state_name"]
-                        }
-                    }
-                }
-    
-                """
+                'text': company_bot.tool_context
             }
         ]
 

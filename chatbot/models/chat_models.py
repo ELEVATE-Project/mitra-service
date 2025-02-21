@@ -1,4 +1,3 @@
-import json
 from django.db import models
 from chatbot.models import CompanyChat, Profile, CompanyBot, ChatStatus, LLMModel, Voice, VoiceType
 from chatbot.llm_models.llm_script import handle_bedrock_model

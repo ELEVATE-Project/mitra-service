@@ -9,7 +9,7 @@ from chatbot.models.company_models import CompanyStateMachine
 channel_layer = get_channel_layer()
 
 
-def get_reflection_bedrock_tool_response(
+def get_mitra_bedrock_tool_response(
         system_prompt, messages, company_bot, session_id, channel_name, route, profile_id
 ):
 
@@ -23,14 +23,11 @@ def get_reflection_bedrock_tool_response(
         system_prompt=system_prompt, messages=messages
     )
     print("response_body bedrock: ", response)
-    if response is None:
-        response = 'I am sorry, I could not understood completely. Could you rephrase this please?'
 
     is_function_call = False
     if isinstance(response, dict):
-        is_function_call = True
-    elif isinstance(response, str):
-        if 'get_state_information' in response:
+        tool_use_id = response.get('toolUseId', None)
+        if tool_use_id:
             is_function_call = True
     print("is_function_call: ", is_function_call)
 

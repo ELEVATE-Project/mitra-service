@@ -1,6 +1,6 @@
 from litellm import completion
 from typing import List, Optional, Union
-from models.enums import LLMProvider
+from chatbot.models.enums import LLMProvider
 import os
 
 
