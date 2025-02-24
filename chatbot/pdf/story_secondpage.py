@@ -12,9 +12,12 @@ def get_story_secondpage_html(story):
     print("action step type: ", type(action_steps))
     print("action_steps: ", action_steps)
     steps = action_steps[0]
-    split_steps = re.findall(r'(\d+\.\s*[^0-9]+)', steps.strip())
-    split_steps = [step.strip() for step in split_steps if step.strip()]
-    print("\n\nsplit_steps: ", split_steps)
+    if steps and isinstance(steps, str):
+        split_steps = re.findall(r'(\d+\.\s*[^0-9]+)', steps.strip())
+        split_steps = [step.strip() for step in split_steps if step.strip()]
+        print("\n\nsplit_steps: ", split_steps)
+    else:
+        split_steps = [step.strip() for step in steps if step.strip()]
     steps_html = (
             f"<ol style='list-style-type: none; padding: 0; margin: 0;'>"
             + ''.join(f"<li>{step}</li>" for step in split_steps)
