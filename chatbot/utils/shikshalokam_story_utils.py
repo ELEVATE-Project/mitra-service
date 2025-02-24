@@ -142,7 +142,7 @@ def update_story_pdf(access_token, session, flow):
         print("pdf_content: ", pdf_content)
         print("pdf_content type: ", type(pdf_content))
 
-        story_media = StoryMedia.objects.get(story=story, media_type=MediaTypeChoices.PDF)
+        story_media = StoryMedia.objects.filter(story=story, media_type=MediaTypeChoices.PDF).first()
 
         # if story_media.file:
         #     story_media.file.storage.delete(story_media.file.name)
