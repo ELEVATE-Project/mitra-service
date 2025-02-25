@@ -46,7 +46,9 @@ def get_mitra_bedrock_response(channel_name, session_id, profile_id, route):
             tool_content = json_repair.repair_json(tool_content, return_objects=True)
         try:
             response = handle_bedrock_model(
-                system_prompt=prompt_to_use, messages=messages, is_json_response=True, tools=tool_content
+                system_prompt=prompt_to_use, messages=messages, is_json_response=True,
+                model_name=company_bot.llm_model, temperature=company_bot.bot_temperature,
+                max_token=company_bot.max_token,
             )
             message = response.get("message", "")
             if message == '' and  response.get("should_move_forward") == 'no':
@@ -65,7 +67,7 @@ def get_mitra_bedrock_response(channel_name, session_id, profile_id, route):
 
         if response:
             problem_statement = response.get("problem_statement", "")
-            if route != 'en':
+            if route != 'en' and problem_statement and problem_statement != '':
                 voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
                 problem_statement = translate_field(
                     voice_provider=voice_provider, message_body=problem_statement, target_language=route,

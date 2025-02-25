@@ -31,7 +31,6 @@ def create_profile_utils(access_token):
 
 
         company = Company.objects.get(slug='shikshalokamstaging')
-        print("company: ", company)
         profile_data = {
             "email": email,
             "first_name": name,
@@ -47,9 +46,6 @@ def create_profile_utils(access_token):
             "state": state,
             "district": district,
         }
-        print("profile_data: ", profile_data)
-        print("address_data: ", address_data)
-
         profile, created = Profile.objects.update_or_create(
             userid=userid,
             defaults=profile_data
@@ -62,9 +58,7 @@ def create_profile_utils(access_token):
                 profile=profile,
                 defaults=address_data
             )
-        print("profile: ", profile)
         serialized_profile = ProfileSerializer(profile).data
-        print("serialized_profile: ", serialized_profile)
         return {
             'success': True,
             'data': serialized_profile
@@ -108,7 +102,6 @@ def get_profile_detail(access_token):
             }
 
         json_response = response.json()
-        print("json_response: ", json_response)
 
         if not json_response or "result" not in json_response:
             return {

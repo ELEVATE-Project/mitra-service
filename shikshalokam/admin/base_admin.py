@@ -3,7 +3,7 @@ from django.contrib import admin
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from shikshalokam.models import LearningResources
 from shikshalokam.models.base_model import Project, Task, Evidence, ProjectTemplate, Category
-from shikshalokam.resource import ProjectResource
+from shikshalokam.resource import ExpertProjectResource
 
 
 @admin.register(Category)
@@ -32,10 +32,9 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Project)
 class ProjectAdmin(ImportMixin, ExportActionMixin, admin.ModelAdmin):
-    resource_class = ProjectResource
+    resource_class = ExpertProjectResource
     list_display = ('project_id', 'actual_title', 'actual_duration', 'generated_by', 'created_at', )
-    list_filter = ('created_at', 'project_id', 'program_id', 'project_status', 'author__company', 'author', 'generated_by')
-    search_fields = ('actual_title', )
+    list_filter = ('created_at', 'project_id', 'author', 'generated_by', 'actual_title', 'expected_title')
     raw_id_fields = ('author', 'story')
     # inlines = [TaskInline, EvidenceInline]
 

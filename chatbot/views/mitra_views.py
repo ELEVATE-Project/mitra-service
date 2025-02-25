@@ -4,7 +4,8 @@ from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from chatbot.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_objective_utils, \
-    generate_action_list_utils, generate_title_utils, validate_objective_utils, validate_actions_utils
+    generate_action_list_utils, generate_title_utils, validate_objective_utils, validate_actions_utils, \
+    validate_title_utils
 from chatbot.utils.story_llama_utils import translate_field
 from shikshalokam.utils.project_utils import update_project_status_utils
 from django.http import JsonResponse
@@ -23,8 +24,8 @@ def paraphrase_view(request):
     voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
     if language != 'en':
         user_input = translate_field(
-            voice_provider=voice_provider, message_body=user_input, target_language=language,
-            source_language='en'
+            voice_provider=voice_provider, message_body=user_input, source_language=language,
+            target_language='en'
         )
         print("user_translated_message: ", user_input)
 
@@ -52,13 +53,14 @@ def generate_objectives_view(request):
     user_input = body.get('user_input')
     language = body.get('language')
     print("User Input: ", user_input)
+    print("language: ", language)
 
     company_bot = CompanyBot.objects.get(route='/objective')
     voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
     if language != 'en':
         user_input = translate_field(
-            voice_provider=voice_provider, message_body=user_input, target_language=language,
-            source_language='en'
+            voice_provider=voice_provider, message_body=user_input, source_language=language,
+            target_language='en'
         )
         print("user_translated_message: ", user_input)
 
@@ -99,15 +101,10 @@ def validate_objectives_view(request):
     if language !='en':
         voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
         user_input = translate_field(
-            voice_provider=voice_provider, message_body=user_input, target_language=language,
-            source_language='en'
-        )
-        error_message = translate_field(
-            voice_provider=voice_provider, message_body=error_message, target_language=language,
-            source_language='en'
+            voice_provider=voice_provider, message_body=user_input, source_language=language,
+            target_language='en'
         )
         print("user_translated_message: ", user_input)
-        print("error_translated_message: ", error_message)
 
     response = validate_objective_utils(user_input=user_input)
     return Response({
@@ -125,6 +122,7 @@ def validate_actions_view(request):
     language = body.get('language')
     problem_statement = body.get('problem_statement')
     print("User Input: ", user_input)
+    print("User language: ", language)
     print("User Objective: ", user_objective)
     print("User Problem Statement: ", problem_statement)
 
@@ -133,21 +131,26 @@ def validate_actions_view(request):
     error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
     if language !='en':
         voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
-        user_input = translate_field(
-            voice_provider=voice_provider, message_body=user_input, target_language=language,
-            source_language='en'
-        )
+
+        if isinstance(user_input, list):
+            user_input = [
+                translate_field(
+                    voice_provider=voice_provider, message_body=action, source_language=language,
+                    target_language='en'
+                ) for action in user_input
+            ]
+        else:
+            user_input = translate_field(
+                voice_provider=voice_provider, message_body=user_input, source_language=language,
+                target_language='en'
+            )
         user_objective = translate_field(
-            voice_provider=voice_provider, message_body=user_objective, target_language=language,
-            source_language='en'
+            voice_provider=voice_provider, message_body=user_objective, source_language=language,
+            target_language='en'
         )
         problem_statement = translate_field(
-            voice_provider=voice_provider, message_body=problem_statement, target_language=language,
-            source_language='en'
-        )
-        error_message = translate_field(
-            voice_provider=voice_provider, message_body=error_message, target_language=language,
-            source_language='en'
+            voice_provider=voice_provider, message_body=problem_statement, source_language=language,
+            target_language='en'
         )
         print("user_translated_message: ", user_input)
         print("user_translated_objective: ", user_objective)
@@ -172,17 +175,18 @@ def generate_action_list_view(request):
     language = body.get('language')
     print("User Problem Statement: ", user_problem_statement)
     print("User Objective: ", user_objective)
+    print("User language: ", language)
 
     company_bot = CompanyBot.objects.get(route='/action_list')
     voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
     if language != 'en':
         user_problem_statement = translate_field(
-            voice_provider=voice_provider, message_body=user_problem_statement, target_language=language,
-            source_language='en'
+            voice_provider=voice_provider, message_body=user_problem_statement, source_language=language,
+            target_language='en'
         )
         user_objective = translate_field(
-            voice_provider=voice_provider, message_body=user_objective, target_language=language,
-            source_language='en'
+            voice_provider=voice_provider, message_body=user_objective, source_language=language,
+            target_language='en'
         )
         print("user_problem_statement: ", user_problem_statement)
         print("user_objective: ", user_objective)
@@ -232,21 +236,32 @@ def generate_title_view(request):
     user_action_list = body.get('user_action_list')
     language = body.get('language')
 
-    company_bot = CompanyBot.objects.get(route='/action_list')
+    company_bot = CompanyBot.objects.get(route='/title')
     voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
     if language != 'en':
         user_problem_statement = translate_field(
-            voice_provider=voice_provider, message_body=user_problem_statement, target_language=language,
-            source_language='en'
+            voice_provider=voice_provider, message_body=user_problem_statement, source_language=language,
+            target_language='en'
         )
         user_objective = translate_field(
-            voice_provider=voice_provider, message_body=user_objective, target_language=language,
-            source_language='en'
+            voice_provider=voice_provider, message_body=user_objective, source_language=language,
+            target_language='en'
         )
-        user_action_list =  translate_field(
-            voice_provider=voice_provider, message_body=user_action_list, target_language=language,
-            source_language='en'
-        )
+        if isinstance(user_action_list, list):
+            user_action_list = user_action_list[0]
+            user_action_list = user_action_list.get('actionSteps')
+            print("user_action_list: ", user_action_list)
+            user_action_list = [
+                translate_field(
+                    voice_provider=voice_provider, message_body=action, source_language=language,
+                    target_language='en'
+                ) for action in user_action_list
+            ]
+        else:
+            user_action_list = translate_field(
+                voice_provider=voice_provider, message_body=user_action_list, source_language=language,
+                target_language='en'
+            )
         print("user_problem_statement: ", user_problem_statement)
         print("user_objective: ", user_objective)
         print("user_action_list: ", user_action_list)
@@ -273,6 +288,67 @@ def generate_title_view(request):
         'status': 'ok',
         'title': title
     }, status=200)
+
+
+@api_view(['POST'])
+def validate_title_view(request):
+    body = request.data
+    user_actions = body.get('user_actions')
+    user_objective = body.get('user_objective')
+    language = body.get('language')
+    problem_statement = body.get('problem_statement')
+    user_input = body.get('user_input')
+    print("User Input: ", user_input)
+    print("User Actions: ", user_actions)
+    print("User language: ", language)
+    print("User Objective: ", user_objective)
+    print("User Problem Statement: ", problem_statement)
+
+    company_bot = CompanyBot.objects.get(route='/title')
+    bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
+    error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
+    if language != 'en':
+        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+
+        if isinstance(user_actions, list):
+            user_input = [
+                translate_field(
+                    voice_provider=voice_provider, message_body=action, source_language=language,
+                    target_language='en'
+                ) for action in user_actions
+            ]
+        else:
+            user_input = translate_field(
+                voice_provider=voice_provider, message_body=user_actions, source_language=language,
+                target_language='en'
+            )
+        user_objective = translate_field(
+            voice_provider=voice_provider, message_body=user_objective, source_language=language,
+            target_language='en'
+        )
+        problem_statement = translate_field(
+            voice_provider=voice_provider, message_body=problem_statement, source_language=language,
+            target_language='en'
+        )
+        user_input = translate_field(
+            voice_provider=voice_provider, message_body=user_input, source_language=language,
+            target_language='en'
+        )
+        print("user_translated_message: ", user_input)
+        print("user_translated_actions: ", user_actions)
+        print("user_translated_objective: ", user_objective)
+        print("user_translated_problem_statement: ", problem_statement)
+        print("error_translated_message: ", error_message)
+    response = validate_title_utils(
+        user_input=user_input, user_objective=user_objective, problem_statement=problem_statement,
+        user_actions=user_actions
+    )
+    return Response({
+        'status': 'ok',
+        'result': response,
+        'error_message': error_message
+    }, status=200)
+
 
 
 @api_view(['POST'])
