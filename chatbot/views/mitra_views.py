@@ -311,6 +311,9 @@ def validate_title_view(request):
         voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
 
         if isinstance(user_actions, list):
+            user_actions = user_actions[0]
+            user_actions = user_actions.get('actionSteps')
+            print("user_action_list: ", user_actions)
             user_actions = [
                 translate_field(
                     voice_provider=voice_provider, message_body=action, source_language=language,
