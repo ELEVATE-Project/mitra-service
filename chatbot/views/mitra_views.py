@@ -311,14 +311,14 @@ def validate_title_view(request):
         voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
 
         if isinstance(user_actions, list):
-            user_input = [
+            user_actions = [
                 translate_field(
                     voice_provider=voice_provider, message_body=action, source_language=language,
                     target_language='en'
                 ) for action in user_actions
             ]
         else:
-            user_input = translate_field(
+            user_actions = translate_field(
                 voice_provider=voice_provider, message_body=user_actions, source_language=language,
                 target_language='en'
             )
