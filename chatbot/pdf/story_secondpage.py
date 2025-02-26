@@ -8,6 +8,7 @@ def get_story_secondpage_html(story):
     if isinstance(story.action_steps, str):
         try:
             story.action_steps = json_repair.repair_json(story.action_steps, return_objects=True)
+            print("story.action_steps after repair: ", story.action_steps,)
         except Exception as e:
             print(f"Error repairing JSON: {e}")
             story.action_steps = ["No action steps provided."]
