@@ -33,7 +33,7 @@ class LLM:
         self.max_tokens = max_tokens
 
         # set the envs here
-        self.aws_region_name = os.environ["AWS_REGION"]
+        self.aws_region_name = "us-west-2"
         self.aws_access_key_val = os.environ["AWS_ACCESS_KEY_ID"]
         self.aws_secret_access_key_val = os.environ["AWS_SECRET_ACCESS_KEY"]
         self.api_key = os.environ["OPENAI_API_KEY"]
