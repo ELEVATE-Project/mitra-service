@@ -126,13 +126,13 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
             response = super().create(request, *args, **kwargs)
             print("response: ", response)
             print("response status_code: ", response.status_code)
-            update_story_pdf(
-                access_token=access_token, session=session_value, flow=flow
-            )
 
             if (response.status_code == status.HTTP_201_CREATED and access_token not in [None, "", "null"]
                     and session_value and flow != 'login'):
                 upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
+                update_story_pdf(
+                    access_token=access_token, session=session_value, flow=flow
+                )
             return response
 
         except Exception as e:
@@ -183,13 +183,13 @@ class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
 
             print("response: ", response)
             print("response status_code: ", response.status_code)
-            update_story_pdf(
-                access_token=access_token, session=session_value, flow=flow
-            )
 
             if response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]:
                 # Pass response.data directly as the instance
                 upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
+                update_story_pdf(
+                    access_token=access_token, session=session_value, flow=flow
+                )
 
             return response
         except Exception as e:
