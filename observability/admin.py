@@ -1,5 +1,5 @@
 from django.contrib import admin
-from observability.models import CompanyBotTestCases, CompanyBotTCRun, TCBotRunMetrics
+from observability.models import CompanyBotTestCases, CompanyBotTCRun, TCBotRunMetrics, BotRunTestCaseMap
 
 
 class TCBotRunMetricsAdmin(admin.TabularInline):
@@ -26,3 +26,8 @@ class CompanyBotTCRunAdmin(admin.ModelAdmin):
     readonly_fields = ['status', 'metrics_result']
 
     list_display = ('company_bot', 'status', 'created_at', 'updated_at')
+
+
+@admin.register(BotRunTestCaseMap)
+class CompanyBotRunTestCaseMapAdmin(admin.ModelAdmin):
+    list_display = ('bot_run', 'metric_name', 'test_case')
