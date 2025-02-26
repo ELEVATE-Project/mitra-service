@@ -1,7 +1,4 @@
-import json
 import os
-from uuid import UUID
-
 from rest_framework.decorators import api_view
 import requests
 from django.http import JsonResponse
@@ -11,7 +8,7 @@ from chatbot.utils.profile_utils import create_profile_utils
 from shikshalokam.models import Project, ProjectCreatedBy, ProjectVernacular
 from shikshalokam.serializer import ProjectSerializer
 import jwt
-
+from shikshalokam.utils.recommendation_utils import get_expert_projects
 
 recommendation_base_url = os.getenv("RECOMMENDATION_BASE_URL")
 
@@ -34,23 +31,15 @@ def generate_recommendation(request):
     try:
 
         decoded = jwt.decode(access_token, options={"verify_signature": False})
-        # print(decoded)
         if decoded:
             user_id = decoded.get('data', {}).get('id')
         else:
             return JsonResponse(default_response, status=200, safe=False)
 
-
-        # print(f"user_id={user_id} page={page} limit={limit} language={language}")
-
         try:
             res_profile = create_profile_utils(access_token=access_token)
-            print("res_profile: ", res_profile)
             current_profile = Profile.objects.get(userid=user_id)
-
-            print("got a profile: ", current_profile)
         except Profile.DoesNotExist:
-            print("profile does not exist so creating one")
             try:
                 create_profile_utils(access_token=access_token)
                 current_profile = Profile.objects.get(userid=user_id)
@@ -59,36 +48,19 @@ def generate_recommendation(request):
                 print("Failed to create or retrieve profile.")
                 return JsonResponse(default_response, status=200, safe=False)
 
-        projects = Project.objects.exclude(author=current_profile)
-        project_serialized = ProjectSerializer(projects, many=True).data
         current_profile_serialized = ProfileSerializer(current_profile).data
-        for project in project_serialized:
-            project_id = project.get('project_id')
-            if project['generated_by'] == ProjectCreatedBy.EXPERT_VETTED:
-                print("language: ", language)
-                vernacular = ProjectVernacular.objects.filter(
-                    project__project_id=project['project_id'], language=language
-                ).first()
-                print("vernacular: ", vernacular)
-                if vernacular:
-                    if 'other_params' not in project:
-                        project['other_params'] = {}
-                    print("Going for project id: ", project_id)
-                    vernacular_details = json.loads(vernacular.details)
-                    project['actual_title'] = vernacular_details.get('title')
-                    project['description'] = vernacular_details.get('description')
-                    project['categories'] = vernacular_details.get('categories')
-                    project['recommendedFor'] = vernacular_details.get('recommendedFor')
-                    project['actual_problem_statement'] = vernacular_details.get('problemStatement')
-                    project['other_params']['text'] = vernacular_details.get('text')
-                    project['other_params']['impact'] = vernacular_details.get('impact')
-                    project['other_params']['summary'] = vernacular_details.get('summary')
-                    project['other_params']['template_author'] = vernacular_details.get('template_author')
+        project_templates = get_expert_projects(language=language)
+        if not project_templates:
+            return JsonResponse(default_response, status=200, safe=False)
+
+        user_projects = Project.objects.filter(author=current_profile)
+        user_projects_serialized = ProjectSerializer(user_projects, many=True).data
+
         data = {
             "current_profile": current_profile_serialized,
-            "project_templates": project_serialized
+            "project_templates": project_templates,
+            "user_projects": user_projects_serialized
         }
-
         url = recommendation_base_url
         response = requests.post(url, json=data)
         response.raise_for_status()
@@ -109,9 +81,6 @@ def generate_recommendation(request):
             paginated_projects = matched_projects[start_index:end_index]
         else:
             paginated_projects = matched_projects
-
-
-        # paginated_projects = paginator.paginate_queryset(matched_projects, request)
 
         return JsonResponse({
             'result': {

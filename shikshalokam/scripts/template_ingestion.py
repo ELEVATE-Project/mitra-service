@@ -1,6 +1,8 @@
 import json
 from django.db import transaction
 
+from chatbot.models import Profile, Company
+from chatbot.models.geo_models import ProfileAddress
 from shikshalokam.models import Project, Evidence, ProjectCreatedBy, LearningResources, Task
 from shikshalokam.models.project_vernacular_model import ProjectVernacular
 
@@ -15,82 +17,7 @@ def ingest_project_template(file_path):
         return
 
     try:
-        with transaction.atomic():
-            for result in results:
-                project, created = Project.objects.get_or_create(
-                    project_id=result.get('_id'),
-                    defaults={
-                        "template_id": result.get('_id'),
-                        "description": result.get('description'),
-                        "keywords": json.dumps(result.get('keywords')),
-                        "recommended_for": json.dumps(result.get('recommendedFor')),
-                        "actual_title": result.get('title'),
-                        "categories": json.dumps(result.get('categories')),
-                        "actual_duration": result.get('metaInformation', {}).get('duration', None),
-                        "actual_problem_statement": result.get('problemStatement'),
-                        "program_id": result.get('programId'),
-                        "other_params": {
-                            'text': result.get('text'),
-                            'impact': result.get('impact'),
-                            'summary': result.get('summary'),
-                            'template_author': result.get('author'),
-                        },
-                        "project_status": result.get('status', '').upper(),
-                        "generated_by": ProjectCreatedBy.EXPERT_VETTED
-                    }
-                )
-
-                if created:
-                    print(f"Project '{project.actual_title}' created successfully.")
-                else:
-                    print(f"Project '{project.actual_title}' already exists.")
-
-                evidences = result.get('evidences', [])
-                for evidence_data in evidences:
-                    evidence, evidence_created = Evidence.objects.get_or_create(
-                        project=project,
-                        evidence_link=evidence_data.get('link'),
-                        remark=evidence_data.get('title'),
-                        defaults={
-                            "type": evidence_data.get('type')
-                        }
-                    )
-                    if evidence_created:
-                        print(f"Evidence '{evidence.remark}' saved for project '{project.actual_title}'.")
-                    else:
-                        print(f"Evidence '{evidence.remark}' already exists for project '{project.actual_title}'.")
-
-                learning_resources = result.get('learningResources', [])
-                for lr_data in learning_resources:
-                    lr, lr_created = LearningResources.objects.get_or_create(
-                        project=project,
-                        link=lr_data.get('link'),
-                        name=lr_data.get('name'),
-                        defaults={
-                            "resource_id": lr_data.get('id'),
-                            "app": lr_data.get('app')
-                        }
-                    )
-                    if lr_created:
-                        print(f"Learning resource '{lr.name}' saved for project '{project.actual_title}'.")
-                    else:
-                        print(f"Learning resource '{lr.name}' already exists for project '{project.actual_title}'.")
-
-                translations = result.get('translations', {})
-                for language, details in translations.items():
-                    vernacular, vernacular_created = ProjectVernacular.objects.get_or_create(
-                        project=project,
-                        language=language,
-                        defaults={
-                            "details": json.dumps(details)
-                        }
-                    )
-                    if vernacular_created:
-                        print(f"Translation for language '{language}' saved for project '{project.actual_title}'.")
-                    else:
-                        vernacular.details = json.dumps(details)
-                        vernacular.save()
-                        print(f"Translation for language '{language}' updated for project '{project.actual_title}'.")
+        process_project_ingestion(json_list=results)
     except Exception as e:
         print(f"Error during project ingestion: {e}")
 
@@ -179,3 +106,121 @@ def load_json(file_path):
     with open(file_path, 'r') as file:
         data = json.load(file)
     return data
+
+
+def process_project_ingestion(json_list):
+    try:
+        with transaction.atomic():
+            for result in json_list:
+
+                try:
+                    author_detail = result.get('author')
+                    # if not author_detail:
+                        # raise ValueError("Author detail is missing")
+                    if author_detail:
+                        name, location = map(str.strip, author_detail.split(",", 1))
+                        email = (result.get('_id') or "") + "@shikshalokam.org"
+                        company = Company.objects.filter(slug='shikshalokamstaging').first()
+                        profile, profile_created = Profile.objects.update_or_create(
+                            email=email,
+                            defaults={
+                                "first_name": name,
+                                "company": company,
+                                "password": 'grit@123',
+                            }
+                        )
+                        if profile_created:
+                            print(f"Profile '{profile.id}' created successfully.")
+                        else:
+                            print(f"Profile '{profile.id}' already exists.")
+
+                        ProfileAddress.objects.update_or_create(
+                            profile=profile,
+                            defaults={
+                                "state": location
+                            }
+                        )
+                    else:
+                        profile = None
+                except Exception as e:
+                    print("Profile error: ", e)
+                    profile = None
+
+                project, created = Project.objects.get_or_create(
+                    project_id=result.get('_id'),
+                    defaults={
+                        "author": profile,
+                        "template_id": result.get('_id'),
+                        "description": result.get('description'),
+                        "keywords": json.dumps(result.get('keywords')),
+                        "recommended_for": json.dumps(result.get('recommendedFor')),
+                        "actual_title": result.get('title'),
+                        "categories": json.dumps(result.get('categories')),
+                        "actual_duration": result.get('metaInformation', {}).get('duration', None),
+                        "actual_problem_statement": result.get('problemStatement'),
+                        "program_id": result.get('programId'),
+                        "other_params": {
+                            'text': result.get('text'),
+                            'impact': result.get('impact'),
+                            'summary': result.get('summary'),
+                            'template_author': result.get('author'),
+                        },
+                        "project_status": result.get('status', '').upper(),
+                        "generated_by": ProjectCreatedBy.EXPERT_VETTED
+                    }
+                )
+
+                if created:
+                    print(f"Project '{project.actual_title}' created successfully.")
+                else:
+                    print(f"Project '{project.actual_title}' already exists.")
+
+                evidences = result.get('evidences', [])
+                for evidence_data in evidences:
+                    evidence, evidence_created = Evidence.objects.get_or_create(
+                        project=project,
+                        evidence_link=evidence_data.get('link'),
+                        remark=evidence_data.get('title'),
+                        defaults={
+                            "type": evidence_data.get('type')
+                        }
+                    )
+                    if evidence_created:
+                        print(f"Evidence '{evidence.remark}' saved for project '{project.actual_title}'.")
+                    else:
+                        print(f"Evidence '{evidence.remark}' already exists for project '{project.actual_title}'.")
+
+                learning_resources = result.get('learningResources', [])
+                for lr_data in learning_resources:
+                    lr, lr_created = LearningResources.objects.get_or_create(
+                        project=project,
+                        link=lr_data.get('link'),
+                        name=lr_data.get('name'),
+                        defaults={
+                            "resource_id": lr_data.get('id'),
+                            "app": lr_data.get('app')
+                        }
+                    )
+                    if lr_created:
+                        print(f"Learning resource '{lr.name}' saved for project '{project.actual_title}'.")
+                    else:
+                        print(f"Learning resource '{lr.name}' already exists for project '{project.actual_title}'.")
+
+                translations = result.get('translations', {})
+                for language, details in translations.items():
+                    vernacular, vernacular_created = ProjectVernacular.objects.get_or_create(
+                        project=project,
+                        language=language,
+                        defaults={
+                            "details": json.dumps(details)
+                        }
+                    )
+                    if vernacular_created:
+                        print(f"Translation for language '{language}' saved for project '{project.actual_title}'.")
+                    else:
+                        vernacular.details = json.dumps(details)
+                        vernacular.save()
+                        print(f"Translation for language '{language}' updated for project '{project.actual_title}'.")
+    except Exception as e:
+        print(f"Error during project ingestion: {e}")
+        raise

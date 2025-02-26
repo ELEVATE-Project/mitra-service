@@ -17,8 +17,8 @@ def get_mitra_paraphrase_utils(paraphrase_problem, should_paraphrase_text):
     validation_prompt = [{'text': validation_prompt}]
     print('validation_prompt: ', validation_prompt)
     validation_response = handle_bedrock_model(
-        system_prompt=validation_prompt, messages=messages, max_token=2048,
-        temperature=0.0
+        system_prompt=validation_prompt, messages=messages,  model_name = company_bot.llm_model,
+        temperature = company_bot.bot_temperature, max_token = company_bot.max_token,
     )
     print("validation_response: ", validation_response)
     is_validated = validation_response.get('is_validated')
@@ -26,8 +26,8 @@ def get_mitra_paraphrase_utils(paraphrase_problem, should_paraphrase_text):
         return validation_response
     print('paraphrase_prompt: ', paraphrase_prompt)
     paraphrase_response = handle_bedrock_model(
-        system_prompt=paraphrase_prompt, messages=messages, max_token=2048,
-        temperature=0.0
+        system_prompt=paraphrase_prompt, messages=messages, model_name = company_bot.llm_model,
+        temperature = company_bot.bot_temperature, max_token = company_bot.max_token,
     )
     print("paraphrase_response: ", paraphrase_response)
     paraphrase_response = paraphrase_response.get('paraphrased_challenge')
@@ -68,8 +68,8 @@ def generate_action_list_utils(input_data):
     prompt = [{'text': prompt}]
 
     response = handle_bedrock_model(
-        system_prompt=prompt, messages=messages, max_token=2048,
-        temperature=0.0
+        system_prompt=prompt, messages=messages, model_name = company_bot.llm_model,
+        temperature = company_bot.bot_temperature, max_token = company_bot.max_token,
     )
 
     response = response.get('action_plan')
@@ -87,8 +87,8 @@ def generate_title_utils(input_data):
     prompt = [{'text': prompt}]
 
     response = handle_bedrock_model(
-        system_prompt=prompt, messages=messages, max_token=2048,
-        temperature=0.0
+        system_prompt=prompt, messages=messages, model_name = company_bot.llm_model,
+        temperature = company_bot.bot_temperature, max_token = company_bot.max_token,
     )
     response = response.get('title')
     return response
@@ -106,8 +106,8 @@ def validate_objective_utils(user_input):
         prompt = [{'text': prompt}]
 
         response = handle_bedrock_model(
-            system_prompt=prompt, messages=messages, max_token=2048,
-            temperature=0.0
+            system_prompt=prompt, messages=messages, model_name = company_bot.llm_model,
+            temperature = company_bot.bot_temperature, max_token = company_bot.max_token,
         )
 
         response = response.get('within_scope')
@@ -139,8 +139,8 @@ def validate_actions_utils(user_input, user_objective, problem_statement):
         prompt = [{'text': prompt}]
 
         response = handle_bedrock_model(
-            system_prompt=prompt, messages=messages, max_token=2048,
-            temperature=0.0
+            system_prompt=prompt, messages=messages, model_name = company_bot.llm_model,
+            temperature = company_bot.bot_temperature, max_token = company_bot.max_token,
         )
 
         response = response.get('within_scope')
@@ -148,3 +148,38 @@ def validate_actions_utils(user_input, user_objective, problem_statement):
     except Exception as e:
         print("Got error : ", e)
         return False
+
+
+def validate_title_utils(user_input, user_objective, problem_statement, user_actions):
+    try:
+        print('user_input: ', user_input)
+        company_bot = CompanyBot.objects.get(route='/title')
+        prompt = company_bot.end_context
+
+        context_data = {
+            "title": user_input,
+            "actionList": user_actions,
+            "objective": user_objective,
+            "problem_statement": problem_statement
+        }
+        template = Template(company_bot.tag_context)
+        tag_context = template.render(context_data)
+
+        messages = [{
+            'role': 'user',
+            'content': [{'text': f"{tag_context}"}]
+        }]
+
+        prompt = [{'text': prompt}]
+
+        response = handle_bedrock_model(
+            system_prompt=prompt, messages=messages, model_name = company_bot.llm_model,
+            temperature = company_bot.bot_temperature, max_token = company_bot.max_token,
+        )
+
+        response = response.get('within_scope')
+        return response
+    except Exception as e:
+        print("Got error : ", e)
+        return False
+

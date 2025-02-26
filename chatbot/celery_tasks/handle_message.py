@@ -58,7 +58,9 @@ def translate_and_send_message(
         return None
 
 def get_language_code_from_route(route):
+    route = route.strip()
     for choice in RouteLanguageChoices:
-        if choice.label == route:
+        if choice.value == route:
+            print("Match found!")
             return choice.value
     return RouteLanguageChoices.ENGLISH.value
