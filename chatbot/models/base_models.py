@@ -8,7 +8,7 @@ from simple_history.models import HistoricalRecords
 from chatbot.models.enums import (
     EntityStatus, LLMModel, GenderChoices, ProfileType, ChatStatus,
     FeedbackChoices, CompanyBotTypeChoices, CompanyBotDynamicContextType, CompanyChatSourceChoices,
-    ChatStageChoices, VoiceProvider, VoiceType
+    ChatStageChoices, VoiceProvider, VoiceType, LLMProvider
 )
 
 S3_BASE_URL = os.getenv('S3_BASE_URL')
@@ -65,6 +65,14 @@ class CompanyBot(models.Model):
         default=2, validators=[MinValueValidator(1)],
         help_text="Set the top-k value for the bot's response selection. This defines how many top options to consider "
                   "for each response."
+    )
+    provider = models.CharField(
+        max_length=100, choices=LLMProvider.choices, default=LLMProvider.BEDROCK_CONVERSE,
+        help_text="Select the LLM provider (BEDROCK, BEDROCK_CONVERSE, or OPENAI)"
+    )
+    provider_keys = models.TextField(
+        default="", max_length=1000, null=False, blank=True,
+        help_text="API keys or credentials for the selected LLM provider."
     )
     llm_model = models.CharField(
         max_length=100, choices=LLMModel.choices, default=LLMModel.GPT4_O_MINI,
