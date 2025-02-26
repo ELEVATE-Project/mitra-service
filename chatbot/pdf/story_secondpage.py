@@ -1,12 +1,20 @@
 import re
 from shikshalokam.models import Project
+import json_repair
 
 
 def get_story_secondpage_html(story):
     print("story.action_steps: ", story.action_steps)
+    if isinstance(story.action_steps, str):
+        try:
+            story.action_steps = json_repair.repair_json(story.action_steps, return_objects=True)
+        except Exception as e:
+            print(f"Error repairing JSON: {e}")
+            story.action_steps = ["No action steps provided."]
+
     action_steps = (
-        story.action_steps.split("\n") if isinstance(story.action_steps, str)
-        else story.action_steps if isinstance(story.action_steps, list)
+        story.action_steps if isinstance(story.action_steps, list)
+        else [story.action_steps] if isinstance(story.action_steps, str)
         else ["No action steps provided."]
     )
     project = Project.objects.filter(story=story).first()
