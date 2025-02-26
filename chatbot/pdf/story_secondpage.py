@@ -26,7 +26,8 @@ def get_story_secondpage_html(story):
     print("action_steps: ", action_steps)
     # steps = action_steps[0]
     if action_steps and isinstance(action_steps, str):
-        split_steps = re.findall(r'(\d+\.\s*[^0-9]+)', action_steps.strip())
+        steps_text = " ".join(action_steps)
+        split_steps = re.findall(r'\d+\.\s*[^.]+', steps_text)
         split_steps = [step.strip() for step in split_steps if step.strip()]
         print("\n\nsplit_steps: ", split_steps)
     else:
