@@ -172,7 +172,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
             story=story, include_in_story=True
         ).exclude(media_type=MediaTypeChoices.PDF)
 
-        if not is_edit_story:
+        if is_edit_story:
             attachments = [
                 {
                     "name": media.name,
