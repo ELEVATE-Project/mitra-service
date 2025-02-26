@@ -1,11 +1,11 @@
 from django.core.validators import MaxValueValidator, MinValueValidator
 from .enums import TestCaseInputFormat, TCRunStatus, TCRunMetrics, TCStatus
 from django.db import models
-from django.utils.translation import gettext_lazy as _
 from chatbot.models import CompanyBot, LLMModel, LLMProvider, ChatSession
 from observability.celery_tasks import llm_test_cases
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from simple_history.models import HistoricalRecords
 
 
 class CompanyBotTestCases(models.Model):
@@ -19,8 +19,21 @@ class CompanyBotTestCases(models.Model):
     retrieval_context = models.TextField(blank=True, null=True)
     input_format = models.CharField(
         max_length=100, choices=TestCaseInputFormat, default=TestCaseInputFormat.JSON)
-    # need to do: Need to hadle this
+
     json_output_schema = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, blank=True, null=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['company_bot']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['chat_session']),
+        ]
+
+    def __str__(self):
+        return self.company_bot + " (" + self.testcase_input + ")"
 
 
 class CompanyBotTCRun(models.Model):
@@ -33,8 +46,11 @@ class CompanyBotTCRun(models.Model):
         max_length=100, choices=LLMProvider.choices, default=LLMProvider.OPENAI)
     status = models.CharField(
         max_length=100, choices=TCRunStatus.choices, default=TCRunStatus.RUNNING)
-
     metrics_result = models.TextField(null=True, blank=True)
+    history = HistoricalRecords()
+
+    def __str__(self):
+        return self.company_bot + " (" + self.llm_model + ")"
 
 
 class TCBotRunMetrics(models.Model):
@@ -74,6 +90,15 @@ class BotRunTestCaseMap(models.Model):
     status = models.CharField(
         max_length=100, choices=TCStatus.choices, null=True, blank=True
     )
+    created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True, blank=True, null=True)
+    history = HistoricalRecords()
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['bot_run']),
+            models.Index(fields=['metric_name']),
+        ]
 
     def __str__(self):
         return self.metric_name
