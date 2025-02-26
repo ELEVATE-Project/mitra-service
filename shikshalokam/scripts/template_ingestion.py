@@ -113,31 +113,38 @@ def process_project_ingestion(json_list):
         with transaction.atomic():
             for result in json_list:
 
-                author_detail = result.get('author')
-                if not author_detail:
-                    raise ValueError("Author detail is missing")
-                name, location = map(str.strip, author_detail.split(",", 1))
-                email = (result.get('_id') or "") + "@shikshalokam.org"
-                company = Company.objects.filter(slug='shikshalokamstaging').first()
-                profile, profile_created = Profile.objects.update_or_create(
-                    email=email,
-                    defaults={
-                        "first_name": name,
-                        "company": company,
-                        "password": 'grit@123',
-                    }
-                )
-                if profile_created:
-                    print(f"Profile '{profile.id}' created successfully.")
-                else:
-                    print(f"Profile '{profile.id}' already exists.")
+                try:
+                    author_detail = result.get('author')
+                    # if not author_detail:
+                        # raise ValueError("Author detail is missing")
+                    if author_detail:
+                        name, location = map(str.strip, author_detail.split(",", 1))
+                        email = (result.get('_id') or "") + "@shikshalokam.org"
+                        company = Company.objects.filter(slug='shikshalokamstaging').first()
+                        profile, profile_created = Profile.objects.update_or_create(
+                            email=email,
+                            defaults={
+                                "first_name": name,
+                                "company": company,
+                                "password": 'grit@123',
+                            }
+                        )
+                        if profile_created:
+                            print(f"Profile '{profile.id}' created successfully.")
+                        else:
+                            print(f"Profile '{profile.id}' already exists.")
 
-                ProfileAddress.objects.update_or_create(
-                    profile=profile,
-                    defaults={
-                        "state": location
-                    }
-                )
+                        ProfileAddress.objects.update_or_create(
+                            profile=profile,
+                            defaults={
+                                "state": location
+                            }
+                        )
+                    else:
+                        profile = None
+                except Exception as e:
+                    print("Profile error: ", e)
+                    profile = None
 
                 project, created = Project.objects.get_or_create(
                     project_id=result.get('_id'),
