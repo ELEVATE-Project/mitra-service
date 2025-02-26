@@ -32,9 +32,6 @@ class CompanyBotTestCases(models.Model):
             models.Index(fields=['chat_session']),
         ]
 
-    def __str__(self):
-        return self.company_bot + " (" + self.testcase_input + ")"
-
 
 class CompanyBotTCRun(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
@@ -50,7 +47,7 @@ class CompanyBotTCRun(models.Model):
     history = HistoricalRecords()
 
     def __str__(self):
-        return self.company_bot + " (" + self.llm_model + ")"
+        return self.company_bot.name + " (" + self.llm_model + ")"
 
 
 class TCBotRunMetrics(models.Model):
