@@ -92,7 +92,8 @@ class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
                 if response and response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]:
                     print("response.data: ", response.data.get('session'))
                     update_story_pdf(
-                        access_token=access_token, session=session_value, flow=flow
+                        access_token=access_token, session=session_value, flow=flow,
+                        is_edit_story=False
                     )
 
                 return response

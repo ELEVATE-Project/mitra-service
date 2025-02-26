@@ -124,7 +124,7 @@ def get_story_html(story, profile):
     return html_content
 
 
-def update_story_pdf(access_token, session, flow):
+def update_story_pdf(access_token, session, flow, is_edit_story=False):
 
     try:
         story = Story.objects.get(session=session)
@@ -172,14 +172,17 @@ def update_story_pdf(access_token, session, flow):
             story=story, include_in_story=True
         ).exclude(media_type=MediaTypeChoices.PDF)
 
-        attachments = [
-            {
-                "name": media.name,
-                "sourcePath": media.source_path,
-                "type": media.media_type
-            }
-            for media in story_media_objects
-        ]
+        if not is_edit_story:
+            attachments = [
+                {
+                    "name": media.name,
+                    "sourcePath": media.source_path,
+                    "type": media.media_type
+                }
+                for media in story_media_objects
+            ]
+        else:
+            attachments = []
         print("attachments: ", attachments)
 
         pdf_information = upload_response_json.get('pdfInformation')
