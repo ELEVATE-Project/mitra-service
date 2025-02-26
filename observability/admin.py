@@ -10,7 +10,7 @@ class TCBotRunMetricsAdmin(admin.TabularInline):
 @admin.register(CompanyBotTestCases)
 class CompanyBotTestCasesAdmin(admin.ModelAdmin):
     list_display = ('company_bot', 'testcase_input',
-                    'expected_output', 'input_format')
+                    'expected_output', 'input_format', 'created_at')
 
     def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
         # This method is called when the admin change form is rendered.
@@ -30,4 +30,4 @@ class CompanyBotTCRunAdmin(admin.ModelAdmin):
 
 @admin.register(BotRunTestCaseMap)
 class CompanyBotRunTestCaseMapAdmin(admin.ModelAdmin):
-    list_display = ('bot_run', 'metric_name', 'test_case')
+    list_display = ('bot_run', 'metric_name', 'test_case', 'created_at')
