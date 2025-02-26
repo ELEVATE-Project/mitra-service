@@ -3,6 +3,7 @@ from shikshalokam.models import Project
 
 
 def get_story_secondpage_html(story):
+    print("story.action_steps: ", story.action_steps)
     action_steps = (
         story.action_steps.split("\n") if isinstance(story.action_steps, str)
         else story.action_steps if isinstance(story.action_steps, list)
