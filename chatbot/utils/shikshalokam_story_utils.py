@@ -5,6 +5,10 @@ import traceback
 import requests
 from django.core.files.base import ContentFile
 from chatbot.models import StoryMedia, MediaTypeChoices, CompanyChat, Profile, Story, ChatSession
+from chatbot.pdf.Hindi.story_first_page import get_first_page_html_hindi
+from chatbot.pdf.Hindi.story_images_page import get_story_images_page_html_hindi
+from chatbot.pdf.Hindi.story_secondpage import get_story_secondpage_html_hindi
+from chatbot.pdf.Hindi.story_thirdpage import get_thirdpage_html_hindi
 from chatbot.pdf.story_first_page import get_first_page_html
 from chatbot.pdf.story_images_page import get_story_images_page_html
 from chatbot.pdf.story_secondpage import get_story_secondpage_html
@@ -12,6 +16,7 @@ from chatbot.pdf.story_thirdpage import get_thirdpage_html
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
+from shikshalokam.models import Project
 
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
@@ -111,10 +116,19 @@ def get_story_html(story, profile):
              <body>
 
         """
-    html_content += get_first_page_html(story=story, profile=profile)
-    html_content += get_story_secondpage_html(story=story)
-    html_content += get_story_images_page_html(story=story)
-    html_content += get_thirdpage_html(story=story, profile=profile)
+
+    project = Project.objects.filter(story=story, author=profile).first()
+
+    if project and project.project_language == 'hi':
+        html_content += get_first_page_html_hindi(story=story, profile=profile)
+        html_content += get_story_secondpage_html_hindi(story=story)
+        html_content += get_story_images_page_html_hindi(story=story)
+        html_content += get_thirdpage_html_hindi(story=story, profile=profile)
+    else:
+        html_content += get_first_page_html(story=story, profile=profile)
+        html_content += get_story_secondpage_html(story=story)
+        html_content += get_story_images_page_html(story=story)
+        html_content += get_thirdpage_html(story=story, profile=profile)
     html_content += f"""
 
             </body>
