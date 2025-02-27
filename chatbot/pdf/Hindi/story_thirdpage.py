@@ -90,7 +90,7 @@ def get_thirdpage_html_hindi(profile, story):
     ]
 
     address_string = ", ".join(filter(None, address_components))
-    author = profile.first_nam
+    author = profile.first_name or ""
 
     sanitized_content = json_to_html(story.formatted_content)
     should_show_story_heading = True

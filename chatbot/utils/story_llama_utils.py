@@ -169,6 +169,8 @@ def validate_json(response_content):
 
 
 def translate_field(voice_provider, message_body, target_language, source_language="en"):
+    if message_body == '' or not message_body:
+        return message_body
     response = text_translate_provider(
         voice_provider=voice_provider, message_body=message_body, target_language=target_language,
         source_language=source_language
