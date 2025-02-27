@@ -32,6 +32,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         else:
             error_message = "Please try again!"
 
+        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
         reflection_bot = CompanyBot.objects.filter(route='/reflection').first()
         validate_bot = CompanyBot.objects.get(route='/story_validation')
         context = company_bot.context
@@ -199,7 +200,6 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         content = clean_escaped_text(text=content)
         print('clean content: ', content)
 
-        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
         print("language used: ", language)
         if language != 'en':
             title = translate_field(
