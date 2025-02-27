@@ -54,6 +54,11 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
             user_project = Project.objects.filter(project_id=project_id).first()
             project_data = get_project_formatted_data(user_project=user_project)
             project_data = reflection_end_context.format(**project_data)
+            print("project_data: ", project_data)
+            project_data = translate_field(
+                voice_provider=voice_provider, message_body=project_data, target_language=language
+            )
+            print("translated project_data: ", project_data)
         else:
             project_data = ''
 
