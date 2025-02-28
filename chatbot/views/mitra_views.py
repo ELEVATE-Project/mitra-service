@@ -6,7 +6,9 @@ from rest_framework.response import Response
 from chatbot.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_objective_utils, \
     generate_action_list_utils, generate_title_utils, validate_objective_utils, validate_actions_utils, \
     validate_title_utils
+from chatbot.utils.shikshalokam_story_utils import update_story_pdf
 from chatbot.utils.story_llama_utils import translate_field
+from shikshalokam.models import Project
 from shikshalokam.utils.project_utils import update_project_status_utils
 from django.http import JsonResponse
 import json_repair
@@ -419,12 +421,14 @@ def update_project_status_view(request):
     access_token = body.get('access_token')
     project_id = body.get('project_id')
     flow = body.get('flow')
-
-    # required_project = Project.objects.filter(project_id=project_id).first()
-    # program_id = required_project.program_id
-
-    response = update_project_status_utils(
-        project_id=project_id, access_token=access_token, flow=flow
-    )
-
-    return JsonResponse(response.get("message"), status=response.get("status"), safe=False)
+    try:
+        project = Project.object.filter(project_id=project_id).first()
+        session = project.story.session
+        update_story_pdf(is_edit_story=True, session=session, access_token=access_token, flow=None)
+        response = update_project_status_utils(
+            project_id=project_id, access_token=access_token, flow=flow
+        )
+        return JsonResponse(response.get("message"), status=response.get("status"), safe=False)
+    except Exception as e:
+        print("Error during status update: ", e)
+        return JsonResponse({'message': f"{e}"}, status=500)

@@ -93,7 +93,7 @@ class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
                     print("response.data: ", response.data.get('session'))
                     update_story_pdf(
                         access_token=access_token, session=session_value, flow=flow,
-                        is_edit_story=True
+                        is_edit_story=False
                     )
 
                 return response
