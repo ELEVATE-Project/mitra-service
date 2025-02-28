@@ -142,7 +142,9 @@ class RouteLanguageChoices(models.TextChoices):
 
 class VoiceProvider(models.TextChoices):
     GOOGLE = 'GOOGLE', _('GOOGLE')
+    GOOGLE_V1 = 'GOOGLE_V1', _('GOOGLE v1 STT')
     AI4Bharat = 'AI4Bharat', _('AI4Bharat')
+    OPENAI_WHISPER = 'OPENAI_WHISPER', _('OpenAI Whisper')
 
 
 class VoiceType(models.TextChoices):
