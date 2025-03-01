@@ -341,13 +341,20 @@
 
   /* story second page  */
 
-    .story-second-page-container {
+.story-second-page-container {
     width: 100%;
-    height: 100%;
     background-color: #f1f1f1;
     padding: 20px 40px;
     box-sizing: border-box;
+    page-break-before: always;
+    page-break-after: always;
+    page-break-inside: avoid;
   }
+  .empty-page-break {
+    page-break-before: always;
+    display: none; /* Prevent it from taking visible space */
+    height: 0;
+}
     .story-second-page-container h1  {
         height: auto;
         font-family: 'Open Sans', sans-serif;
@@ -370,6 +377,12 @@
         border: 2px solid #ddd;
         border-radius: 20px;
         background-color: #fff;
+        page-break-inside: avoid;
+    }
+    .story-action-steps {
+        page-break-before: auto; /* Ensure steps start on a new page if needed */
+        page-break-inside: auto;  /* Avoid breaking inside a step */
+        page-break-after: auto; /* Continue on the next page if needed */
     }
     .story-second-page-section h2 {
         display: flex;
@@ -957,4 +970,13 @@
 
     .page-break {
           page-break-before: always;
+    }
+
+    .page-break-new {
+        page-break-before: always;
+        page-break-after: always;
+        page-break-inside: avoid;
+        break-before: page; /* Newer CSS spec */
+        break-after: page;
+        break-inside: avoid;
     }

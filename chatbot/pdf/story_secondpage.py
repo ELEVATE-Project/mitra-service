@@ -47,7 +47,7 @@ def get_story_secondpage_html(story):
     print("story.objective: ", story.objective)
 
     page_html = f"""
-    <div class="story-second-page-container page-break">
+    <div class="story-second-page-container">
         <h1>Report of Micro Improvement</h1>
         <div class="story-second-page-section">
             <h2>Problem Statement</h2>
@@ -57,11 +57,11 @@ def get_story_secondpage_html(story):
             <h2>Objective</h2>
             <p>{story.objective or "No objective provided."}</p>
         </div>
-        <div class="story-second-page-section">
+        <div class="story-second-page-section story-action-steps">
             <h2>Action Steps</h2>
             {steps_html or "No action steps provided"}
         </div>
-        <div class="story-second-page-section">
+        <div class="story-second-page-section story-action-steps">
             <h2>Impact</h2>
             <p>{story.impact or "No impact provided."}</p>
         </div>

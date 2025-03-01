@@ -2,7 +2,7 @@ from chatbot.models import CompanyBot, Voice, VoiceType
 from chatbot.utils.story_llama_utils import translate_field
 
 
-def get_first_page_html_hindi(profile, story):
+def get_first_page_html_hindi(profile, story, project):
     profile_addresses = profile.profile_address.all().first()
     current_state = profile_addresses.state if profile_addresses else ""
     company_logo = profile.company.get_public_url()
@@ -16,7 +16,8 @@ def get_first_page_html_hindi(profile, story):
     address_string = ", ".join(filter(None, address_components))
 
     print("current_state: ", current_state)
-    title = story.title or ""
+    title = project.expected_title if project and project.expected_title else ""
+
     author = profile.first_name or ""
 
     company_bot = CompanyBot.objects.get(route='/story')
@@ -39,7 +40,9 @@ def get_first_page_html_hindi(profile, story):
                 </div>
             </div>
 
-            <h2 style="font-size: 2.8rem; margin: 20px 0; color: #333; font-weight: bold; text-align: center;">{title}</h2>
+            <h2 style="font-size: 2.8rem; margin: 20px 0; color: #333; font-weight: bold; text-align: center;">
+                {title}
+            </h2>
             <div class="nagaland-image-div"> 
                 <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/pdf_page1_logo_fmt1.png" 
                     class="story-bg1-fmt1" alt="pdf_bg1">

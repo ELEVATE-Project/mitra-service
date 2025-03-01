@@ -4,7 +4,7 @@ import requests
 from datetime import timedelta, timezone
 from pydantic_core._pydantic_core import ValidationError
 from django.utils.timezone import now
-from chatbot.models import Profile, CompanyChat
+from chatbot.models import Profile, CompanyChat, ChatSession
 import json
 from shikshalokam.models import Project, Task
 import ast
@@ -135,7 +135,7 @@ def extract_numeric(value):
 def create_mitra_project_utils(
         chunks, actual_problem_statement, project_title, project_duration,
         project_objective, user_action_steps, project_id, program_id, profile,
-        language
+        language, session
 ):
     try:
 
@@ -170,6 +170,11 @@ def create_mitra_project_utils(
                     "provider": "Bedrock"
                 }
             )
+
+        chat_session = ChatSession.objects.filter(session=session)
+        if chat_session:
+            chat_session.project_id = project_id
+            chat_session.save()
 
         return {
             "status": "success",

@@ -47,7 +47,7 @@ def get_story_secondpage_html_hindi(story):
     print("story.objective: ", story.objective)
 
     page_html = f"""
-    <div class="story-second-page-container page-break">
+    <div class="story-second-page-container">
         <h1>सूक्ष्म सुधार की रिपोर्ट</h1>
         <div class="story-second-page-section">
             <h2>समस्या का विवरण</h2>
@@ -57,11 +57,11 @@ def get_story_secondpage_html_hindi(story):
             <h2>उद्देश्य</h2>
             <p>{story.objective or "कोई उद्देश्य प्रदान नहीं किया गया."}</p>
         </div>
-        <div class="story-second-page-section">
+        <div class="story-second-page-section story-action-steps">
             <h2>कार्रवाई के चरण</h2>
             {steps_html or "कोई कार्रवाई चरण प्रदान नहीं किया गया."}
         </div>
-        <div class="story-second-page-section">
+        <div class="story-second-page-section story-action-steps">
             <h2>प्रभाव</h2>
             <p>{story.impact or "कोई प्रभाव नहीं पड़ा."}</p>
         </div>

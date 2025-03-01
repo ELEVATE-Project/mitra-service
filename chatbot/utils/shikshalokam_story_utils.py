@@ -93,10 +93,9 @@ def save_shikshalokam_story(
 
 
 def get_story_html(story, profile):
+    project = Project.objects.filter(story=story, author=profile).first()
     css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/story_pdf.css"))
-    pdf_file_name = story.title
-    if not pdf_file_name or pdf_file_name == '':
-        pdf_file_name = 'mi_story'
+    pdf_file_name = project.expected_title if project and project.expected_title else "'mi_story"
     with open(css_path, 'r') as css_file:
         inline_css = css_file.read()
     html_content = f"""
@@ -117,24 +116,51 @@ def get_story_html(story, profile):
 
         """
 
-    project = Project.objects.filter(story=story, author=profile).first()
 
     if project and project.project_language == 'hi':
-        html_content += get_first_page_html_hindi(story=story, profile=profile)
+        print("Taking hindi pdf files")
+        html_content += get_first_page_html_hindi(story=story, profile=profile, project=project)
         html_content += get_story_secondpage_html_hindi(story=story)
         html_content += get_story_images_page_html_hindi(story=story)
         html_content += get_thirdpage_html_hindi(story=story, profile=profile)
     else:
-        html_content += get_first_page_html(story=story, profile=profile)
+        html_content += get_first_page_html(story=story, profile=profile, project=project)
         html_content += get_story_secondpage_html(story=story)
+        # html_content += "<div></div>"
         html_content += get_story_images_page_html(story=story)
         html_content += get_thirdpage_html(story=story, profile=profile)
+    # html_content += f"""
+    #
+    #         </body>
+    #
+    #     </html>
+    #     """
     html_content += f"""
+        <script>
+        document.addEventListener("DOMContentLoaded", function () {{
+            function checkOverflowAndInsertBreaks() {{
+                const containers = document.querySelectorAll(".story-second-page-container");
+                console.log("containers: ", containers)
+                containers.forEach(container => {{
+                    if (container.scrollHeight > container.clientHeight) {{
+                        // Create a page break div if the content overflows
+                        const pageBreak = document.createElement("div");
+                        pageBreak.style.pageBreakBefore = "always";
+                        container.parentNode.insertBefore(pageBreak, container.nextSibling);
+                    }}
+                }});
+            }}
 
-            </body>
-        </html>
-        """
+            checkOverflowAndInsertBreaks(); // Run on page load
+        }});
+        </script>
+        </body>
+    </html>
+    """
 
+    print("--------------------")
+    print(html_content)
+    print("--------------------")
     return html_content
 
 

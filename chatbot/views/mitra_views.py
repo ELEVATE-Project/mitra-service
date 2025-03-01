@@ -403,7 +403,8 @@ def create_project_view(request):
             project_id=project_id,
             program_id=program_id,
             chunks=chunks,
-            language=language
+            language=language,
+            session=session
         )
 
         print("Result: ", result)

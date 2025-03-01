@@ -10,7 +10,8 @@ from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_
 from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
 from chatbot.utils.story_llama_utils import create_project, translate_field
 from chatbot.llm_models.llm_script import handle_bedrock_model
-from shikshalokam.models import Project
+from shikshalokam.models import Project, Task
+from shikshalokam.serializer import TaskSerializer
 from shikshalokam.utils.project_utils import get_project_formatted_data
 from jinja2 import Template
 import json_repair
@@ -231,6 +232,17 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
             blurb = translate_field(
                 voice_provider=voice_provider, message_body=blurb, target_language=language
             )
+        if flow != 'login':
+            print("project_id: ", project_id)
+            project = Project.objects.get(project_id=project_id)
+            if project:
+                print("project: ", project)
+                tasks = Task.objects.filter(project=project)
+                serialized_tasks = TaskSerializer(tasks, many=True).data
+                print("tasks serialized_tasks: ", serialized_tasks)
+                # action_steps = [task.get('task_name') for task in serialized_tasks]
+                action_steps = [f"{idx + 1}. {task.get('task_name')}" for idx, task in enumerate(serialized_tasks)]
+                print("tasks action_steps: ", action_steps)
 
         if profile:
             address = ProfileAddress.objects.filter(profile=profile).first()

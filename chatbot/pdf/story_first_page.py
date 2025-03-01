@@ -1,5 +1,5 @@
 
-def get_first_page_html(profile, story):
+def get_first_page_html(profile, story, project):
     profile_addresses = profile.profile_address.all().first()
     current_state = profile_addresses.state if profile_addresses else ""
     company_logo = profile.company.get_public_url()
@@ -13,7 +13,7 @@ def get_first_page_html(profile, story):
     address_string = ", ".join(filter(None, address_components))
 
     print("current_state: ", current_state)
-    title = story.title or ""
+    title = project.expected_title if project and project.expected_title else ""
     author = profile.first_name or ""
 
     html = f"""
