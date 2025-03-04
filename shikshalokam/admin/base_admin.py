@@ -33,7 +33,7 @@ class ProjectTemplateAdmin(admin.ModelAdmin):
 class ProjectAdmin(ImportMixin, ExportActionMixin, admin.ModelAdmin):
     resource_class = ProjectResource
     list_display = ('title', 'duration', 'project_status', 'created_at', )
-    list_filter = (CustomAdvanceDateFilter, 'project_id', 'project_status', 'author__company', 'author')
+    list_filter = (CustomAdvanceDateFilter, 'project_id', 'project_status', 'author__company', 'author', 'story')
     search_fields = ('title', )
     raw_id_fields = ('author', 'story')
     # inlines = [TaskInline, EvidenceInline]
