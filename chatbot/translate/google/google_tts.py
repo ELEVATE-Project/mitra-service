@@ -8,18 +8,27 @@ import base64
 import traceback
 from google.cloud import texttospeech
 
+from chatbot.models import GenderChoices
 
-def google_text_to_speech(message, language_code):
+
+def google_text_to_speech(message, language_code, voice_provider):
     try:
         client = texttospeech.TextToSpeechClient()
         synthesis_input = texttospeech.SynthesisInput(text=message)
+        gender_mapping = {
+            GenderChoices.MALE: texttospeech.SsmlVoiceGender.MALE,
+            GenderChoices.FEMALE: texttospeech.SsmlVoiceGender.FEMALE
+        }
+        gender_value = voice_provider.gender if voice_provider else None
+        ssml_gender = gender_mapping.get(gender_value, texttospeech.SsmlVoiceGender.NEUTRAL)
 
         voice = texttospeech.VoiceSelectionParams(
-            language_code=language_code, ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
+            language_code=language_code, ssml_gender=ssml_gender
         )
 
         audio_config = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.MP3
+            audio_encoding=texttospeech.AudioEncoding.MP3,
+            speaking_rate=voice_provider.voice_speed
         )
 
         response = client.synthesize_speech(

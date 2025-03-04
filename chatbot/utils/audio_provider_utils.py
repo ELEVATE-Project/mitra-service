@@ -15,7 +15,8 @@ def text_speech_provider(voice_provider, text, gender, source_language):
         response = ai4bharat_text_speech(text=text, gender=gender, source_language=source_language)
     elif voice_provider.provider == VoiceProvider.GOOGLE:
         response = google_text_to_speech(
-            message=text, language_code=LanguageMapping.get_mapped_language(source_language)
+            message=text, language_code=LanguageMapping.get_mapped_language(source_language),
+            voice_provider=voice_provider
         )
     else:
         return {

@@ -2,7 +2,7 @@ import os
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.auth.hashers import make_password
 from simple_history.models import HistoricalRecords
 from chatbot.models.enums import (
@@ -228,6 +228,11 @@ class Voice(models.Model):
     sample_link = models.URLField(null=True, blank=True)
     language = models.CharField(max_length=100, null=True, blank=True)
     provider_code = models.CharField(max_length=100, null=True, blank=True)
+    gender = models.CharField(max_length=100, choices=GenderChoices.choices, default=GenderChoices.MALE)
+    voice_speed = models.FloatField(
+        null=True, blank=True, default=1.0,
+        validators=[MinValueValidator(0.25), MaxValueValidator(4.0)]
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
