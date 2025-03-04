@@ -254,23 +254,40 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         else:
             location = ""
 
-        story = Story(
-            title=title,
-            content=content,
-            tweet=tweet,
-            author=profile,
-            session=session,
-            objective=objective,
-            action_steps=action_steps,
-            impact=impact,
-            micro_improvement=micro_improvement,
-            language=StoryLanguageChoices.ENGLISH,
-            stage=StoryStatusChoices.COMPLETED,
-            other_params=other_params,
-            location=location,
-            blurb=blurb,
-            validation_logs=combined_reason
-        )
+        story = Story.objects.filter(session=session).first()
+        if story:
+            story.title = title
+            story.content = content
+            story.tweet = tweet
+            story.author = profile
+            story.objective = objective
+            story.action_steps = action_steps
+            story.impact = impact
+            story.micro_improvement = micro_improvement
+            story.language = StoryLanguageChoices.ENGLISH
+            story.stage = StoryStatusChoices.COMPLETED
+            story.other_params = other_params
+            story.location = location
+            story.blurb = blurb
+            story.validation_logs = combined_reason
+        else:
+            story = Story(
+                title=title,
+                content=content,
+                tweet=tweet,
+                author=profile,
+                session=session,
+                objective=objective,
+                action_steps=action_steps,
+                impact=impact,
+                micro_improvement=micro_improvement,
+                language=StoryLanguageChoices.ENGLISH,
+                stage=StoryStatusChoices.COMPLETED,
+                other_params=other_params,
+                location=location,
+                blurb=blurb,
+                validation_logs=combined_reason
+            )
 
         story.save()
         formatted_content = get_formatted_story(story)
@@ -285,6 +302,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
 
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=['session_status'])
+        chat_session.save_title(language=language)
         conversation = get_stored_conversation(company_chats=company_chats, ai_user=ai_user)
         chat_history = get_stored_chathistory(company_chats=company_chats, ai_user=ai_user)
 
@@ -436,11 +454,28 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
 
     reason_content = response_json_content.get('reason')
     response_json_content = response_json_content.get('final_answer')
-    response_json_content = json_repair.repair_json(response_json_content, return_objects=True)
+    if response_json_content and isinstance(response_json_content, str):
+        response_json_content = json_repair.repair_json(response_json_content, return_objects=True)
 
     reason_story = response_json_story.get('reason')
     response_json_story = response_json_story.get('final_answer')
-    response_json_story = json_repair.repair_json(response_json_story, return_objects=True)
+    if response_json_story and isinstance(response_json_story, str):
+        response_json_story = json_repair.repair_json(response_json_story, return_objects=True)
+
+    print("response_json_content: ", response_json_content)
+    print("response_json_story: ", response_json_story)
+
+    if (isinstance(response_json_story, dict) and response_json_story.get("type") == "string" and
+            "value" in response_json_story):
+        value = response_json_story.get("value")
+        if isinstance(value, str) and value.strip():
+            response_json_story = json_repair.repair_json(value, return_objects=True)
+
+    if (isinstance(response_json_content, dict) and response_json_content.get("type") == "string" and
+            "value" in response_json_content):
+        value = response_json_content.get("value")
+        if isinstance(value, str) and value.strip():
+            response_json_content = json_repair.repair_json(value, return_objects=True)
 
     combined_result = {**response_json_content, **response_json_story}
     combined_reason = {
