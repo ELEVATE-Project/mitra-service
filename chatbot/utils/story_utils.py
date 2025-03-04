@@ -420,7 +420,8 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
     response_json_story = response_json_story.get('final_answer')
     if response_json_story and isinstance(response_json_story, str):
         response_json_story = json_repair.repair_json(response_json_story, return_objects=True)
-
+    print("response_json_content: ", response_json_content)
+    print("response_json_story: ", response_json_story)
     combined_result = {**response_json_content, **response_json_story}
     combined_reason = {
         "reason_content": reason_content,
