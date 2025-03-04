@@ -45,6 +45,7 @@ def get_story_secondpage_html(story):
     )
     print("\n\nsteps_html: ", steps_html)
     print("story.objective: ", story.objective)
+    print("project.problem_statement: ", project.problem_statement)
 
     page_html = f"""
     <div class="story-second-page-container page-break">
