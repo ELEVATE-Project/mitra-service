@@ -216,24 +216,40 @@ def create_story_object(profile_id, session, language='en'):
         else:
             location = ""
 
-        story = Story(
-            title=title,
-            content=content,
-            tweet=tweet,
-            author=profile,
-            session=session,
-            objective=objective,
-            action_steps=action_steps,
-            impact=impact,
-            micro_improvement=micro_improvement,
-            language=StoryLanguageChoices.ENGLISH,
-            stage=StoryStatusChoices.COMPLETED,
-            other_params=other_params,
-            location=location,
-            blurb=blurb,
-            validation_logs=combined_reason
-        )
-
+        story = Story.objects.filter(session=session).first()
+        if story:
+            story.title = title
+            story.content = content
+            story.tweet = tweet
+            story.author = profile
+            story.objective = objective
+            story.action_steps = action_steps
+            story.impact = impact
+            story.micro_improvement = micro_improvement
+            story.language = StoryLanguageChoices.ENGLISH
+            story.stage = StoryStatusChoices.COMPLETED
+            story.other_params = other_params
+            story.location = location
+            story.blurb = blurb
+            story.validation_logs = combined_reason
+        else:
+            story = Story(
+                title=title,
+                content=content,
+                tweet=tweet,
+                author=profile,
+                session=session,
+                objective=objective,
+                action_steps=action_steps,
+                impact=impact,
+                micro_improvement=micro_improvement,
+                language=StoryLanguageChoices.ENGLISH,
+                stage=StoryStatusChoices.COMPLETED,
+                other_params=other_params,
+                location=location,
+                blurb=blurb,
+                validation_logs=combined_reason
+            )
         story.save()
         formatted_content = get_formatted_story(story)
         story.formatted_content = formatted_content
