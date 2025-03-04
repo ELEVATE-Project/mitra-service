@@ -267,6 +267,7 @@ def create_story_object(profile_id, session, language='en'):
 
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=['session_status'])
+        chat_session.save_title(language=language)
         save_shikshalokam_story(
             story=story, profile=profile
         )
