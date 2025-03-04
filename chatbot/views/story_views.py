@@ -30,18 +30,24 @@ def end_story(request):
                 'message': 'profile id or session or access_token is mandatory'
             }, status=400)
         else:
-            id, content = create_story_object(
+            id, content, error_msg = create_story_object(
                 profile_id=profile_id, session=session, language=language
             )
             return Response({
                 'status': 'ok',
                 'message': 'Story created',
                 'id': id,
-                'content': content
+                'content': content,
+                'error_message': error_msg
             }, status=200)
     except Exception as e:
         print(e)
         traceback.print_exc()
+        return Response({
+            'status': 'error',
+            'message': '',
+            'error_message': f'{e}'
+        }, status=500)
 
 
 # @authentication_classes([ProfileJWTAuthentication])

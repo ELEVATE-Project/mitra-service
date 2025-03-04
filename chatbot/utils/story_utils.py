@@ -16,11 +16,13 @@ import functools
 
 
 def create_story_object(profile_id, session, language='en'):
+    voice_provider=None
     try:
         profile = Profile.objects.get(id=profile_id)
         company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
         ai_user = Profile.objects.get(id=1)
         company_bot = CompanyBot.objects.get(route='/story')
+        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
         validate_bot = CompanyBot.objects.get(route='/story_validation')
         context = company_bot.context
         address = ProfileAddress.objects.filter(profile=profile)
@@ -175,8 +177,6 @@ def create_story_object(profile_id, session, language='en'):
         print('blurb: ', blurb)
         content = clean_escaped_text(text=content)
 
-        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
-
         if language != 'en':
             title = translate_field(
                 voice_provider=voice_provider, message_body=title, target_language=language
@@ -250,11 +250,16 @@ def create_story_object(profile_id, session, language='en'):
             story=story, profile=profile
         )
 
-        return story.id, story.content
+        return story.id, story.content, ""
 
     except Exception as e:
         traceback.print_exc()
-        return "", ""
+        error_message="Our server's taking a breather! Give it a moment and try again."
+        if voice_provider and language != 'en':
+            error_message=translate_field(
+                voice_provider=voice_provider, message_body=error_message, target_language=language
+            )
+        return "", "", error_message
 
 
 def format_response_json(response):
