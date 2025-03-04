@@ -37,6 +37,9 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
     if not remaining_stages and len(messages) < 2:
         remaining_stages_response = get_remaining_strands(messages=messages)
         remaining_stages = remaining_stages_response.get('remaining_stages', [])
+        print("remaining_stages: ", remaining_stages)
+        if remaining_stages and isinstance(remaining_stages, str):
+            remaining_stages = []
         remaining_stages.append('APPRECIATION')
         chat_session.session_context['remaining_stages'] = remaining_stages
         chat_session.save()
