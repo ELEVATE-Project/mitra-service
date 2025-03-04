@@ -15,7 +15,7 @@ def google_text_to_speech(message, language_code):
         synthesis_input = texttospeech.SynthesisInput(text=message)
 
         voice = texttospeech.VoiceSelectionParams(
-            language_code=language_code, ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
+            language_code=language_code, ssml_gender=texttospeech.SsmlVoiceGender.MALE
         )
 
         audio_config = texttospeech.AudioConfig(
