@@ -19,7 +19,8 @@ def google_text_to_speech(message, language_code):
         )
 
         audio_config = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.MP3
+            audio_encoding=texttospeech.AudioEncoding.MP3,
+            speaking_rate=0.8
         )
 
         response = client.synthesize_speech(
