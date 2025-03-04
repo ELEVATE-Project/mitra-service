@@ -28,13 +28,28 @@ def save_shikshalokam_story(
         pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
         print("pdf_content: ", pdf_content)
         print("pdf_content type: ", type(pdf_content))
-        StoryMedia.objects.create(
-            name=pdf_file_name,
-            file=pdf_content,
+        # StoryMedia.objects.create(
+        #     name=pdf_file_name,
+        #     file=pdf_content,
+        #     story=story,
+        #     include_in_story=False,
+        #     media_type=MediaTypeChoices.PDF
+        # )
+
+        story_media, created = StoryMedia.objects.update_or_create(
             story=story,
-            include_in_story=False,
-            media_type=MediaTypeChoices.PDF
+            media_type=MediaTypeChoices.PDF,
+            defaults={
+                "name": pdf_file_name,
+                "file": pdf_content,
+                "include_in_story": False
+            }
         )
+
+        if created:
+            print("New PDF created")
+        else:
+            print("Existing PDF updated")
 
     except Exception as e:
         traceback.print_exc()
