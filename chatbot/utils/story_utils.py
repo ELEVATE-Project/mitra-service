@@ -413,11 +413,13 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
 
     reason_content = response_json_content.get('reason')
     response_json_content = response_json_content.get('final_answer')
-    response_json_content = json_repair.repair_json(response_json_content, return_objects=True)
+    if response_json_content and isinstance(response_json_content, str):
+        response_json_content = json_repair.repair_json(response_json_content, return_objects=True)
 
     reason_story = response_json_story.get('reason')
     response_json_story = response_json_story.get('final_answer')
-    response_json_story = json_repair.repair_json(response_json_story, return_objects=True)
+    if response_json_story and isinstance(response_json_story, str):
+        response_json_story = json_repair.repair_json(response_json_story, return_objects=True)
 
     combined_result = {**response_json_content, **response_json_story}
     combined_reason = {
