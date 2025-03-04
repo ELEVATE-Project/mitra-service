@@ -176,6 +176,11 @@ def create_story_object(profile_id, session, language='en'):
         blurb = response_json_story.get('blurb', '')
         print('blurb: ', blurb)
         content = clean_escaped_text(text=content)
+        title = clean_escaped_text(text=title)
+        objective = clean_escaped_text(text=objective)
+        blurb = clean_escaped_text(text=blurb)
+        impact = clean_escaped_text(text=impact)
+        problem_statement = clean_escaped_text(text=problem_statement)
 
         if language != 'en':
             title = translate_field(
