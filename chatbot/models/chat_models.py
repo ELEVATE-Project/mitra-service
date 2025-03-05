@@ -1,9 +1,11 @@
 import json
 from django.db import models
-from chatbot.models import CompanyChat, Profile, CompanyBot, ChatStatus, LLMModel, Voice, VoiceType
-from chatbot.llm_models.llm_script import handle_bedrock_model
+from chatbot.models import CompanyChat, Profile, CompanyBot, ChatStatus, LLMModel, Voice, VoiceType, LLMProvider
+from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_model
 from chatbot.utils.audio_provider_utils import text_translate_provider
 import json_repair
+
+from chatbot.utils.chat_utils import get_guided_chat
 
 
 class ChatSession(models.Model):
@@ -21,11 +23,13 @@ class ChatSession(models.Model):
 
     def save_title(self, language='en'):
         company_chats = CompanyChat.objects.filter(session=self.session).order_by('created_at')
-        messages = self._get_bedrock_format_message(chats=company_chats)
         company_bot = CompanyBot.objects.filter(route='/mohini_title').first()
+        messages = get_guided_chat(
+            company_bot=company_bot, company_chats=company_chats
+        )
         prompt = self._get_prompt(company_bot=company_bot)
 
-        json_output = self._handle_bedrock_model(
+        json_output = self._handle_llm_model(
             prompt=prompt, messages=messages, company_bot=company_bot
         )
         try:
@@ -50,43 +54,32 @@ class ChatSession(models.Model):
 
     def _get_prompt(self, company_bot):
         prompt = company_bot.context
+        if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
+            return [{'text': prompt}]
+        elif company_bot.provider == LLMProvider.OPENAI:
+            return [
+                {
+                    'role': 'system',
+                    'content': prompt
+                },
+            ]
 
-        return [{'text': prompt}]
-
-    def _get_bedrock_format_message(self, chats):
-        ai_user = Profile.objects.get(id=1)
-        messages = []
-        for chat in chats:
-            if chat.receiver == ai_user:
-                user_message = chat.message
-                if chat.translated_message is not None and chat.translated_message != '':
-                    user_message = chat.translated_message
-                messages.append({
-                    'role': 'user',
-                    'content': [{'text': user_message}]
-                })
-            else:
-                messages.append({
-                    'role': 'assistant',
-                    "content": [{'text': chat.message}]
-                })
-        return messages
-
-    def _determine_model(self):
-        model = LLMModel.GPT4_O
-        if self.company_bot:
-            model = self.company_bot.llm_model if self.company_bot.llm_model else model
-        return model
-
-    def _handle_bedrock_model(self, prompt, messages, company_bot):
-        tool = company_bot.tool_context
-        if tool and isinstance(tool, str):
-            tool = json_repair.repair_json(tool, return_objects=True)
-        response_json = handle_bedrock_model(
-            system_prompt=prompt, messages=messages, model_name=company_bot.llm_model,
-            temperature=company_bot.bot_temperature, max_token=company_bot.max_token,
-            tools=tool
-        )
+    def _handle_llm_model(self, prompt, messages, company_bot):
+        response_json = None
+        if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
+            tool = company_bot.tool_context
+            if tool and isinstance(tool, str):
+                tool = json_repair.repair_json(tool, return_objects=True)
+            response_json = handle_bedrock_model(
+                system_prompt=prompt, messages=messages, model_name=company_bot.llm_model,
+                temperature=company_bot.bot_temperature, max_token=company_bot.max_token,
+                tools=tool
+            )
+        elif company_bot.provider == LLMProvider.OPENAI:
+            response_json = handle_openai_model(
+                system_prompt=prompt, messages=messages, model_name=company_bot.llm_model,
+                temperature=company_bot.bot_temperature, max_token=company_bot.max_token
+            )
 
         if response_json and isinstance(response_json, dict):
             if response_json.get('parameters'):
