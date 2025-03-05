@@ -16,11 +16,17 @@ def get_story_secondpage_html(story):
             print(f"Error repairing JSON: {e}")
             story.action_steps = ["No action steps provided."]
 
+    # action_steps = (
+    #     story.action_steps if isinstance(story.action_steps, list)
+    #     else [story.action_steps] if isinstance(story.action_steps, str)
+    #     else ["No action steps provided."]
+    # )
     action_steps = (
-        story.action_steps if isinstance(story.action_steps, list)
-        else [story.action_steps] if isinstance(story.action_steps, str)
+        [clean_escaped_text(step) for step in story.action_steps] if isinstance(story.action_steps, list)
+        else [clean_escaped_text(story.action_steps)] if isinstance(story.action_steps, str)
         else ["No action steps provided."]
     )
+
     project = Project.objects.filter(story=story).first()
     print("action step type: ", type(action_steps))
     print("action_steps: ", action_steps)
@@ -69,3 +75,10 @@ def get_story_secondpage_html(story):
     </div>
     """
     return page_html
+
+def clean_escaped_text(text):
+    text = text.replace("\\'", "")# \'  →  '
+    text = text.replace('\\"', '')# \"  →  "
+    text = text.replace("\\\\", "") # \\  →  \
+    print("Text: ", text)
+    return text

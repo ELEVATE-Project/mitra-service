@@ -41,7 +41,7 @@ class CompanyAdmin(admin.ModelAdmin):
 @admin.register(CompanyBot)
 class CompanyBotAdmin(SimpleHistoryAdmin):
     list_display = ('name', 'company', 'context')
-    list_filter = ('company', )
+    list_filter = ('company', 'provider', 'name')
     inlines = [VoiceProviderAdmin]
 
     def get_queryset(self, request):

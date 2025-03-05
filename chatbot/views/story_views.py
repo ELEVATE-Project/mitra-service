@@ -2,9 +2,8 @@ import traceback
 from chatbot.models import Story, StoryMedia
 from chatbot.serializer.story_serializer import StoryCreateSerializer, StoryRetrieveSerializer, \
     StoryMediaRetrieveSerializer, StoryFullSerializer
-from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf
-from chatbot.utils.story_utils import create_story_object
+from chatbot.utils.story_utils.story_utils import create_story_object
 import django_filters
 from rest_framework import generics, status
 from rest_framework.decorators import api_view, authentication_classes

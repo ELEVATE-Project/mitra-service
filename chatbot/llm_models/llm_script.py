@@ -120,7 +120,7 @@ def handle_openai_model(
         if tool_choice:
             request_data["tool_choice"]= tool_choice
     if top_p:
-        request_data['topP'] = top_p
+        request_data['top_p'] = top_p
     print("request_data: ", request_data)
     response = client.chat.completions.create(**request_data)
     print("raw res: ", response)
