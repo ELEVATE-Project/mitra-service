@@ -9,7 +9,7 @@ from chatbot.models.company_models import CompanyStateMachine
 channel_layer = get_channel_layer()
 
 
-def get_bedrock_tool_call_response(
+def get_reflection_bedrock_tool_response(
         system_prompt, messages, company_bot, session_id, channel_name, route, profile_id
 ):
 
@@ -19,45 +19,38 @@ def get_bedrock_tool_call_response(
     print("Length: ", len(company_chat))
     chunks = []
 
-
-    if company_chat and len(company_chat)<2:
-        chat_session.current_step += 1
-        chat_session.save()
-        state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
-        bot_question = state_machine.bot_question
-
-        translated_message = translate_and_send_message(
-            accumulated_message=bot_question, current_channel_name=channel_name,
-            current_step_number=chat_session.current_step, finish_reason="stop", route=route,
-            company_bot=company_bot
-        )
-
-        save_in_company_db(
-            session_id, profile_id, 'AI', bot_question, chunks, ChatStatus.IN_PROGRESS, translated_message
-        )
-        print("asking first bot_question: ", bot_question)
-        return bot_question
-
+    # if user_problem_statement and len(company_chat)<2:
+    #     chat_session.current_step += 2
+    #     chat_session.save()
+    #     state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
+    #     pre_context = company_bot.pre_context
+    #     if pre_context:
+    #         pre_context = pre_context.format(problem_statement=user_problem_statement)
+    #     bot_question = pre_context + " " + state_machine.bot_question
+    #
+    #     translated_message = translate_and_send_message(
+    #         accumulated_message=bot_question, current_channel_name=channel_name,
+    #         current_step_number=chat_session.current_step, finish_reason="stop", route=route
+    #     )
+    #
+    #     save_in_company_db(
+    #         session_id, profile_id, 'AI', bot_question, chunks, ChatStatus.IN_PROGRESS, translated_message
+    #     )
+    #     print("skipping stages bot_question: ", bot_question)
+    #     return bot_question
 
     response = handle_bedrock_model(
-        system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
-        temperature=company_bot.bot_temperature, max_token=company_bot.max_token
+        system_prompt=system_prompt, messages=messages
     )
-
     print("response_body bedrock: ", response)
-    if response is None:
-        response = 'I am sorry, I could not understood completely. Could you rephrase this please?'
 
-    print("Response: ", response)
     is_function_call = False
     if isinstance(response, dict):
-        # tool_use_id = response.get('toolUseId', None)
-        # if tool_use_id or response.get('name') == 'get_state_information' or response.get('type') == 'function':
-        is_function_call = True
-    elif isinstance(response, str):
-        if 'get_state_information' in response:
+        tool_use_id = response.get('toolUseId', None)
+        if tool_use_id:
             is_function_call = True
     print("is_function_call: ", is_function_call)
+
     if is_function_call:
         print("its func call")
         chat_session.current_step += 1
@@ -67,8 +60,7 @@ def get_bedrock_tool_call_response(
 
         translated_message = translate_and_send_message(
             accumulated_message=bot_question, current_channel_name=channel_name,
-            current_step_number=chat_session.current_step, finish_reason="stop", route=route,
-            company_bot=company_bot
+            current_step_number=chat_session.current_step, finish_reason="stop", route=route
         )
 
         name_machine = state_machine.name
@@ -86,8 +78,7 @@ def get_bedrock_tool_call_response(
         print("its not a  func call")
         translated_message = translate_and_send_message(
             accumulated_message=response, current_channel_name=channel_name,
-            current_step_number=current_step, finish_reason="stop", route=route,
-            company_bot=company_bot
+            current_step_number=current_step, finish_reason="stop", route=route
         )
         save_in_company_db(
             session_id, profile_id, 'AI', response, chunks, ChatStatus.IN_PROGRESS, translated_message

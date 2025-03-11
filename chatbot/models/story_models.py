@@ -63,6 +63,7 @@ class StoryMedia(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     base64_str = models.TextField(null=True, blank=True)
+    source_path = models.TextField(null=True, blank=True)
     media_type = models.CharField(max_length=100, choices=MediaTypeChoices.choices, null=True, blank=True)
 
     def get_public_url(self):

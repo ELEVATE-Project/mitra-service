@@ -15,6 +15,8 @@ class ChatSession(models.Model):
     current_step = models.IntegerField(null=True, blank=True)
     session_context = models.JSONField(null=True, blank=True)
     session_status = models.CharField(max_length=20, choices=ChatStatus.choices, null=True, blank=True)
+    project_id = models.CharField(max_length=400, null=True, blank=True)
+    user_id = models.CharField(max_length=400, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

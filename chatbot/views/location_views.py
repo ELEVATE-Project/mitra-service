@@ -29,7 +29,6 @@ def get_location_view(request):
         'Authorization': f'Bearer ' + location_auth,
         'Content-Type': 'application/json'
     }
-    print("headers: ", headers)
     response = requests.request("POST", url, headers=headers, data=payload)
     print("res: ", response)
     json_response = response.json()

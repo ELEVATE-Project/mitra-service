@@ -131,7 +131,6 @@ class CompanyBotDynamicContextType(models.TextChoices):
 class CompanyChatSourceChoices(models.TextChoices):
     WEB = 'WEB', _('WEB')
     PHONE = 'PHONE', _('PHONE')
-    WHATSAPP = 'WHATSAPP', _('WHATSAPP')
 
 
 class RouteLanguageChoices(models.TextChoices):
