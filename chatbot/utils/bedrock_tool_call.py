@@ -1,8 +1,8 @@
 from channels.layers import get_channel_layer
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.celery_tasks.handle_message import translate_and_send_message
-from chatbot.llm_models.llm_script import handle_bedrock_model
-from chatbot.models import ChatSession, ChatStatus, CompanyChat
+from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_model
+from chatbot.models import ChatSession, ChatStatus, CompanyChat, LLMProvider
 from chatbot.models.company_models import CompanyStateMachine
 
 
@@ -35,11 +35,37 @@ def get_bedrock_tool_call_response(system_prompt, messages, company_bot, session
         print("asking first bot_question: ", bot_question)
         return bot_question
 
-
-    response = handle_bedrock_model(
-        system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
-        temperature=company_bot.bot_temperature, max_token=company_bot.max_token
-    )
+    response = None
+    if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
+        response = handle_bedrock_model(
+            system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
+            temperature=company_bot.bot_temperature, max_token=company_bot.max_token
+        )
+    elif company_bot.provider == LLMProvider.OPENAI:
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_state_information",
+                    "description": "Get the information of the state you want to be in.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "state_name": {
+                                "type": "string",
+                                "description": "Name of the next state provided in the context."
+                            }
+                        },
+                        "required": ["state_name"]
+                    }
+                }
+            }
+        ]
+        response = handle_openai_model(
+            system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
+            temperature=company_bot.bot_temperature, max_token=company_bot.max_token,
+            tools=tools, tool_choice='auto', is_json_response=False
+        )
 
     print("response_body bedrock: ", response)
     if response is None:
@@ -48,8 +74,6 @@ def get_bedrock_tool_call_response(system_prompt, messages, company_bot, session
     print("Response: ", response)
     is_function_call = False
     if isinstance(response, dict):
-        # tool_use_id = response.get('toolUseId', None)
-        # if tool_use_id or response.get('name') == 'get_state_information' or response.get('type') == 'function':
         is_function_call = True
     elif isinstance(response, str):
         if 'get_state_information' in response:
