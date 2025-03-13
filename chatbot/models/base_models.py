@@ -56,6 +56,10 @@ class CompanyBot(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     context = models.TextField(help_text="Provide the bot's main prompt or description of its purpose.")
     max_token = models.IntegerField(default=2048, validators=[MinValueValidator(1)])
+    provider = models.CharField(
+        max_length=100, choices=LLMProvider.choices, default=LLMProvider.OPENAI)
+    provider_keys = models.TextField(
+        default="", max_length=1000, null=False, blank=True)
     bot_temperature = models.FloatField(
         default=0,
         help_text="Set the temperature for controlling response randomness (0-1). Lower values produce more "

@@ -4,7 +4,6 @@ from chatbot.serializer.story_serializer import StoryCreateSerializer, StoryRetr
     StoryMediaRetrieveSerializer, StoryFullSerializer
 from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf
-from chatbot.utils.story_utils import create_story_object
 import django_filters
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
@@ -12,6 +11,7 @@ from rest_framework.response import Response
 from chatbot.models.media_models import ProfileMedia
 from chatbot.serializer.profile_serializer import ProfileMediaSerializer
 from chatbot.utils.recreate_story_utils import re_create_story_object
+from chatbot.utils.story_utils.story_utils import create_story_object
 
 
 @api_view(['POST'])
@@ -74,6 +74,7 @@ class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
         print("Updating (PATCH)")
         return self.handle_update_logic(request, *args, **kwargs, is_partial=True)
 
+
     def handle_update_logic(self, request, *args, **kwargs):
         """
         Shared PATCH requests.
@@ -100,6 +101,7 @@ class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
         except Exception as e:
             print("Error occurred: ", str(e))
             raise
+
 
 class StoryMediaListCreateView(generics.ListCreateAPIView):
     queryset = StoryMedia.objects.all()

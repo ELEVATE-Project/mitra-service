@@ -36,13 +36,28 @@ def save_shikshalokam_story(
         pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
         print("pdf_content: ", pdf_content)
         print("pdf_content type: ", type(pdf_content))
-        StoryMedia.objects.create(
-            name=pdf_file_name,
-            file=pdf_content,
+        # StoryMedia.objects.create(
+        #     name=pdf_file_name,
+        #     file=pdf_content,
+        #     story=story,
+        #     include_in_story=False,
+        #     media_type=MediaTypeChoices.PDF
+        # )
+
+        story_media, created = StoryMedia.objects.update_or_create(
             story=story,
-            include_in_story=False,
-            media_type=MediaTypeChoices.PDF
+            media_type=MediaTypeChoices.PDF,
+            defaults={
+                "name": pdf_file_name,
+                "file": pdf_content,
+                "include_in_story": False
+            }
         )
+
+        if created:
+            print("New PDF created")
+        else:
+            print("Existing PDF updated")
 
         if access_token in [None, "", "null"] or not session or not project_id or flow == 'login':
             print("Not calling shikshalokam api as access_tokne or session or project_id is missing")
@@ -177,15 +192,14 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
 
         pdf_generated = generate_pdf_with_gotenberg(html_content)
         pdf_file_name = story.title
+        if not pdf_file_name or pdf_file_name == '':
+            pdf_file_name = 'mi_story'
         pdf_file_name = f"{pdf_file_name}.pdf"
         pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
         print("pdf_content: ", pdf_content)
         print("pdf_content type: ", type(pdf_content))
 
         story_media = StoryMedia.objects.filter(story=story, media_type=MediaTypeChoices.PDF).first()
-
-        # if story_media.file:
-        #     story_media.file.storage.delete(story_media.file.name)
 
         story_media.name = pdf_file_name
         story_media.file.save(pdf_file_name, pdf_content)

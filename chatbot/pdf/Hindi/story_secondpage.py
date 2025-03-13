@@ -1,4 +1,6 @@
 import re
+
+from chatbot.pdf.story_secondpage import clean_escaped_text
 from shikshalokam.models import Project
 import json_repair
 
@@ -17,8 +19,8 @@ def get_story_secondpage_html_hindi(story):
             story.action_steps = ["No action steps provided."]
 
     action_steps = (
-        story.action_steps if isinstance(story.action_steps, list)
-        else [story.action_steps] if isinstance(story.action_steps, str)
+        [clean_escaped_text(step) for step in story.action_steps] if isinstance(story.action_steps, list)
+        else [clean_escaped_text(story.action_steps)] if isinstance(story.action_steps, str)
         else ["No action steps provided."]
     )
     project = Project.objects.filter(story=story).first()

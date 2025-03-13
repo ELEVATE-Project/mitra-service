@@ -17,10 +17,11 @@ def get_story_secondpage_html(story):
             story.action_steps = ["No action steps provided."]
 
     action_steps = (
-        story.action_steps if isinstance(story.action_steps, list)
-        else [story.action_steps] if isinstance(story.action_steps, str)
+        [clean_escaped_text(step) for step in story.action_steps] if isinstance(story.action_steps, list)
+        else [clean_escaped_text(story.action_steps)] if isinstance(story.action_steps, str)
         else ["No action steps provided."]
     )
+
     project = Project.objects.filter(story=story).first()
     print("action step type: ", type(action_steps))
     print("action_steps: ", action_steps)
@@ -51,7 +52,7 @@ def get_story_secondpage_html(story):
         <h1>Report of Micro Improvement</h1>
         <div class="story-second-page-section">
             <h2>Problem Statement</h2>
-            <p>{project.actual_problem_statement or ""}</p>
+            <p>{project.actual_problem_statement or "No problem statement provided."}</p>
         </div>
         <div class="story-second-page-section">
             <h2>Objective</h2>
@@ -68,3 +69,10 @@ def get_story_secondpage_html(story):
     </div>
     """
     return page_html
+
+def clean_escaped_text(text):
+    text = text.replace("\\'", "")# \'  →  '
+    text = text.replace('\\"', '')# \"  →  "
+    text = text.replace("\\\\", "") # \\  →  \
+    print("Text: ", text)
+    return text
