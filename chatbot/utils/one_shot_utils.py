@@ -2,8 +2,7 @@ import json_repair
 from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_model
 from chatbot.models import CompanyBot, LLMProvider
 from jinja2 import Template
-
-from chatbot.utils.chat_utils import get_guided_chat, convert_llama_to_openai_tool
+from chatbot.utils.chat_utils import get_guided_chat
 
 
 def get_remaining_strands(messages, company_chats, oneshot_bot):

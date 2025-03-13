@@ -4,13 +4,13 @@ from typing import List
 from chatbot.llm_models.llm_script import handle_bedrock_model
 
 DATABASE_INTERFACE_BEARER_TOKEN = os.getenv('DATABASE_INTERFACE_BEARER_TOKEN')
-
+base_url = os.getenv('VECTOR_DB_BASE_URL')
 
 def query_database(query_prompt: str, priority_filter: str, limit: int):
     """
     Query vector database to retrieve chunk with user's input questions.
     """
-    url = "https://demo-mitra.shikshalokam.org/api/query/"
+    url = f"https://{base_url}/api/query/"
     headers = {
         "Content-Type": "application/json",
         "accept": "application/json",
@@ -23,9 +23,9 @@ def query_database(query_prompt: str, priority_filter: str, limit: int):
         data["priority_filter"] = priority_filter
     print("DATA: ", data)
     response = requests.post(url, json=data, headers=headers)
-
     if response.status_code == 200:
         result = response.json()
+        print("response: ", result)
         # process the result
         return result
     else:
@@ -64,7 +64,7 @@ def call_bedrock_api(prompt, messages, temperature, chunks: List[str]):
     return response
 
 
-def ask(messages, user_question, temperature, priority_filter, top_k, prompt):
+def ask(messages, user_question, temperature, priority_filter, top_k, prompt, filter_score):
     """
     Handle user's questions.
     """
@@ -73,19 +73,17 @@ def ask(messages, user_question, temperature, priority_filter, top_k, prompt):
     chunks = []
     if chunks_response and chunks_response["relevant_texts"]:
         for result in chunks_response["relevant_texts"]:
-            if (
-                    "qdrant_recommendation_text" in result
-                    and result["qdrant_recommendation_text"] is not None
-                    and len(result["qdrant_recommendation_text"]) > 20
+            print(f"relevance_score: {result['relevance_score']} filter_score: {filter_score}")
+            if ("qdrant_recommendation_text" in result and result["qdrant_recommendation_text"] is not None
+                and len(result["qdrant_recommendation_text"]) > 20 and result["relevance_score"] >= filter_score
             ):
                 chunks.append(result["qdrant_recommendation_text"])
 
-            elif (
-                    "translated_text" in result
-                    and result["translated_text"] is not None
-                    and len(result["translated_text"]) > 20
-            ):
+            elif ("translated_text" in result and result["translated_text"] is not None
+                  and len(result["translated_text"]) > 20):
                 chunks.append(result["translated_text"])
     print("\nCHUNKS: ", chunks)
+    chunks = []
+    print("\nChunk Response: ", chunks_response)
     response = call_bedrock_api(prompt=prompt, messages=messages, temperature=temperature, chunks=chunks)
     return response, chunks, chunks_response

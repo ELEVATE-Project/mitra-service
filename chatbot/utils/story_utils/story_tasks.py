@@ -115,7 +115,8 @@ def save_story(response_json_story, language, voice_provider, profile, session, 
 
     create_project(
         response_json=response_json_story, title=title, objective=objective, story=story,
-        profile=profile, problem_statement=problem_statement, language=language, voice_provider=voice_provider
+        profile=profile, problem_statement=problem_statement, language=language, voice_provider=voice_provider,
+        project_id=None
     )
 
     return story, problem_statement

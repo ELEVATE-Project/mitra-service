@@ -41,7 +41,7 @@ class CompanyAdmin(admin.ModelAdmin):
 @admin.register(CompanyBot)
 class CompanyBotAdmin(SimpleHistoryAdmin):
     list_display = ('name', 'company', 'context')
-    list_filter = ('company', 'provider', 'name')
+    list_filter = ('company', 'name')
     inlines = [VoiceProviderAdmin]
 
     def get_queryset(self, request):
@@ -65,7 +65,8 @@ class CompanyBotAdmin(SimpleHistoryAdmin):
             if company_field:
                 form.base_fields['company'].queryset = form.base_fields['company'].queryset.filter(
                     id=profile[0].company.id)
-            form.base_fields = {field_name: form.base_fields[field_name] for field_name in form.base_fields}
+            form.base_fields = {field_name: form.base_fields[field_name] for field_name in form.base_fields
+                                if field_name not in ['llm_model', 'llm_key']}
         form.base_fields = {field_name: form.base_fields[field_name] for field_name in form.base_fields}
         return form
 
@@ -143,7 +144,7 @@ class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
 @admin.register(ChatSession)
 class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
     list_display = ('session', 'get_first_name', 'created_at')
-    list_filter = ('session', 'title', ChatSessionFilter)
+    list_filter = ('session', 'title', ChatSessionFilter, 'project_id', 'session_status')
     search_fields = ('session', 'title', 'profile__first_name')
     raw_id_fields = ('profile',)
 

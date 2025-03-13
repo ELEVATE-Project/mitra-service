@@ -55,6 +55,7 @@ def get_company_end_context(slug):
                 "problem_statement": "The challenge faced by the user and what they wanted to solve."
             }
 
+
             Ensure all JSON fields are properly formatted. If certain information is not explicitly provided in 
             the conversation, use reasonable inferences or leave the field empty.
 
@@ -92,7 +93,8 @@ def get_company_content_prompt():
     """
 
 
-def create_project(response_json, title, objective, story, profile, problem_statement, language, voice_provider):
+def create_project(response_json, title, objective, story, profile, problem_statement, project_id, language,
+                   voice_provider):
     try:
         resource_name = response_json.get('resource_name', '')
         resource_link = response_json.get('resource_link', '')
@@ -108,24 +110,25 @@ def create_project(response_json, title, objective, story, profile, problem_stat
             resource_name = translate_field(
                 voice_provider=voice_provider, message_body=resource_name, target_language=language
             )
-
-        project_id = generate_random_hex()
+        if not project_id:
+            project_id = generate_random_hex()
 
         project, created = Project.objects.update_or_create(
             project_id=project_id,
             defaults={
                 "story": story,
                 "author": profile,
-                "title": title,
-                "objective": objective,
-                "duration": duration,
+                "actual_title": title,
+                "actual_objective": objective,
+                "actual_duration": duration,
                 "project_status": ProjectStatus.SUBMITTED,
-                "problem_statement": problem_statement,
+                "actual_problem_statement": problem_statement,
                 "keywords": keywords,
                 "resource_name": resource_name,
                 "resource_link": resource_link,
                 "project_start_date": project_start_date,
                 "project_end_date": project_end_date,
+                "project_language": language
             }
         )
 
@@ -166,6 +169,8 @@ def validate_json(response_content):
 
 
 def translate_field(voice_provider, message_body, target_language, source_language="en"):
+    if not message_body or message_body == '':
+        return message_body
     response = text_translate_provider(
         voice_provider=voice_provider, message_body=message_body, target_language=target_language,
         source_language=source_language

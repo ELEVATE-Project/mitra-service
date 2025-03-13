@@ -66,7 +66,7 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
             )
 
             if self.route != '/':
-                company_bot = CompanyBot.objects.filter(route='/oneshot_bot').first()
+                company_bot = CompanyBot.objects.filter(route='/').first()
                 voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
 
                 response = text_translate_provider(

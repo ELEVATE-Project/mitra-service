@@ -295,8 +295,8 @@ def format_response_json(response):
     print("\nBEFORE LOADS: ", response_json)
     if isinstance(response_json, str):
         response_json = json_repair.repair_json(response_json, return_objects=True)
-        # response_json = json.loads(response_json)
-    print("AFTER LOADS: ", response_json)
+        # response_json = json_repair.repair_json(response_json, return_objects=True)
+        print("AFTER LOADS: ", response_json)
     print("TYPE response_json: ", type(response_json))
 
     return response_json

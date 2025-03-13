@@ -13,7 +13,7 @@ from chatbot.utils.story_utils.story_llm import generate_story_llm, validate_sto
 from chatbot.utils.story_utils.story_tasks import save_story
 
 
-def create_story_object(profile_id, session, language='en'):
+def create_story_object(profile_id, session, access_token, flow, language='en'):
     voice_provider=None
     try:
         profile = Profile.objects.get(id=profile_id)
@@ -76,7 +76,9 @@ def create_story_object(profile_id, session, language='en'):
         chat_session.save_title(language=language)
 
         save_shikshalokam_story(
-            story=story, profile=profile
+            story=story, profile=profile,
+            problem_statement=problem_statement, chat_history=None, access_token=access_token,
+            project_id=None, session=session, conversation=None, flow=flow
         )
 
         story_id = story.id if story and story.id else ""

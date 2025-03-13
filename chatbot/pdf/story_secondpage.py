@@ -51,14 +51,14 @@ def get_story_secondpage_html(story):
     )
     print("\n\nsteps_html: ", steps_html)
     print("story.objective: ", story.objective)
-    print("project.problem_statement: ", project.problem_statement)
+    print("project.problem_statement: ", project.actual_problem_statement)
 
     page_html = f"""
     <div class="story-second-page-container page-break">
         <h1>Report of Micro Improvement</h1>
         <div class="story-second-page-section">
             <h2>Problem Statement</h2>
-            <p>{project.problem_statement or "No problem statement provided."}</p>
+            <p>{project.actual_problem_statement or "No problem statement provided."}</p>
         </div>
         <div class="story-second-page-section">
             <h2>Objective</h2>

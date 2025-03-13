@@ -1,5 +1,4 @@
 from rest_framework import serializers
-
 from chatbot.models import BotVernacular
 from chatbot.models.base_models import CompanyBot, Company
 from chatbot.models.company_models import CompanyStateMachine

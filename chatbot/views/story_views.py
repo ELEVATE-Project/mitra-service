@@ -1,5 +1,5 @@
 import traceback
-from chatbot.models import Story, StoryMedia
+from chatbot.models import Story, StoryMedia, ChatSession
 from chatbot.serializer.story_serializer import StoryCreateSerializer, StoryRetrieveSerializer, \
     StoryMediaRetrieveSerializer, StoryFullSerializer
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf
@@ -19,19 +19,26 @@ def end_story(request):
     try:
         profile_id = request.data['profile_id']
         session = request.data['session']
-        language = request.data['language']
+        model = request.data.get('model', None)
+        access_token = request.data.get('access_token', None)
+        flow = request.data.get('flow')
+        language = request.data.get('language', 'en')
+
         print("profile_id:", profile_id)
         print("session:", session)
-        print("language:", language)
+        print("access_token:", access_token)
         if profile_id is None or session is None:
             return Response({
                 'status': 'error',
-                'message': 'profile id or session or access_token is mandatory'
+                'message': 'profile id or session is mandatory',
+                'error_message': 'profile id or session is mandatory'
             }, status=400)
         else:
             id, content, error_msg = create_story_object(
-                profile_id=profile_id, session=session, language=language
+                profile_id=profile_id, session=session,
+                access_token=access_token, flow=flow, language=language
             )
+
             return Response({
                 'status': 'ok',
                 'message': 'Story created',
@@ -49,7 +56,6 @@ def end_story(request):
         }, status=500)
 
 
-# @authentication_classes([ProfileJWTAuthentication])
 class StoryListCreateView(generics.ListCreateAPIView):
     queryset = Story.objects.all()
     serializer_class = StoryCreateSerializer
@@ -76,14 +82,20 @@ class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
         """
         is_partial = kwargs.pop('is_partial', False)
         session_value = request.data.get('session')
+        access_token = request.data.get('access_token')
+        flow = request.data.get('flow')
         print("session_value: ", session_value)
+        print("access_token: ", access_token)
+        print("flow: ", flow)
 
         try:
             if is_partial:
                 response = super().partial_update(request, *args, **kwargs)
                 if response and response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]:
                     print("response.data: ", response.data.get('session'))
-                    update_story_pdf(session=session_value)
+                    update_story_pdf(
+                        access_token=access_token, session=session_value, flow=flow
+                    )
 
                 return response
         except Exception as e:
@@ -91,8 +103,6 @@ class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
             raise
 
 
-
-# @authentication_classes([ProfileJWTAuthentication])
 class StoryMediaListCreateView(generics.ListCreateAPIView):
     queryset = StoryMedia.objects.all()
     serializer_class = StoryMediaRetrieveSerializer
@@ -111,13 +121,17 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
         print("Creating")
         session_value = request.data.get('session')
         access_token = request.data.get('access_token')
+        flow = request.data.get('flow')
         print("session_value: ", session_value)
+        print("flow: ", flow)
         print("access_token: ", access_token)
         try:
             response = super().create(request, *args, **kwargs)
             print("response: ", response)
             print("response status_code: ", response.status_code)
-            update_story_pdf(session=session_value)
+            update_story_pdf(
+                access_token=access_token, session=session_value, flow=flow
+            )
             # if response.status_code == status.HTTP_201_CREATED:
             #     upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
             return response
@@ -127,7 +141,6 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
             raise
 
 
-# @authentication_classes([ProfileJWTAuthentication])
 class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = StoryMedia.objects.all()
     serializer_class = StoryMediaRetrieveSerializer
@@ -158,7 +171,9 @@ class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
         is_partial = kwargs.pop('is_partial', False)  # Safely extract the flag
         session_value = request.data.get('session')
         access_token = request.data.get('access_token')
+        flow = request.data.get('flow')
         print("session_value: ", session_value)
+        print("flow: ", flow)
         print("access_token: ", access_token)
 
         try:
@@ -169,7 +184,9 @@ class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
 
             print("response: ", response)
             print("response status_code: ", response.status_code)
-            update_story_pdf(session=session_value)
+            update_story_pdf(
+                access_token=access_token, session=session_value, flow=flow
+            )
 
             # if response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]:
                 # Pass response.data directly as the instance
@@ -181,7 +198,6 @@ class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
             raise
 
 
-@authentication_classes([ProfileJWTAuthentication])
 class ProfileMediaListCreateView(generics.ListCreateAPIView):
     queryset = ProfileMedia.objects.all()
     serializer_class = ProfileMediaSerializer
@@ -194,7 +210,6 @@ class ProfileMediaListCreateView(generics.ListCreateAPIView):
         return context
 
 
-@authentication_classes([ProfileJWTAuthentication])
 class ProfileMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = ProfileMedia.objects.all()
     serializer_class = ProfileMediaSerializer
@@ -223,7 +238,6 @@ def story_recreate_view(request):
     return Response({'message': temp_json}, status=status.HTTP_200_OK)
 
 
-# @authentication_classes([ProfileJWTAuthentication])
 class StoryBySessionView(generics.ListAPIView):
     serializer_class = StoryFullSerializer
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend]
