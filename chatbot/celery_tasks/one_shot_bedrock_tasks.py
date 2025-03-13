@@ -1,6 +1,7 @@
 from celery import shared_task
-from chatbot.models import CompanyChat, Profile, CompanyBot, ChatSession
+from chatbot.models import CompanyChat, Profile, CompanyBot, ChatSession, LLMProvider
 from chatbot.models.company_models import CompanyStateMachine
+from chatbot.utils.chat_utils import get_guided_chat
 from chatbot.utils.one_shot_bedrock_tool_call import get_one_shot_bedrock_tool_call_response
 from chatbot.utils.one_shot_utils import get_remaining_strands
 
@@ -10,33 +11,24 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
     company_chats = CompanyChat.objects.filter(session=session_id).order_by('created_at')
     chat_session = ChatSession.objects.get(session=session_id)
     profile = Profile.objects.get(id=profile_id)
-    ai_user = Profile.objects.get(id=1)
     company_bot = CompanyBot.objects.get(company=profile.company, route='/oneshot_bot')
 
-    messages=[]
-    # Bedrock wants user to initiate message first so skipping into mssg
-    for chat in company_chats:
-        if chat.receiver == ai_user:
-            user_message = chat.message
-            if chat.translated_message is not None and chat.translated_message != '':
-                user_message = chat.translated_message
-            messages.append({
-                'role': 'user',
-                'content': [{'text': user_message}]
-            })
-        else:
-            messages.append({
-                'role': 'assistant',
-                "content": [{'text': chat.message}]
-            })
+    messages = get_guided_chat(
+        company_bot=company_bot, company_chats=company_chats
+    )
 
     if not chat_session.session_context:
         chat_session.session_context = {}
     remaining_stages = chat_session.session_context.get('remaining_stages')
 
     if not remaining_stages and len(messages) < 2:
-        remaining_stages_response = get_remaining_strands(messages=messages)
+        remaining_stages_response = get_remaining_strands(
+            messages=messages, company_chats=company_chats, oneshot_bot=company_bot
+        )
         remaining_stages = remaining_stages_response.get('remaining_stages', [])
+        print("remaining_stages: ", remaining_stages)
+        if remaining_stages and isinstance(remaining_stages, str):
+            remaining_stages = []
         remaining_stages.append('APPRECIATION')
         chat_session.session_context['remaining_stages'] = remaining_stages
         chat_session.save()
@@ -52,22 +44,9 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
         print("Error: ", e)
         return
 
-    prompt_to_use = [
-        {
-            'text': company_bot.context
-        },
-        {
-            'text': f"""
-            {state_machine.context}
-        
-            Completion Criteria:
-            {state_machine.completion_criteria}
-            """
-        },
-        {
-            'text': company_bot.tool_context
-        }
-    ]
+    prompt_to_use = get_onestep_prompt(
+        company_bot=company_bot, state_machine=state_machine
+    )
 
     response = get_one_shot_bedrock_tool_call_response(
         system_prompt=prompt_to_use, messages=messages, company_bot=company_bot, session_id=session_id,
@@ -75,3 +54,42 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
     )
 
     return response
+
+
+def get_onestep_prompt(company_bot, state_machine):
+    prompt_to_use=[]
+    if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
+        prompt_to_use = [
+            {
+                'text': company_bot.context
+            },
+            {
+                'text': f"""
+                    {state_machine.context}
+
+                    Completion Criteria:
+                    {state_machine.completion_criteria}
+                    """
+            },
+            {
+                'text': company_bot.tool_context
+            }
+        ]
+    elif company_bot.provider == LLMProvider.OPENAI:
+        prompt_to_use = [
+            {
+                'role': 'system',
+                'content': """{}
+
+                            {}
+
+                            Completion Criteria:
+                            {}""".format(
+                    company_bot.context,
+                    state_machine.context,
+                    state_machine.completion_criteria
+                )
+            }
+        ]
+
+    return prompt_to_use

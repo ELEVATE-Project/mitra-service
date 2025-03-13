@@ -15,11 +15,12 @@ def google_text_to_speech(message, language_code):
         synthesis_input = texttospeech.SynthesisInput(text=message)
 
         voice = texttospeech.VoiceSelectionParams(
-            language_code=language_code, ssml_gender=texttospeech.SsmlVoiceGender.NEUTRAL
+            language_code=language_code, ssml_gender=texttospeech.SsmlVoiceGender.MALE
         )
 
         audio_config = texttospeech.AudioConfig(
-            audio_encoding=texttospeech.AudioEncoding.MP3
+            audio_encoding=texttospeech.AudioEncoding.MP3,
+            speaking_rate=0.9
         )
 
         response = client.synthesize_speech(

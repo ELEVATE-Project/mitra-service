@@ -2,12 +2,12 @@ import traceback
 from chatbot.models import Story, StoryMedia, ChatSession
 from chatbot.serializer.story_serializer import StoryCreateSerializer, StoryRetrieveSerializer, \
     StoryMediaRetrieveSerializer, StoryFullSerializer
-from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf
-from chatbot.utils.story_utils import create_story_object
+from chatbot.utils.story_utils.story_utils import create_story_object
 import django_filters
 from rest_framework import generics, status
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes
+from chatbot.auth import ProfileJWTAuthentication
 from rest_framework.response import Response
 from chatbot.models.media_models import ProfileMedia
 from chatbot.serializer.profile_serializer import ProfileMediaSerializer
@@ -63,6 +63,7 @@ class StoryListCreateView(generics.ListCreateAPIView):
     filterset_fields = ['session', 'author']
 
 
+@authentication_classes([ProfileJWTAuthentication])
 class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Story.objects.all()
     serializer_class = StoryRetrieveSerializer
@@ -73,6 +74,7 @@ class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
         """
         print("Updating (PATCH)")
         return self.handle_update_logic(request, *args, **kwargs, is_partial=True)
+
 
     def handle_update_logic(self, request, *args, **kwargs):
         """
@@ -99,6 +101,7 @@ class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
         except Exception as e:
             print("Error occurred: ", str(e))
             raise
+
 
 class StoryMediaListCreateView(generics.ListCreateAPIView):
     queryset = StoryMedia.objects.all()
@@ -129,10 +132,8 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
             update_story_pdf(
                 access_token=access_token, session=session_value, flow=flow
             )
-
-            if (response.status_code == status.HTTP_201_CREATED and access_token not in [None, "", "null"]
-                    and session_value and flow != 'login'):
-                upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
+            # if response.status_code == status.HTTP_201_CREATED:
+            #     upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
             return response
 
         except Exception as e:
@@ -187,9 +188,9 @@ class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
                 access_token=access_token, session=session_value, flow=flow
             )
 
-            if response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]:
+            # if response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]:
                 # Pass response.data directly as the instance
-                upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
+                # upload_to_cloud(session_value=session_value, access_token=access_token, instance=response.data)
 
             return response
         except Exception as e:

@@ -23,7 +23,7 @@ def text_speech_view(request):
             }, status=500)
 
         company_bot = CompanyBot.objects.filter(route=route).first()
-        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.SpeechToText).first()
+        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToSpeech).first()
 
         response = text_speech_provider(
             voice_provider=voice_provider, text=text, gender=gender, source_language=source_language
@@ -105,7 +105,7 @@ def text_translation_view(request):
             }, status=500)
 
         company_bot = CompanyBot.objects.filter(route=route).first()
-        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.SpeechToText).first()
+        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
 
         response = text_translate_provider(
             voice_provider=voice_provider, message_body=message_body, target_language=target_language,

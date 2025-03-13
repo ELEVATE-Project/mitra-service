@@ -5,6 +5,7 @@ from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_
 from chatbot.translate.google.google_stt import transcribe_multiple_languages_v2
 from chatbot.translate.google.google_translate import translate_text
 from chatbot.translate.google.google_tts import google_text_to_speech
+from chatbot.translate.openai.openai_stt import transcribe_audio
 from shikshalokam_mohini.settings import load_secrets
 
 
@@ -38,6 +39,11 @@ def speech_text_provider(voice_provider, base64, audio_format, source_language):
             project_id=secret.get('project_id'), audio_file=base64,
             language_codes=[LanguageMapping.get_mapped_language(source_language, region)]
         )
+    elif voice_provider.provider == VoiceProvider.OPENAI_WHISPER:
+        response = transcribe_audio(
+            base64_audio=base64, audio_format=audio_format, source_language=source_language
+        )
+
     else:
         return {
             'status': 500,

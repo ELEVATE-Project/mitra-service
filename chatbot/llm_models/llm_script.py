@@ -74,7 +74,8 @@ def handle_llama_model(
 @observe()
 def handle_openai_model(
         messages, max_token=None, temperature=None, company_bot=None, model_name=None, is_json_response=True,
-        stream=False, key_name='OPENAI_API_KEY', is_actual_key=False, tools=None, tool_choice=None, client_choice=None
+        stream=False, key_name='OPENAI_API_KEY', is_actual_key=False, tools=None, tool_choice=None, client_choice=None,
+        top_p=None, system_prompt=None
 ):
     if client_choice:
         client = client_choice
@@ -98,6 +99,9 @@ def handle_openai_model(
     else:
         model_to_use = LLMModel.GPT4_O_MINI
 
+    if system_prompt and isinstance(system_prompt, list):
+        messages = system_prompt+messages
+
     request_data = {
         "model": model_to_use,
         "messages": messages,
@@ -115,15 +119,24 @@ def handle_openai_model(
         request_data["tools"]= tools
         if tool_choice:
             request_data["tool_choice"]= tool_choice
-
+    if top_p:
+        request_data['top_p'] = top_p
+    print("request_data: ", request_data)
     response = client.chat.completions.create(**request_data)
-
+    print("raw res: ", response)
     if is_json_response:
         response_content = response.choices[0].message.content
-        response_json = json.loads(response_content)
+        response_json = None
+        if response_content:
+            response_json = json.loads(response_content)
         return response_json
+    elif tools:
+        tool_calls = response.choices[0].message.tool_calls
+        if tool_calls and len(tool_calls) > 0:
+            return {}
+        return response.choices[0].message.content if response.choices else response
     else:
-        return response
+        return response.choices[0].message.content if response.choices else response
 
 
 @observe()
@@ -168,6 +181,7 @@ def handle_bedrock_model(
             request_payload['inferenceConfig'] = inference_config
         if tools:
             request_payload['toolConfig'] = tools.get('toolConfig')
+        print("request_payload:", request_payload)
         response = bedrock_runtime.converse(**request_payload)
 
         print("Response:", response)

@@ -1,0 +1,164 @@
+from jinja2 import Template
+import json_repair
+from chatbot.models import Profile, LLMProvider
+from chatbot.models.geo_models import ProfileAddress
+
+
+def get_creation_promt(company_bot, profile):
+    context = company_bot.context
+    address = ProfileAddress.objects.filter(profile=profile)
+    context_data = {
+        "profile": profile,
+        "address": address if address else [{}]
+    }
+    template = Template(company_bot.tag_context)
+
+    tag_context = template.render(context_data)
+
+    end_context = company_bot.end_context
+
+    project_data = ''
+
+    content_prompt = f"""
+                {context}
+                {tag_context}
+                {project_data}
+            """
+    story_prompt = f"""
+                {end_context}
+                {tag_context}
+                {project_data}
+            """
+    print('-------------------------------')
+    print(story_prompt)
+    formatted_content_prompt = []
+    formatted_story_prompt = []
+
+    if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
+        formatted_content_prompt = [
+            {
+                'text': content_prompt
+            },
+        ]
+        formatted_story_prompt = [
+            {
+                'text': story_prompt
+            },
+        ]
+    elif company_bot.provider == LLMProvider.OPENAI:
+        formatted_content_prompt = [
+            {
+                'role': 'system',
+                'content': content_prompt
+            },
+        ]
+        formatted_story_prompt = [
+            {
+                'role': 'system',
+                'content': story_prompt
+            },
+        ]
+
+    return formatted_content_prompt, formatted_story_prompt, tag_context, project_data
+
+
+def get_validation_prompt(
+        response_json_story, validate_bot, response_json_content, tag_context, project_data
+):
+    validate_context_data = {
+        "story_json_output": response_json_story,
+    }
+    validate_template = Template(validate_bot.tag_context)
+    validate_tag_context = validate_template.render(validate_context_data)
+
+    validate_story_prompt = f"""
+               {validate_bot.end_context}
+               {validate_tag_context}
+               {tag_context}
+               {project_data}
+           """
+
+    validate_context_data = {
+        "story_json_output": response_json_content,
+    }
+    validate_tag_context = validate_template.render(validate_context_data)
+
+    validate_content_prompt = f"""
+               {validate_bot.context}
+               {validate_tag_context}
+               {tag_context}
+               {project_data}
+           """
+
+    if validate_bot.provider == LLMProvider.BEDROCK_CONVERSE:
+        validate_content_prompt = [
+            {
+                'text': validate_content_prompt
+            },
+        ]
+        validate_story_prompt = [
+            {
+                'text': validate_story_prompt
+            },
+        ]
+    elif validate_bot.provider == LLMProvider.OPENAI:
+        validate_content_prompt = [
+            {
+                'role': 'system',
+                'content': validate_content_prompt
+            },
+        ]
+        validate_story_prompt = [
+            {
+                'role': 'system',
+                'content': validate_story_prompt
+            },
+        ]
+
+    return validate_content_prompt, validate_story_prompt
+
+
+def get_chat_message(company_chats, company_bot):
+    messages = []
+    ai_user = Profile.objects.get(id=1)
+
+    if company_chats and company_chats[0].receiver != ai_user:
+        company_chats.pop(0)
+    for chat in company_chats:
+        user_message = chat.message
+        if chat.receiver == ai_user:
+            if chat.translated_message is not None and chat.translated_message != '':
+                user_message = chat.translated_message
+            if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
+                messages.append({
+                    'role': 'user',
+                    'content': [{'text': user_message}]
+                })
+            elif company_bot.provider == LLMProvider.OPENAI:
+                messages.append({
+                    'role': 'user',
+                    'content': user_message
+                })
+        else:
+            if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
+                messages.append({
+                    'role': 'assistant',
+                    'content': [{'text': user_message}]
+                })
+            elif company_bot.provider == LLMProvider.OPENAI:
+                messages.append({
+                    'role': 'assistant',
+                    'content': user_message
+                })
+
+
+    return messages
+
+
+def get_tool_values(company_bot):
+    tool_context = company_bot.tool_context
+    tool_context = json_repair.repair_json(tool_context, return_objects=True)
+    tool_story = tool_context.get('story_tool')
+    tool_content = tool_context.get('content_tool')
+
+    return tool_content, tool_story
