@@ -437,7 +437,9 @@ def update_project_status_view(request):
         ).exclude(media_type=MediaTypeChoices.PDF)
 
         with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(upload_to_cloud, session, access_token, story_obj, None) for story_obj in
+            futures = [executor.submit(
+                upload_to_cloud, session_value=session, access_token=access_token, instance=story_obj, story=None
+            ) for story_obj in
                        story_media_objects]
 
             for future in as_completed(futures):
