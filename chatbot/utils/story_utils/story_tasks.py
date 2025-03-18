@@ -2,9 +2,13 @@ from chatbot.models import StoryLanguageChoices, StoryStatusChoices, Story
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.story_llama_utils import translate_field, create_project
 from chatbot.utils.story_utils.format_utils import clean_escaped_text
+from shikshalokam.models import Project, Task
+from shikshalokam.serializer import TaskSerializer
 
 
-def save_story(response_json_story, language, voice_provider, profile, session, combined_reason):
+def save_story(
+        response_json_story, language, voice_provider, profile, session, combined_reason, flow=None, project_id=None
+):
     title = response_json_story.get('title', '')
     print('title: ', title)
     tweet = response_json_story.get('tweet', '')
@@ -66,6 +70,18 @@ def save_story(response_json_story, language, voice_provider, profile, session, 
         blurb = translate_field(
             voice_provider=voice_provider, message_body=blurb, target_language=language
         )
+
+    if flow != 'login' and project_id:
+        print("project_id: ", project_id)
+        project = Project.objects.get(project_id=project_id)
+        if project:
+            print("project: ", project)
+            tasks = Task.objects.filter(project=project)
+            serialized_tasks = TaskSerializer(tasks, many=True).data
+            print("tasks serialized_tasks: ", serialized_tasks)
+            # action_steps = [task.get('task_name') for task in serialized_tasks]
+            action_steps = [f"{idx + 1}. {task.get('task_name')}" for idx, task in enumerate(serialized_tasks)]
+            print("tasks action_steps: ", action_steps)
 
     if profile:
         address = ProfileAddress.objects.filter(profile=profile).first()

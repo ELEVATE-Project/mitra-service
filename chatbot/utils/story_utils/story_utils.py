@@ -64,7 +64,8 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
 
         story, problem_statement = save_story(
             response_json_story=response_json_story, language=language, voice_provider=voice_provider,
-            profile=profile, session=session, combined_reason=combined_reason
+            profile=profile, session=session, combined_reason=combined_reason, flow=flow,
+            project_id=chat_session.project_id
         )
         if story:
             formatted_content = get_formatted_story(story)
