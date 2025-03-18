@@ -1,5 +1,6 @@
 from django.db import models
-from chatbot.models import CompanyChat, Profile, CompanyBot, ChatStatus, LLMModel, Voice, VoiceType, LLMProvider
+from chatbot.models import CompanyChat, Profile, CompanyBot, ChatStatus, LLMModel, Voice, VoiceType, LLMProvider, \
+    ChatType
 from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_model
 from chatbot.utils.audio_provider_utils import text_translate_provider
 import json_repair
@@ -18,6 +19,8 @@ class ChatSession(models.Model):
     session_status = models.CharField(max_length=20, choices=ChatStatus.choices, null=True, blank=True)
     project_id = models.CharField(max_length=400, null=True, blank=True)
     user_id = models.CharField(max_length=400, null=True, blank=True)
+    session_type = models.CharField(max_length=100, choices=ChatType.choices, null=True, blank=True)
+
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

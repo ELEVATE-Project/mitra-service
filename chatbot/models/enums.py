@@ -10,6 +10,11 @@ class ChatStatus(models.TextChoices):
     RESUME = 'RESUME', _('RESUME')
 
 
+class ChatType(models.TextChoices):
+    guidedReflection = 'normal', _('guidedReflection')
+    oneStepReflection = 'oneshot', _('oneStepReflection')
+
+
 class LLMProvider(models.TextChoices):
     BEDROCK = 'bedrock', _('BEDROCK')
     BEDROCK_CONVERSE = 'bedrock/converse', _('BEDROCK_CONVERSE')

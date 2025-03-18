@@ -3,7 +3,7 @@ import traceback
 from asgiref.sync import async_to_sync
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.base_consumer import BaseConsumer
-from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType
+from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType, ChatType
 from chatbot.celery_tasks.shikshalokam_bedrock_tasks import get_shikshalokam_bedrock_response
 from chatbot.utils.audio_provider_utils import text_translate_provider
 
@@ -51,6 +51,7 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
                         'current_step': 1,
                         'company_bot': CompanyBot.objects.get(company=profile.company, route='/'),
                         'session_status': ChatStatus.IN_PROGRESS,
+                        'session_type': ChatType.guidedReflection
                     }
                 )
                 print(cs, cs_created)
