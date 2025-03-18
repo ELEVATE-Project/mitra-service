@@ -31,7 +31,6 @@ def create_profile_utils(access_token):
 
 
         company = Company.objects.get(slug='shikshalokamstaging')
-
         profile_data = {
             "email": email,
             "first_name": name,
@@ -47,20 +46,19 @@ def create_profile_utils(access_token):
             "state": state,
             "district": district,
         }
-
         profile, created = Profile.objects.update_or_create(
             userid=userid,
             defaults=profile_data
         )
 
         if address_data:
+            ProfileAddress.objects.filter(profile=profile).delete()
+
             ProfileAddress.objects.update_or_create(
                 profile=profile,
                 defaults=address_data
             )
-        print("profile: ", profile)
         serialized_profile = ProfileSerializer(profile).data
-        print("serialized_profile: ", serialized_profile)
         return {
             'success': True,
             'data': serialized_profile
@@ -73,6 +71,7 @@ def create_profile_utils(access_token):
             'message': f"Error while making the API call: {e}"
         }
     except Exception as e:
+        print("e: ", e)
         return {
             'success': False,
             'status_code': 500,
@@ -103,7 +102,6 @@ def get_profile_detail(access_token):
             }
 
         json_response = response.json()
-        print("json_response: ", json_response)
 
         if not json_response or "result" not in json_response:
             return {

@@ -88,6 +88,7 @@ def handle_cloud_response(results, session_value, story=None, instance=None):
     if instance:
         file_name = instance.get("name")
         file_info = results.get(session_value, {}).get("files", [])[0]
+        print("file_info: ", file_info)
         source_path = file_info["payload"]["sourcePath"]
         file_data = instance.get("base64_str")
         print('source path: ', source_path)
@@ -151,6 +152,9 @@ def handle_cloud_response(results, session_value, story=None, instance=None):
 def upload_to_cloud(session_value, access_token, story=None, instance=None):
     """Main function to upload files to the cloud."""
     url = f"https://{base_url}/cloud-services/files/preSignedUrls"
+    print("---------------------")
+    print("Upload Cloud Url: ", url)
+    print("---------------------")
     headers = {"X-auth-token": access_token}
 
     if story:

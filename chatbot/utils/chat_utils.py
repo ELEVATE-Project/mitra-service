@@ -1,9 +1,20 @@
 from chatbot.models import Profile, LLMProvider
 import json
 
-def format_message_as_per_openai_format(chats):
+def format_message_as_per_openai_format(chats, intro=None):
     ai_user = Profile.objects.get(id=1)
-    messages = []
+    if intro:
+        messages = [
+            {
+                'role': 'user',
+                'content': "Hello"
+            }, {
+                'role': 'assistant',
+                'content': intro
+            }
+        ]
+    else:
+        messages = []
     for chat in chats:
         if chat.receiver == ai_user:
             user_message = chat.message
@@ -21,9 +32,20 @@ def format_message_as_per_openai_format(chats):
     return messages
 
 
-def format_message_as_per_bedrock_format(chats):
+def format_message_as_per_bedrock_format(chats, intro=None):
     ai_user = Profile.objects.get(id=1)
-    messages = []
+    if intro:
+        messages = [
+            {
+                'role': 'user',
+                'content': [{'text': "Hello"}]
+            }, {
+                'role': 'assistant',
+                'content': [{'text': intro}]
+            }
+        ]
+    else:
+        messages = []
     for chat in chats:
         if chat.receiver == ai_user:
             user_message = chat.message
@@ -42,12 +64,12 @@ def format_message_as_per_bedrock_format(chats):
     return messages
 
 
-def get_guided_chat(company_bot, company_chats):
+def get_guided_chat(company_bot, company_chats, intro=None):
     messages = []
     if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
-        messages = format_message_as_per_bedrock_format(chats=company_chats)
+        messages = format_message_as_per_bedrock_format(chats=company_chats, intro=intro)
     elif company_bot.provider == LLMProvider.OPENAI:
-        messages = format_message_as_per_openai_format(chats=company_chats)
+        messages = format_message_as_per_openai_format(chats=company_chats, intro=intro)
 
     return messages
 

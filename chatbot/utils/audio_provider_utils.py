@@ -3,6 +3,7 @@ from chatbot.translate.ai4Bharat.speech_to_text import ai4bharat_speech_text
 from chatbot.translate.ai4Bharat.text_to_speech import ai4bharat_text_speech
 from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
 from chatbot.translate.google.google_stt import transcribe_multiple_languages_v2
+from chatbot.translate.google.google_stt_v1 import transcribe_multiple_languages_v1
 from chatbot.translate.google.google_translate import translate_text
 from chatbot.translate.google.google_tts import google_text_to_speech
 from chatbot.translate.openai.openai_stt import transcribe_audio
@@ -14,7 +15,8 @@ def text_speech_provider(voice_provider, text, gender, source_language):
         response = ai4bharat_text_speech(text=text, gender=gender, source_language=source_language)
     elif voice_provider.provider == VoiceProvider.GOOGLE:
         response = google_text_to_speech(
-            message=text, language_code=LanguageMapping.get_mapped_language(source_language)
+            message=text, language_code=LanguageMapping.get_mapped_language(source_language),
+            voice_provider=voice_provider
         )
     else:
         return {
@@ -37,6 +39,16 @@ def speech_text_provider(voice_provider, base64, audio_format, source_language):
         secret = load_secrets()
         response = transcribe_multiple_languages_v2(
             project_id=secret.get('project_id'), audio_file=base64,
+            language_codes=[LanguageMapping.get_mapped_language(source_language, region)]
+        )
+    elif voice_provider.provider == VoiceProvider.GOOGLE_V1:
+        if source_language == 'en':
+            region = "US"
+        else:
+            region = "IN"
+
+        response = transcribe_multiple_languages_v1(
+            audio_file=base64,
             language_codes=[LanguageMapping.get_mapped_language(source_language, region)]
         )
     elif voice_provider.provider == VoiceProvider.OPENAI_WHISPER:

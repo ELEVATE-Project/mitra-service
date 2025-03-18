@@ -11,8 +11,14 @@ class BotVernacular(models.Model):
         null=True, blank=True, help_text="Provide an introductory message that the bot will present when the "
                                          "conversation starts."
     )
+    alt_introductory_message = models.TextField(
+        null=True, blank=True, help_text="Provide an alternate introductory message that the bot will present when the "
+                                         "conversation starts."
+    )
     name = models.CharField(max_length=100,null=True, blank=True, help_text="Enter the name of the bot.")
-
+    error_message = models.TextField(
+        null=True, blank=True, help_text="Provide an error message that the bot will display."
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

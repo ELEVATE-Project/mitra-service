@@ -5,6 +5,10 @@ import traceback
 import requests
 from django.core.files.base import ContentFile
 from chatbot.models import StoryMedia, MediaTypeChoices, CompanyChat, Profile, Story, ChatSession
+from chatbot.pdf.Hindi.story_first_page import get_first_page_html_hindi
+from chatbot.pdf.Hindi.story_images_page import get_story_images_page_html_hindi
+from chatbot.pdf.Hindi.story_secondpage import get_story_secondpage_html_hindi
+from chatbot.pdf.Hindi.story_thirdpage import get_thirdpage_html_hindi
 from chatbot.pdf.story_first_page import get_first_page_html
 from chatbot.pdf.story_images_page import get_story_images_page_html
 from chatbot.pdf.story_secondpage import get_story_secondpage_html
@@ -12,6 +16,7 @@ from chatbot.pdf.story_thirdpage import get_thirdpage_html
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
+from shikshalokam.models import Project
 
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
@@ -103,10 +108,9 @@ def save_shikshalokam_story(
 
 
 def get_story_html(story, profile):
+    project = Project.objects.filter(story=story, author=profile).first()
     css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/story_pdf.css"))
-    pdf_file_name = story.title
-    if not pdf_file_name or pdf_file_name == '':
-        pdf_file_name = 'mi_story'
+    pdf_file_name = project.expected_title if project and project.expected_title else "'mi_story"
     with open(css_path, 'r') as css_file:
         inline_css = css_file.read()
     html_content = f"""
@@ -126,20 +130,56 @@ def get_story_html(story, profile):
              <body>
 
         """
-    html_content += get_first_page_html(story=story, profile=profile)
-    html_content += get_story_secondpage_html(story=story)
-    html_content += get_story_images_page_html(story=story)
-    html_content += get_thirdpage_html(story=story, profile=profile)
+
+
+    if project and project.project_language == 'hi':
+        print("Taking hindi pdf files")
+        html_content += get_first_page_html_hindi(story=story, profile=profile, project=project)
+        html_content += get_story_secondpage_html_hindi(story=story)
+        html_content += get_story_images_page_html_hindi(story=story)
+        html_content += get_thirdpage_html_hindi(story=story, profile=profile)
+    else:
+        html_content += get_first_page_html(story=story, profile=profile, project=project)
+        html_content += get_story_secondpage_html(story=story)
+        # html_content += "<div></div>"
+        html_content += get_story_images_page_html(story=story)
+        html_content += get_thirdpage_html(story=story, profile=profile)
+    # html_content += f"""
+    #
+    #         </body>
+    #
+    #     </html>
+    #     """
     html_content += f"""
+        <script>
+        document.addEventListener("DOMContentLoaded", function () {{
+            function checkOverflowAndInsertBreaks() {{
+                const containers = document.querySelectorAll(".story-second-page-container");
+                console.log("containers: ", containers)
+                containers.forEach(container => {{
+                    if (container.scrollHeight > container.clientHeight) {{
+                        // Create a page break div if the content overflows
+                        const pageBreak = document.createElement("div");
+                        pageBreak.style.pageBreakBefore = "always";
+                        container.parentNode.insertBefore(pageBreak, container.nextSibling);
+                    }}
+                }});
+            }}
 
-            </body>
-        </html>
-        """
+            checkOverflowAndInsertBreaks(); // Run on page load
+        }});
+        </script>
+        </body>
+    </html>
+    """
 
+    print("--------------------")
+    print(html_content)
+    print("--------------------")
     return html_content
 
 
-def update_story_pdf(access_token, session, flow):
+def update_story_pdf(access_token, session, flow, is_edit_story=False):
 
     try:
         story = Story.objects.get(session=session)
@@ -159,7 +199,7 @@ def update_story_pdf(access_token, session, flow):
         print("pdf_content: ", pdf_content)
         print("pdf_content type: ", type(pdf_content))
 
-        story_media = StoryMedia.objects.get(story=story, media_type=MediaTypeChoices.PDF)
+        story_media = StoryMedia.objects.filter(story=story, media_type=MediaTypeChoices.PDF).first()
 
         story_media.name = pdf_file_name
         story_media.file.save(pdf_file_name, pdf_content)
@@ -186,14 +226,17 @@ def update_story_pdf(access_token, session, flow):
             story=story, include_in_story=True
         ).exclude(media_type=MediaTypeChoices.PDF)
 
-        attachments = [
-            {
-                "name": media.name,
-                "sourcePath": media.source_path,
-                "type": media.media_type
-            }
-            for media in story_media_objects
-        ]
+        if is_edit_story:
+            attachments = [
+                {
+                    "name": media.name,
+                    "sourcePath": media.source_path,
+                    "type": media.media_type
+                }
+                for media in story_media_objects
+            ]
+        else:
+            attachments = []
         print("attachments: ", attachments)
 
         pdf_information = upload_response_json.get('pdfInformation')

@@ -9,31 +9,13 @@ from chatbot.models.company_models import CompanyStateMachine
 channel_layer = get_channel_layer()
 
 
-def get_bedrock_tool_call_response(system_prompt, messages, company_bot, session_id, channel_name, route, profile_id):
+def get_bedrock_tool_call_response(
+        system_prompt, messages, company_bot, session_id, channel_name, route, profile_id
+):
 
     chat_session = ChatSession.objects.get(session=session_id)
     current_step = chat_session.current_step
-    company_chat = CompanyChat.objects.filter(session=session_id)
-    print("Length: ", len(company_chat))
     chunks = []
-
-    if company_chat and len(company_chat)<2:
-        chat_session.current_step += 1
-        chat_session.save()
-        state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
-        bot_question = state_machine.bot_question
-
-        translated_message = translate_and_send_message(
-            accumulated_message=bot_question, current_channel_name=channel_name,
-            current_step_number=chat_session.current_step, finish_reason="stop", route=route,
-            company_bot=company_bot
-        )
-
-        save_in_company_db(
-            session_id, profile_id, 'AI', bot_question, chunks, ChatStatus.IN_PROGRESS, translated_message
-        )
-        print("asking first bot_question: ", bot_question)
-        return bot_question
 
     response = None
     if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:

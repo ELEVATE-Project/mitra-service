@@ -3,7 +3,7 @@ import json
 from rest_framework import serializers
 
 from chatbot.serializer.profile_serializer import ProfileSerializer
-from shikshalokam.models.base_model import Project, Task, Category, ProjectTemplate, Evidence
+from shikshalokam.models.base_model import Project, Task, Category, ProjectTemplate, Evidence, LearningResources
 from shikshalokam.models.wishlist_model import ProjectWishlist
 
 
@@ -17,6 +17,12 @@ class ProjectTemplateSerializer(serializers.ModelSerializer):
     category = CategorySerializer(read_only=True)
     class Meta:
         model = ProjectTemplate
+        fields = '__all__'
+
+
+class LearningResourceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LearningResources
         fields = '__all__'
 
 
@@ -44,6 +50,8 @@ class ProjectSerializer(serializers.ModelSerializer):
     author = ProfileSerializer(read_only=True)
     categories = serializers.ListField(child=serializers.JSONField(), required=False)
     recommended_for = serializers.ListField(child=serializers.JSONField(), required=False)
+    evidence = EvidenceSerializer(many=True, read_only=True)
+    learning_resource = LearningResourceSerializer(many=True, read_only=True)
 
     def to_representation(self, instance):
         representation = super().to_representation(instance)

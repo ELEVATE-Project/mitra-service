@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from chatbot.models import Story, StoryMedia
+from chatbot.serializer.profile_serializer import ProfileSerializer
 
 
 class StoryMediaCreateSerializer(serializers.ModelSerializer):
@@ -41,7 +42,7 @@ class StoryRetrieveSerializer(serializers.ModelSerializer):
 
 class StoryFullSerializer(serializers.ModelSerializer):
     story_media = StoryMediaCreateSerializer(many=True, read_only=True)
-
+    author = ProfileSerializer(read_only=True)
     class Meta:
         model = Story
         fields = '__all__'

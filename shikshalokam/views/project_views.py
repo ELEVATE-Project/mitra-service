@@ -16,7 +16,7 @@ from rest_framework.exceptions import AuthenticationFailed
 
 
 class ProjectListCreateView(generics.ListCreateAPIView):
-    queryset = Project.objects.prefetch_related('task__evidence').select_related(
+    queryset = Project.objects.prefetch_related('task__evidence', 'evidence', 'learning_resource').select_related(
         'project_template__category', 'author'
     ).all()
     serializer_class = ProjectSerializer

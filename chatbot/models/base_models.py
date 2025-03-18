@@ -2,7 +2,7 @@ import os
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.auth.hashers import make_password
 from simple_history.models import HistoricalRecords
 from chatbot.models.enums import (
@@ -24,6 +24,7 @@ class Company(models.Model):
     name = models.CharField(max_length=100)
     slug = models.CharField(max_length=100, unique=True)
     status = models.CharField(max_length=20, choices=EntityStatus.choices)
+    logo = models.ImageField(upload_to=get_file_upload_path, max_length=1000, null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -35,6 +36,9 @@ class Company(models.Model):
         indexes = [
             models.Index(fields=['slug']),
         ]
+
+    def get_public_url(self):
+        return f"{S3_BASE_URL}{self.logo.name}"
 
 
 class CompanyBot(models.Model):
@@ -65,6 +69,14 @@ class CompanyBot(models.Model):
         default=2, validators=[MinValueValidator(1)],
         help_text="Set the top-k value for the bot's response selection. This defines how many top options to consider "
                   "for each response."
+    )
+    provider = models.CharField(
+        max_length=100, choices=LLMProvider.choices, default=LLMProvider.BEDROCK_CONVERSE,
+        help_text="Select the LLM provider (BEDROCK, BEDROCK_CONVERSE, or OPENAI)"
+    )
+    provider_keys = models.TextField(
+        default="", max_length=1000, null=False, blank=True,
+        help_text="API keys or credentials for the selected LLM provider."
     )
     llm_model = models.CharField(
         max_length=100, choices=LLMModel.choices, default=LLMModel.GPT4_O_MINI,
@@ -220,6 +232,11 @@ class Voice(models.Model):
     sample_link = models.URLField(null=True, blank=True)
     language = models.CharField(max_length=100, null=True, blank=True)
     provider_code = models.CharField(max_length=100, null=True, blank=True)
+    gender = models.CharField(max_length=100, choices=GenderChoices.choices, default=GenderChoices.MALE)
+    voice_speed = models.FloatField(
+        null=True, blank=True, default=1.0,
+        validators=[MinValueValidator(0.25), MaxValueValidator(4.0)]
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

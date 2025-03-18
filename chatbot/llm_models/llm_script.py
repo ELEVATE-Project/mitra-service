@@ -7,11 +7,13 @@ from langfuse.openai import openai
 from chatbot.models import LLMModel
 import boto3
 import json_repair
+from retrying import retry
 
 
 validate = URLValidator()
 AWS_KEY = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+llm_retry_number = int(os.getenv('LLM_RETRY_NUMBER'))
 
 
 @observe()
@@ -138,8 +140,11 @@ def handle_openai_model(
     else:
         return response.choices[0].message.content if response.choices else response
 
+def retry_if_result_none(result):
+    return result is None
 
 @observe()
+@retry(stop_max_attempt_number=llm_retry_number, retry_on_result=retry_if_result_none, wrap_exception=True)
 def handle_bedrock_model(
         system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
         model_name=None, region_name='us-west-2', tools=None, is_json_response=False
@@ -181,7 +186,8 @@ def handle_bedrock_model(
             request_payload['inferenceConfig'] = inference_config
         if tools:
             request_payload['toolConfig'] = tools.get('toolConfig')
-        print("request_payload:", request_payload)
+
+        print("request_payload: ", request_payload)
         response = bedrock_runtime.converse(**request_payload)
 
         print("Response:", response)

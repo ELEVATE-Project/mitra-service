@@ -6,16 +6,18 @@ from chatbot.utils.shikshalokam_story_utils import get_story_html
 from django.core.files.base import ContentFile
 
 
-@api_view(['POST'])
+@api_view(['GET'])
 def generate_pdf_view(request):
-    body = request.data
+    body = request.query_params
     session = body.get("session")
     print("session: ", session)
     story = Story.objects.get(session=session)
     profile = story.author
 
     html_content = get_story_html(story=story, profile=profile)
-
+    print("--------------------")
+    print(html_content)
+    print("--------------------")
     pdf_generated =  generate_pdf_with_gotenberg(html_content)
     pdf_file_name = f"Sample.pdf"
     pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
