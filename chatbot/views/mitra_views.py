@@ -1,6 +1,7 @@
 import json
 import traceback
 from chatbot.models import Profile, CompanyBot, Voice, VoiceType, BotVernacular, StoryMedia, MediaTypeChoices
+from chatbot.serializer.story_serializer import StoryMediaRetrieveSerializer
 from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_mitra_project_utils
 from rest_framework.decorators import api_view
@@ -435,12 +436,12 @@ def update_project_status_view(request):
         story_media_objects = StoryMedia.objects.filter(
             story=project.story, include_in_story=True
         ).exclude(media_type=MediaTypeChoices.PDF)
+        serialized_data = StoryMediaRetrieveSerializer(story_media_objects, many=True).data
 
         with ThreadPoolExecutor() as executor:
             futures = [executor.submit(
                 upload_to_cloud, session_value=session, access_token=access_token, instance=story_obj, story=None
-            ) for story_obj in
-                       story_media_objects]
+            ) for story_obj in serialized_data]
 
             for future in as_completed(futures):
                 future.result()
