@@ -1,7 +1,8 @@
+import asyncio
 import json
 import traceback
-
-from chatbot.models import Profile, CompanyBot, Voice, VoiceType, BotVernacular
+from chatbot.models import Profile, CompanyBot, Voice, VoiceType, BotVernacular, StoryMedia, MediaTypeChoices
+from chatbot.utils.media_utils import upload_to_cloud, upload_story_media
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_mitra_project_utils
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -419,7 +420,7 @@ def create_project_view(request):
 
 
 @api_view(['POST'])
-def update_project_status_view(request):
+async def update_project_status_view(request):
     body = request.data
     access_token = body.get('access_token')
     project_id = body.get('project_id')
@@ -430,6 +431,13 @@ def update_project_status_view(request):
         print("story: ", project.story)
         session = project.story.session
         print("session: ", session)
+        story_media_objects = StoryMedia.objects.filter(
+            story=project.story, include_in_story=True
+        ).exclude(media_type=MediaTypeChoices.PDF)
+        tasks = [
+            upload_story_media(story_obj, session, access_token, None) for story_obj in story_media_objects
+        ]
+        await asyncio.gather(*tasks)
         update_story_pdf(is_edit_story=True, session=session, access_token=access_token, flow=None)
         response = update_project_status_utils(
             project_id=project_id, access_token=access_token, flow=flow
