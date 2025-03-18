@@ -13,7 +13,8 @@ def get_first_page_html(profile, story, project):
     address_string = ", ".join(filter(None, address_components))
 
     print("current_state: ", current_state)
-    title = project.expected_title if project and project.expected_title else ""
+    title = project.expected_title or project.actual_title or "mi_story"
+    print("using title: ", title)
     author = profile.first_name or ""
 
     html = f"""
