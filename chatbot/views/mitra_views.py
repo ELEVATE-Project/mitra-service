@@ -1,4 +1,6 @@
 import json
+import traceback
+
 from chatbot.models import Profile, CompanyBot, Voice, VoiceType, BotVernacular
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_mitra_project_utils
 from rest_framework.decorators import api_view
@@ -425,11 +427,14 @@ def update_project_status_view(request):
     try:
         project = Project.objects.filter(project_id=project_id).first()
         session = project.story.session
+        print("session: ", session)
         update_story_pdf(is_edit_story=True, session=session, access_token=access_token, flow=None)
         response = update_project_status_utils(
             project_id=project_id, access_token=access_token, flow=flow
         )
         return JsonResponse(response.get("message"), status=response.get("status"), safe=False)
     except Exception as e:
+        traceback.print_exc()
+
         print("Error during status update: ", e)
         return JsonResponse({'message': f"{e}"}, status=500)
