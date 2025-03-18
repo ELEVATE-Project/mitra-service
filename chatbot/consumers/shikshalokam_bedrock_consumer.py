@@ -81,8 +81,11 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
                     translated_message = text_data_json['text']
             else:
                 translated_message = None
-            save_in_company_db(self.session_id, self.profile_id, 'User', text_data_json['text'],
-                               None, company_chat_status, translated_message)
+
+            print("text_data_json: ", text_data_json)
+            if text_data_json and text_data_json['text']:
+                save_in_company_db(self.session_id, self.profile_id, 'User', text_data_json['text'],
+                                   None, company_chat_status, translated_message)
 
             print(f"channel_name: {self.channel_name}, session_id: {self.session_id}, profile_id: "
                   f"{self.profile_id}, route: {self.route}")

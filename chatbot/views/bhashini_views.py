@@ -13,7 +13,6 @@ def text_speech_view(request):
         body = request.data
         text = body.get('text', '')
         source_language = body.get('source_language', 'en')
-        gender = body.get('gender', 'male')
         route = body.get('route')
 
         if not route:
@@ -23,10 +22,12 @@ def text_speech_view(request):
             }, status=500)
 
         company_bot = CompanyBot.objects.filter(route=route).first()
-        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToSpeech).first()
-
+        voice_provider = Voice.objects.filter(
+            company_bot=company_bot, type=VoiceType.TextToSpeech, language=source_language
+        ).first()
+        print("voice_provider: ", voice_provider)
         response = text_speech_provider(
-            voice_provider=voice_provider, text=text, gender=gender, source_language=source_language
+            voice_provider=voice_provider, text=text, gender=voice_provider.gender, source_language=source_language
         )
 
         if response.get('status') == 200:

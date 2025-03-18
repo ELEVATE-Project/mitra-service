@@ -23,7 +23,7 @@ def google_text_to_speech(message, language_code, voice_provider):
         ssml_gender = gender_mapping.get(gender_value, texttospeech.SsmlVoiceGender.NEUTRAL)
 
         voice = texttospeech.VoiceSelectionParams(
-            language_code=language_code, ssml_gender=ssml_gender
+            language_code=language_code, ssml_gender=ssml_gender, name=voice_provider.name
         )
 
         audio_config = texttospeech.AudioConfig(
