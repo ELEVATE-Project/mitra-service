@@ -4,7 +4,6 @@ import requests
 from chatbot.models import StoryMedia, MediaTypeChoices
 from django.db.models import Q
 from django.db import transaction
-from asgiref.sync import sync_to_async
 
 
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
@@ -148,12 +147,6 @@ def handle_cloud_response(results, session_value, story=None, instance=None):
                     })
 
     return {"attachments": attachments, "pdfInformation": pdf_information}
-
-
-async def upload_story_media(story_obj, session, access_token, story):
-    await sync_to_async(upload_to_cloud, thread_sensitive=False)(
-        session_value=session, access_token=access_token, instance=story_obj, story=story
-    )
 
 
 def upload_to_cloud(session_value, access_token, story=None, instance=None):

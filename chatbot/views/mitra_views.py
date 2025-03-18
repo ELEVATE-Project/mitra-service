@@ -1,8 +1,7 @@
-import asyncio
 import json
 import traceback
 from chatbot.models import Profile, CompanyBot, Voice, VoiceType, BotVernacular, StoryMedia, MediaTypeChoices
-from chatbot.utils.media_utils import upload_to_cloud, upload_story_media
+from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_mitra_project_utils
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -15,6 +14,7 @@ from shikshalokam.models import Project
 from shikshalokam.utils.project_utils import update_project_status_utils
 from django.http import JsonResponse
 import json_repair
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 @api_view(['POST'])
@@ -420,7 +420,7 @@ def create_project_view(request):
 
 
 @api_view(['POST'])
-async def update_project_status_view(request):
+def update_project_status_view(request):
     body = request.data
     access_token = body.get('access_token')
     project_id = body.get('project_id')
@@ -431,13 +431,18 @@ async def update_project_status_view(request):
         print("story: ", project.story)
         session = project.story.session
         print("session: ", session)
+
         story_media_objects = StoryMedia.objects.filter(
             story=project.story, include_in_story=True
         ).exclude(media_type=MediaTypeChoices.PDF)
-        tasks = [
-            upload_story_media(story_obj, session, access_token, None) for story_obj in story_media_objects
-        ]
-        await asyncio.gather(*tasks)
+
+        with ThreadPoolExecutor() as executor:
+            futures = [executor.submit(upload_to_cloud, session, access_token, story_obj, None) for story_obj in
+                       story_media_objects]
+
+            for future in as_completed(futures):
+                future.result()
+
         update_story_pdf(is_edit_story=True, session=session, access_token=access_token, flow=None)
         response = update_project_status_utils(
             project_id=project_id, access_token=access_token, flow=flow
