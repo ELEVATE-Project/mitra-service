@@ -110,7 +110,8 @@ def save_shikshalokam_story(
 def get_story_html(story, profile):
     project = Project.objects.filter(story=story, author=profile).first()
     css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/story_pdf.css"))
-    pdf_file_name = project.expected_title if project and project.expected_title else "'mi_story"
+    pdf_file_name = project.expected_title or project.actual_title or "mi_story"
+
     with open(css_path, 'r') as css_file:
         inline_css = css_file.read()
     html_content = f"""
