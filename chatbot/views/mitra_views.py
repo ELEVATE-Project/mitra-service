@@ -426,6 +426,8 @@ def update_project_status_view(request):
     flow = body.get('flow')
     try:
         project = Project.objects.filter(project_id=project_id).first()
+        print("project: ", project)
+        print("story: ", project.story)
         session = project.story.session
         print("session: ", session)
         update_story_pdf(is_edit_story=True, session=session, access_token=access_token, flow=None)
