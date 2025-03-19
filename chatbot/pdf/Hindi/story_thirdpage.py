@@ -79,7 +79,7 @@ def split_content_based_on_words(content, max_words_per_page=400):
     return chunks
 
 
-def get_thirdpage_html_hindi(profile, story):
+def get_thirdpage_html_hindi(profile, story, project, voice_provider, story_vernacular):
 
     profile_addresses = profile.profile_address.all().first()
 
@@ -97,18 +97,22 @@ def get_thirdpage_html_hindi(profile, story):
 
     content_chunks = split_content_based_on_words(sanitized_content)
 
-    company_bot = CompanyBot.objects.get(route='/story')
-    voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
     author = translate_field(
-        voice_provider=voice_provider, message_body=author, target_language='hi'
+        voice_provider=voice_provider, message_body=author, target_language=project.project_language
     )
     address_string = translate_field(
-        voice_provider=voice_provider, message_body=address_string, target_language='hi'
+        voice_provider=voice_provider, message_body=address_string, target_language=project.project_language
     )
+
+    translation_json = story_vernacular.translation_json
+    if translation_json:
+        translation_json = translation_json.get('third_page', {})
+    else:
+        translation_json = {}
 
     title = (
         f"{story.title or ''} {address_string} "
-        f"{author or ''} की पहल"
+        f"{author or ''} {translation_json.get('title', '')}"
     )
 
     html_pages = []

@@ -1,7 +1,7 @@
 from chatbot.models import StoryMedia
 
 
-def get_story_images_page_html_hindi(story):
+def get_story_images_page_html_hindi(story, story_vernacular):
 
     story_media = StoryMedia.objects.filter(story=story, include_in_story=True).exclude(media_type="pdf")
     images = [media.get_public_url() for media in story_media]
@@ -10,6 +10,12 @@ def get_story_images_page_html_hindi(story):
     page_html = ""
     should_show_story_heading = True
 
+    translation_json = story_vernacular.translation_json
+    if translation_json:
+        translation_json = translation_json.get('image_page', {})
+    else:
+        translation_json = {}
+    image_heading = translation_json.get('heading1', "")
     for batch in image_batches:
         image_elements = ""
         for image in batch:
@@ -21,7 +27,7 @@ def get_story_images_page_html_hindi(story):
 
         page_html += f"""
         <div class="story-image-page-container page-break">
-          {'<h1 class="story-image-page-title">कहानी</h1>' if should_show_story_heading 
+          {f'<h1 class="story-image-page-title">{image_heading}</h1>' if should_show_story_heading 
             else '<div class="image-nohead"></div>'}
           <div class="story-image-page-grid">
             {image_elements}

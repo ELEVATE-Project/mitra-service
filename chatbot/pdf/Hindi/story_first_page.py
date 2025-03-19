@@ -2,7 +2,7 @@ from chatbot.models import CompanyBot, Voice, VoiceType
 from chatbot.utils.story_llama_utils import translate_field
 
 
-def get_first_page_html_hindi(profile, story, project):
+def get_first_page_html_hindi(profile, project, voice_provider):
     profile_addresses = profile.profile_address.all().first()
     current_state = profile_addresses.state if profile_addresses else ""
     company_logo = profile.company.get_public_url()
@@ -20,14 +20,13 @@ def get_first_page_html_hindi(profile, story, project):
 
     author = profile.first_name or ""
 
-    company_bot = CompanyBot.objects.get(route='/story')
-    voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
-    author = translate_field(
-        voice_provider=voice_provider, message_body=author, target_language='hi'
-    )
-    address_string = translate_field(
-        voice_provider=voice_provider, message_body=address_string, target_language='hi'
-    )
+    if project and project.project_language and project.project_language != 'en':
+        author = translate_field(
+            voice_provider=voice_provider, message_body=author, target_language=project.project_language
+        )
+        address_string = translate_field(
+            voice_provider=voice_provider, message_body=address_string, target_language=project.project_language
+        )
 
     html = f"""
     <div class="story-company-div-fmt1 page-break">
