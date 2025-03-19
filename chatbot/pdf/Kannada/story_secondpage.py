@@ -5,7 +5,7 @@ from shikshalokam.models import Project
 import json_repair
 
 
-def get_story_secondpage_html_hindi(story):
+def get_story_secondpage_html_kannada(story):
     print("story.action_steps: ", story.action_steps)
     if isinstance(story.action_steps, str):
         try:
@@ -16,12 +16,12 @@ def get_story_secondpage_html_hindi(story):
                 story.action_steps = [story.action_steps]
         except Exception as e:
             print(f"Error repairing JSON: {e}")
-            story.action_steps = ["कोई कार्रवाई कदम नहीं बताया गया."]
+            story.action_steps = ["ಯಾವುದೇ ಕ್ರಮ ಕ್ರಮಗಳನ್ನು ಒದಗಿಸಲಾಗಿಲ್ಲ."]
 
     action_steps = (
         [clean_escaped_text(step) for step in story.action_steps] if isinstance(story.action_steps, list)
         else [clean_escaped_text(story.action_steps)] if isinstance(story.action_steps, str)
-        else ["कोई कार्रवाई कदम नहीं बताया गया."]
+        else ["ಯಾವುದೇ ಕ್ರಮ ಕ್ರಮಗಳನ್ನು ಒದಗಿಸಲಾಗಿಲ್ಲ."]
     )
     project = Project.objects.filter(story=story).first()
     print("action step type: ", type(action_steps))
@@ -50,22 +50,22 @@ def get_story_secondpage_html_hindi(story):
 
     page_html = f"""
     <div class="story-second-page-container">
-        <h1>सूक्ष्म सुधार की रिपोर्ट</h1>
+        <h1>ಸೂಕ್ಷ್ಮ ಸುಧಾರಣೆಗಳ ವರದಿ</h1>
         <div class="story-second-page-section">
-            <h2>समस्या का विवरण</h2>
+            <h2>ಸಮಸ್ಯೆಯ ವಿವರಣೆ</h2>
             <p>{project.actual_problem_statement or ""}</p>
         </div>
         <div class="story-second-page-section">
-            <h2>उद्देश्य</h2>
-            <p>{story.objective or "कोई उद्देश्य प्रदान नहीं किया गया."}</p>
+            <h2>ಉದ್ದೇಶ</h2>
+            <p>{story.objective or "ಯಾವುದೇ ಉದ್ದೇಶವನ್ನು ಒದಗಿಸಲಾಗಿಲ್ಲ."}</p>
         </div>
         <div class="story-second-page-section story-action-steps">
-            <h2>कार्रवाई के चरण</h2>
-            {steps_html or "कोई कार्रवाई चरण प्रदान नहीं किया गया."}
+            <h2>ಕ್ರಿಯೆಯ ಹಂತಗಳು</h2>
+            {steps_html or "ಯಾವುದೇ ಕ್ರಮ ಕ್ರಮಗಳನ್ನು ಒದಗಿಸಿಲ್ಲ."}
         </div>
         <div class="story-second-page-section story-action-steps">
-            <h2>प्रभाव</h2>
-            <p>{story.impact or "कोई प्रभाव नहीं पड़ा."}</p>
+            <h2>ಪರಿಣಾಮ</h2>
+            <p>{story.impact or "ಯಾವುದೇ ಪರಿಣಾಮ ಬೀರಲಿಲ್ಲ."}</p>
         </div>
     </div>
     """

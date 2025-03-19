@@ -9,6 +9,10 @@ from chatbot.pdf.Hindi.story_first_page import get_first_page_html_hindi
 from chatbot.pdf.Hindi.story_images_page import get_story_images_page_html_hindi
 from chatbot.pdf.Hindi.story_secondpage import get_story_secondpage_html_hindi
 from chatbot.pdf.Hindi.story_thirdpage import get_thirdpage_html_hindi
+from chatbot.pdf.Kannada.story_first_page import get_first_page_html_kannada
+from chatbot.pdf.Kannada.story_images_page import get_story_images_page_html_kannada
+from chatbot.pdf.Kannada.story_secondpage import get_story_secondpage_html_kannada
+from chatbot.pdf.Kannada.story_thirdpage import get_thirdpage_html_kannada
 from chatbot.pdf.story_first_page import get_first_page_html
 from chatbot.pdf.story_images_page import get_story_images_page_html
 from chatbot.pdf.story_secondpage import get_story_secondpage_html
@@ -139,6 +143,12 @@ def get_story_html(story, profile):
         html_content += get_story_secondpage_html_hindi(story=story)
         html_content += get_story_images_page_html_hindi(story=story)
         html_content += get_thirdpage_html_hindi(story=story, profile=profile)
+    elif project and project.project_language == 'kn':
+        print("Taking Kannada pdf files")
+        html_content += get_first_page_html_kannada(story=story, profile=profile, project=project)
+        html_content += get_story_secondpage_html_kannada(story=story)
+        html_content += get_story_images_page_html_kannada(story=story)
+        html_content += get_thirdpage_html_kannada(story=story, profile=profile)
     else:
         html_content += get_first_page_html(story=story, profile=profile, project=project)
         html_content += get_story_secondpage_html(story=story)
