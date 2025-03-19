@@ -41,9 +41,8 @@ def create_project_utils(
     conversation = []
     if session:
         company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
-        ai_user = Profile.objects.get(id=1)
 
-        conversation = get_stored_conversation(company_chats=company_chats, ai_user=ai_user)
+        conversation = get_stored_conversation(company_chats=company_chats)
 
     if original_project:
         chunks = original_project.project_source
@@ -242,7 +241,8 @@ def get_conversation(company_chats, ai_user):
     return conversation
 
 
-def get_stored_conversation(company_chats, ai_user):
+def get_stored_conversation(company_chats):
+    ai_user = Profile.objects.get(id=1)
     conversation=[]
     for chat in company_chats:
         if chat.receiver == ai_user:
@@ -261,7 +261,8 @@ def get_stored_conversation(company_chats, ai_user):
 
     return conversation
 
-def get_stored_chathistory(company_chats, ai_user):
+def get_stored_chathistory(company_chats):
+    ai_user = Profile.objects.get(id=1)
     chat_history=[]
     for chat in company_chats:
         if chat.receiver == ai_user:

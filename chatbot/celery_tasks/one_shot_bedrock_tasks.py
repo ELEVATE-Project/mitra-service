@@ -23,7 +23,8 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
 
     if not remaining_stages and len(messages) < 2:
         remaining_stages_response = get_remaining_strands(
-            messages=messages, company_chats=company_chats, oneshot_bot=company_bot
+            messages=messages, company_chats=company_chats, oneshot_bot=company_bot,
+            profile=profile
         )
         remaining_stages = remaining_stages_response.get('remaining_stages', [])
         print("remaining_stages: ", remaining_stages)

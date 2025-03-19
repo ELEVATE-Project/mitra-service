@@ -5,10 +5,10 @@ from jinja2 import Template
 from chatbot.utils.chat_utils import get_guided_chat
 
 
-def get_remaining_strands(messages, company_chats, oneshot_bot):
+def get_remaining_strands(messages, company_chats, oneshot_bot, profile):
 
-    company_bot = CompanyBot.objects.filter(route='/oneshot_assistant').first()
-    validate_bot = CompanyBot.objects.filter(route='/oneshot_validator').first()
+    company_bot = CompanyBot.objects.filter(company=profile.company, route='/oneshot_assistant').first()
+    validate_bot = CompanyBot.objects.filter(company=profile.company, route='/oneshot_validator').first()
     tool = company_bot.tool_context
     if tool and isinstance(tool, str):
         tool = json_repair.repair_json(tool, return_objects=True)

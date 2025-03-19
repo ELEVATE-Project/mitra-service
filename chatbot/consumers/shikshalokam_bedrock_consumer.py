@@ -69,7 +69,8 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
                 )
 
             if self.route != 'en':
-                company_bot = CompanyBot.objects.filter(route='/').first()
+                profile = Profile.objects.get(id=self.profile_id)
+                company_bot = CompanyBot.objects.filter(company=profile.company, route='/').first()
                 voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
 
                 response = text_translate_provider(

@@ -36,7 +36,7 @@ def paraphrase_view(request):
         print("user_translated_message: ", user_input)
 
     paraphrased_output = get_mitra_paraphrase_utils(
-        paraphrase_problem=user_input, should_paraphrase_text=should_paraphrase_text
+        paraphrase_problem=user_input, should_paraphrase_text=should_paraphrase_text, company_bot=company_bot
     )
 
     if language !='en' and isinstance(paraphrased_output, str) and paraphrased_output.lower() != 'no':
@@ -58,10 +58,12 @@ def generate_objectives_view(request):
     body = request.data
     user_input = body.get('user_input')
     language = body.get('language')
+    profile_id = body.get('profile_id')
     print("User Input: ", user_input)
     print("language: ", language)
 
-    company_bot = CompanyBot.objects.get(route='/objective')
+    profile = Profile.objects.filter(id=profile_id).first()
+    company_bot = CompanyBot.objects.get(company=profile.company, route='/objective')
     voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
     if language != 'en':
         user_input = translate_field(
@@ -70,7 +72,9 @@ def generate_objectives_view(request):
         )
         print("user_translated_message: ", user_input)
 
-    objective_list, chunk_response = generate_objective_utils(user_problem_statement=user_input)
+    objective_list, chunk_response = generate_objective_utils(
+        user_problem_statement=user_input, company_bot=company_bot
+    )
     translated_list = None
     if language !='en':
         translated_list = translate_field(
@@ -99,9 +103,11 @@ def validate_objectives_view(request):
     body = request.data
     user_input = body.get('user_input')
     language = body.get('language')
+    profile_id = body.get('profile_id')
     print("User Input: ", user_input)
 
-    company_bot = CompanyBot.objects.get(route='/objective')
+    profile = Profile.objects.filter(id=profile_id).first()
+    company_bot = CompanyBot.objects.get(company=profile.company, route='/objective')
     bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
     error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
     if language !='en':
@@ -112,7 +118,7 @@ def validate_objectives_view(request):
         )
         print("user_translated_message: ", user_input)
 
-    response = validate_objective_utils(user_input=user_input)
+    response = validate_objective_utils(user_input=user_input, company_bot=company_bot)
     return Response({
         'status': 'ok',
         'result': response,
@@ -127,12 +133,10 @@ def validate_actions_view(request):
     user_objective = body.get('user_objective')
     language = body.get('language')
     problem_statement = body.get('problem_statement')
-    print("User Input: ", user_input)
-    print("User language: ", language)
-    print("User Objective: ", user_objective)
-    print("User Problem Statement: ", problem_statement)
+    profile_id = body.get('profile_id')
 
-    company_bot = CompanyBot.objects.get(route='/action_list')
+    profile = Profile.objects.filter(id=profile_id).first()
+    company_bot = CompanyBot.objects.get(company=profile.company, route='/action_list')
     bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
     error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
     if language !='en':
@@ -164,7 +168,8 @@ def validate_actions_view(request):
         print("error_translated_message: ", error_message)
 
     response = validate_actions_utils(
-        user_input=user_input, user_objective=user_objective, problem_statement=problem_statement
+        user_input=user_input, user_objective=user_objective, problem_statement=problem_statement,
+        company_bot=company_bot
     )
     return Response({
         'status': 'ok',
@@ -179,11 +184,10 @@ def generate_action_list_view(request):
     user_problem_statement = body.get('user_problem_statement')
     user_objective = body.get('user_objective')
     language = body.get('language')
-    print("User Problem Statement: ", user_problem_statement)
-    print("User Objective: ", user_objective)
-    print("User language: ", language)
+    profile_id = body.get('profile_id')
 
-    company_bot = CompanyBot.objects.get(route='/action_list')
+    profile = Profile.objects.filter(id=profile_id).first()
+    company_bot = CompanyBot.objects.get(company=profile.company, route='/action_list')
     voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
     if language != 'en':
         user_problem_statement = translate_field(
@@ -203,7 +207,7 @@ def generate_action_list_view(request):
     }
 
     action_list = generate_action_list_utils(
-        input_data=input_data
+        input_data=input_data, company_bot=company_bot
     )
 
     if language != 'en':
@@ -241,8 +245,10 @@ def generate_title_view(request):
     user_objective = body.get('user_objective')
     user_action_list = body.get('user_action_list')
     language = body.get('language')
+    profile_id = body.get('profile_id')
 
-    company_bot = CompanyBot.objects.get(route='/title')
+    profile = Profile.objects.filter(id=profile_id).first()
+    company_bot = CompanyBot.objects.get(company=profile.company, route='/title')
     voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
     if language != 'en':
         user_problem_statement = translate_field(
@@ -278,7 +284,7 @@ def generate_title_view(request):
         "user_action_list": user_action_list
     }
 
-    title = generate_title_utils(input_data=input_data)
+    title = generate_title_utils(input_data=input_data, company_bot=company_bot)
 
     if language != 'en':
         title = translate_field(
@@ -304,13 +310,10 @@ def validate_title_view(request):
     language = body.get('language')
     problem_statement = body.get('problem_statement')
     user_input = body.get('user_input')
-    print("User Input: ", user_input)
-    print("User Actions: ", user_actions)
-    print("User language: ", language)
-    print("User Objective: ", user_objective)
-    print("User Problem Statement: ", problem_statement)
+    profile_id = body.get('profile_id')
 
-    company_bot = CompanyBot.objects.get(route='/title')
+    profile = Profile.objects.filter(id=profile_id).first()
+    company_bot = CompanyBot.objects.get(company=profile.company, route='/title')
     bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
     error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
     if language != 'en':
@@ -350,7 +353,7 @@ def validate_title_view(request):
         print("error_translated_message: ", error_message)
     response = validate_title_utils(
         user_input=user_input, user_objective=user_objective, problem_statement=problem_statement,
-        user_actions=user_actions
+        user_actions=user_actions, company_bot=company_bot
     )
     return Response({
         'status': 'ok',

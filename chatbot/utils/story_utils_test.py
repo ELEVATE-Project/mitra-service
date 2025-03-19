@@ -303,8 +303,8 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=['session_status'])
         chat_session.save_title(language=language)
-        conversation = get_stored_conversation(company_chats=company_chats, ai_user=ai_user)
-        chat_history = get_stored_chathistory(company_chats=company_chats, ai_user=ai_user)
+        conversation = get_stored_conversation(company_chats=company_chats)
+        chat_history = get_stored_chathistory(company_chats=company_chats)
 
         save_shikshalokam_story(
             story=story, access_token=access_token,
