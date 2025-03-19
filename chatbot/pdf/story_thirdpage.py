@@ -95,12 +95,13 @@ def get_thirdpage_html(profile, story, project, voice_provider, story_vernacular
 
     content_chunks = split_content_based_on_words(sanitized_content)
 
-    author = translate_field(
-        voice_provider=voice_provider, message_body=author, target_language=project.project_language
-    )
-    address_string = translate_field(
-        voice_provider=voice_provider, message_body=address_string, target_language=project.project_language
-    )
+    if project and project.project_language and project.project_language != 'en':
+        author = translate_field(
+            voice_provider=voice_provider, message_body=author, target_language=project.project_language
+        )
+        address_string = translate_field(
+            voice_provider=voice_provider, message_body=address_string, target_language=project.project_language
+        )
 
     translation_json = story_vernacular.translation_json
     if translation_json:

@@ -171,10 +171,6 @@ def get_story_html(story, profile):
         </body>
     </html>
     """
-
-    print("--------------------")
-    print(html_content)
-    print("--------------------")
     return html_content
 
 
