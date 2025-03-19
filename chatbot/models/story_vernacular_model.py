@@ -4,7 +4,7 @@ from chatbot.models import CompanyBot
 
 
 class StoryVernacular(models.Model):
-    company_bot = models.ForeignKey(CompanyBot, on_delete=models.SET_NULL, related_name='story_vernacular')
+    company_bot = models.ForeignKey(CompanyBot, on_delete=models.CASCADE, related_name='story_vernacular')
 
     translation_json = models.JSONField(
         null=True, blank=True,
@@ -18,6 +18,7 @@ class StoryVernacular(models.Model):
     history = HistoricalRecords()
 
     class Meta:
+        unique_together = ('company_bot', 'language')
         indexes = [
             models.Index(fields=['language']),
             models.Index(fields=['created_at']),

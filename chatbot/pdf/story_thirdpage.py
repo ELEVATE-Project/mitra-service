@@ -1,5 +1,6 @@
 import json
 from bs4 import BeautifulSoup
+from chatbot.utils.story_llama_utils import translate_field
 
 
 def json_to_html(formatted_content):
@@ -76,7 +77,7 @@ def split_content_based_on_words(content, max_words_per_page=400):
     return chunks
 
 
-def get_thirdpage_html(profile, story):
+def get_thirdpage_html(profile, story, project, voice_provider, story_vernacular):
 
     profile_addresses = profile.profile_address.all().first()
 
@@ -87,15 +88,30 @@ def get_thirdpage_html(profile, story):
     ]
 
     address_string = ", ".join(filter(None, address_components))
-    title = (
-        f"{story.title or ''} {address_string} "
-        f"{profile.first_name or ''}'s initiative"
-    )
+    author = profile.first_name or ""
 
     sanitized_content = json_to_html(story.formatted_content)
     should_show_story_heading = True
 
     content_chunks = split_content_based_on_words(sanitized_content)
+
+    author = translate_field(
+        voice_provider=voice_provider, message_body=author, target_language=project.project_language
+    )
+    address_string = translate_field(
+        voice_provider=voice_provider, message_body=address_string, target_language=project.project_language
+    )
+
+    translation_json = story_vernacular.translation_json
+    if translation_json:
+        translation_json = translation_json.get('third_page', {})
+    else:
+        translation_json = {}
+
+    title = (
+        f"{story.title or ''} {address_string} "
+        f"{author or ''}{translation_json.get('title', '')}"
+    )
 
     html_pages = []
     for chunk in content_chunks:
