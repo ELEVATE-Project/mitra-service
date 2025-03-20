@@ -27,7 +27,7 @@ class ReflectionBedrockConsumer(BaseConsumer):
             c = ChatSession(session=self.session_id)
         c.save_title(self.route)
         company_chat_status = self.determine_company_chat_status(
-            session_id=self.session_id, profile_id=self.profile_id, is_disconnected=True
+            session_id=self.session_id, profile_id=self.profile_id, is_disconnected=True, route='/reflection'
         )
         print("COMPANY CHAT STATUS: ", company_chat_status)
         self.update_last_chat_status(chat_status=company_chat_status)
@@ -78,7 +78,7 @@ class ReflectionBedrockConsumer(BaseConsumer):
                 print(cs, cs_created)
             else:
                 company_chat_status = self.determine_company_chat_status(
-                    session_id=self.session_id, profile_id=self.profile_id
+                    session_id=self.session_id, profile_id=self.profile_id, route='/reflection'
                 )
                 print("COMPANY CHAT STATUS: ", company_chat_status)
                 async_to_sync(self.channel_layer.send)(
