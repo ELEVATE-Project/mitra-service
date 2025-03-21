@@ -3,7 +3,7 @@ import os
 import base64
 from celery import shared_task
 from django.db import models
-from chatbot.models import Profile, CompanyBot, MediaTypeChoices
+from chatbot.models import Profile, CompanyBot, MediaTypeChoices, MediaTemplateChoices, PDFStrategyChoices
 from chatbot.utils.database_util import upsert_single_file, delete_single_file
 from shikshalokam.models.enums import PriorityChoices
 
@@ -123,3 +123,16 @@ class KeyValue(models.Model):
 
     def __str__(self):
         return f"{self.key}: {self.value}"
+
+
+class MediaTemplate(models.Model):
+    name = models.CharField(max_length=100, null=True, unique=True)
+    template_content = models.TextField(null=True)
+    template_type = models.CharField(choices=MediaTemplateChoices.choices, max_length=100, null=True)
+    pdf_strategy = models.CharField(choices=PDFStrategyChoices.choices, max_length=100, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.name
