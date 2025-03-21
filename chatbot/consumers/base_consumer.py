@@ -25,10 +25,10 @@ class BaseConsumer(WebsocketConsumer):
         text = event["text"]
         self.send(text_data=json.dumps({"text": text}))
 
-    def determine_company_chat_status(self, session_id, profile_id, is_disconnected=False):
+    def determine_company_chat_status(self, session_id, profile_id, route,is_disconnected=False):
         chat_session = ChatSession.objects.filter(session=session_id).first()
         profile = Profile.objects.get(id=profile_id)
-        company_bot = CompanyBot.objects.get(company=profile.company, route='/')
+        company_bot = CompanyBot.objects.get(company=profile.company, route=route)
         state_machine = CompanyStateMachine.objects.filter(
             company_bot=company_bot, step=chat_session.current_step
         ).first()

@@ -4,15 +4,9 @@ import re
 import traceback
 import requests
 from django.core.files.base import ContentFile
-from chatbot.models import StoryMedia, MediaTypeChoices, CompanyChat, Profile, Story, ChatSession
-from chatbot.pdf.Hindi.story_first_page import get_first_page_html_hindi
-from chatbot.pdf.Hindi.story_images_page import get_story_images_page_html_hindi
-from chatbot.pdf.Hindi.story_secondpage import get_story_secondpage_html_hindi
-from chatbot.pdf.Hindi.story_thirdpage import get_thirdpage_html_hindi
-from chatbot.pdf.Kannada.story_first_page import get_first_page_html_kannada
-from chatbot.pdf.Kannada.story_images_page import get_story_images_page_html_kannada
-from chatbot.pdf.Kannada.story_secondpage import get_story_secondpage_html_kannada
-from chatbot.pdf.Kannada.story_thirdpage import get_thirdpage_html_kannada
+from chatbot.models import StoryMedia, MediaTypeChoices, CompanyChat, Profile, Story, ChatSession, CompanyBot, Voice, \
+    VoiceType
+from chatbot.models.story_vernacular_model import StoryVernacular
 from chatbot.pdf.story_first_page import get_first_page_html
 from chatbot.pdf.story_images_page import get_story_images_page_html
 from chatbot.pdf.story_secondpage import get_story_secondpage_html
@@ -137,30 +131,24 @@ def get_story_html(story, profile):
         """
 
 
-    if project and project.project_language == 'hi':
-        print("Taking hindi pdf files")
-        html_content += get_first_page_html_hindi(story=story, profile=profile, project=project)
-        html_content += get_story_secondpage_html_hindi(story=story)
-        html_content += get_story_images_page_html_hindi(story=story)
-        html_content += get_thirdpage_html_hindi(story=story, profile=profile)
-    elif project and project.project_language == 'kn':
-        print("Taking Kannada pdf files")
-        html_content += get_first_page_html_kannada(story=story, profile=profile, project=project)
-        html_content += get_story_secondpage_html_kannada(story=story)
-        html_content += get_story_images_page_html_kannada(story=story)
-        html_content += get_thirdpage_html_kannada(story=story, profile=profile)
-    else:
-        html_content += get_first_page_html(story=story, profile=profile, project=project)
-        html_content += get_story_secondpage_html(story=story)
-        # html_content += "<div></div>"
-        html_content += get_story_images_page_html(story=story)
-        html_content += get_thirdpage_html(story=story, profile=profile)
-    # html_content += f"""
-    #
-    #         </body>
-    #
-    #     </html>
-    #     """
+    company_bot = CompanyBot.objects.get(company=profile.company, route='/story')
+    voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+    story_vernacular = StoryVernacular.objects.filter(
+        company_bot=company_bot, language=project.project_language
+    ).first()
+
+    html_content += get_first_page_html(
+        profile=profile, project=project, voice_provider=voice_provider
+    )
+    html_content += get_story_secondpage_html(
+        story=story, project=project, story_vernacular=story_vernacular
+    )
+    html_content += get_story_images_page_html(story=story, story_vernacular=story_vernacular)
+    html_content += get_thirdpage_html(
+        story=story, profile=profile, project=project, voice_provider=voice_provider,
+        story_vernacular=story_vernacular
+    )
+
     html_content += f"""
         <script>
         document.addEventListener("DOMContentLoaded", function () {{
@@ -183,10 +171,6 @@ def get_story_html(story, profile):
         </body>
     </html>
     """
-
-    print("--------------------")
-    print(html_content)
-    print("--------------------")
     return html_content
 
 

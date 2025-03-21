@@ -2,6 +2,7 @@ import traceback
 from chatbot.models import (Profile, CompanyChat, CompanyBot,
                             ChatSession, ChatStatus, Voice, VoiceType)
 from chatbot.utils.chat_utils import get_guided_chat
+from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
 from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
 from chatbot.utils.story_llama_utils import translate_field
 import asyncio
@@ -18,10 +19,10 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
     try:
         profile = Profile.objects.get(id=profile_id)
         company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
-        company_bot = CompanyBot.objects.get(route='/story')
+        company_bot = CompanyBot.objects.get(company=profile.company, route='/story')
 
         voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
-        validate_bot = CompanyBot.objects.get(route='/story_validation')
+        validate_bot = CompanyBot.objects.get(company=profile.company, route='/story_validation')
 
         chat_session = ChatSession.objects.get(session=session)
 
@@ -76,10 +77,13 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         chat_session.save(update_fields=['session_status'])
         chat_session.save_title(language=language)
 
+        conversation = get_stored_conversation(company_chats=company_chats)
+        chat_history = get_stored_chathistory(company_chats=company_chats)
+
         save_shikshalokam_story(
             story=story, profile=profile,
-            problem_statement=problem_statement, chat_history=None, access_token=access_token,
-            project_id=None, session=session, conversation=None, flow=flow
+            problem_statement=problem_statement, chat_history=chat_history, access_token=access_token,
+            project_id=None, session=session, conversation=conversation, flow=flow
         )
 
         story_id = story.id if story and story.id else ""

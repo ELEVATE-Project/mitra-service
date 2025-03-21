@@ -27,7 +27,7 @@ class ChatSession(models.Model):
 
     def save_title(self, language='en'):
         company_chats = CompanyChat.objects.filter(session=self.session).order_by('created_at')
-        company_bot = CompanyBot.objects.filter(route='/mohini_title').first()
+        company_bot = CompanyBot.objects.filter(company=self.profile.company, route='/mohini_title').first()
         messages = get_guided_chat(
             company_bot=company_bot, company_chats=company_chats
         )

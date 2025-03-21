@@ -74,6 +74,8 @@ class MediaTypeChoices(models.TextChoices):
     PNG = 'image/png', _('PNG')
     SVG = 'image/svg+xml', _('SVG')
     WEBP = 'image/webp', _('WEBP')
+    HEIF = 'image/heif', _('HEIF')
+    HEIC = 'image/heic', _('HEIC')
 
 
 class VoiceProviderChoices(models.TextChoices):

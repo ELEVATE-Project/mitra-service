@@ -12,6 +12,7 @@ def transcribe_multiple_languages_v2(
     client = SpeechClient()
 
     try:
+        print("language_codes: ", language_codes)
         config = cloud_speech.RecognitionConfig(
             auto_decoding_config=cloud_speech.AutoDetectDecodingConfig(),
             language_codes=language_codes,
@@ -38,9 +39,11 @@ def transcribe_multiple_languages_v2(
         if not response or isinstance(response, str):
             print("response: ", response)
         for res_result in response.results:
-            if not res_result or res_result.alternatives or len(res_result.alternatives) == 0:
-                print("res_result: ", res_result)
-            transcript = res_result.alternatives[0].transcript
+            print("res_result: ", res_result)
+            if res_result and res_result.alternatives:
+                transcript = res_result.alternatives[0].transcript
+            else:
+                transcript = ''
             transcripts.append(transcript)
             print(f"Transcript: {transcript}")
 

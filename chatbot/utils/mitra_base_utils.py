@@ -1,11 +1,9 @@
 from chatbot.llm_models.llm_script import handle_bedrock_model
-from chatbot.models import CompanyBot
 from chatbot.utils.chat_query_handler import ask
 from jinja2 import Template
 
 
-def get_mitra_paraphrase_utils(paraphrase_problem, should_paraphrase_text):
-    company_bot = CompanyBot.objects.get(route='/paraphrase')
+def get_mitra_paraphrase_utils(paraphrase_problem, should_paraphrase_text, company_bot):
     messages = [{
                     'role': 'user',
                     'content': [{'text': paraphrase_problem}]
@@ -34,8 +32,7 @@ def get_mitra_paraphrase_utils(paraphrase_problem, should_paraphrase_text):
     return paraphrase_response
 
 
-def generate_objective_utils(user_problem_statement):
-    company_bot = CompanyBot.objects.get(route='/objective')
+def generate_objective_utils(user_problem_statement, company_bot):
     prompt = company_bot.context
     messages = [{
         'role': 'user',
@@ -58,8 +55,7 @@ def generate_objective_utils(user_problem_statement):
     return response, chunks_response
 
 
-def generate_action_list_utils(input_data):
-    company_bot = CompanyBot.objects.get(route='/action_list')
+def generate_action_list_utils(input_data, company_bot):
     prompt = company_bot.context
     messages = [{
         'role': 'user',
@@ -76,8 +72,7 @@ def generate_action_list_utils(input_data):
     return response
 
 
-def generate_title_utils(input_data):
-    company_bot = CompanyBot.objects.get(route='/title')
+def generate_title_utils(input_data, company_bot):
     prompt = company_bot.context
     messages = [{
         'role': 'user',
@@ -94,9 +89,8 @@ def generate_title_utils(input_data):
     return response
 
 
-def validate_objective_utils(user_input):
+def validate_objective_utils(user_input, company_bot):
     try:
-        company_bot = CompanyBot.objects.get(route='/objective')
         prompt = company_bot.end_context
         messages = [{
             'role': 'user',
@@ -117,10 +111,9 @@ def validate_objective_utils(user_input):
         return False
 
 
-def validate_actions_utils(user_input, user_objective, problem_statement):
+def validate_actions_utils(user_input, user_objective, problem_statement, company_bot):
     try:
         print('user_input: ', user_input)
-        company_bot = CompanyBot.objects.get(route='/action_list')
         prompt = company_bot.end_context
 
         context_data = {
@@ -150,10 +143,9 @@ def validate_actions_utils(user_input, user_objective, problem_statement):
         return False
 
 
-def validate_title_utils(user_input, user_objective, problem_statement, user_actions):
+def validate_title_utils(user_input, user_objective, problem_statement, user_actions, company_bot):
     try:
         print('user_input: ', user_input)
-        company_bot = CompanyBot.objects.get(route='/title')
         prompt = company_bot.end_context
 
         context_data = {
