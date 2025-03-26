@@ -7,9 +7,12 @@ from langfuse.openai import openai
 from chatbot.models import LLMModel
 import boto3
 import json_repair
-from retrying import retry
+from retrying import retry, RetryError
+import logging
+from botocore.client import Config as BotoConfig
 
 
+logger = logging.getLogger('django')
 validate = URLValidator()
 AWS_KEY = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
@@ -149,11 +152,18 @@ def handle_bedrock_model(
         system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
         model_name=None, region_name='us-west-2', tools=None, is_json_response=False
 ):
+    boto_config = BotoConfig(
+        connect_timeout=3,
+        read_timeout=10,
+        retries={"mode": "adaptive"}
+    )
+
     bedrock_runtime = boto3.client(
         service_name='bedrock-runtime',
         region_name=region_name,
         aws_access_key_id=AWS_KEY,
-        aws_secret_access_key=AWS_SECRET_KEY
+        aws_secret_access_key=AWS_SECRET_KEY,
+        config=boto_config
     )
 
     if model_name:
@@ -188,7 +198,9 @@ def handle_bedrock_model(
             request_payload['toolConfig'] = tools.get('toolConfig')
 
         print("request_payload: ", request_payload)
+        logger.info('Bedrock request payload: %s', request_payload)
         response = bedrock_runtime.converse(**request_payload)
+        logger.info('Bedrock response: %s', response)
 
         print("Response:", response)
 
@@ -214,6 +226,7 @@ def handle_bedrock_model(
                     print("type final_output: ", type(final_output))
                 except json.JSONDecodeError as e:
                     print(f"Error decoding JSON: {e}")
+                    logger.error('Error decoding JSON: %s', e, exc_info=True)
                     return None
             elif is_json_response:
                 return None
@@ -224,6 +237,7 @@ def handle_bedrock_model(
 
     except Exception as e:
         print(f"Error processing request: {e}")
+        logger.error('Error processing request: %s', e, exc_info=True)
         return None
 
 

@@ -3,6 +3,10 @@ from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_mo
 from chatbot.models import CompanyBot, LLMProvider
 from jinja2 import Template
 from chatbot.utils.chat_utils import get_guided_chat
+import logging
+
+
+logger = logging.getLogger('django')
 
 
 def get_remaining_strands(messages, company_chats, oneshot_bot, profile):
@@ -21,10 +25,15 @@ def get_remaining_strands(messages, company_chats, oneshot_bot, profile):
         )
     response = None
     if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
-        response = handle_bedrock_model(
-            system_prompt=one_shot_prompt, messages=messages, model_name=company_bot.llm_model,
-            temperature=company_bot.bot_temperature, max_token=company_bot.max_token, tools=tool
-        )
+        try:
+            response = handle_bedrock_model(
+                system_prompt=one_shot_prompt, messages=messages, model_name=company_bot.llm_model,
+                temperature=company_bot.bot_temperature, max_token=company_bot.max_token, tools=tool
+            )
+        except Exception as e:
+            logger.error(f"Got Error: %s", e)
+            print(f"Got Error: {e}")
+            response = None
     elif company_bot.provider == LLMProvider.OPENAI:
         # openai_tool = convert_llama_to_openai_tool(llama_tool_call=tool)
         response = handle_openai_model(
@@ -58,10 +67,17 @@ def get_remaining_strands(messages, company_chats, oneshot_bot, profile):
             company_bot=validate_bot, company_chats=company_chats
         )
     if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
-        response = handle_bedrock_model(
-            system_prompt=one_shot_prompt, messages=messages, model_name=validate_bot.llm_model,
-            temperature=validate_bot.bot_temperature, max_token=validate_bot.max_token, tools=tool
-        )
+        try:
+            response = handle_bedrock_model(
+                system_prompt=one_shot_prompt, messages=messages, model_name=validate_bot.llm_model,
+                temperature=validate_bot.bot_temperature, max_token=validate_bot.max_token, tools=tool
+            )
+        except Exception as e:
+            logger.error(f"Got Error: %s", e)
+            print(f"Got Error: {e}")
+            response = {
+                "error": "I am sorry, I could not understood completely. Could you rephrase this please?"
+            }
     elif company_bot.provider == LLMProvider.OPENAI:
         # openai_tool = convert_llama_to_openai_tool(llama_tool_call=tool)
         response = handle_openai_model(
