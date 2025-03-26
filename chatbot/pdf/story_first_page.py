@@ -31,8 +31,8 @@ def get_first_page_html(profile, project, voice_provider):
         html = f"""
         <div class="story-company-div-fmt1 page-break">
             <div class="story-logo-div2">
-              <div style="width: 100%; margin-top: 40px; display: flex; flex-direction: row; align-items: center; gap: 80px;">
-                  <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/Samagra Shiksha_new.jpg" 
+              <div class="nagaland-logo-div">
+                  <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/Samagra_Shiksha_new_bg_removed.png" 
                       style="width: 200px; height: auto; object-fit: contain;"
                       alt="Logo 1">
               
@@ -58,12 +58,12 @@ def get_first_page_html(profile, project, voice_provider):
                     <p style="font-size: 1rem; color: #666; margin: 5px 0;">{address_string}</p>
                 </div>
             </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 10px;">
+            <div  class="nagaland-company-logo-div">
                 <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/shikshalokam_logo_pdf.png" 
                     style="width: 200px; height: auto; object-fit: contain;"
                 alt="Logo 1">
                 
-                <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/shikshagrahaLogo.png" 
+                <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/shikshagrahaLogo_bg_removed.png" 
                     style="width: 200px; height: auto; object-fit: contain;"
                 alt="Logo 2">
             </div>

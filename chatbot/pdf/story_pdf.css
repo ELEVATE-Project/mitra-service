@@ -4,6 +4,23 @@
     background-color: #f1f1f1;
   }
 
+  .nagaland-logo-div {
+    width: 100%;
+    margin-top: 40px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 40px;
+    justify-content: center;
+  }
+
+  .nagaland-company-logo-div {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 0 50px;
+  }
+
   .story-company-div1 {
     position: relative;
     width: 210mm;
