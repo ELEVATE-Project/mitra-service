@@ -77,7 +77,7 @@ class ChatSession(models.Model):
             response_json = handle_bedrock_model(
                 system_prompt=prompt, messages=messages, model_name=company_bot.llm_model,
                 temperature=company_bot.bot_temperature, max_token=company_bot.max_token,
-                tools=tool
+                tools=tool, company_bot=company_bot
             )
         elif company_bot.provider == LLMProvider.OPENAI:
             response_json = handle_openai_model(

@@ -19,7 +19,8 @@ async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, m
                     temperature=company_bot.bot_temperature,
                     max_token=company_bot.max_token,
                     top_p=company_bot.filter_score,
-                    model_name=company_bot.llm_model
+                    model_name=company_bot.llm_model,
+                    company_bot=company_bot
                 )
             )
         elif company_bot.provider == LLMProvider.OPENAI:
@@ -47,7 +48,8 @@ async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, m
                     temperature=company_bot.bot_temperature,
                     max_token=company_bot.max_token,
                     top_p=company_bot.filter_score,
-                    model_name=company_bot.llm_model
+                    model_name=company_bot.llm_model,
+                    company_bot=company_bot
                 )
             )
         elif company_bot.provider == LLMProvider.OPENAI:
@@ -99,7 +101,8 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
                     temperature=company_bot.bot_temperature,
                     max_token=company_bot.max_token,
                     top_p=company_bot.filter_score,
-                    model_name=company_bot.llm_model
+                    model_name=company_bot.llm_model,
+                    company_bot=company_bot
                 )
             )
         elif company_bot.provider == LLMProvider.OPENAI:
@@ -127,7 +130,8 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
                     temperature=company_bot.bot_temperature,
                     max_token=company_bot.max_token,
                     top_p=company_bot.filter_score,
-                    model_name=company_bot.llm_model
+                    model_name=company_bot.llm_model,
+                    company_bot=company_bot
                 )
             )
         elif company_bot.provider == LLMProvider.OPENAI:

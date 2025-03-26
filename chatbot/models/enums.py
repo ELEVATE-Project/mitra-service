@@ -170,3 +170,15 @@ class LanguageMapping:
     @classmethod
     def get_mapped_language(cls, language_code: str, region: str = "IN") -> str:
         return cls.MAPPING.get(language_code, {}).get(region, f"{language_code}-IN")
+
+
+class MediaTemplateChoices(models.TextChoices):
+    EJS = 'EJS', _('EJS')
+    RAW_TEXT = 'RAW-TEXT', _('RAW-TEXT')
+
+
+class PDFStrategyChoices(models.TextChoices):
+    HTMLPDF = 'HTMLPDF', _('HTMLPDF')
+    PUPPETEER = 'PUPPETEER', _('PUPPETEER')
+    HTMLDOCX = 'HTMLDOCX', _('HTMLDOCX')
+    XLSX = 'XLSX', _('XLSX')

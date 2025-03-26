@@ -48,7 +48,7 @@ def get_mitra_bedrock_response(channel_name, session_id, profile_id, route):
             response = handle_bedrock_model(
                 system_prompt=prompt_to_use, messages=messages, is_json_response=True,
                 model_name=company_bot.llm_model, temperature=company_bot.bot_temperature,
-                max_token=company_bot.max_token,
+                max_token=company_bot.max_token, company_bot=company_bot
             )
             message = response.get("message", "")
             if message == '' and  response.get("should_move_forward") == 'no':

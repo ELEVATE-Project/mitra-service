@@ -4,6 +4,10 @@ from chatbot.models import CompanyChat, Profile, CompanyBot, ChatSession, LLMPro
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.bedrock_tool_call import get_bedrock_tool_call_response
 from chatbot.utils.chat_utils import get_guided_chat
+import logging
+
+
+logger = logging.getLogger('django')
 
 
 @shared_task
@@ -36,10 +40,12 @@ def get_shikshalokam_bedrock_response(channel_name, session_id, profile_id, rout
             system_prompt=prompt_to_use, messages=messages, company_bot=company_bot, session_id=session_id,
             channel_name=channel_name, route=route, profile_id=profile_id
         )
+        logger.info('Bedrock Final response: %s', response)
 
         return response
     except Exception as e:
         print(e)
+        logger.error('error: %s', e, exc_info=True)
         traceback.print_exc()
 
 

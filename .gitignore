@@ -1,4 +1,5 @@
-/shikshalokam_mohini/logs/
+/logs/
+/config/secrets.json
 .env
 .idea
 shikshalokam_mohini/**/__pycache__/

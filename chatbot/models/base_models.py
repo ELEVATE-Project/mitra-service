@@ -119,6 +119,10 @@ class CompanyBot(models.Model):
                                          "conversation."
     )
     tool_context = models.TextField(null=True, blank=True)
+
+    connect_timeout = models.FloatField(default=5.0, help_text="Timeout in seconds for establishing a LLM connection.")
+    read_timeout = models.FloatField(default=10.0, help_text="Timeout in seconds for reading a LLM response.")
+
     history = HistoricalRecords()
 
     def __str__(self):

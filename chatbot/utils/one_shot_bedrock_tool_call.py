@@ -4,7 +4,10 @@ from chatbot.celery_tasks.handle_message import translate_and_send_message
 from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_model
 from chatbot.models import ChatSession, ChatStatus, LLMProvider
 from chatbot.models.company_models import CompanyStateMachine
+import logging
 
+
+logger = logging.getLogger('django')
 
 channel_layer = get_channel_layer()
 
@@ -35,10 +38,16 @@ def get_one_shot_bedrock_tool_call_response(system_prompt, messages, company_bot
 
     response = None
     if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
-        response = handle_bedrock_model(
-            system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
-            temperature=company_bot.bot_temperature, max_token=company_bot.max_token
-        )
+        try:
+            response = handle_bedrock_model(
+                system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
+                temperature=company_bot.bot_temperature, max_token=company_bot.max_token,
+                company_bot=company_bot
+            )
+        except Exception as e:
+            logger.error(f"Got Error: %s", e)
+            print(f"Got Error: {e}")
+            response = None
     elif company_bot.provider == LLMProvider.OPENAI:
         tools = [
             {

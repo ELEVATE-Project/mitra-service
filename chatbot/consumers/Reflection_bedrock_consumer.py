@@ -8,118 +8,127 @@ from chatbot.celery_tasks.reflection_bedrock_tasks import get_reflection_bedrock
 import jwt
 from chatbot.utils.audio_provider_utils import text_translate_provider
 from shikshalokam.utils.project_utils import check_and_save_project
+import logging
+
+
+logger = logging.getLogger('django')
 
 
 class ReflectionBedrockConsumer(BaseConsumer):
+    try:
+        session_id = None
+        profile_id = None
+        project_id = None
+        access_token = None
+        route = None
 
-    session_id = None
-    profile_id = None
-    project_id = None
-    access_token = None
-    route = None
+        def disconnect(self, code):
+            print('Websocket closed')
+            chat_session = ChatSession.objects.filter(session=self.session_id)
+            if chat_session.exists():
+                c = chat_session[0]
+            else:
+                c = ChatSession(session=self.session_id)
+            c.save_title(self.route)
+            company_chat_status = self.determine_company_chat_status(
+                session_id=self.session_id, profile_id=self.profile_id, is_disconnected=True, route='/reflection'
+            )
+            print("COMPANY CHAT STATUS: ", company_chat_status)
+            self.update_last_chat_status(chat_status=company_chat_status)
+            self.close()
 
-    def disconnect(self, code):
-        print('Websocket closed')
-        chat_session = ChatSession.objects.filter(session=self.session_id)
-        if chat_session.exists():
-            c = chat_session[0]
-        else:
-            c = ChatSession(session=self.session_id)
-        c.save_title(self.route)
-        company_chat_status = self.determine_company_chat_status(
-            session_id=self.session_id, profile_id=self.profile_id, is_disconnected=True, route='/reflection'
-        )
-        print("COMPANY CHAT STATUS: ", company_chat_status)
-        self.update_last_chat_status(chat_status=company_chat_status)
-        self.close()
+        def receive(self, text_data):
+            print(text_data)
+            text_data_json = json.loads(text_data)
+            message_type = text_data_json.get('type', None)
 
-    def receive(self, text_data):
-        print(text_data)
-        text_data_json = json.loads(text_data)
-        message_type = text_data_json.get('type', None)
-
-        try:
-            if message_type == 'authenticate':
-                self.session_id = text_data_json.get('sessionid')
-                self.profile_id = text_data_json.get('profileid')
-                self.project_id = text_data_json.get('projectid')
-                self.access_token = text_data_json.get('access_token')
-                self.route = text_data_json.get('route')
-                profile = Profile.objects.get(id=self.profile_id)
-                check_and_save_project(
-                    project_id=self.project_id, access_token=self.access_token, profile=profile
-                )
-                print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
-                      f"route: {self.route}")
-                print(f"Received project_id: {self.project_id} and access_token: {self.access_token}")
-                if self.access_token:
-                    decoded = jwt.decode(self.access_token, options={"verify_signature": False})
-                    print(decoded)
-                    if decoded:
-                        user_id = decoded.get('data', {}).get('id')
+            try:
+                if message_type == 'authenticate':
+                    self.session_id = text_data_json.get('sessionid')
+                    self.profile_id = text_data_json.get('profileid')
+                    self.project_id = text_data_json.get('projectid')
+                    self.access_token = text_data_json.get('access_token')
+                    self.route = text_data_json.get('route')
+                    profile = Profile.objects.get(id=self.profile_id)
+                    check_and_save_project(
+                        project_id=self.project_id, access_token=self.access_token, profile=profile
+                    )
+                    print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
+                          f"route: {self.route}")
+                    print(f"Received project_id: {self.project_id} and access_token: {self.access_token}")
+                    if self.access_token:
+                        decoded = jwt.decode(self.access_token, options={"verify_signature": False})
+                        print(decoded)
+                        if decoded:
+                            user_id = decoded.get('data', {}).get('id')
+                        else:
+                            user_id = None
                     else:
                         user_id = None
-                else:
-                    user_id = None
-                print("User_id: ", user_id)
+                    print("User_id: ", user_id)
 
-                # chat session create (session, profile)
-                cs, cs_created = ChatSession.objects.get_or_create(
-                    session=self.session_id,
-                    defaults={
-                        'profile': profile,
-                        'current_step': 1,
-                        'company_bot': CompanyBot.objects.get(company=profile.company, route='/reflection'),
-                        'session_status': ChatStatus.IN_PROGRESS,
-                        'project_id': self.project_id,
-                        'user_id': user_id,
-                    }
-                )
-                print(cs, cs_created)
-            else:
-                company_chat_status = self.determine_company_chat_status(
-                    session_id=self.session_id, profile_id=self.profile_id, route='/reflection'
-                )
-                print("COMPANY CHAT STATUS: ", company_chat_status)
-                async_to_sync(self.channel_layer.send)(
-                    self.channel_name,
-                    {
-                        "type": "chat_message",
-                        "text": {"msg": text_data_json["text"], "source": "user"},
-                    },
-                )
-
-                if self.route != 'en':
-                    profile = Profile.objects.get(id=self.profile_id)
-                    company_bot = CompanyBot.objects.filter(company=profile.company, route='/reflection').first()
-                    voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
-
-                    response = text_translate_provider(
-                        voice_provider=voice_provider, message_body=text_data_json['text'], target_language='en',
-                        source_language=self.route
+                    # chat session create (session, profile)
+                    cs, cs_created = ChatSession.objects.get_or_create(
+                        session=self.session_id,
+                        defaults={
+                            'profile': profile,
+                            'current_step': 1,
+                            'company_bot': CompanyBot.objects.get(company=profile.company, route='/reflection'),
+                            'session_status': ChatStatus.IN_PROGRESS,
+                            'project_id': self.project_id,
+                            'user_id': user_id,
+                        }
                     )
-                    if response.get('status') == 200:
-                        translated_message = response.get('content')
-                    else:
-                        translated_message = text_data_json['text']
+                    print(cs, cs_created)
                 else:
-                    translated_message = None
-                save_in_company_db(self.session_id, self.profile_id, 'User', text_data_json['text'],
-                                   None, company_chat_status, translated_message)
+                    company_chat_status = self.determine_company_chat_status(
+                        session_id=self.session_id, profile_id=self.profile_id, route='/reflection'
+                    )
+                    print("COMPANY CHAT STATUS: ", company_chat_status)
+                    async_to_sync(self.channel_layer.send)(
+                        self.channel_name,
+                        {
+                            "type": "chat_message",
+                            "text": {"msg": text_data_json["text"], "source": "user"},
+                        },
+                    )
 
-                print(f"channel_name: {self.channel_name}, session_id: {self.session_id}, profile_id: {self.profile_id}, "
-                      f"route: {self.route}")
+                    if self.route != 'en':
+                        profile = Profile.objects.get(id=self.profile_id)
+                        company_bot = CompanyBot.objects.filter(company=profile.company, route='/reflection').first()
+                        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
 
-                get_reflection_bedrock_response.delay(
-                    self.channel_name, self.session_id, self.profile_id, self.route, self.project_id
-                )
-        except Exception as e:
-            print(e)
-            traceback.print_exc()
+                        response = text_translate_provider(
+                            voice_provider=voice_provider, message_body=text_data_json['text'], target_language='en',
+                            source_language=self.route
+                        )
+                        if response.get('status') == 200:
+                            translated_message = response.get('content')
+                        else:
+                            translated_message = text_data_json['text']
+                    else:
+                        translated_message = None
+                    save_in_company_db(self.session_id, self.profile_id, 'User', text_data_json['text'],
+                                       None, company_chat_status, translated_message)
 
-    def connect(self):
-        try:
-            print('Attempting to connect to websocket')
-            super().connect()
-        except Exception:
-            traceback.print_exc()
+                    print(f"channel_name: {self.channel_name}, session_id: {self.session_id}, profile_id: {self.profile_id}, "
+                          f"route: {self.route}")
+
+                    get_reflection_bedrock_response.delay(
+                        self.channel_name, self.session_id, self.profile_id, self.route, self.project_id
+                    )
+            except Exception as e:
+                print(e)
+                logger.error('Receive Error: %s', e, exc_info=True)
+                traceback.print_exc()
+
+        def connect(self):
+            try:
+                print('Attempting to connect to websocket')
+                super().connect()
+            except Exception:
+                logger.error('Connect Error: %s', e, exc_info=True)
+                traceback.print_exc()
+    except Exception as e:
+        logger.error('Error: %s', e, exc_info=True)
+        print(f"Error: {e}")

@@ -1,9 +1,14 @@
 from celery import shared_task
+from chatbot.celery_tasks.handle_message import translate_and_send_message
 from chatbot.models import CompanyChat, Profile, CompanyBot, ChatSession, LLMProvider
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.chat_utils import get_guided_chat
 from chatbot.utils.one_shot_bedrock_tool_call import get_one_shot_bedrock_tool_call_response
 from chatbot.utils.one_shot_utils import get_remaining_strands
+import logging
+
+
+logger = logging.getLogger('django')
 
 
 @shared_task
@@ -26,6 +31,16 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
             messages=messages, company_chats=company_chats, oneshot_bot=company_bot,
             profile=profile
         )
+        if remaining_stages_response and remaining_stages_response.get('error'):
+            error_msg = remaining_stages_response.get('error')
+            logger.info(f"Sending message: %s", error_msg)
+            print("Sending message: ", error_msg)
+            translated_message = translate_and_send_message(
+                accumulated_message=error_msg, current_channel_name=channel_name,
+                current_step_number=chat_session.current_step, finish_reason="stop", route=route,
+                company_bot=company_bot
+            )
+            return translated_message
         remaining_stages = remaining_stages_response.get('remaining_stages', [])
         print("remaining_stages: ", remaining_stages)
         if remaining_stages and isinstance(remaining_stages, str):

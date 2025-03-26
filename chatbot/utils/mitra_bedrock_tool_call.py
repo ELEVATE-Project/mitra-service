@@ -20,7 +20,7 @@ def get_mitra_bedrock_tool_response(
     chunks = []
 
     response = handle_bedrock_model(
-        system_prompt=system_prompt, messages=messages
+        system_prompt=system_prompt, messages=messages, company_bot=company_bot
     )
     print("response_body bedrock: ", response)
 
