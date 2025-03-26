@@ -22,7 +22,7 @@ def get_reflection_bedrock_tool_response(
     response = handle_bedrock_model(
         system_prompt=system_prompt, messages=messages,
         model_name=company_bot.llm_model, temperature=company_bot.bot_temperature,
-        max_token=company_bot.max_token
+        max_token=company_bot.max_token, company_bot=company_bot
     )
     print("response_body bedrock: ", response)
     if response is None:

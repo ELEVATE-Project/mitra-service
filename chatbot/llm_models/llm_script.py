@@ -149,12 +149,15 @@ def retry_if_result_none(result):
 @observe()
 @retry(stop_max_attempt_number=llm_retry_number, retry_on_result=retry_if_result_none, wrap_exception=True)
 def handle_bedrock_model(
-        system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
+        company_bot, system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
         model_name=None, region_name='us-west-2', tools=None, is_json_response=False
 ):
+    connect_timeout = company_bot.connect_timeout
+    read_timeout = company_bot.read_timeout
+
     boto_config = BotoConfig(
-        connect_timeout=3,
-        read_timeout=10,
+        connect_timeout=connect_timeout,
+        read_timeout=read_timeout,
         retries={"mode": "adaptive"}
     )
 

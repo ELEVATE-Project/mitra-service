@@ -46,7 +46,7 @@ def apply_prompt_template(question: str) -> str:
     return prompt
 
 
-def call_bedrock_api(prompt, messages, temperature, chunks: List[str]):
+def call_bedrock_api(prompt, messages, temperature, company_bot, chunks: List[str]):
     """
     Call chatgpt api with user's question and retrieved chunks.
     """
@@ -58,13 +58,13 @@ def call_bedrock_api(prompt, messages, temperature, chunks: List[str]):
 
     response = handle_bedrock_model(
         system_prompt=prompt, messages=messages, max_token=2048,
-        temperature=temperature
+        temperature=temperature, company_bot=company_bot
     )
 
     return response
 
 
-def ask(messages, user_question, temperature, priority_filter, top_k, prompt, filter_score):
+def ask(messages, user_question, temperature, priority_filter, top_k, prompt, filter_score, company_bot):
     """
     Handle user's questions.
     """
@@ -85,5 +85,7 @@ def ask(messages, user_question, temperature, priority_filter, top_k, prompt, fi
     print("\nCHUNKS: ", chunks)
     chunks = []
     print("\nChunk Response: ", chunks_response)
-    response = call_bedrock_api(prompt=prompt, messages=messages, temperature=temperature, chunks=chunks)
+    response = call_bedrock_api(
+        prompt=prompt, messages=messages, temperature=temperature, chunks=chunks, company_bot=company_bot
+    )
     return response, chunks, chunks_response

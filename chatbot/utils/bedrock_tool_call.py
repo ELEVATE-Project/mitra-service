@@ -24,7 +24,7 @@ def get_bedrock_tool_call_response(
         try:
             response = handle_bedrock_model(
                 system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
-                temperature=company_bot.bot_temperature, max_token=company_bot.max_token
+                temperature=company_bot.bot_temperature, max_token=company_bot.max_token, company_bot=company_bot
             )
         except Exception as e:
             logger.error(f"Got Error: %s", e)

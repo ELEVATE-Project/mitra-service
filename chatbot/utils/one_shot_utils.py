@@ -28,7 +28,8 @@ def get_remaining_strands(messages, company_chats, oneshot_bot, profile):
         try:
             response = handle_bedrock_model(
                 system_prompt=one_shot_prompt, messages=messages, model_name=company_bot.llm_model,
-                temperature=company_bot.bot_temperature, max_token=company_bot.max_token, tools=tool
+                temperature=company_bot.bot_temperature, max_token=company_bot.max_token, tools=tool,
+                company_bot=company_bot
             )
         except Exception as e:
             logger.error(f"Got Error: %s", e)
@@ -70,7 +71,8 @@ def get_remaining_strands(messages, company_chats, oneshot_bot, profile):
         try:
             response = handle_bedrock_model(
                 system_prompt=one_shot_prompt, messages=messages, model_name=validate_bot.llm_model,
-                temperature=validate_bot.bot_temperature, max_token=validate_bot.max_token, tools=tool
+                temperature=validate_bot.bot_temperature, max_token=validate_bot.max_token, tools=tool,
+                company_bot=company_bot
             )
         except Exception as e:
             logger.error(f"Got Error: %s", e)

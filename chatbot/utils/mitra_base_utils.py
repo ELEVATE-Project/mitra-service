@@ -16,7 +16,7 @@ def get_mitra_paraphrase_utils(paraphrase_problem, should_paraphrase_text, compa
     print('validation_prompt: ', validation_prompt)
     validation_response = handle_bedrock_model(
         system_prompt=validation_prompt, messages=messages,  model_name = company_bot.llm_model,
-        temperature = company_bot.bot_temperature, max_token = company_bot.max_token,
+        temperature = company_bot.bot_temperature, max_token = company_bot.max_token, company_bot=company_bot
     )
     print("validation_response: ", validation_response)
     is_validated = validation_response.get('is_validated')
@@ -25,7 +25,7 @@ def get_mitra_paraphrase_utils(paraphrase_problem, should_paraphrase_text, compa
     print('paraphrase_prompt: ', paraphrase_prompt)
     paraphrase_response = handle_bedrock_model(
         system_prompt=paraphrase_prompt, messages=messages, model_name = company_bot.llm_model,
-        temperature = company_bot.bot_temperature, max_token = company_bot.max_token,
+        temperature = company_bot.bot_temperature, max_token = company_bot.max_token, company_bot=company_bot
     )
     print("paraphrase_response: ", paraphrase_response)
     paraphrase_response = paraphrase_response.get('paraphrased_challenge')
@@ -48,7 +48,8 @@ def generate_objective_utils(user_problem_statement, company_bot):
 
     response, chunks, chunks_response = ask(
         messages=messages, user_question=user_problem_statement, temperature=company_bot.bot_temperature,
-        priority_filter="p1", top_k=company_bot.top_k, prompt=prompt, filter_score=company_bot.filter_score
+        priority_filter="p1", top_k=company_bot.top_k, prompt=prompt, filter_score=company_bot.filter_score,
+        company_bot=company_bot
     )
 
     response = response.get('objective_list')
@@ -65,7 +66,7 @@ def generate_action_list_utils(input_data, company_bot):
 
     response = handle_bedrock_model(
         system_prompt=prompt, messages=messages, model_name = company_bot.llm_model,
-        temperature = company_bot.bot_temperature, max_token = company_bot.max_token,
+        temperature = company_bot.bot_temperature, max_token = company_bot.max_token, company_bot=company_bot
     )
 
     response = response.get('action_plan')
@@ -84,6 +85,7 @@ def generate_title_utils(input_data, company_bot):
     response = handle_bedrock_model(
         system_prompt=prompt, messages=messages, model_name = company_bot.llm_model,
         temperature = company_bot.bot_temperature, max_token = company_bot.max_token,
+        company_bot=company_bot
     )
     response = response.get('title')
     return response
@@ -102,6 +104,7 @@ def validate_objective_utils(user_input, company_bot):
         response = handle_bedrock_model(
             system_prompt=prompt, messages=messages, model_name = company_bot.llm_model,
             temperature = company_bot.bot_temperature, max_token = company_bot.max_token,
+            company_bot=company_bot
         )
 
         response = response.get('within_scope')
@@ -134,6 +137,7 @@ def validate_actions_utils(user_input, user_objective, problem_statement, compan
         response = handle_bedrock_model(
             system_prompt=prompt, messages=messages, model_name = company_bot.llm_model,
             temperature = company_bot.bot_temperature, max_token = company_bot.max_token,
+            company_bot=company_bot
         )
 
         response = response.get('within_scope')
@@ -167,6 +171,7 @@ def validate_title_utils(user_input, user_objective, problem_statement, user_act
         response = handle_bedrock_model(
             system_prompt=prompt, messages=messages, model_name = company_bot.llm_model,
             temperature = company_bot.bot_temperature, max_token = company_bot.max_token,
+            company_bot=company_bot
         )
 
         response = response.get('within_scope')
