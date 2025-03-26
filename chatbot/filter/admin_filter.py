@@ -150,23 +150,85 @@ class StoryCompanyFilter(admin.SimpleListFilter):
             return queryset.filter(Q(author__company__id=self.value()))
 
 
-class StoryLocationFilter(admin.SimpleListFilter):
-    title = 'Location'
-    parameter_name = 'location'
+class StoryStateFilter(admin.SimpleListFilter):
+    title = 'State'
+    parameter_name = 'state'
 
     def lookups(self, request, model_admin):
         user_email = request.user.email
         profile = Profile.objects.filter(email=user_email)
         if request.user.is_superuser:
-            return [(profile.id, profile.location) for profile in Profile.objects.all()]
+            states = ProfileAddress.objects.values_list('state', flat=True).distinct()
+            state_filters = []
+            for state in states:
+                if state:
+                    # Add as (value, display name)
+                    state_filters.append((state, state))
+            return state_filters
         elif len(profile) > 0 and profile[0].profile_type == ProfileType.MODERATOR:
-            return [(profile[0].id, profile[0].location)]
+            profile_address = ProfileAddress.objects.filter(profile=profile).first()
+            if profile_address and profile_address.state:
+                return [(profile_address.state, profile_address.state)]
         else:
             return [()]
 
     def queryset(self, request, queryset):
         if self.value():
-            return queryset.filter(Q(author__location=self.value()))
+            return queryset.filter(author__profile_address__state=self.value())
+
+
+class StoryDistrictFilter(admin.SimpleListFilter):
+    title = 'District'
+    parameter_name = 'district'
+
+    def lookups(self, request, model_admin):
+        user_email = request.user.email
+        profile = Profile.objects.filter(email=user_email)
+        if request.user.is_superuser:
+            districts = ProfileAddress.objects.values_list('district', flat=True).distinct()
+            district_filters = []
+            for district in districts:
+                if district:
+                    # Add as (value, display name)
+                    district_filters.append((district, district))
+            return district_filters
+        elif len(profile) > 0 and profile[0].profile_type == ProfileType.MODERATOR:
+            profile_address = ProfileAddress.objects.filter(profile=profile).first()
+            if profile_address and profile_address.district:
+                return [(profile_address.district, profile_address.district)]
+        else:
+            return [()]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(author__profile_address__district=self.value())
+
+
+class StoryBlockFilter(admin.SimpleListFilter):
+    title = 'Block'
+    parameter_name = 'block'
+
+    def lookups(self, request, model_admin):
+        user_email = request.user.email
+        profile = Profile.objects.filter(email=user_email)
+        if request.user.is_superuser:
+            blocks = ProfileAddress.objects.values_list('block', flat=True).distinct()
+            block_filters = []
+            for block in blocks:
+                if block:
+                    # Add as (value, display name)
+                    block_filters.append((block, block))
+            return block_filters
+        elif len(profile) > 0 and profile[0].profile_type == ProfileType.MODERATOR:
+            profile_address = ProfileAddress.objects.filter(profile=profile).first()
+            if profile_address and profile_address.block:
+                return [(profile_address.block, profile_address.block)]
+        else:
+            return [()]
+
+    def queryset(self, request, queryset):
+        if self.value():
+            return queryset.filter(author__profile_address__block=self.value())
 
 
 class ChatSessionFilter(admin.SimpleListFilter):

@@ -2,8 +2,7 @@ from django.utils.html import format_html
 from import_export.admin import ExportActionMixin
 from django.contrib import admin
 from django.db.models import Q
-from chatbot.filter.admin_filter import StoryCompanyFilter, StoryLocationFilter
-from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
+from chatbot.filter.admin_filter import StoryCompanyFilter, StoryStateFilter, StoryDistrictFilter, StoryBlockFilter
 from chatbot.models import StoryTag, StoryMedia, Story, Profile, ProfileType, MediaTypeChoices
 
 
@@ -31,7 +30,10 @@ class StoryMediaInline(admin.TabularInline):
 @admin.register(Story)
 class StoryAdmin(ExportActionMixin, admin.ModelAdmin):
     list_display = ('title', 'author', 'session', 'created_at',)
-    list_filter = (CustomAdvanceDateFilter, StoryCompanyFilter, 'author', 'session', StoryLocationFilter)
+    list_filter = (
+        'created_at', StoryCompanyFilter, 'author', 'session', StoryStateFilter,
+        StoryDistrictFilter, StoryBlockFilter
+    )
     search_fields = ('title', 'session',)
     exclude = ('formatted_content', )
     inlines = [StoryTagInline, StoryMediaInline]
