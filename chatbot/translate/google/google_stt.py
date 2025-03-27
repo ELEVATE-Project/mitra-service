@@ -28,6 +28,8 @@ def split_audio(audio_bytes, chunk_duration=50):
                 chunk_wf.setsampwidth(samp_width)
                 chunk_wf.setframerate(frame_rate)
                 chunk_wf.writeframes(chunk_data)
+            chunk_size = len(output.getvalue()) / 1024  # size in KB
+            print(f"Chunk {len(chunks) + 1}: {len(chunk_data) / frame_rate:.2f} seconds, {chunk_size:.2f} KB")
             chunks.append(output.getvalue())
     return chunks
 
