@@ -5,6 +5,7 @@ from google.cloud.speech_v2.types import cloud_speech
 import io
 import wave
 import base64
+import concurrent.futures
 
 
 def split_audio(audio_bytes, chunk_duration=50):
@@ -20,63 +21,63 @@ def split_audio(audio_bytes, chunk_duration=50):
 
         chunks = []
         i = 0
-        chunk_number = 1
+        chunk_number = 0
 
         while i < total_frames:
             remaining_frames = total_frames - i
-            while remaining_frames > chunk_frames:
-                # Process exactly 50s chunk
-                wf.setpos(i)
-                chunk_data = wf.readframes(chunk_frames)
+            chunk_size = min(chunk_frames, remaining_frames)
 
-                output = io.BytesIO()
-                with wave.open(output, "wb") as chunk_wf:
-                    chunk_wf.setnchannels(num_channels)
-                    chunk_wf.setsampwidth(samp_width)
-                    chunk_wf.setframerate(frame_rate)
-                    chunk_wf.writeframes(chunk_data)
+            wf.setpos(i)
+            chunk_data = wf.readframes(chunk_size)
 
-                chunk_seconds = chunk_frames / frame_rate
-                chunk_kb = len(output.getvalue()) / 1024
-                print(f"Chunk {chunk_number}: {chunk_seconds:.2f} sec, {chunk_kb:.2f} KB")
+            output = io.BytesIO()
+            with wave.open(output, "wb") as chunk_wf:
+                chunk_wf.setnchannels(num_channels)
+                chunk_wf.setsampwidth(samp_width)
+                chunk_wf.setframerate(frame_rate)
+                chunk_wf.writeframes(chunk_data)
 
-                chunks.append(output.getvalue())
-                i += chunk_frames  # Move forward by 50s worth of frames
-                chunk_number += 1
-                remaining_frames -= chunk_frames
+            chunk_seconds = chunk_size / frame_rate
+            chunk_kb = len(output.getvalue()) / 1024
+            print(f"Chunk {chunk_number}: {chunk_seconds:.2f} sec, {chunk_kb:.2f} KB")
 
-            # Handle last chunk (which might be less than or equal to 50s)
-            if remaining_frames > 0:
-                wf.setpos(i)
-                chunk_data = wf.readframes(remaining_frames)
-
-                output = io.BytesIO()
-                with wave.open(output, "wb") as chunk_wf:
-                    chunk_wf.setnchannels(num_channels)
-                    chunk_wf.setsampwidth(samp_width)
-                    chunk_wf.setframerate(frame_rate)
-                    chunk_wf.writeframes(chunk_data)
-
-                chunk_seconds = remaining_frames / frame_rate
-                chunk_kb = len(output.getvalue()) / 1024
-                print(f"Chunk {chunk_number}: {chunk_seconds:.2f} sec, {chunk_kb:.2f} KB")
-
-                chunks.append(output.getvalue())
-
-            i += remaining_frames  # Move to the end (exit loop)
+            chunks.append((chunk_number, output.getvalue()))
+            i += chunk_size
+            chunk_number += 1
 
     return chunks
 
 
+def transcribe_chunk(client, project_id, config, chunk_number, chunk):
+    """Transcribes a single chunk of audio."""
+    request = cloud_speech.RecognizeRequest(
+        recognizer=f"projects/{project_id}/locations/global/recognizers/_",
+        config=config,
+        content=chunk,
+    )
+    try:
+        response = client.recognize(request=request)
+        transcript = ""
+        if response and not isinstance(response, str):
+            for res_result in response.results:
+                if res_result and res_result.alternatives:
+                    transcript += res_result.alternatives[0].transcript + " "
+        return (chunk_number, transcript.strip())
+    except Exception as e:
+        print(f"Error during API request for chunk {chunk_number}: {e}")
+        traceback.print_exc()
+        return (chunk_number, "")
+
+
 def transcribe_multiple_languages_v2(
-    project_id: str,
-    language_codes: List[str],
-    audio_file: str,
+        project_id: str,
+        language_codes: List[str],
+        audio_file: str,
 ) -> dict:
     client = SpeechClient()
 
     try:
-        print("language_codes: ", language_codes)
+        print("language_codes:", language_codes)
         config = cloud_speech.RecognitionConfig(
             auto_decoding_config=cloud_speech.AutoDetectDecodingConfig(),
             language_codes=language_codes,
@@ -87,37 +88,23 @@ def transcribe_multiple_languages_v2(
         chunks = split_audio(audio_bytes)
 
         transcripts = []
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_to_chunk = {
+                executor.submit(transcribe_chunk, client, project_id, config, chunk_number, chunk): chunk_number
+                for chunk_number, chunk in chunks
+            }
 
-        for chunk in chunks:
-            request = cloud_speech.RecognizeRequest(
-                recognizer=f"projects/{project_id}/locations/global/recognizers/_",
-                config=config,
-                content=chunk,
-            )
-            try:
-                response = client.recognize(request=request)
-                if response and not isinstance(response, str):
-                    for res_result in response.results:
-                        if res_result and res_result.alternatives:
-                            transcripts.append(res_result.alternatives[0].transcript)
-            except Exception as e:
-                print(f"Error during API request: {e}")
-                traceback.print_exc()
-                return {
-                    'status': 500,
-                    'content': f"Error during API request: {e}"
-                }
-        print("transcripts: ", transcripts)
-        full_transcript = " ".join(transcripts)
-        return {
-            'status': 200,
-            'content': full_transcript
-        }
+            results = []
+            for future in concurrent.futures.as_completed(future_to_chunk):
+                chunk_number, transcript = future.result()
+                results.append((chunk_number, transcript))
+
+        results.sort()  # Ensure correct order
+        full_transcript = " ".join(transcript for _, transcript in results)
+
+        return {'status': 200, 'content': full_transcript}
 
     except Exception as e:
         print(f"Error processing file: {e}")
         traceback.print_exc()
-        return {
-            'status': 500,
-            'content': f"Error processing file: {e}"
-        }
+        return {'status': 500, 'content': f"Error processing file: {e}"}
