@@ -100,6 +100,7 @@ def transcribe_multiple_languages_v2(
                 results.append((chunk_number, transcript))
 
         results.sort()  # Ensure correct order
+        print("sorted results: ", results)
         full_transcript = " ".join(transcript for _, transcript in results)
 
         return {'status': 200, 'content': full_transcript}
