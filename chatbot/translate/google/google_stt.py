@@ -9,28 +9,62 @@ import base64
 
 def split_audio(audio_bytes, chunk_duration=50):
     """
-    Splits audio into 50-second chunks.
+    Splits audio into strictly 50-second chunks.
     """
     with wave.open(io.BytesIO(audio_bytes), "rb") as wf:
         frame_rate = wf.getframerate()
         num_channels = wf.getnchannels()
         samp_width = wf.getsampwidth()
         total_frames = wf.getnframes()
-        chunk_frames = chunk_duration * frame_rate
+        chunk_frames = chunk_duration * frame_rate  # Frames per 50s chunk
 
         chunks = []
-        for i in range(0, total_frames, chunk_frames):
-            wf.setpos(i)
-            chunk_data = wf.readframes(min(chunk_frames, total_frames - i))
-            output = io.BytesIO()
-            with wave.open(output, "wb") as chunk_wf:
-                chunk_wf.setnchannels(num_channels)
-                chunk_wf.setsampwidth(samp_width)
-                chunk_wf.setframerate(frame_rate)
-                chunk_wf.writeframes(chunk_data)
-            chunk_size = len(output.getvalue()) / 1024  # size in KB
-            print(f"Chunk {len(chunks) + 1}: {len(chunk_data) / frame_rate:.2f} seconds, {chunk_size:.2f} KB")
-            chunks.append(output.getvalue())
+        i = 0
+        chunk_number = 1
+
+        while i < total_frames:
+            remaining_frames = total_frames - i
+            while remaining_frames > chunk_frames:
+                # Process exactly 50s chunk
+                wf.setpos(i)
+                chunk_data = wf.readframes(chunk_frames)
+
+                output = io.BytesIO()
+                with wave.open(output, "wb") as chunk_wf:
+                    chunk_wf.setnchannels(num_channels)
+                    chunk_wf.setsampwidth(samp_width)
+                    chunk_wf.setframerate(frame_rate)
+                    chunk_wf.writeframes(chunk_data)
+
+                chunk_seconds = chunk_frames / frame_rate
+                chunk_kb = len(output.getvalue()) / 1024
+                print(f"Chunk {chunk_number}: {chunk_seconds:.2f} sec, {chunk_kb:.2f} KB")
+
+                chunks.append(output.getvalue())
+                i += chunk_frames  # Move forward by 50s worth of frames
+                chunk_number += 1
+                remaining_frames -= chunk_frames
+
+            # Handle last chunk (which might be less than or equal to 50s)
+            if remaining_frames > 0:
+                wf.setpos(i)
+                chunk_data = wf.readframes(remaining_frames)
+
+                output = io.BytesIO()
+                with wave.open(output, "wb") as chunk_wf:
+                    chunk_wf.setnchannels(num_channels)
+                    chunk_wf.setsampwidth(samp_width)
+                    chunk_wf.setframerate(frame_rate)
+                    chunk_wf.writeframes(chunk_data)
+
+                chunk_seconds = remaining_frames / frame_rate
+                chunk_kb = len(output.getvalue()) / 1024
+                print(f"Chunk {chunk_number}: {chunk_seconds:.2f} sec, {chunk_kb:.2f} KB")
+
+                chunks.append(output.getvalue())
+
+            i += remaining_frames  # Move to the end (exit loop)
+
     return chunks
 
 
