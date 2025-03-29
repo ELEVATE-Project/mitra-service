@@ -13,6 +13,7 @@ class ChatStatus(models.TextChoices):
 class ChatType(models.TextChoices):
     guidedReflection = 'normal', _('guidedReflection')
     oneStepReflection = 'oneshot', _('oneStepReflection')
+    shikshaChaupal = 'shikshalokam_chaupal', _('shikshaChaupal')
 
 
 class LLMProvider(models.TextChoices):
