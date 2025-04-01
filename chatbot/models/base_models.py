@@ -193,6 +193,12 @@ class Profile(models.Model):
 
 
 class CompanyChat(models.Model):
+    def get_file_upload_path(self, filename):
+        folder_name = f'chatbot'
+        upload_path = os.path.join(folder_name, filename)
+        print("upload_path: ", upload_path)
+        return upload_path
+
     message = models.TextField()
     translated_message = models.TextField(null=True, blank=True)
     chunks = models.TextField(null=True)
@@ -209,6 +215,7 @@ class CompanyChat(models.Model):
     whatsapp_message_id = models.CharField(max_length=255, null=True, blank=True)
     message_type = models.CharField(max_length=20, null=True, blank=True)
     stage = models.CharField(max_length=500, choices=ChatStageChoices.choices, null=True, blank=True)
+    audio_file = models.FileField(upload_to=get_file_upload_path, max_length=1000, null=True, blank=True)
 
     def __str__(self):
         return self.message

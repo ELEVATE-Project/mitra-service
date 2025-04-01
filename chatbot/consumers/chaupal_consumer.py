@@ -39,21 +39,25 @@ class ShikshalokamChaupalConsumer(BaseConsumer):
             message_type = text_data_json.get('type', None)
 
             try:
+                company_bot = None
                 if message_type == 'authenticate':
                     self.session_id = text_data_json.get('sessionid')
                     self.profile_id = text_data_json.get('profileid')
                     self.route = text_data_json.get('route')
-                    profile = Profile.objects.get(id=self.profile_id)
+                    profile = Profile.objects.filter(id=self.profile_id).first()
                     print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
                           f"route: {self.route}")
-
+                    if profile:
+                        company_bot = CompanyBot.objects.get(company=profile.company, route='/shikshalokam_chaupal')
+                    else:
+                        company_bot = CompanyBot.objects.get(route='/shikshalokam_chaupal')
                     # chat session create (session, profile)
                     cs, cs_created = ChatSession.objects.get_or_create(
                         session=self.session_id,
                         defaults={
                             'profile': profile,
                             'current_step': 1,
-                            'company_bot': CompanyBot.objects.get(company=profile.company, route='/shikshalokam_chaupal'),
+                            'company_bot': company_bot,
                             'session_status': ChatStatus.IN_PROGRESS,
                             'session_type': ChatType.shikshaChaupal
                         }
@@ -61,7 +65,7 @@ class ShikshalokamChaupalConsumer(BaseConsumer):
                     print(cs, cs_created)
                 else:
                     company_chat_status = self.determine_company_chat_status(
-                        session_id=self.session_id, profile_id=self.profile_id, route='/'
+                        session_id=self.session_id, profile_id=self.profile_id, route='/shikshalokam_chaupal'
                     )
                     print("COMPANY CHAT STATUS: ", company_chat_status)
                     async_to_sync(self.channel_layer.send)(
@@ -73,8 +77,6 @@ class ShikshalokamChaupalConsumer(BaseConsumer):
                     )
 
                 if self.route != 'en':
-                    profile = Profile.objects.get(id=self.profile_id)
-                    company_bot = CompanyBot.objects.filter(company=profile.company, route='/shikshalokam_chaupal').first()
                     voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
 
                     response = text_translate_provider(
@@ -88,10 +90,12 @@ class ShikshalokamChaupalConsumer(BaseConsumer):
                 else:
                     translated_message = None
 
-                print("text_data_json: ", text_data_json)
                 if message_type != 'authenticate' and text_data_json and text_data_json.get('text'):
-                    save_in_company_db(self.session_id, self.profile_id, 'User', text_data_json['text'],
-                                       None, company_chat_status, translated_message)
+                    save_in_company_db(
+                        session_id=self.session_id, profile_id=self.profile_id, initiated_by='User',
+                        message=text_data_json['text'], chunks=None, status=company_chat_status,
+                        translated_message=translated_message, audio_base64=text_data_json.get('asr_audio')
+                    )
 
                 print(f"channel_name: {self.channel_name}, session_id: {self.session_id}, profile_id: "
                       f"{self.profile_id}, route: {self.route}")

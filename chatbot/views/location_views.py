@@ -3,6 +3,7 @@ import os
 import requests
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+import json_repair
 
 
 location_auth = os.getenv('LOCATION_AUTH')
@@ -39,3 +40,32 @@ def get_location_view(request):
         'status': 'ok',
         'list': location_list
     }, status=200)
+
+
+@api_view(['GET'])
+def get_ip_location_view(request):
+    try:
+        url = "http://ip-api.com/json/"
+        response = requests.get(url)
+
+        if response.status_code == 200:
+            location_data = response.json()
+
+            location_output = json_repair.repair_json(json.dumps(location_data), return_objects=True)
+
+            return Response({
+                'status': 'ok',
+                'location': location_output
+            }, status=200)
+        else:
+            return Response({
+                'status': 'error',
+                'message': 'Failed to fetch location'
+            }, status=response.status_code)
+
+    except Exception as e:
+        print("Error occurred:", e)
+        return Response({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)

@@ -123,8 +123,7 @@ def get_missing_question_prompt(company_bot, system_context, state_machine, chec
                             Completion Criteria:
                             {}""".format(
                     system_context,
-                    state_machine.context,
-                    state_machine.completion_criteria
+                    state_machine_context, state_machine_completion_criteria
                 )
             }
         ]

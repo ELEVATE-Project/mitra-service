@@ -4,7 +4,7 @@ from chatbot.models import CompanyChat, Profile, CompanyBot, ChatSession, LLMPro
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.chat_utils import get_guided_chat
 import logging
-
+from jinja2 import Template
 from chatbot.utils.chaupal_tool_call import get_chaupal_tool_call_response
 
 logger = logging.getLogger('django')
@@ -16,19 +16,31 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
         company_chats = CompanyChat.objects.filter(session=session_id).order_by('created_at')
         print(session_id)
         chat_session = ChatSession.objects.filter(session=session_id).first()
-        profile = Profile.objects.get(id=profile_id)
-        company_bot = CompanyBot.objects.get(company=profile.company, route='/shikshalokam_chaupal')
+        profile = Profile.objects.filter(id=profile_id).first()
+        if profile:
+            company_bot = CompanyBot.objects.get(company=profile.company, route='/shikshalokam_chaupal')
+        else:
+            company_bot = CompanyBot.objects.get(route='/shikshalokam_chaupal')
         state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
         system_context = company_bot.context
 
-        prompt_to_use = get_guided_prompt(
-            company_bot=company_bot, system_context=system_context, state_machine=state_machine
-        )
         bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot).first()
         if bot_vernacular:
-            intro_mssg = bot_vernacular.introductory_message
+            if profile_id:
+                intro_mssg = bot_vernacular.introductory_message
+                first_word = intro_mssg.split(" ")[0]
+                remaining_message = " ".join(intro_mssg.split(" ")[1:])
+                intro_mssg = f"{first_word} {profile.first_name}, {remaining_message}"
+            else:
+                intro_mssg = bot_vernacular.alt_introductory_message
         else:
             intro_mssg = None
+
+        prompt_to_use = get_guided_prompt(
+            company_bot=company_bot, system_context=system_context, state_machine=state_machine,
+            intro_mssg=intro_mssg
+        )
+
         messages = get_guided_chat(
             company_bot=company_bot, company_chats=company_chats, intro=intro_mssg
         )
@@ -46,8 +58,16 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
         traceback.print_exc()
 
 
-def get_guided_prompt(company_bot, system_context, state_machine):
+def get_guided_prompt(company_bot, system_context, state_machine, intro_mssg=None):
     prompt_to_use=[]
+    state_machine_context = state_machine.context
+    if intro_mssg:
+        context_data = {
+            "intro_message": intro_mssg
+        }
+        template = Template(state_machine_context)
+        state_machine_context = template.render(context_data)
+
     if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
         prompt_to_use = [
             {
@@ -59,7 +79,7 @@ def get_guided_prompt(company_bot, system_context, state_machine):
 
                 Completion Criteria for function calling:
                 {}
-                """.format(state_machine.context, state_machine.completion_criteria)
+                """.format(state_machine_context, state_machine.completion_criteria)
             },
             {
                 'text': company_bot.tool_context
@@ -76,7 +96,7 @@ def get_guided_prompt(company_bot, system_context, state_machine):
                             Completion Criteria:
                             {}""".format(
                     system_context,
-                    state_machine.context,
+                    state_machine_context,
                     state_machine.completion_criteria
                 )
             }
