@@ -139,12 +139,19 @@ def get_story_html(story, profile, flow):
         """
 
     if profile:
-        company_bot = CompanyBot.objects.get(company=profile.company, route='/story')
+        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
+            company_bot = CompanyBot.objects.get(company=profile.company, route='/story')
+        else:
+            company_bot = CompanyBot.objects.get(company=profile.company, route='/chaupal-story')
     else:
-        company_bot = CompanyBot.objects.get(route='/story')
+        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
+            company_bot = CompanyBot.objects.get(route='/story')
+        else:
+            company_bot = CompanyBot.objects.get(route='/chaupal-story')
 
     voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
     language_used = project.project_language if project else story.language
+
     story_vernacular = StoryVernacular.objects.filter(
         company_bot=company_bot, language=language_used
     ).first()

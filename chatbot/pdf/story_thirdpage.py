@@ -79,7 +79,7 @@ def split_content_based_on_words(content, max_words_per_page=400):
 
 def get_thirdpage_html(profile, story, project, voice_provider, story_vernacular):
     profile_addresses=None
-    if profile:
+    if profile and profile.first_name:
         profile_addresses = profile.profile_address.all().first()
 
     address_components = [

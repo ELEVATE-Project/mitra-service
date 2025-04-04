@@ -108,7 +108,7 @@ def process_steps(raw_data, fallback_text):
 
 def get_user_details(story, profile, voice_provider):
     profile_addresses=None
-    if profile:
+    if profile and profile.first_name:
         profile_addresses = profile.profile_address.all().first()
         company_logo = profile.company.get_public_url()
     else:

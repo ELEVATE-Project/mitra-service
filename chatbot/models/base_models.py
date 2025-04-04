@@ -8,7 +8,7 @@ from simple_history.models import HistoricalRecords
 from chatbot.models.enums import (
     EntityStatus, LLMModel, GenderChoices, ProfileType, ChatStatus,
     FeedbackChoices, CompanyBotTypeChoices, CompanyBotDynamicContextType, CompanyChatSourceChoices,
-    ChatStageChoices, VoiceProvider, VoiceType, LLMProvider
+    ChatStageChoices, VoiceProvider, VoiceType, LLMProvider, SessionFlowName
 )
 
 S3_BASE_URL = os.getenv('S3_BASE_URL')
@@ -141,10 +141,10 @@ class Profile(models.Model):
         upload_path = f"{folder_name}/{filename}"
         return upload_path
 
-    first_name = models.CharField(max_length=100)
+    first_name = models.CharField(max_length=100, null=True, blank=True)
     userid = models.CharField(max_length=200, null=True, blank=True)
     last_name = models.CharField(max_length=100, null=True, blank=True)
-    email = models.EmailField(max_length=100, null=False, blank=False)
+    email = models.EmailField(max_length=1000, null=False, blank=False)
     phone = models.CharField(max_length=20, null=True, blank=True)
     alternate_phone = models.CharField(max_length=20, null=True, blank=True)
     country = models.CharField(max_length=100, null=True, blank=True)
@@ -165,10 +165,11 @@ class Profile(models.Model):
     other_params = models.JSONField(null=True, blank=True)
     source = models.CharField(max_length=1000, null=True, blank=True)
     preferred_route = models.CharField(max_length=1000, null=True, blank=True)
+    latest_flow_used = models.CharField(max_length=500, choices=SessionFlowName.choices, null=True, blank=True)
     history = HistoricalRecords()
 
     def __str__(self):
-        return self.first_name
+        return self.first_name if self.first_name else ""
 
     def clean(self):
         super().clean()

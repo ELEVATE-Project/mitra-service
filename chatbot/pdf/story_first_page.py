@@ -3,7 +3,7 @@ from chatbot.utils.story_llama_utils import translate_field
 
 def get_first_page_html(profile, project, voice_provider):
     profile_addresses=None
-    if profile:
+    if profile and profile.first_name:
         profile_addresses = profile.profile_address.all().first()
         company_logo = profile.company.get_public_url()
     else:
