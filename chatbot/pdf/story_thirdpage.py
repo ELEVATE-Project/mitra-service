@@ -78,8 +78,9 @@ def split_content_based_on_words(content, max_words_per_page=400):
 
 
 def get_thirdpage_html(profile, story, project, voice_provider, story_vernacular):
-
-    profile_addresses = profile.profile_address.all().first()
+    profile_addresses=None
+    if profile:
+        profile_addresses = profile.profile_address.all().first()
 
     address_components = [
         profile_addresses.district if profile_addresses and profile_addresses.district else "",
@@ -88,7 +89,7 @@ def get_thirdpage_html(profile, story, project, voice_provider, story_vernacular
     ]
 
     address_string = ", ".join(filter(None, address_components))
-    author = profile.first_name or ""
+    author = profile.first_name if profile else ""
 
     sanitized_content = json_to_html(story.formatted_content)
     should_show_story_heading = True
@@ -96,12 +97,14 @@ def get_thirdpage_html(profile, story, project, voice_provider, story_vernacular
     content_chunks = split_content_based_on_words(sanitized_content)
 
     if project and project.project_language and project.project_language != 'en':
-        author = translate_field(
-            voice_provider=voice_provider, message_body=author, target_language=project.project_language
-        )
-        address_string = translate_field(
-            voice_provider=voice_provider, message_body=address_string, target_language=project.project_language
-        )
+        if author:
+            author = translate_field(
+                voice_provider=voice_provider, message_body=author, target_language=project.project_language
+            )
+        if address_string:
+            address_string = translate_field(
+                voice_provider=voice_provider, message_body=address_string, target_language=project.project_language
+            )
 
     translation_json = story_vernacular.translation_json
     if translation_json:

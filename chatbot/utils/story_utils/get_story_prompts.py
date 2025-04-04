@@ -63,11 +63,19 @@ def get_creation_promt(company_bot, profile):
 
 
 def get_validation_prompt(
-        response_json_story, validate_bot, response_json_content, tag_context, project_data
+        response_json_story, validate_bot, response_json_content, tag_context, project_data, profile
 ):
+    print("Got profile: ", profile)
+    address = ProfileAddress.objects.filter(profile=profile)
+
     validate_context_data = {
         "story_json_output": response_json_story,
+        "profile": profile,
+        "address": address if address else [{}]
     }
+    print("Validate Bot Tag Context:", validate_bot.tag_context)
+    print("Validate validate_context_data:", validate_context_data)
+
     validate_template = Template(validate_bot.tag_context)
     validate_tag_context = validate_template.render(validate_context_data)
 
@@ -80,6 +88,8 @@ def get_validation_prompt(
 
     validate_context_data = {
         "story_json_output": response_json_content,
+        "profile": profile,
+        "address": address if address else [{}]
     }
     validate_tag_context = validate_template.render(validate_context_data)
 

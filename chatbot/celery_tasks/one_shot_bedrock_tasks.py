@@ -15,8 +15,11 @@ logger = logging.getLogger('django')
 def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
     company_chats = CompanyChat.objects.filter(session=session_id).order_by('created_at')
     chat_session = ChatSession.objects.get(session=session_id)
-    profile = Profile.objects.get(id=profile_id)
-    company_bot = CompanyBot.objects.get(company=profile.company, route='/oneshot_bot')
+    profile = Profile.objects.filter(id=profile_id).first()
+    if profile:
+        company_bot = CompanyBot.objects.get(company=profile.company, route='/oneshot_bot')
+    else:
+        company_bot = CompanyBot.objects.get(route='/oneshot_bot')
 
     messages = get_guided_chat(
         company_bot=company_bot, company_chats=company_chats

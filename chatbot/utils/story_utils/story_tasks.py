@@ -1,9 +1,10 @@
-from chatbot.models import StoryLanguageChoices, StoryStatusChoices, Story
+from chatbot.models import StoryLanguageChoices, StoryStatusChoices, Story, SessionFlowName
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.story_llama_utils import translate_field, create_project
 from chatbot.utils.story_utils.format_utils import clean_escaped_text
 from shikshalokam.models import Project, Task
 from shikshalokam.serializer import TaskSerializer
+import json_repair
 
 
 def save_story(
@@ -71,7 +72,7 @@ def save_story(
             voice_provider=voice_provider, message_body=blurb, target_language=language
         )
 
-    if flow != 'login' and project_id:
+    if flow == SessionFlowName.Reflection and project_id:
         print("project_id: ", project_id)
         project = Project.objects.get(project_id=project_id)
         if project:
@@ -136,3 +137,92 @@ def save_story(
     )
 
     return story, problem_statement
+
+
+def save_chaupal_report(response_json_story, language, voice_provider, profile, session, combined_reason, flow=None):
+    title = response_json_story.get('title', '')
+    print('title: ', title)
+    challenges_faced = response_json_story.get('challenges_faced', '')
+    print('challenges_faced: ', challenges_faced)
+    solutions_discussed = response_json_story.get('solutions_discussed', '')
+    print('solutions_discussed: ', solutions_discussed)
+
+    user_name = response_json_story.get('user_name', '')
+    user_location = response_json_story.get('location', '')
+    organization = response_json_story.get('organization', '')
+    participants_count = response_json_story.get('participants_count', '')
+    discussion_date = response_json_story.get('discussion_date', '')
+
+    title = clean_escaped_text(text=title)
+
+    print("language used: ", language)
+    if language != 'en':
+        title = translate_field(
+            voice_provider=voice_provider, message_body=title, target_language=language
+        )
+        if isinstance(challenges_faced, str):
+            challenges_faced = json_repair.repair_json(challenges_faced, return_objects=True)
+
+        challenges_faced = [
+            translate_field(
+                voice_provider=voice_provider,
+                message_body=challenge,
+                target_language=language
+            )
+            for challenge in challenges_faced
+        ]
+
+        if isinstance(solutions_discussed, str):
+            solutions_discussed = json_repair.repair_json(solutions_discussed, return_objects=True)
+
+        solutions_discussed = [
+            translate_field(
+                voice_provider=voice_provider,
+                message_body=solution,
+                target_language=language
+            )
+            for solution in solutions_discussed
+        ]
+
+    if profile:
+        address = ProfileAddress.objects.filter(profile=profile).first()
+        if address:
+            location_parts = filter(None, [address.block, address.district, address.state])
+            location = ", ".join(location_parts)
+        else:
+            location = ""
+    else:
+        location = ""
+
+    other_params = {
+        'challenges_faced': challenges_faced,
+        'solutions_discussed': solutions_discussed,
+        'user_name': user_name,
+        'location': user_location,
+        'organization': organization,
+        'participants_count': participants_count,
+        'discussion_date': discussion_date,
+        'flow': flow
+    }
+
+    story = Story.objects.filter(session=session).first()
+    if story:
+        story.title = title
+        story.other_params = other_params
+        story.stage = StoryStatusChoices.COMPLETED
+        story.location = location
+        story.validation_logs = combined_reason
+    else:
+        story = Story(
+            title=title,
+            author=profile,
+            session=session,
+            stage=StoryStatusChoices.COMPLETED,
+            location=location,
+            validation_logs=combined_reason,
+            language=language,
+            other_params=other_params
+        )
+    story.save()
+
+    return story, None

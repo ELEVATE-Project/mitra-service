@@ -449,7 +449,7 @@ def update_project_status_view(request):
             for future in as_completed(futures):
                 future.result()
 
-        update_story_pdf(is_edit_story=True, session=session, access_token=access_token, flow=None)
+        update_story_pdf(is_edit_story=True, session=session, access_token=access_token, flow=flow)
         response = update_project_status_utils(
             project_id=project_id, access_token=access_token, flow=flow
         )

@@ -17,6 +17,7 @@ class ShikshalokamChaupalConsumer(BaseConsumer):
         session_id = None
         profile_id = None
         route = None
+        company_bot = None
 
         def disconnect(self, code):
             print('Websocket closed')
@@ -39,7 +40,6 @@ class ShikshalokamChaupalConsumer(BaseConsumer):
             message_type = text_data_json.get('type', None)
 
             try:
-                company_bot = None
                 if message_type == 'authenticate':
                     self.session_id = text_data_json.get('sessionid')
                     self.profile_id = text_data_json.get('profileid')
@@ -48,16 +48,16 @@ class ShikshalokamChaupalConsumer(BaseConsumer):
                     print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
                           f"route: {self.route}")
                     if profile:
-                        company_bot = CompanyBot.objects.get(company=profile.company, route='/shikshalokam_chaupal')
+                        self.company_bot = CompanyBot.objects.get(company=profile.company, route='/shikshalokam_chaupal')
                     else:
-                        company_bot = CompanyBot.objects.get(route='/shikshalokam_chaupal')
+                        self.company_bot = CompanyBot.objects.get(route='/shikshalokam_chaupal')
                     # chat session create (session, profile)
                     cs, cs_created = ChatSession.objects.get_or_create(
                         session=self.session_id,
                         defaults={
                             'profile': profile,
                             'current_step': 1,
-                            'company_bot': company_bot,
+                            'company_bot': self.company_bot,
                             'session_status': ChatStatus.IN_PROGRESS,
                             'session_type': ChatType.shikshaChaupal
                         }
@@ -77,16 +77,19 @@ class ShikshalokamChaupalConsumer(BaseConsumer):
                     )
 
                 if self.route != 'en':
-                    voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
-
-                    response = text_translate_provider(
-                        voice_provider=voice_provider, message_body=text_data_json['text'], target_language='en',
-                        source_language=self.route
-                    )
-                    if response.get('status') == 200:
-                        translated_message = response.get('content')
+                    print("Company bot: ", self.company_bot)
+                    voice_provider = Voice.objects.filter(company_bot=self.company_bot, type=VoiceType.TextToText).first()
+                    if text_data_json and text_data_json.get('text'):
+                        response = text_translate_provider(
+                            voice_provider=voice_provider, message_body=text_data_json['text'], target_language='en',
+                            source_language=self.route
+                        )
+                        if response.get('status') == 200:
+                            translated_message = response.get('content')
+                        else:
+                            translated_message = text_data_json['text']
                     else:
-                        translated_message = text_data_json['text']
+                        translated_message=None
                 else:
                     translated_message = None
 

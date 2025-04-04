@@ -1,5 +1,5 @@
 import traceback
-from chatbot.models import Story, StoryMedia, ChatSession
+from chatbot.models import Story, StoryMedia, ChatSession, SessionFlowName
 from chatbot.serializer.story_serializer import StoryCreateSerializer, StoryRetrieveSerializer, \
     StoryMediaRetrieveSerializer, StoryFullSerializer
 from chatbot.utils.media_utils import upload_to_cloud
@@ -27,11 +27,11 @@ def end_story(request):
         print("profile_id:", profile_id)
         print("session:", session)
         print("access_token:", access_token)
-        if profile_id is None or session is None:
+        if session is None:
             return Response({
                 'status': 'error',
-                'message': 'profile id or session is mandatory',
-                'error_message': 'profile id or session is mandatory'
+                'message': 'session is mandatory',
+                'error_message': 'session is mandatory'
             }, status=400)
         else:
             id, content, error_msg = create_story_object(
@@ -130,7 +130,7 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
             print("response: ", response)
             print("response status_code: ", response.status_code)
 
-            if response.status_code == status.HTTP_201_CREATED and flow == 'login':
+            if response.status_code == status.HTTP_201_CREATED and flow != SessionFlowName.Reflection:
                 update_story_pdf(
                     access_token=access_token, session=session_value, flow=flow
                 )
@@ -185,7 +185,8 @@ class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
             print("response: ", response)
             print("response status_code: ", response.status_code)
 
-            if response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT] and flow == 'login':
+            if (response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT] and
+                    flow != SessionFlowName.Reflection):
                     update_story_pdf(
                         access_token=access_token, session=session_value, flow=flow
                     )

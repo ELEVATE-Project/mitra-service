@@ -10,11 +10,12 @@ from django.core.files.base import ContentFile
 def generate_pdf_view(request):
     body = request.query_params
     session = body.get("session")
+    flow = body.get('flow')
     print("session: ", session)
     story = Story.objects.get(session=session)
     profile = story.author
 
-    html_content = get_story_html(story=story, profile=profile)
+    html_content = get_story_html(story=story, profile=profile, flow=flow)
     print("--------------------")
     print(html_content)
     print("--------------------")

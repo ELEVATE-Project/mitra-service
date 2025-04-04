@@ -16,8 +16,11 @@ def get_shikshalokam_bedrock_response(channel_name, session_id, profile_id, rout
         company_chats = CompanyChat.objects.filter(session=session_id).order_by('created_at')
         print(session_id)
         chat_session = ChatSession.objects.filter(session=session_id).first()
-        profile = Profile.objects.get(id=profile_id)
-        company_bot = CompanyBot.objects.get(company=profile.company, route='/')
+        profile = Profile.objects.filter(id=profile_id).first()
+        if profile:
+            company_bot = CompanyBot.objects.get(company=profile.company, route='/')
+        else:
+            company_bot = CompanyBot.objects.get(route='/')
         if company_chats and len(company_chats) < 2:
             chat_session.current_step += 1
             chat_session.save()

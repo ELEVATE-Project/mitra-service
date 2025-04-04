@@ -4,6 +4,7 @@ from django.contrib import admin
 from django.db.models import Q
 from chatbot.filter.admin_filter import StoryCompanyFilter, StoryStateFilter, StoryDistrictFilter, StoryBlockFilter
 from chatbot.models import StoryTag, StoryMedia, Story, Profile, ProfileType, MediaTypeChoices
+from chatbot.utils.shikshalokam_story_utils import update_story_pdf
 
 
 class StoryTagInline(admin.TabularInline):
@@ -52,3 +53,13 @@ class StoryAdmin(ExportActionMixin, admin.ModelAdmin):
             return qs.filter(Q(author__company=profile.company))
         else:
             return qs.none()
+
+    def save_model(self, request, obj, form, change):
+        print(f"Story saved: {obj.title}")
+        flow = obj.other_params.get('flow') if obj.other_params else None
+        update_story_pdf(
+            access_token=None, session=obj.session, flow=flow,
+            is_edit_story=False
+        )
+
+        super().save_model(request, obj, form, change)

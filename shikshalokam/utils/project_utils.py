@@ -2,6 +2,8 @@ import json
 import traceback
 import os
 import requests
+
+from chatbot.models import SessionFlowName
 from shikshalokam.models import Task, Project
 
 
@@ -10,7 +12,7 @@ base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
 def update_project_status_utils(project_id, access_token, flow):
     try:
-        if flow == 'login':
+        if flow != SessionFlowName.Reflection:
             return {'message': 'This api has no effect in the current flow', 'status': 200}
 
         url = f"https://{base_url}/userProjects/update/{project_id}"

@@ -5,8 +5,9 @@ import traceback
 import requests
 from django.core.files.base import ContentFile
 from chatbot.models import StoryMedia, MediaTypeChoices, CompanyChat, Profile, Story, ChatSession, CompanyBot, Voice, \
-    VoiceType
+    VoiceType, SessionFlowName
 from chatbot.models.story_vernacular_model import StoryVernacular
+from chatbot.pdf.shiksha_chaupal.mom_report import get_mom_report_html
 from chatbot.pdf.story_first_page import get_first_page_html
 from chatbot.pdf.story_images_page import get_story_images_page_html
 from chatbot.pdf.story_secondpage import get_story_secondpage_html
@@ -24,7 +25,7 @@ def save_shikshalokam_story(
         profile, conversation, flow
 ):
     try:
-        html_content = get_story_html(story=story, profile=profile)
+        html_content = get_story_html(story=story, profile=profile, flow=flow)
 
         pdf_generated = generate_pdf_with_gotenberg(html_content)
         pdf_file_name = story.title
@@ -57,7 +58,7 @@ def save_shikshalokam_story(
         else:
             print("Existing PDF updated")
 
-        if access_token in [None, "", "null"] or not session or not project_id or flow == 'login':
+        if access_token in [None, "", "null"] or not session or not project_id or flow != SessionFlowName.Reflection:
             print("Not calling shikshalokam api as access_tokne or session or project_id is missing")
             return
         upload_response_json = upload_to_cloud(session_value=session, access_token=access_token, story=story)
@@ -105,10 +106,17 @@ def save_shikshalokam_story(
         print(f"Failed to save story to Shikshalokam: {str(e)}")
 
 
-def get_story_html(story, profile):
-    project = Project.objects.filter(story=story, author=profile).first()
-    css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/story_pdf.css"))
-    pdf_file_name = project.expected_title or project.actual_title or "mi_story"
+def get_story_html(story, profile, flow):
+    project = Project.objects.filter(story=story).first()
+    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
+        css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/story_pdf.css"))
+    else:
+        css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/shiksha_chaupal/mom_report_pdf.css"))
+    if project:
+        pdf_file_name = project.expected_title or project.actual_title or "mi_story"
+    else:
+        pdf_file_name = story.title or "mi_story"
+
     print("Using pdf name: ", pdf_file_name)
     with open(css_path, 'r') as css_file:
         inline_css = css_file.read()
@@ -130,24 +138,33 @@ def get_story_html(story, profile):
 
         """
 
+    if profile:
+        company_bot = CompanyBot.objects.get(company=profile.company, route='/story')
+    else:
+        company_bot = CompanyBot.objects.get(route='/story')
 
-    company_bot = CompanyBot.objects.get(company=profile.company, route='/story')
     voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+    language_used = project.project_language if project else story.language
     story_vernacular = StoryVernacular.objects.filter(
-        company_bot=company_bot, language=project.project_language
+        company_bot=company_bot, language=language_used
     ).first()
-
-    html_content += get_first_page_html(
-        profile=profile, project=project, voice_provider=voice_provider
-    )
-    html_content += get_story_secondpage_html(
-        story=story, project=project, story_vernacular=story_vernacular
-    )
-    html_content += get_story_images_page_html(story=story, story_vernacular=story_vernacular)
-    html_content += get_thirdpage_html(
-        story=story, profile=profile, project=project, voice_provider=voice_provider,
-        story_vernacular=story_vernacular
-    )
+    print("Generating for FLOW: ", flow)
+    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
+        html_content += get_first_page_html(
+            profile=profile, project=project, voice_provider=voice_provider
+        )
+        html_content += get_story_secondpage_html(
+            story=story, project=project, story_vernacular=story_vernacular
+        )
+        html_content += get_story_images_page_html(story=story, story_vernacular=story_vernacular)
+        html_content += get_thirdpage_html(
+            story=story, profile=profile, project=project, voice_provider=voice_provider,
+            story_vernacular=story_vernacular
+        )
+    else:
+        html_content += get_mom_report_html(
+            story=story, story_vernacular=story_vernacular, profile=profile, voice_provider=voice_provider
+        )
 
     html_content += f"""
         <script>
@@ -183,7 +200,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         print("profile: ", profile)
         print("story: ", story.title)
         print("story format: ", story.formatted_content)
-        html_content = get_story_html(story=story, profile=profile)
+        html_content = get_story_html(story=story, profile=profile, flow=flow)
 
         pdf_generated = generate_pdf_with_gotenberg(html_content)
         pdf_file_name = story.title
@@ -208,7 +225,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         chat_session = ChatSession.objects.get(session=session)
         project_id = chat_session.project_id
 
-        if access_token in [None, "", "null"] or not session or not project_id or flow == 'login':
+        if access_token in [None, "", "null"] or not session or not project_id or flow != SessionFlowName.Reflection:
             print("Not calling shikshalokam api as access_tokne or session or project_id is missing")
             return
 

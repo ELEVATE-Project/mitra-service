@@ -3,7 +3,7 @@ import traceback
 from asgiref.sync import async_to_sync
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.base_consumer import BaseConsumer
-from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType
+from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType, ChatType
 from chatbot.celery_tasks.reflection_bedrock_tasks import get_reflection_bedrock_response
 import jwt
 from chatbot.utils.audio_provider_utils import text_translate_provider
@@ -77,6 +77,7 @@ class ReflectionBedrockConsumer(BaseConsumer):
                             'session_status': ChatStatus.IN_PROGRESS,
                             'project_id': self.project_id,
                             'user_id': user_id,
+                            'session_type': ChatType.reflection
                         }
                     )
                     print(cs, cs_created)
