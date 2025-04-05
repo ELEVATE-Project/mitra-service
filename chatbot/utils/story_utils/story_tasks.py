@@ -17,9 +17,9 @@ def save_story(
         print('title: ', title)
         tweet = response_json_story.get('tweet', '')
         print('tweet: ', tweet)
-        objective = response_json_story.get('objective', '')
+        objective = response_json_story['objective']
         print('objective: ', objective)
-        action_steps = response_json_story.get('action_steps', '')
+        action_steps = response_json_story['action_steps']
         print('action_steps: ', action_steps)
         impact = response_json_story.get('impact', '')
         print('impact: ', impact)
@@ -33,7 +33,7 @@ def save_story(
             'duration': duration
         }
 
-        content = response_json_story.get('content', '')
+        content = response_json_story['content']
         print('content: ', content)
         blurb = response_json_story.get('blurb', '')
         print('blurb: ', blurb)
@@ -148,11 +148,11 @@ def save_story(
 
 def save_chaupal_report(response_json_story, language, voice_provider, profile, session, combined_reason, flow=None):
     try:
-        title = response_json_story.get('title', '')
+        title = response_json_story['title']
         print('title: ', title)
-        challenges_faced = response_json_story.get('challenges_faced', '')
+        challenges_faced = response_json_story['challenges_faced']
         print('challenges_faced: ', challenges_faced)
-        solutions_discussed = response_json_story.get('solutions_discussed', '')
+        solutions_discussed = response_json_story['solutions_discussed']
         print('solutions_discussed: ', solutions_discussed)
 
         user_name = response_json_story.get('user_name', '')
