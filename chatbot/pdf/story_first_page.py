@@ -21,7 +21,7 @@ def get_first_page_html(profile, project, voice_provider):
     print("current_state: ", current_state)
     title = project.expected_title or project.actual_title or "mi_story"
 
-    author = profile.first_name if profile else ""
+    author = profile.first_name if profile and profile.first_name else ""
 
     if project and project.project_language and project.project_language != 'en':
         if author:
