@@ -1,67 +1,96 @@
-# from import_export import resources
-# from chatbot.models import Story, MediaTypeChoices
-# from datetime import datetime
-#
-#
-# class StoryResource(resources.ModelResource):
-#     class Meta:
-#         model = Story
-#         fields = (
-#             'id', 'title', 'author', 'session', 'created_at',
-#             'pdf_url'
-#         )
-#
-#     def export_resource(self, obj, *, export_fields=None, **kwargs):
-#         data = super().export_resource(obj, export_fields=export_fields, **kwargs)
-#         print("data: ", data)
-#         if export_fields is None:
-#             print("Export fields is none")
-#             export_fields = self.get_export_fields()
-#
-#         print("export fields: ", export_fields)
-#         # Loop through fields and data together
-#         for i, (field, value) in enumerate(zip(export_fields, data)):
-#             if isinstance(value, datetime) and value.tzinfo is not None:
-#                 data[i] = value.replace(tzinfo=None)
-#
-#         return data
-#
-#     def dehydrate_pdf_url(self, obj):
-#         """
-#         Returns the public URL of the first associated PDF media, if any.
-#         """
-#         pdf_media = obj.story_media.filter(media_type=MediaTypeChoices.PDF).first()
-#         if pdf_media:
-#             return pdf_media.get_public_url()
-#         return ""
+from django.http import HttpResponseRedirect
+from django.contrib import admin
+from django.utils.http import urlencode
+from io import BytesIO
+from django.utils.timezone import localtime
+from docx import Document
+from django.http import HttpResponse
+from django.forms.models import model_to_dict
+
+from chatbot.models import Story, MediaTypeChoices
 
 
-from import_export import resources, fields
-from import_export.widgets import ForeignKeyWidget
-from chatbot.models import Story, Profile
+@admin.action(description='Export selected stories')
+def redirect_to_export_view(modeladmin, request, queryset):
+    selected = queryset.values_list('pk', flat=True)
+    query_string = urlencode({'ids': ','.join(map(str, selected))})
+    return HttpResponseRedirect(f'{request.path}export_stories/?{query_string}')
 
-class StoryResource(resources.ModelResource):
-    title = fields.Field(attribute='title', column_name='Title')
-    author = fields.Field(attribute='author', column_name='Author', widget=ForeignKeyWidget(Profile, 'id'))
-    content = fields.Field(attribute='content', column_name='Content')
-    blurb = fields.Field(attribute='blurb', column_name='Blurb')
-    session = fields.Field(attribute='session', column_name='Session')
-    objective = fields.Field(attribute='objective', column_name='Objective')
-    action_steps = fields.Field(attribute='action_steps', column_name='Action Steps')
-    impact = fields.Field(attribute='impact', column_name='Impact')
-    micro_improvement = fields.Field(attribute='micro_improvement', column_name='Micro Improvement')
-    location = fields.Field(attribute='location', column_name='Location')
-    formatted_content = fields.Field(attribute='formatted_content', column_name='Formatted Content')
-    language = fields.Field(attribute='language', column_name='Language')
-    source = fields.Field(attribute='source', column_name='Source')
-    summary = fields.Field(attribute='summary', column_name='Summary')
-    other_params = fields.Field(attribute='other_params', column_name='Other Params')
-    created_at = fields.Field(attribute='created_at', column_name='Created At')
 
-    class Meta:
-        model = Story
-        fields = (
-            'title', 'author', 'content', 'blurb', 'session', 'objective', 'action_steps',
-            'impact', 'micro_improvement', 'location', 'formatted_content', 'language',
-            'source', 'summary', 'other_params', 'created_at'
-        )
+def get_all_other_params_keys(stories):
+    keys = set()
+    for story in stories:
+        if isinstance(story.other_params, dict):
+            keys.update(story.other_params.keys())
+    return sorted(keys)
+
+
+def generate_csv_response(dataset):
+    response = HttpResponse(dataset.export('csv'), content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename=stories.csv'
+    return response
+
+
+def generate_xls_response(dataset):
+    response = HttpResponse(dataset.export('xls'), content_type='application/vnd.ms-excel')
+    response['Content-Disposition'] = 'attachment; filename=stories.xls'
+    return response
+
+
+def generate_docx_response(stories):
+    document = Document()
+    headers = get_story_fields(stories)
+
+    for i, story in enumerate(stories, start=1):
+        document.add_heading(f'Story {i}: {story.title}', level=1)
+
+        row_data = get_story_data(story, headers)
+        for field, value in zip(headers, row_data):
+            document.add_paragraph(f"{field.replace('_', ' ').title()}: {value}")
+
+        if i != len(stories):
+            document.add_page_break()
+
+    doc_io = BytesIO()
+    document.save(doc_io)
+    doc_io.seek(0)
+
+    response = HttpResponse(
+        doc_io.read(),
+        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
+    response['Content-Disposition'] = 'attachment; filename=stories.docx'
+    return response
+
+
+def get_story_fields(stories):
+    base_fields = [field.name for field in Story._meta.fields if field.name != 'other_params']
+    extra_fields = set()
+
+    for story in stories:
+        if isinstance(story.other_params, dict):
+            extra_fields.update(story.other_params.keys())
+
+    headers = base_fields + sorted(extra_fields)
+    headers.append("story_pdfs")
+    return headers
+
+
+def get_story_data(story, headers):
+    data = []
+    story_dict = model_to_dict(story)
+
+    for field in headers:
+        if field == 'story_pdfs':
+            pdf = story.story_media.filter(media_type=MediaTypeChoices.PDF).first()
+            value = pdf.get_public_url() if pdf else ''
+        elif field in story_dict:
+            value = story_dict[field]
+            if hasattr(value, '__str__'):
+                value = str(value)
+        elif field == 'created_at' and story.created_at:
+            value = localtime(story.created_at).replace(tzinfo=None)
+        else:
+            value = story.other_params.get(field, '') if story.other_params else ''
+        data.append(value)
+    return data

@@ -1,13 +1,17 @@
 from django.utils.html import format_html
-# from import_export.admin import ExportActionMixin
 from django.contrib import admin
 from django.db.models import Q
 from chatbot.filter.admin_filter import StoryCompanyFilter, StoryStateFilter, StoryDistrictFilter, StoryBlockFilter
 from chatbot.models import StoryTag, StoryMedia, Story, Profile, ProfileType, MediaTypeChoices
-from chatbot.resources.story_resource import StoryResource
+from chatbot.resources.story_resource import (
+    redirect_to_export_view, generate_csv_response, generate_xls_response, generate_docx_response,
+    get_story_fields, get_story_data
+)
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf
-# from import_export.formats.base_formats import CSV, XLSX
-from import_export.admin import ExportActionModelAdmin, ExportMixin, ExportActionMixin
+from import_export.admin import ExportActionMixin
+from django.urls import path
+from django.shortcuts import render
+import tablib
 
 
 class StoryTagInline(admin.TabularInline):
@@ -32,13 +36,7 @@ class StoryMediaInline(admin.TabularInline):
 
 
 @admin.register(Story)
-class StoryAdmin(ExportActionMixin, admin.ModelAdmin):
-# class StoryAdmin(ExportActionModelAdmin, admin.ModelAdmin):
-    resource_class = StoryResource
-    # actions = ["export_admin_action"]
-    actions = ['export_selected']
-    list_export = ('csv', 'xlsx')
-
+class StoryAdmin(admin.ModelAdmin):
     list_display = ('title', 'author', 'session', 'created_at',)
     list_filter = (
         'created_at', StoryCompanyFilter, 'author', 'session', StoryStateFilter,
@@ -71,4 +69,34 @@ class StoryAdmin(ExportActionMixin, admin.ModelAdmin):
 
         super().save_model(request, obj, form, change)
 
+    actions = [redirect_to_export_view]
 
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('export_stories/', self.admin_site.admin_view(self.export_stories_view), name='export_stories'),
+        ]
+        return custom_urls + urls
+
+    def export_stories_view(self, request):
+        ids = request.GET.get('ids', '')
+        selected_ids = ids.split(',') if ids else []
+        stories = Story.objects.filter(id__in=selected_ids)
+
+        if request.method == 'POST':
+            export_format = request.POST.get('format')
+            dataset = tablib.Dataset()
+
+            headers = get_story_fields(stories)
+            dataset.headers = headers
+            for story in stories:
+                dataset.append(get_story_data(story, headers))
+
+            if export_format == 'csv':
+                return generate_csv_response(dataset)
+            elif export_format == 'xls':
+                return generate_xls_response(dataset)
+            elif export_format == 'docx':
+                return generate_docx_response(stories)
+
+        return render(request, 'admin/export_story_format.html', {'ids': ids})
