@@ -38,7 +38,7 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
 
         prompt_to_use = get_guided_prompt(
             company_bot=company_bot, system_context=system_context, state_machine=state_machine,
-            intro_mssg=intro_mssg
+            intro_mssg=intro_mssg, profile=profile
         )
 
         messages = get_guided_chat(
@@ -58,12 +58,24 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
         traceback.print_exc()
 
 
-def get_guided_prompt(company_bot, system_context, state_machine, intro_mssg=None):
+def get_guided_prompt(company_bot, system_context, state_machine, intro_mssg=None, profile=None):
     prompt_to_use=[]
+    profile_addresses=None
+    if profile and profile.first_name:
+        profile_addresses = profile.profile_address.all().first()
+    address_components = [
+        profile_addresses.district if profile_addresses and profile_addresses.district else "",
+        profile_addresses.block if profile_addresses and profile_addresses.block else "",
+        profile_addresses.state if profile_addresses and profile_addresses.state else ""
+    ]
+    address_string = ", ".join(filter(None, address_components))
+
+
     state_machine_context = state_machine.context
     if intro_mssg:
         context_data = {
-            "intro_message": intro_mssg
+            "intro_message": intro_mssg,
+            "user_location": address_string
         }
         template = Template(state_machine_context)
         state_machine_context = template.render(context_data)

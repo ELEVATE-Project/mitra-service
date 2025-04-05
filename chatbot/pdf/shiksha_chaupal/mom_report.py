@@ -38,7 +38,7 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
             </div>
         </div>
         <h1>{story.title}</h1>
-        <p>{author}</p>
+        <p>{author if author else ""}</p>
         <p>{address_string}</p>
         <div class="story-second-page-section story-action-steps">
             <h2>{translation_json.get('heading2', "Challenges")}</h2>
@@ -123,7 +123,7 @@ def get_user_details(story, profile, voice_provider):
 
     address_string = ", ".join(filter(None, address_components))
 
-    author = profile.first_name if profile else ""
+    author = profile.first_name if profile and profile.first_name else ""
     if not profile:
         print("story.other_params.get('user_name', ''): ", story.other_params.get('user_name', ''))
         print("story.other_params.get('location', ''): ", story.other_params.get('location', ''))

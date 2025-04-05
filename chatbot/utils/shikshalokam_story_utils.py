@@ -202,7 +202,8 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
 
     try:
         story = Story.objects.get(session=session)
-        update_story_content(story)
+        if story and story.content and story.formatted_content:
+            update_story_content(story)
         profile = story.author
         print("profile: ", profile)
         print("story: ", story.title)
