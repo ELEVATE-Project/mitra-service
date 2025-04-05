@@ -89,7 +89,7 @@ def get_thirdpage_html(profile, story, project, voice_provider, story_vernacular
     ]
 
     address_string = ", ".join(filter(None, address_components))
-    author = profile.first_name if profile else ""
+    author = profile.first_name if profile and profile.first_name else ""
 
     sanitized_content = json_to_html(story.formatted_content)
     should_show_story_heading = True
