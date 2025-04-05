@@ -112,9 +112,14 @@ def get_thirdpage_html(profile, story, project, voice_provider, story_vernacular
     else:
         translation_json = {}
 
+    if profile and profile.first_name:
+        author_title = translation_json.get('title', '')
+    else:
+        author_title = translation_json.get('title1', '')
+
     title = (
         f"{story.title or ''} {address_string} "
-        f"{author or ''}{translation_json.get('title', '')}"
+        f"{author or ''}{author_title}"
     )
 
     html_pages = []
