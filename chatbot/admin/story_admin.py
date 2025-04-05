@@ -1,10 +1,13 @@
 from django.utils.html import format_html
-from import_export.admin import ExportActionMixin
+# from import_export.admin import ExportActionMixin
 from django.contrib import admin
 from django.db.models import Q
 from chatbot.filter.admin_filter import StoryCompanyFilter, StoryStateFilter, StoryDistrictFilter, StoryBlockFilter
 from chatbot.models import StoryTag, StoryMedia, Story, Profile, ProfileType, MediaTypeChoices
+from chatbot.resources.story_resource import StoryResource
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf
+# from import_export.formats.base_formats import CSV, XLSX
+from import_export.admin import ExportActionModelAdmin, ExportMixin, ExportActionMixin
 
 
 class StoryTagInline(admin.TabularInline):
@@ -30,6 +33,12 @@ class StoryMediaInline(admin.TabularInline):
 
 @admin.register(Story)
 class StoryAdmin(ExportActionMixin, admin.ModelAdmin):
+# class StoryAdmin(ExportActionModelAdmin, admin.ModelAdmin):
+    resource_class = StoryResource
+    # actions = ["export_admin_action"]
+    actions = ['export_selected']
+    list_export = ('csv', 'xlsx')
+
     list_display = ('title', 'author', 'session', 'created_at',)
     list_filter = (
         'created_at', StoryCompanyFilter, 'author', 'session', StoryStateFilter,
@@ -40,8 +49,6 @@ class StoryAdmin(ExportActionMixin, admin.ModelAdmin):
     inlines = [StoryTagInline, StoryMediaInline]
     list_per_page = 20
 
-    actions = ['export_selected']
-    list_export = ('csv', 'xlsx')
 
     def get_queryset(self, request):
         qs = super().get_queryset(request).select_related('author').defer('formatted_content')
@@ -63,3 +70,5 @@ class StoryAdmin(ExportActionMixin, admin.ModelAdmin):
         )
 
         super().save_model(request, obj, form, change)
+
+
