@@ -27,14 +27,18 @@ def get_shikshalokam_bedrock_response(channel_name, session_id, profile_id, rout
         state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
         system_context = company_bot.context
 
-        prompt_to_use = get_guided_prompt(
-            company_bot=company_bot, system_context=system_context, state_machine=state_machine
-        )
         bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot).first()
         if bot_vernacular:
-            intro_mssg = bot_vernacular.introductory_message
+            if profile and profile.first_name:
+                intro_mssg = bot_vernacular.introductory_message
+            else:
+                intro_mssg = bot_vernacular.alt_introductory_message
         else:
             intro_mssg = None
+
+        prompt_to_use = get_guided_prompt(
+            company_bot=company_bot, system_context=system_context, state_machine=state_machine,
+        )
         messages = get_guided_chat(
             company_bot=company_bot, company_chats=company_chats, intro=intro_mssg
         )

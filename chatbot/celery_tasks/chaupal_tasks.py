@@ -26,7 +26,7 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
 
         bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot).first()
         if bot_vernacular:
-            if profile_id:
+            if profile and profile.first_name:
                 intro_mssg = bot_vernacular.introductory_message
                 first_word = intro_mssg.split(" ")[0]
                 remaining_message = " ".join(intro_mssg.split(" ")[1:])
