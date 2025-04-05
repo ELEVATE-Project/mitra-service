@@ -124,7 +124,7 @@ def get_user_details(story, profile, voice_provider):
     address_string = ", ".join(filter(None, address_components))
 
     author = profile.first_name if profile and profile.first_name else ""
-    if not profile:
+    if not profile or not profile.first_name:
         print("story.other_params.get('user_name', ''): ", story.other_params.get('user_name', ''))
         print("story.other_params.get('location', ''): ", story.other_params.get('location', ''))
         author = story.other_params.get('user_name', '') if story.other_params else ''
