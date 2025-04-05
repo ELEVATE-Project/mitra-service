@@ -187,13 +187,15 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
             "value" in response_json_story):
         value = response_json_story.get("value")
         if isinstance(value, str) and value.strip():
-            response_json_story = json_repair.repair_json(value, return_objects=True)
+            value = json_repair.repair_json(value, return_objects=True)
+        response_json_story = value
 
     if (isinstance(response_json_content, dict) and response_json_content.get("type") and
             "value" in response_json_content):
         value = response_json_content.get("value")
         if isinstance(value, str) and value.strip():
-            response_json_content = json_repair.repair_json(value, return_objects=True)
+            value = json_repair.repair_json(value, return_objects=True)
+        response_json_content = value
 
     combined_result = {**(response_json_content or {}), **(response_json_story or {})}
 
