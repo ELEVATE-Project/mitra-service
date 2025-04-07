@@ -56,9 +56,20 @@ def save_story(
             objective = translate_field(
                 voice_provider=voice_provider, message_body=objective, target_language=language
             )
-            action_steps = translate_field(
-                voice_provider=voice_provider, message_body=action_steps, target_language=language
-            )
+            if isinstance(action_steps, str):
+                action_steps = translate_field(
+                    voice_provider=voice_provider, message_body=action_steps, target_language=language
+                )
+            else:
+                action_steps = [
+                    translate_field(
+                        voice_provider=voice_provider,
+                        message_body=action_step,
+                        target_language=language
+                    )
+                    for action_step in action_steps
+                ]
+
             impact = translate_field(
                 voice_provider=voice_provider, message_body=impact, target_language=language
             )
