@@ -30,7 +30,8 @@ def save_story(
 
         duration = response_json_story.get('duration', '')
         other_params = {
-            'duration': duration
+            'duration': duration,
+            'flow': flow
         }
 
         content = response_json_story['content']
