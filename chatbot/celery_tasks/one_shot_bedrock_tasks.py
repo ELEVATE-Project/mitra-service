@@ -40,7 +40,7 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
     if not chat_session.session_context:
         chat_session.session_context = {}
     remaining_stages = chat_session.session_context.get('remaining_stages')
-
+    print("Leng of msg: ", len(messages))
     if not remaining_stages and (
             (intro_mssg is None and len(messages) < 2) or
             (intro_mssg is not None and len(messages) < 3)
