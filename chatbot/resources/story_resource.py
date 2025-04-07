@@ -1,0 +1,96 @@
+from django.http import HttpResponseRedirect
+from django.contrib import admin
+from django.utils.http import urlencode
+from io import BytesIO
+from django.utils.timezone import localtime
+from docx import Document
+from django.http import HttpResponse
+from django.forms.models import model_to_dict
+
+from chatbot.models import Story, MediaTypeChoices
+
+
+@admin.action(description='Export selected stories')
+def redirect_to_export_view(modeladmin, request, queryset):
+    selected = queryset.values_list('pk', flat=True)
+    query_string = urlencode({'ids': ','.join(map(str, selected))})
+    return HttpResponseRedirect(f'{request.path}export_stories/?{query_string}')
+
+
+def get_all_other_params_keys(stories):
+    keys = set()
+    for story in stories:
+        if isinstance(story.other_params, dict):
+            keys.update(story.other_params.keys())
+    return sorted(keys)
+
+
+def generate_csv_response(dataset):
+    response = HttpResponse(dataset.export('csv'), content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename=stories.csv'
+    return response
+
+
+def generate_xls_response(dataset):
+    response = HttpResponse(dataset.export('xls'), content_type='application/vnd.ms-excel')
+    response['Content-Disposition'] = 'attachment; filename=stories.xls'
+    return response
+
+
+def generate_docx_response(stories):
+    document = Document()
+    headers = get_story_fields(stories)
+
+    for i, story in enumerate(stories, start=1):
+        document.add_heading(f'Story {i}: {story.title}', level=1)
+
+        row_data = get_story_data(story, headers)
+        for field, value in zip(headers, row_data):
+            document.add_paragraph(f"{field.replace('_', ' ').title()}: {value}")
+
+        if i != len(stories):
+            document.add_page_break()
+
+    doc_io = BytesIO()
+    document.save(doc_io)
+    doc_io.seek(0)
+
+    response = HttpResponse(
+        doc_io.read(),
+        content_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
+    response['Content-Disposition'] = 'attachment; filename=stories.docx'
+    return response
+
+
+def get_story_fields(stories):
+    base_fields = [field.name for field in Story._meta.fields if field.name != 'other_params']
+    extra_fields = set()
+
+    for story in stories:
+        if isinstance(story.other_params, dict):
+            extra_fields.update(story.other_params.keys())
+
+    headers = base_fields + sorted(extra_fields)
+    headers.append("story_pdfs")
+    return headers
+
+
+def get_story_data(story, headers):
+    data = []
+    story_dict = model_to_dict(story)
+
+    for field in headers:
+        if field == 'story_pdfs':
+            pdf = story.story_media.filter(media_type=MediaTypeChoices.PDF).first()
+            value = pdf.get_public_url() if pdf else ''
+        elif field in story_dict:
+            value = story_dict[field]
+            if hasattr(value, '__str__'):
+                value = str(value)
+        elif field == 'created_at' and story.created_at:
+            value = localtime(story.created_at).replace(tzinfo=None)
+        else:
+            value = story.other_params.get(field, '') if story.other_params else ''
+        data.append(value)
+    return data

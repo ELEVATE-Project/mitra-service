@@ -19,6 +19,8 @@ def format_response_json(response):
 
 
 def get_formatted_story(story):
+    if not story or not story.content:
+        return None
     story_paragraphs = story.content.split("\n")
     res = []
     for paragraph in story_paragraphs:

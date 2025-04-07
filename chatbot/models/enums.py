@@ -1,3 +1,5 @@
+from random import choices
+
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -13,6 +15,9 @@ class ChatStatus(models.TextChoices):
 class ChatType(models.TextChoices):
     guidedReflection = 'normal', _('guidedReflection')
     oneStepReflection = 'oneshot', _('oneStepReflection')
+    shikshaChaupal = 'shikshalokam_chaupal', _('shikshaChaupal')
+    reflection = 'reflection', _('reflection')
+    creation = 'creation', _('creation')
 
 
 class LLMProvider(models.TextChoices):
@@ -182,3 +187,11 @@ class PDFStrategyChoices(models.TextChoices):
     PUPPETEER = 'PUPPETEER', _('PUPPETEER')
     HTMLDOCX = 'HTMLDOCX', _('HTMLDOCX')
     XLSX = 'XLSX', _('XLSX')
+
+
+class SessionFlowName(models.TextChoices):
+    GuestDiscussion = 'guest-discussion', _('guest-discussion')
+    LoginDiscussion = 'login-discussion', _('login-discussion')
+    GuestMiStory = 'guest-mi-story', _('guest-mi-story')
+    LoginMiStory = 'login', _('login')
+    Reflection = 'reflection', _('reflection')

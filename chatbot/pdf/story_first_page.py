@@ -2,10 +2,14 @@ from chatbot.utils.story_llama_utils import translate_field
 
 
 def get_first_page_html(profile, project, voice_provider):
-    profile_addresses = profile.profile_address.all().first()
-    current_state = profile_addresses.state if profile_addresses else ""
-    company_logo = profile.company.get_public_url()
+    profile_addresses=None
+    if profile and profile.first_name:
+        profile_addresses = profile.profile_address.all().first()
+        company_logo = profile.company.get_public_url()
+    else:
+        company_logo = voice_provider.company_bot.company.get_public_url()
     print("logo: ", company_logo)
+    current_state = profile_addresses.state if profile_addresses else ""
     address_components = [
         profile_addresses.district if profile_addresses and profile_addresses.district else "",
         profile_addresses.block if profile_addresses and profile_addresses.block else "",
@@ -17,15 +21,17 @@ def get_first_page_html(profile, project, voice_provider):
     print("current_state: ", current_state)
     title = project.expected_title or project.actual_title or "mi_story"
 
-    author = profile.first_name or ""
+    author = profile.first_name if profile and profile.first_name else ""
 
     if project and project.project_language and project.project_language != 'en':
-        author = translate_field(
-            voice_provider=voice_provider, message_body=author, target_language=project.project_language
-        )
-        address_string = translate_field(
-            voice_provider=voice_provider, message_body=address_string, target_language=project.project_language
-        )
+        if author:
+            author = translate_field(
+                voice_provider=voice_provider, message_body=author, target_language=project.project_language
+            )
+        if address_string:
+            address_string = translate_field(
+                voice_provider=voice_provider, message_body=address_string, target_language=project.project_language
+            )
 
     if profile_addresses and profile_addresses.state and profile_addresses.state.lower() == 'nagaland':
         html = f"""

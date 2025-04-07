@@ -3,7 +3,8 @@ import traceback
 import random
 import string
 from chatbot.models import (Profile, CompanyChat, CompanyBot, StoryLanguageChoices,
-                            StoryStatusChoices, ChatSession, ChatStatus, Voice, VoiceType, BotVernacular)
+                            StoryStatusChoices, ChatSession, ChatStatus, Voice, VoiceType, BotVernacular,
+                            SessionFlowName)
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.story_models import Story
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
@@ -51,7 +52,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         chat_session = ChatSession.objects.get(session=session)
         project_id = chat_session.project_id
 
-        if flow != 'login' and project_id and reflection_bot:
+        if flow == SessionFlowName.Reflection and project_id and reflection_bot:
             reflection_end_context = reflection_bot.end_context
             user_project = Project.objects.filter(project_id=project_id).first()
             project_data = get_project_formatted_data(user_project=user_project)
@@ -232,7 +233,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
             blurb = translate_field(
                 voice_provider=voice_provider, message_body=blurb, target_language=language
             )
-        if flow != 'login':
+        if flow == SessionFlowName.Reflection:
             print("project_id: ", project_id)
             project = Project.objects.get(project_id=project_id)
             if project:

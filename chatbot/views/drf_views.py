@@ -1,7 +1,7 @@
 import django_filters
 from rest_framework import generics
 from chatbot.filter.drf_filter import ChatSessionProfileFilter
-from chatbot.models import ChatSession, BotVernacular
+from chatbot.models import ChatSession, BotVernacular, SessionFlowName, ChatType
 from chatbot.models.base_models import CompanyChat, CompanyBot, Profile
 from chatbot.serializer.base_serializer import ChatSessionSerializer
 from chatbot.serializer.company_serializer import CompanyBotSerializer, BotVernacularSerializer
@@ -60,7 +60,20 @@ class ChatSessionListCreateView(generics.ListCreateAPIView):
     queryset = ChatSession.objects.all()
     serializer_class = ChatSessionSerializer
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend, ChatSessionProfileFilter]
-    filterset_fields = ['session', 'project_id', 'user_id']
+    filterset_fields = ['session', 'project_id', 'user_id', 'profile', 'session_type']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        flow = self.request.query_params.get('flow')
+
+        if flow in [SessionFlowName.LoginMiStory.value, SessionFlowName.GuestMiStory.value]:
+            queryset = queryset.filter(session_type__in=[
+                ChatType.guidedReflection, ChatType.oneStepReflection
+            ])
+        elif flow == SessionFlowName.LoginDiscussion.value:
+            queryset = queryset.filter(session_type=ChatType.shikshaChaupal)
+
+        return queryset
 
 
 class ChatSessionRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):
