@@ -43,7 +43,7 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
     print("Leng of msg: ", len(messages))
     if not remaining_stages and (
             (intro_mssg is None and len(messages) < 2) or
-            (intro_mssg is not None and len(messages) < 3)
+            (intro_mssg is not None and len(messages) <= 3)
     ):
         remaining_stages_response = get_remaining_strands(
             messages=messages, company_chats=company_chats, oneshot_bot=company_bot,
