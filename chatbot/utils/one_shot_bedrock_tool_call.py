@@ -13,13 +13,13 @@ channel_layer = get_channel_layer()
 
 
 def get_one_shot_bedrock_tool_call_response(system_prompt, messages, company_bot, session_id, channel_name,
-                                            route, profile_id, remaining_stages):
+                                            route, profile_id, remaining_stages, intro_mssg=None):
 
     chat_session = ChatSession.objects.get(session=session_id)
     current_step = chat_session.current_step
     chunks = []
 
-    if len(messages) < 2:
+    if (intro_mssg is None and len(messages) < 2) or (intro_mssg is not None and len(messages) <= 3):
         current_stage_name = remaining_stages[0]
         state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, name=current_stage_name)
         bot_question = state_machine.bot_question

@@ -84,7 +84,8 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
 
     response = get_one_shot_bedrock_tool_call_response(
         system_prompt=prompt_to_use, messages=messages, company_bot=company_bot, session_id=session_id,
-        channel_name=channel_name, route=route, profile_id=profile_id, remaining_stages=remaining_stages
+        channel_name=channel_name, route=route, profile_id=profile_id, remaining_stages=remaining_stages,
+        intro_mssg=intro_mssg
     )
 
     return response
