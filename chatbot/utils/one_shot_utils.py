@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger('django')
 
 
-def get_remaining_strands(messages, company_chats, oneshot_bot, profile):
+def get_remaining_strands(messages, company_chats, oneshot_bot, profile, intro=None):
 
     if profile:
         company_bot = CompanyBot.objects.filter(company=profile.company, route='/oneshot_assistant').first()
@@ -26,7 +26,7 @@ def get_remaining_strands(messages, company_chats, oneshot_bot, profile):
     if oneshot_bot.provider != company_bot.provider:
         print("provider is not same so changing message!")
         messages = get_guided_chat(
-            company_bot=company_bot, company_chats=company_chats
+            company_bot=company_bot, company_chats=company_chats, intro=intro
         )
     response = None
     if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
@@ -70,7 +70,7 @@ def get_remaining_strands(messages, company_chats, oneshot_bot, profile):
 
     if oneshot_bot.provider != validate_bot.provider:
         messages = get_guided_chat(
-            company_bot=validate_bot, company_chats=company_chats
+            company_bot=validate_bot, company_chats=company_chats, intro=intro
         )
     if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
         try:
