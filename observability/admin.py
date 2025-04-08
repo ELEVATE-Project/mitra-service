@@ -11,6 +11,7 @@ class TCBotRunMetricsAdmin(admin.TabularInline):
 class CompanyBotTestCasesAdmin(admin.ModelAdmin):
     list_display = ('company_bot', 'about', 'created_at')
 
+    raw_id_fields = ('company_bot', )
     def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
         # This method is called when the admin change form is rendered.
         if object_id:
@@ -24,9 +25,12 @@ class CompanyBotTestCasesAdmin(admin.ModelAdmin):
 class CompanyBotTCRunAdmin(admin.ModelAdmin):
     readonly_fields = ['status', 'metrics_result']
 
+    raw_id_fields = ('company_bot', )
     list_display = ('company_bot', 'status', 'created_at', 'updated_at')
 
 
 @admin.register(BotRunTestCaseMap)
 class CompanyBotRunTestCaseMapAdmin(admin.ModelAdmin):
     list_display = ('bot_run', 'metric_name', 'test_case', 'created_at')
+    raw_id_fields = ('bot_run', 'test_case', )
+
