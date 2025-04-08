@@ -49,7 +49,9 @@ def get_ip_location_view(request):
         response = requests.get(url)
 
         if response.status_code == 200:
+            print("Response: ", response.text)
             location_data = response.json()
+            print("location_data: ", location_data)
 
             location_output = json_repair.repair_json(json.dumps(location_data), return_objects=True)
 
