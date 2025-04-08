@@ -1,3 +1,7 @@
+import io
+import zipfile
+import requests
+from django.utils.text import slugify
 from django.http import HttpResponseRedirect
 from django.contrib import admin
 from django.utils.http import urlencode
@@ -94,3 +98,34 @@ def get_story_data(story, headers):
             value = story.other_params.get(field, '') if story.other_params else ''
         data.append(value)
     return data
+
+
+def generate_zip_response(stories):
+    zip_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
+        for story in stories:
+            pdfs = story.story_media.filter(media_type=MediaTypeChoices.PDF)
+            for i, pdf in enumerate(pdfs, start=1):
+                print(f"Story {story.id} has {pdfs.count()} PDFs")
+                url = pdf.get_public_url()
+                if not url:
+                    continue
+                try:
+                    response = requests.get(url)
+                    if response.status_code == 200:
+                        # Use pdf.name, fallback to something if it's missing
+                        base_name = pdf.name or f"story_{story.id}_media_{i}"
+                        safe_name = slugify(base_name)
+                        filename = f"{safe_name}_{story.id}.pdf"
+                        zip_file.writestr(filename, response.content)
+                    else:
+                        print(f"Failed to download from {url}, status code {response.status_code}")
+                except Exception as e:
+                    print(f"Error downloading {url}: {e}")
+
+    zip_buffer.seek(0)
+    response = HttpResponse(zip_buffer, content_type='application/zip')
+    response['Content-Disposition'] = 'attachment; filename=stories.zip'
+    return response
+

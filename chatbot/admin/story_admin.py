@@ -5,7 +5,7 @@ from chatbot.filter.admin_filter import StoryCompanyFilter, StoryStateFilter, St
 from chatbot.models import StoryTag, StoryMedia, Story, Profile, ProfileType, MediaTypeChoices
 from chatbot.resources.story_resource import (
     redirect_to_export_view, generate_csv_response, generate_xls_response, generate_docx_response,
-    get_story_fields, get_story_data
+    get_story_fields, get_story_data, generate_zip_response
 )
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf
 from import_export.admin import ExportActionMixin
@@ -98,5 +98,8 @@ class StoryAdmin(admin.ModelAdmin):
                 return generate_xls_response(dataset)
             elif export_format == 'docx':
                 return generate_docx_response(stories)
+            elif export_format == 'zip-pdf':
+                return generate_zip_response(stories)
+
 
         return render(request, 'admin/export_story_format.html', {'ids': ids})
