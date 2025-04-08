@@ -13,7 +13,7 @@ channel_layer = get_channel_layer()
 
 
 def get_chaupal_tool_call_response(
-        system_prompt, messages, company_bot, session_id, channel_name, route, profile_id
+        system_prompt, messages, company_bot, session_id, channel_name, route, profile_id, profile
 ):
 
     chat_session = ChatSession.objects.get(session=session_id)
@@ -79,7 +79,7 @@ def get_chaupal_tool_call_response(
         print("Statemachine we using: ", state_machine.name, " with step: ", state_machine.step)
         if state_machine and state_machine.name == "CHECKER":
             checker_response = prepare_missing_stage_questions(
-                company_bot=company_bot, state_machine=state_machine, messages=messages
+                company_bot=company_bot, state_machine=state_machine, messages=messages, profile=profile
             )
             print("checker_response: ", checker_response)
             chat_session.session_context = checker_response

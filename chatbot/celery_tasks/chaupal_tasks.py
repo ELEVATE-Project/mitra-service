@@ -51,7 +51,7 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
 
         response = get_chaupal_tool_call_response(
             system_prompt=prompt_to_use, messages=messages, company_bot=company_bot, session_id=session_id,
-            channel_name=channel_name, route=route, profile_id=profile_id
+            channel_name=channel_name, route=route, profile_id=profile_id, profile=profile
         )
         logger.info('Bedrock Final response: %s', response)
 
