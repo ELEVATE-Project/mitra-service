@@ -24,6 +24,7 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
         state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
         system_context = company_bot.context
 
+        other_info = None
         bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot).first()
         if bot_vernacular:
             if profile and profile.first_name:
@@ -31,6 +32,9 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
                 first_word = intro_mssg.split(" ")[0]
                 remaining_message = " ".join(intro_mssg.split(" ")[1:])
                 intro_mssg = f"{first_word} {profile.first_name}, {remaining_message}"
+                other_info = {
+                    "first_name": profile.first_name
+                }
             else:
                 intro_mssg = bot_vernacular.alt_introductory_message
         else:
@@ -42,7 +46,7 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
         )
 
         messages = get_guided_chat(
-            company_bot=company_bot, company_chats=company_chats, intro=intro_mssg
+            company_bot=company_bot, company_chats=company_chats, intro=intro_mssg, other_info=other_info
         )
 
         response = get_chaupal_tool_call_response(
