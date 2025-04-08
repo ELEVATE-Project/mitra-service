@@ -37,8 +37,11 @@ def format_message_as_per_bedrock_format(chats, intro=None, other_info=None):
     if intro:
         if other_info:
             user_name = other_info.get('first_name', None)
+            user_location = other_info.get('user_location', None)
             if user_name:
-                initial_msg = f"Hello my name is {user_name}"
+                initial_msg = f"Hello my name is {user_name}."
+                if user_location:
+                    initial_msg += f" I am from {user_location}"
             else:
                 initial_msg = "Hello"
         else:
