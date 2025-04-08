@@ -22,19 +22,23 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
         company_bot = CompanyBot.objects.get(route='/oneshot_bot')
 
     bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot).first()
+    other_info=None
     if bot_vernacular:
         if profile and profile.first_name:
             intro_mssg = bot_vernacular.introductory_message
             first_word = intro_mssg.split(" ")[0]
             remaining_message = " ".join(intro_mssg.split(" ")[1:])
             intro_mssg = f"{first_word} {profile.first_name}, {remaining_message}"
+            other_info = {
+                "first_name": profile.first_name
+            }
         else:
             intro_mssg = None
     else:
         intro_mssg = None
 
     messages = get_guided_chat(
-        company_bot=company_bot, company_chats=company_chats, intro=intro_mssg
+        company_bot=company_bot, company_chats=company_chats, intro=intro_mssg, other_info=other_info
     )
 
     if not chat_session.session_context:
@@ -47,7 +51,7 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
     ):
         remaining_stages_response = get_remaining_strands(
             messages=messages, company_chats=company_chats, oneshot_bot=company_bot,
-            profile=profile, intro=intro_mssg
+            profile=profile, intro=intro_mssg, other_info=other_info
         )
         if remaining_stages_response and remaining_stages_response.get('error'):
             error_msg = remaining_stages_response.get('error')
