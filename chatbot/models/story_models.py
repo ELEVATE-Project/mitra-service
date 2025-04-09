@@ -92,7 +92,7 @@ class StoryMedia(models.Model):
                     # Replace the file with JPEG
                     converted_io.seek(0)
                     new_filename = os.path.splitext(self.file.name)[0] + ".jpg"
-                    self.file.save(new_filename, ContentFile(converted_io.read()), save=False)
+                    self.file = ContentFile(converted_io.read(), name=new_filename)
                     self.media_type = MediaTypeChoices.JPEG
 
                     print("Converted HEIC/HEIF to JPEG:", new_filename)
