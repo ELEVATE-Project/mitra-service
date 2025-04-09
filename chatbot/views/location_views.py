@@ -45,7 +45,7 @@ def get_location_view(request):
 @api_view(['GET'])
 def get_ip_location_view(request):
     try:
-        # Try to get the user's real IP address from headers
+        #Gget the user's real IP address from headers
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
             ip = x_forwarded_for.split(',')[0]  # get the first IP if multiple
@@ -54,7 +54,10 @@ def get_ip_location_view(request):
 
         # Fall back to default IP if IP isn't found
         if not ip:
-            ip = "127.0.0.1"
+            return Response({
+                'status': 'error',
+                'message': 'Failed! No ip found.'
+            })
 
         print("Client IP:", ip)
 
