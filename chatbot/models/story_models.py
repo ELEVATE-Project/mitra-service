@@ -1,12 +1,17 @@
+import io
 import os
 import base64
 from django.db import models
 from django.core.validators import MinLengthValidator
 from chatbot.models import Profile, TagChoices, StoryLanguageChoices, StorySourceChoices, MediaTypeChoices, \
     StoryStatusChoices, Company
+from pillow_heif import register_heif_opener
+from django.core.files.base import ContentFile
+from PIL import Image, UnidentifiedImageError
 
 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
+register_heif_opener()
 
 
 class Story(models.Model):
@@ -70,7 +75,39 @@ class StoryMedia(models.Model):
         return f"{S3_BASE_URL}{self.file.name}"
 
     def save(self, *args, **kwargs):
-        self.base64_str = base64.b64encode(self.file.read()).decode('utf-8')
+        try:
+            self.file.seek(0)
+            file_ext = os.path.splitext(self.file.name)[1].lower()
+            print("file_ext:", file_ext)
+            print("File name:", self.file.name)
+            print("File size:", self.file.size)
+
+            # Convert HEIC/HEIF to JPEG
+            if file_ext in ['.heic', '.heif']:
+                try:
+                    image = Image.open(self.file)
+                    converted_io = io.BytesIO()
+                    image.save(converted_io, format='JPEG')
+
+                    # Replace the file with JPEG
+                    converted_io.seek(0)
+                    new_filename = os.path.splitext(self.file.name)[0] + ".jpg"
+                    self.file.save(new_filename, ContentFile(converted_io.read()), save=False)
+                    self.media_type = MediaTypeChoices.JPEG
+
+                    print("Converted HEIC/HEIF to JPEG:", new_filename)
+                except UnidentifiedImageError:
+                    print("Could not identify image file. Make sure it's valid.")
+                except Exception as e:
+                    print("Unexpected error during HEIF conversion:", str(e))
+
+            # Reset pointer before base64 encoding
+            self.file.seek(0)
+            self.base64_str = base64.b64encode(self.file.read()).decode('utf-8')
+
+        except Exception as e:
+            print("Error during save():", str(e))
+
         super().save(*args, **kwargs)
 
 
