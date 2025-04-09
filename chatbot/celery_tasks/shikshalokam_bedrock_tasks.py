@@ -21,7 +21,7 @@ def get_shikshalokam_bedrock_response(channel_name, session_id, profile_id, rout
             company_bot = CompanyBot.objects.get(company=profile.company, route='/')
         else:
             company_bot = CompanyBot.objects.get(route='/')
-        if company_chats and len(company_chats) < 2:
+        if company_chats and len(company_chats) < 2 and profile and profile.first_name:
             chat_session.current_step += 1
             chat_session.save()
         state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)

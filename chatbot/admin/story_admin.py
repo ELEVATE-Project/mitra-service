@@ -85,8 +85,12 @@ class StoryAdmin(admin.ModelAdmin):
         if request.method == 'POST':
             export_format = request.POST.get('format')
             dataset = tablib.Dataset()
-
-            headers = get_story_fields(stories)
+            fields_to_export = [
+                "id", "title", "author", "content", "blurb", "objective", "action_steps", "impact",
+                "location", "language", "stage", "created_at", "organisation"
+            ]
+            # fields_to_export=[]
+            headers = get_story_fields(stories, fields_to_export)
             dataset.headers = headers
             for story in stories:
                 dataset.append(get_story_data(story, headers))
@@ -96,7 +100,7 @@ class StoryAdmin(admin.ModelAdmin):
             elif export_format == 'xls':
                 return generate_xls_response(dataset)
             elif export_format == 'docx':
-                return generate_docx_response(stories)
+                return generate_docx_response(stories, fields_to_export)
             elif export_format == 'zip-pdf':
                 return generate_zip_response(stories)
 

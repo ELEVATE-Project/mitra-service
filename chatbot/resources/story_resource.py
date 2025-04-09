@@ -42,9 +42,9 @@ def generate_xls_response(dataset):
     return response
 
 
-def generate_docx_response(stories):
+def generate_docx_response(stories, fields_to_export):
     document = Document()
-    headers = get_story_fields(stories)
+    headers = get_story_fields(stories, fields_to_export)
 
     for i, story in enumerate(stories, start=1):
         document.add_heading(f'Story {i}: {story.title}', level=1)
@@ -52,6 +52,8 @@ def generate_docx_response(stories):
         row_data = get_story_data(story, headers)
         for field, value in zip(headers, row_data):
             if field == "story_media_urls":
+                if not value:
+                    continue
                 document.add_paragraph(f"{field.replace('_', ' ').title()}:")
                 urls = value.split(', ')
                 for url in urls:
@@ -92,15 +94,18 @@ def generate_docx_response(stories):
     return response
 
 
-def get_story_fields(stories):
-    base_fields = [field.name for field in Story._meta.fields if field.name != 'other_params']
+def get_story_fields(stories, fields_to_export):
+    # base_fields = [field.name for field in Story._meta.fields if field.name != 'other_params']
+    headers = fields_to_export.copy()
+
     extra_fields = set()
 
     for story in stories:
         if isinstance(story.other_params, dict):
             extra_fields.update(story.other_params.keys())
 
-    headers = base_fields + sorted(extra_fields)
+    # headers = base_fields + sorted(extra_fields)
+    headers += sorted(extra_fields)
     headers.append("story_pdfs")
     headers.append("story_media_urls")
 
@@ -121,7 +126,11 @@ def get_story_data(story, headers):
                 for media in story.story_media.all()
                 if media.media_type != MediaTypeChoices.PDF and media.get_public_url()
             ]
-            value = ', '.join(media_urls)
+            if media_urls:
+                value = ', '.join(media_urls)
+            else:
+                value = None
+
         elif field in story_dict:
             value = story_dict[field]
             if hasattr(value, '__str__'):

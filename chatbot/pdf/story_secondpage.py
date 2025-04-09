@@ -43,7 +43,7 @@ def get_story_secondpage_html(story, project, story_vernacular):
         split_steps = [step.strip() for step in action_steps if step.strip()]
     print("\n\nsplit_steps: ", split_steps)
     steps_html = (
-            f"<ol style='list-style-type: none; padding: 0; margin: 0;'>"
+            f"<ol style='list-style-type: decimal; padding: 0; margin: 0;'>"
             + ''.join(f"<li>{step}</li>" for step in split_steps)
             + "</ol>"
     )

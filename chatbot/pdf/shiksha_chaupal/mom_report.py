@@ -97,7 +97,7 @@ def process_steps(raw_data, fallback_text):
     print("\n\nsplit_steps: ", split_steps)
 
     steps_html = (
-        f"<ol style='list-style-type: none; padding: 0; margin: 0;'>"
+        f"<ol style='list-style-type: decimal; padding: 0; margin: 0;'>"
         + ''.join(f"<li>{step}</li>" for step in split_steps)
         + "</ol>"
     )

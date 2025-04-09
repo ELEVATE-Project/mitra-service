@@ -13,7 +13,7 @@ def save_story(
         response_json_story, language, voice_provider, profile, session, combined_reason, flow=None, project_id=None
 ):
     try:
-        title = response_json_story.get('title', '')
+        title = response_json_story['title']
         print('title: ', title)
         tweet = response_json_story.get('tweet', '')
         print('tweet: ', tweet)
@@ -25,7 +25,7 @@ def save_story(
         print('impact: ', impact)
         micro_improvement = response_json_story.get('micro_improvement', '')
         print('micro_improvement: ', micro_improvement)
-        problem_statement = response_json_story.get('problem_statement', '')
+        problem_statement = response_json_story['problem_statement']
         print('problem_statement: ', problem_statement)
 
         duration = response_json_story.get('duration', '')
@@ -45,6 +45,9 @@ def save_story(
         blurb = clean_escaped_text(text=blurb)
         impact = clean_escaped_text(text=impact)
         problem_statement = clean_escaped_text(text=problem_statement)
+
+        if not title or not objective or not action_steps or not problem_statement:
+            raise Exception("Empty fields found")
 
         print("language used: ", language)
         if language != 'en':
