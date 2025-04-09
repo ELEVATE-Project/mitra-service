@@ -1,3 +1,7 @@
+import io
+import zipfile
+import requests
+from django.utils.text import slugify
 from django.http import HttpResponseRedirect
 from django.contrib import admin
 from django.utils.http import urlencode
@@ -6,7 +10,8 @@ from django.utils.timezone import localtime
 from docx import Document
 from django.http import HttpResponse
 from django.forms.models import model_to_dict
-
+from docx.shared import Inches
+import tempfile
 from chatbot.models import Story, MediaTypeChoices
 
 
@@ -46,7 +51,31 @@ def generate_docx_response(stories):
 
         row_data = get_story_data(story, headers)
         for field, value in zip(headers, row_data):
-            document.add_paragraph(f"{field.replace('_', ' ').title()}: {value}")
+            if field == "story_media_urls":
+                document.add_paragraph(f"{field.replace('_', ' ').title()}:")
+                urls = value.split(', ')
+                for url in urls:
+                    if not url.lower().endswith('.pdf'):
+                        try:
+                            img_response = requests.get(url)
+                            if img_response.status_code == 200:
+                                with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_img:
+                                    tmp_img.write(img_response.content)
+                                    tmp_img.flush()
+                                    document.add_paragraph(url)  # Show URL
+                                    try:
+                                        # Try showing if it's image
+                                        document.add_picture(
+                                            tmp_img.name,width=Inches(2.5)
+                                        )
+                                    except Exception as e:
+                                        document.add_paragraph(f"(Preview not available: {e})")
+                        except Exception as e:
+                            document.add_paragraph(f"Failed to load image: {url} ({e})")
+                    else:
+                        document.add_paragraph(url)  # Non-image media, just show link
+            else:
+                document.add_paragraph(f"{field.replace('_', ' ').title()}: {value}")
 
         if i != len(stories):
             document.add_page_break()
@@ -73,6 +102,8 @@ def get_story_fields(stories):
 
     headers = base_fields + sorted(extra_fields)
     headers.append("story_pdfs")
+    headers.append("story_media_urls")
+
     return headers
 
 
@@ -84,6 +115,13 @@ def get_story_data(story, headers):
         if field == 'story_pdfs':
             pdf = story.story_media.filter(media_type=MediaTypeChoices.PDF).first()
             value = pdf.get_public_url() if pdf else ''
+        elif field == 'story_media_urls':
+            media_urls = [
+                media.get_public_url()
+                for media in story.story_media.all()
+                if media.media_type != MediaTypeChoices.PDF and media.get_public_url()
+            ]
+            value = ', '.join(media_urls)
         elif field in story_dict:
             value = story_dict[field]
             if hasattr(value, '__str__'):
@@ -94,3 +132,34 @@ def get_story_data(story, headers):
             value = story.other_params.get(field, '') if story.other_params else ''
         data.append(value)
     return data
+
+
+def generate_zip_response(stories):
+    zip_buffer = io.BytesIO()
+
+    with zipfile.ZipFile(zip_buffer, 'w') as zip_file:
+        for story in stories:
+            pdfs = story.story_media.filter(media_type=MediaTypeChoices.PDF)
+            for i, pdf in enumerate(pdfs, start=1):
+                print(f"Story {story.id} has {pdfs.count()} PDFs")
+                url = pdf.get_public_url()
+                if not url:
+                    continue
+                try:
+                    response = requests.get(url)
+                    if response.status_code == 200:
+                        # Use pdf.name, fallback to something if it's missing
+                        base_name = pdf.name or f"story_{story.id}_media_{i}"
+                        safe_name = slugify(base_name)
+                        filename = f"{safe_name}_{story.id}.pdf"
+                        zip_file.writestr(filename, response.content)
+                    else:
+                        print(f"Failed to download from {url}, status code {response.status_code}")
+                except Exception as e:
+                    print(f"Error downloading {url}: {e}")
+
+    zip_buffer.seek(0)
+    response = HttpResponse(zip_buffer, content_type='application/zip')
+    response['Content-Disposition'] = 'attachment; filename=stories.zip'
+    return response
+

@@ -9,6 +9,11 @@ from simple_history.models import HistoricalRecords
 
 
 class CompanyBotTestCases(models.Model):
+    about = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Optional description of the test case. For informational purposes only; it does not affect the test output."
+    )
     company_bot = models.ForeignKey(
         CompanyBot, on_delete=models.CASCADE, null=True, blank=True)
     testcase_input = models.TextField(blank=True, null=True)

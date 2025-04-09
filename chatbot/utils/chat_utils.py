@@ -32,13 +32,24 @@ def format_message_as_per_openai_format(chats, intro=None):
     return messages
 
 
-def format_message_as_per_bedrock_format(chats, intro=None):
+def format_message_as_per_bedrock_format(chats, intro=None, other_info=None):
     ai_user = Profile.objects.get(id=1)
     if intro:
+        if other_info:
+            user_name = other_info.get('first_name', None)
+            user_location = other_info.get('user_location', None)
+            if user_name:
+                initial_msg = f"Hello my name is {user_name}."
+                if user_location:
+                    initial_msg += f" I am from {user_location}"
+            else:
+                initial_msg = "Hello"
+        else:
+            initial_msg = "Hello"
         messages = [
             {
                 'role': 'user',
-                'content': [{'text': "Hello"}]
+                'content': [{'text': initial_msg}]
             }, {
                 'role': 'assistant',
                 'content': [{'text': intro}]
@@ -64,10 +75,10 @@ def format_message_as_per_bedrock_format(chats, intro=None):
     return messages
 
 
-def get_guided_chat(company_bot, company_chats, intro=None):
+def get_guided_chat(company_bot, company_chats, intro=None, other_info=None):
     messages = []
     if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
-        messages = format_message_as_per_bedrock_format(chats=company_chats, intro=intro)
+        messages = format_message_as_per_bedrock_format(chats=company_chats, intro=intro, other_info=other_info)
     elif company_bot.provider == LLMProvider.OPENAI:
         messages = format_message_as_per_openai_format(chats=company_chats, intro=intro)
 

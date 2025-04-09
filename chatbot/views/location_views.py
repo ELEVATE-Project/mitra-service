@@ -45,7 +45,23 @@ def get_location_view(request):
 @api_view(['GET'])
 def get_ip_location_view(request):
     try:
-        url = "http://ip-api.com/json/"
+        #Gget the user's real IP address from headers
+        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(',')[0]  # get the first IP if multiple
+        else:
+            ip = request.META.get('REMOTE_ADDR')
+
+        # Fall back to default IP if IP isn't found
+        if not ip:
+            return Response({
+                'status': 'error',
+                'message': 'Failed! No ip found.'
+            })
+
+        print("Client IP:", ip)
+
+        url = f"http://ip-api.com/json/{ip}"
         response = requests.get(url)
 
         if response.status_code == 200:

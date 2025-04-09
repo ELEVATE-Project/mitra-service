@@ -24,6 +24,7 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
         state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
         system_context = company_bot.context
 
+        other_info = None
         bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot).first()
         if bot_vernacular:
             if profile and profile.first_name:
@@ -31,6 +32,19 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
                 first_word = intro_mssg.split(" ")[0]
                 remaining_message = " ".join(intro_mssg.split(" ")[1:])
                 intro_mssg = f"{first_word} {profile.first_name}, {remaining_message}"
+                profile_addresses = None
+                if profile and profile.first_name:
+                    profile_addresses = profile.profile_address.all().first()
+                address_components = [
+                    profile_addresses.district if profile_addresses and profile_addresses.district else "",
+                    profile_addresses.block if profile_addresses and profile_addresses.block else "",
+                    profile_addresses.state if profile_addresses and profile_addresses.state else ""
+                ]
+                address_string = ", ".join(filter(None, address_components))
+                other_info = {
+                    "first_name": profile.first_name,
+                    "user_location": address_string
+                }
             else:
                 intro_mssg = bot_vernacular.alt_introductory_message
         else:
@@ -42,12 +56,12 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
         )
 
         messages = get_guided_chat(
-            company_bot=company_bot, company_chats=company_chats, intro=intro_mssg
+            company_bot=company_bot, company_chats=company_chats, intro=intro_mssg, other_info=other_info
         )
 
         response = get_chaupal_tool_call_response(
             system_prompt=prompt_to_use, messages=messages, company_bot=company_bot, session_id=session_id,
-            channel_name=channel_name, route=route, profile_id=profile_id
+            channel_name=channel_name, route=route, profile_id=profile_id, profile=profile
         )
         logger.info('Bedrock Final response: %s', response)
 

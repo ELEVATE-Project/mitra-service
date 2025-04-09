@@ -7,12 +7,12 @@ from jinja2 import Template
 logger = logging.getLogger('django')
 
 
-def prepare_missing_stage_questions(company_bot, state_machine, messages, extra_data=""):
+def prepare_missing_stage_questions(company_bot, state_machine, messages, extra_data="", profile=None):
     print("Preparing for llm call")
     system_context = company_bot.context
     if state_machine and state_machine.name == "CHECKER":
         prompt_to_use = get_guided_prompt(
-            company_bot=company_bot, state_machine=state_machine
+            company_bot=company_bot, state_machine=state_machine, profile=profile
         )
     else:
         prompt_to_use= get_missing_question_prompt(
@@ -49,8 +49,25 @@ def prepare_missing_stage_questions(company_bot, state_machine, messages, extra_
     return response
 
 
-def get_guided_prompt(company_bot, state_machine):
+def get_guided_prompt(company_bot, state_machine, profile):
     prompt_to_use=[]
+    profile_addresses=None
+    if profile and profile.first_name:
+        profile_addresses = profile.profile_address.all().first()
+    address_components = [
+        profile_addresses.district if profile_addresses and profile_addresses.district else "",
+        profile_addresses.block if profile_addresses and profile_addresses.block else "",
+        profile_addresses.state if profile_addresses and profile_addresses.state else ""
+    ]
+    address_string = ", ".join(filter(None, address_components))
+
+    state_machine_context = state_machine.context
+    context_data = {
+        "user_location": address_string
+    }
+    template = Template(state_machine_context)
+    state_machine_context = template.render(context_data)
+
     if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
         prompt_to_use = [
             {
@@ -59,7 +76,7 @@ def get_guided_prompt(company_bot, state_machine):
 
                 Completion Criteria for function calling:
                 {}
-                """.format(state_machine.context, state_machine.completion_criteria)
+                """.format(state_machine_context, state_machine.completion_criteria)
             },
             # {
             #     'text': company_bot.tool_context
@@ -74,7 +91,7 @@ def get_guided_prompt(company_bot, state_machine):
 
                             Completion Criteria:
                             {}""".format(
-                    state_machine.context,
+                    state_machine_context,
                     state_machine.completion_criteria
                 )
             }
