@@ -17,11 +17,22 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
     else:
         translation_json = {}
 
+    challenges_char_limit = translation_json.get('challenges_char_limit', None)
+    first_challenges_char_limit = translation_json.get('first_challenges_char_limit', None)
+    solutions_char_limit = translation_json.get('solutions_char_limit', None)
+
     challenges_html = process_steps(
-        raw_data=challenges_faced, fallback_text=translation_json.get('no_challenges_faced_text', "")
+        raw_data=challenges_faced,
+        fallback_text=translation_json.get('no_challenges_faced_text', ""),
+        heading=translation_json.get('heading2', "Challenges"),
+        char_limit=challenges_char_limit,
+        first_char_limit=first_challenges_char_limit,
+        is_challenges=True  # New flag
     )
+
     solutions_html = process_steps(
-        raw_data=solutions_discussed, fallback_text=translation_json.get('no_solutions_text', "")
+        raw_data=solutions_discussed, fallback_text=translation_json.get('no_solutions_text', ""),
+        heading=translation_json.get('heading3', "Solutions"), char_limit=solutions_char_limit
     )
 
     author, address_string, company_logo = get_user_details(
@@ -40,14 +51,9 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
         <h1>{story.title}</h1>
         <p>{author if author else ""}</p>
         <p>{address_string}</p>
-        <div class="story-second-page-section story-action-steps">
-            <h2>{translation_json.get('heading2', "Challenges")}</h2>
-            {challenges_html or translation_json.get('no_challenges_faced_text', "")}
-        </div>
-        <div class="story-second-page-section story-action-steps">
-            <h2>{translation_json.get('heading3', "Solutions")}</h2>
-            {solutions_html or translation_json.get('no_solutions_text', "")}
-        </div>
+       
+        {challenges_html}
+        {solutions_html}
         {get_report_images_page_html(story=story)}
     </div>
     """
@@ -61,16 +67,14 @@ def clean_escaped_text(text):
     return text
 
 
-def process_steps(raw_data, fallback_text):
+def process_steps(raw_data, fallback_text, char_limit, first_char_limit=None, heading=None, is_challenges=False):
     if isinstance(raw_data, str):
         try:
             if raw_data.strip().startswith("["):
                 raw_data = json_repair.repair_json(raw_data, return_objects=True)
-                print("Processed JSON:", raw_data)
             else:
                 raw_data = [raw_data]
         except Exception as e:
-            print(f"Error repairing JSON: {e}")
             raw_data = [fallback_text]
 
     steps = (
@@ -79,9 +83,7 @@ def process_steps(raw_data, fallback_text):
         else [fallback_text]
     )
 
-    print("Processed steps: ", steps)
-
-    if (steps and isinstance(steps, list) and len(steps) == 1 and isinstance(steps[0], str)):
+    if steps and isinstance(steps, list) and len(steps) == 1 and isinstance(steps[0], str):
         steps_text = steps[0]
         split_steps = re.findall(r'\d+\.\s*[^0-9]+', steps_text)
         split_steps = [step.strip() for step in split_steps if step.strip()]
@@ -94,16 +96,48 @@ def process_steps(raw_data, fallback_text):
     else:
         split_steps = [step.strip() for step in steps if step.strip()]
 
-    print("\n\nsplit_steps: ", split_steps)
+    # Determine chunking logic
+    chunks = []
+    current_chunk = []
+    current_length = 0
+    chunk_index = 0
 
-    steps_html = (
-        f"<ol style='list-style-type: decimal; padding: 0; margin: 0;'>"
-        + ''.join(f"<li>{step}</li>" for step in split_steps)
-        + "</ol>"
-    )
+    for step in split_steps:
+        current_limit = first_char_limit if is_challenges and chunk_index == 0 else char_limit or 1200
+        step_len = len(step)
 
-    print("\n\nsteps_html: ", steps_html)
-    return steps_html or fallback_text
+        if current_length + step_len > current_limit and current_chunk:
+            chunks.append(current_chunk)
+            current_chunk = [step]
+            current_length = step_len
+            chunk_index += 1
+        else:
+            current_chunk.append(step)
+            current_length += step_len
+
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    # Build HTML with page breaks between chunks
+    full_html = ""
+    current_number = 1  # Counter to maintain numbering across chunks
+    for i, chunk in enumerate(chunks):
+        # Do not apply page-break to the last chunk
+        page_break = "split-div;" if i < len(chunks) - 1 else ""
+        # Only add page break if it's not the last chunk
+        html = (
+                f" <div class='second-main-sec-div {page_break}'> <div class='story-second-page-section'>" +
+                "<div class='split-div'>"
+                + (f"<h2>{heading}</h2>" if heading else "")
+                + "<ol class='secondpage-order-list'>"
+                + ''.join(f"<li>{current_number + idx}. {step}</li>" for idx, step in enumerate(chunk))
+                + "</ol></div></div></div>"
+        )
+        full_html += html
+        # Update the current_number after the chunk
+        current_number += len(chunk)
+
+    return full_html or fallback_text
 
 
 def get_user_details(story, profile, voice_provider):

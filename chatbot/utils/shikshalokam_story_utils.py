@@ -211,10 +211,12 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         html_content = get_story_html(story=story, profile=profile, flow=flow)
 
         pdf_generated = generate_pdf_with_gotenberg(html_content)
+        # print("pdf_generated: ", pdf_generated)
         pdf_file_name = story.title
         if not pdf_file_name or pdf_file_name == '':
             pdf_file_name = 'mi_story'
         pdf_file_name = f"{pdf_file_name}.pdf"
+        print("pdf_file_name: ", pdf_file_name)
         pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
         print("pdf_content: ", pdf_content)
         print("pdf_content type: ", type(pdf_content))
