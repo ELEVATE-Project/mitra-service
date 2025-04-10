@@ -52,8 +52,8 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
         <p>{author if author else ""}</p>
         <p>{address_string}</p>
        
-        {challenges_html}
-        {solutions_html}
+        {challenges_html if challenges_faced not in [None, [], ""] else ""}
+        {solutions_html if solutions_discussed not in [None, [], ""] else ""}
         {get_report_images_page_html(story=story)}
     </div>
     """
