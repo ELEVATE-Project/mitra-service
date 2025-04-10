@@ -49,8 +49,6 @@ def get_ip_location_view(request):
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
             ip = x_forwarded_for.split(',')[0]  # get the first IP if multiple
-        else:
-            ip = request.META.get('REMOTE_ADDR')
 
         # Fall back to default IP if IP isn't found
         if not ip:

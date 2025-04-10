@@ -11,7 +11,9 @@ def get_report_images_page_html(story):
     for image in images:
         image_elements += f"""
         <div class="story-image-page-image-box" style="page-break-inside: avoid;">
-          <img src="{image}" alt="Story Image" style="width:100%; height:100%; border-radius: 10px;" />
+            <div class='story-img-split-div'>
+                <img src="{image}" alt="Story Image" class="image-report" />
+            </div>
         </div>
         """
 

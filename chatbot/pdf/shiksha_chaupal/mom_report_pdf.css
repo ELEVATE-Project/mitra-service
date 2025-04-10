@@ -356,22 +356,40 @@
     align-items: center;
   }
 
+  .step-li-items {
+    padding: 30px 0 0 0;
+  }
+
   /* story second page  */
 
-.story-second-page-container {
-    width: 100%;
-    background-color: #f1f1f1;
-    padding: 20px 40px;
-    box-sizing: border-box;
-    page-break-before: always;
-    page-break-after: always;
-    page-break-inside: avoid;
-  }
-  .empty-page-break {
-    page-break-before: always;
-    display: none; /* Prevent it from taking visible space */
-    height: 0;
-}
+    .story-second-page-container {
+        width: 100%;
+        background-color: #f1f1f1;
+        padding: 20px 40px;
+        box-sizing: border-box;
+        page-break-before: always;
+        page-break-after: always;
+        page-break-inside: avoid;
+      }
+    .empty-page-break {
+        page-break-before: always;
+        display: none; /* Prevent it from taking visible space */
+        height: 0;
+    }
+
+    .secondpage-order-list {
+        list-style-type: none;
+        padding-left: 20px;
+    }
+
+    .split-div{
+        margin-bottom: 20px;
+    }
+
+    .split-div1{
+        page-break-after: auto;
+    }
+
     .story-second-page-container h1  {
         height: auto;
         font-family: 'Open Sans', sans-serif;
@@ -396,6 +414,11 @@
         margin: 0px 0 10px 0;
         text-align: center;
     }
+
+    .second-main-sec-div {
+        padding: 20px 0 0 0;
+    }
+
     .story-second-page-section {
         margin-bottom: 20px;
         padding: 20px;
@@ -946,7 +969,8 @@
 /* image page */
 
     .story-image-page-container {
-      text-align: center;
+        text-align: center;
+         padding-top: 20px;
     }
 
     .story-image-page-title {
@@ -977,18 +1001,30 @@
         margin-top: 40px;
     }
 
+    .image-report {
+        width:100%;
+        height:100%;
+        border-radius: 10px;
+    }
+
     .story-image-page-image-box {
       width: 330px;
       height: 300px;
-      background-color: #fff;
-      border: 2px solid #ccc;
-      border-radius: 20px;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      padding: 3px;
+      padding: 40px 0 0 0;
 
     }
 
-    .story-image-page-image-box img {
+    .story-img-split-div{
+        background-color: #fff;
+        border: 2px solid #ccc;
+        border-radius: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        padding: 3px;
+        width: 100%;
+        height: 100%;
+    }
+
+    .story-img-split-div img {
       width: 100%;
       height: 100%;
     }
