@@ -131,6 +131,7 @@ def execute_test_case(
     actual_output = None
     try:
         actual_output = llm.prompt(test_case_message).choices[0].message.content
+        print("Actual Output: ", actual_output)
     except Exception as e:
         error_msg = f"[LLM Prompt Error] TestCase {test_case.pk}: {str(e)}"
         print(error_msg)
@@ -168,11 +169,37 @@ def execute_test_case(
 
         print(list(metrics_val.keys()))
 
-        print(eval_metrics, len(eval_metrics), "Eval Metrics printed")
+        print("Eval Metrics printed: ", eval_metrics, len(eval_metrics))
     except Exception as eval_err:
         error_msg = f"[Eval Init Error] TestCase {test_case.pk}: {str(eval_err)}"
         print(error_msg)
         response_log["errors"].append(error_msg)
+    finally:
+        try:
+            run_tc_map_obj = BotRunTestCaseMap.objects.filter(
+                bot_run_id=tc_run_id,
+                test_case=test_case
+            ).first()
+
+            if run_tc_map_obj:
+                run_tc_map_obj.response_log = json.dumps(response_log, indent=2)
+                run_tc_map_obj.status = TCStatus.FAILED
+                run_tc_map_obj.reason = run_tc_map_obj.reason or "Updated with fallback errors"
+                run_tc_map_obj.save()
+            else:
+                run_tc_map = BotRunTestCaseMap(
+                    bot_run=CompanyBotTCRun(pk=tc_run_id),
+                    test_case=test_case,
+                    metric_name=None,
+                    score=None,
+                    reason="Execution failed. See response_log for errors.",
+                    response_log=json.dumps(response_log, indent=2),
+                    status=TCStatus.FAILED
+                )
+                run_tc_map.save()
+        except Exception as final_save_err:
+            print(f"[Final Save Error] TestCase {test_case.pk}: {str(final_save_err)}")
+
 
 @shared_task
 def run(company_bot_id: int, tc_run_id: int):
@@ -191,6 +218,7 @@ def run(company_bot_id: int, tc_run_id: int):
         try:
             for test_case in company_test_cases:
                 try:
+                    print("Running Test for: ", test_case)
                     execute_test_case(
                         test_case,
                         model=company_bot.llm_model,
