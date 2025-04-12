@@ -131,6 +131,7 @@ def execute_test_case(
     actual_output = None
     try:
         actual_output = llm.prompt(test_case_message).choices[0].message.content
+        response_log["actual_output"] = actual_output
         print("Actual Output: ", actual_output)
     except Exception as e:
         error_msg = f"[LLM Prompt Error] TestCase {test_case.pk}: {str(e)}"
@@ -150,6 +151,13 @@ def execute_test_case(
                 print(metrics_val[metric].reason, "<< REASON")
                 print(metrics_val[metric].score, "<< SCORE")
                 print(metrics_val[metric])
+
+                response_log["metric_results"].append({
+                    "metric_name": metric,
+                    "score": metrics_val[metric].score,
+                    "reason": metrics_val[metric].reason,
+                    "status": "PASS" if metrics_val[metric].is_successful() else "FAILED"
+                })
 
                 run_tc_map = BotRunTestCaseMap(
                     bot_run=CompanyBotTCRun(pk=tc_run_id),
@@ -176,27 +184,27 @@ def execute_test_case(
         response_log["errors"].append(error_msg)
     finally:
         try:
-            run_tc_map_obj = BotRunTestCaseMap.objects.filter(
-                bot_run_id=tc_run_id,
-                test_case=test_case
-            ).first()
+            existing_metrics = set(
+                BotRunTestCaseMap.objects.filter(
+                    bot_run_id=tc_run_id,
+                    test_case=test_case
+                ).values_list('metric_name', flat=True)
+            )
 
-            if run_tc_map_obj:
-                run_tc_map_obj.response_log = json.dumps(response_log, indent=2)
-                run_tc_map_obj.status = TCStatus.FAILED
-                run_tc_map_obj.reason = run_tc_map_obj.reason or "Updated with fallback errors"
-                run_tc_map_obj.save()
-            else:
-                run_tc_map = BotRunTestCaseMap(
-                    bot_run=CompanyBotTCRun(pk=tc_run_id),
-                    test_case=test_case,
-                    metric_name=None,
-                    score=None,
-                    reason="Execution failed. See response_log for errors.",
-                    response_log=json.dumps(response_log, indent=2),
-                    status=TCStatus.FAILED
-                )
-                run_tc_map.save()
+            for metric in metrics_val:
+                if metric not in existing_metrics:
+                    BotRunTestCaseMap.objects.create(
+                        bot_run=CompanyBotTCRun(pk=tc_run_id),
+                        test_case=test_case,
+                        metric_name=metric,
+                        score=0,
+                        reason="Execution failed. See response_log for errors.",
+                        response_log=json.dumps(response_log, indent=2),
+                        status=TCStatus.FAILED
+                    )
+
+            if not metrics_val and not existing_metrics:
+               print("No metric found.")
         except Exception as final_save_err:
             print(f"[Final Save Error] TestCase {test_case.pk}: {str(final_save_err)}")
 
