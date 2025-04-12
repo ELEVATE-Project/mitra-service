@@ -1,3 +1,4 @@
+from chatbot.views.aws_views import get_presigned_url
 from chatbot.views.gotenberg_view import generate_pdf_view
 from chatbot.views.kafka_views import sync_user_project_view
 from chatbot.views.location_views import get_location_view, get_ip_location_view
@@ -82,5 +83,5 @@ urlpatterns = [
     path('api/sync-user-project/', sync_user_project_view, name='sync-user-project'),
     path('api/get-location/', get_location_view, name='get-location'),
     path('api/get-ip-location/', get_ip_location_view, name='get-ip-location'),
-
+    path("api/get-presigned-url/", get_presigned_url,  name='get-presigned-url'),
 ]

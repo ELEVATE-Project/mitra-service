@@ -92,6 +92,7 @@ class BotRunTestCaseMap(models.Model):
     status = models.CharField(
         max_length=100, choices=TCStatus.choices, null=True, blank=True
     )
+    response_log = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True, blank=True, null=True)
     updated_at = models.DateTimeField(auto_now=True, blank=True, null=True)
     history = HistoricalRecords()
