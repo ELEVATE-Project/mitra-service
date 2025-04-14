@@ -367,8 +367,6 @@
         background-color: #f1f1f1;
         padding: 20px 40px;
         box-sizing: border-box;
-        page-break-before: always;
-        page-break-after: always;
         page-break-inside: avoid;
       }
     .empty-page-break {
@@ -387,7 +385,17 @@
     }
 
     .split-div1{
+        page-break-after: always;
+    }
+
+    .second-main-sec-wrapper {
         page-break-after: auto;
+        page-break-inside: avoid;
+    }
+
+    .second-main-sec-wrapper1 {
+        page-break-after: avoid;
+        page-break-inside: avoid;
     }
 
     .story-second-page-container h1  {
