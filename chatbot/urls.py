@@ -1,3 +1,4 @@
+from chatbot.utils.image_converter import convert_image
 from chatbot.views.aws_views import get_presigned_url
 from chatbot.views.gotenberg_view import generate_pdf_view
 from chatbot.views.kafka_views import sync_user_project_view
@@ -84,4 +85,5 @@ urlpatterns = [
     path('api/get-location/', get_location_view, name='get-location'),
     path('api/get-ip-location/', get_ip_location_view, name='get-ip-location'),
     path("api/get-presigned-url/", get_presigned_url,  name='get-presigned-url'),
+    path("api/image-converter/", convert_image, name='image-converter'),
 ]
