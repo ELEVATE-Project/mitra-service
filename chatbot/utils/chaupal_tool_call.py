@@ -6,6 +6,7 @@ from chatbot.models import ChatSession, ChatStatus, LLMProvider
 from chatbot.models.company_models import CompanyStateMachine
 import logging
 
+from chatbot.utils.chaupal_question import get_chaupal_challenge_response, get_chaupal_solution_response
 from chatbot.utils.shiksha_chaupal.checker_utils import prepare_missing_stage_questions
 
 logger = logging.getLogger('django')
@@ -108,6 +109,20 @@ def get_chaupal_tool_call_response(
                 bot_question = state_machine.bot_question
         else:
             bot_question = state_machine.bot_question
+
+        if state_machine.name == 'CHALLENGES':
+            challenge_res = get_chaupal_challenge_response(messages=messages)
+            if challenge_res and isinstance(challenge_res, str):
+                bot_question = challenge_res
+            else:
+                bot_question = 'I am sorry, I could not understood completely. Could you rephrase this please?'
+        if state_machine.name == 'SOLUTIONS':
+            solution_res = get_chaupal_solution_response(messages=messages)
+            if solution_res and isinstance(solution_res, str):
+                bot_question = solution_res
+            else:
+                bot_question = 'I am sorry, I could not understood completely. Could you rephrase this please?'
+
         print("In function call: so asking bot question as: ", bot_question)
         translated_message = translate_and_send_message(
             accumulated_message=bot_question, current_channel_name=channel_name,

@@ -35,9 +35,15 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
         heading=translation_json.get('heading3', "Solutions"), char_limit=solutions_char_limit
     )
 
-    author, address_string, company_logo = get_user_details(
+    author, address_string, company_logo, date_of_discussion, number_of_people = get_user_details(
         story=story, profile=profile, voice_provider=voice_provider
     )
+    info_parts = []
+    if date_of_discussion:
+        info_parts.append(f"<span>{translation_json.get('dateHeader', '')}:</span> {date_of_discussion}")
+    if number_of_people:
+        info_parts.append(f"<span>{translation_json.get('memberHeader', '')}:</span> {number_of_people}")
+    info_html = f"<p>{' &nbsp;&nbsp; '.join(info_parts)}</p>" if info_parts else ''
 
     page_html = f"""
     <div class="story-second-page-container">
@@ -51,6 +57,7 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
         <h1>{story.title}</h1>
         <p>{author if author else ""}</p>
         <p>{address_string}</p>
+         {info_html}
        
         {challenges_html if challenges_faced not in [None, [], [""]] else ""}
         {solutions_html if solutions_discussed not in [None, [], [""]] else ""}
@@ -177,4 +184,9 @@ def get_user_details(story, profile, voice_provider):
             address_string = translate_field(
                 voice_provider=voice_provider, message_body=address_string, target_language=story.language
             )
-    return author, address_string, company_logo
+    date_of_discussion = story.other_params.get('discussion_date', None)
+    print("date_of_discussion: ", date_of_discussion)
+    number_of_people = story.other_params.get('participants_count', None)
+    print("number_of_people: ", number_of_people)
+
+    return author, address_string, company_logo, date_of_discussion, number_of_people

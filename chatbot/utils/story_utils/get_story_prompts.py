@@ -2,6 +2,7 @@ from jinja2 import Template
 import json_repair
 from chatbot.models import Profile, LLMProvider
 from chatbot.models.geo_models import ProfileAddress
+from chatbot.utils.sql_utils import get_todays_date
 
 
 def get_creation_promt(company_bot, profile):
@@ -19,14 +20,18 @@ def get_creation_promt(company_bot, profile):
 
     project_data = ''
 
+    today_date = get_todays_date(company_bot=company_bot)
+
     content_prompt = f"""
                 {context}
                 {tag_context}
+                {today_date}
                 {project_data}
             """
     story_prompt = f"""
                 {end_context}
                 {tag_context}
+                {today_date}
                 {project_data}
             """
     print('-------------------------------')
@@ -79,10 +84,13 @@ def get_validation_prompt(
     validate_template = Template(validate_bot.tag_context)
     validate_tag_context = validate_template.render(validate_context_data)
 
+    today_date = get_todays_date(company_bot=validate_bot)
+
     validate_story_prompt = f"""
                {validate_bot.end_context}
                {validate_tag_context}
                {tag_context}
+                {today_date}
                {project_data}
            """
 
@@ -97,6 +105,7 @@ def get_validation_prompt(
                {validate_bot.context}
                {validate_tag_context}
                {tag_context}
+                {today_date}
                {project_data}
            """
 
