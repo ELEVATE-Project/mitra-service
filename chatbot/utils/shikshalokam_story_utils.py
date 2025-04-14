@@ -269,8 +269,8 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
 
         if company_chats and company_chats[0].receiver != ai_user:
             company_chats.pop(0)
-        conversation = get_stored_conversation(company_chats=company_chats, ai_user=ai_user)
-        chat_history = get_stored_chathistory(company_chats=company_chats, ai_user=ai_user)
+        conversation = get_stored_conversation(company_chats=company_chats)
+        chat_history = get_stored_chathistory(company_chats=company_chats)
 
         request_body = {
             "story": {
