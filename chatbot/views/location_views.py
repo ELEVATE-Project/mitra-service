@@ -61,7 +61,7 @@ def get_ip_location_view(request):
         print("Client IP:", ip)
 
         url = f"http://ip-api.com/json/{ip}"
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
 
         if response.status_code == 200:
             location_data = response.json()
