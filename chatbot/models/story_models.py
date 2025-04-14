@@ -62,7 +62,7 @@ class StoryMedia(models.Model):
         return upload_path
 
     name = models.CharField(max_length=1000)
-    file = models.FileField(upload_to=get_file_upload_path, max_length=1000)
+    file = models.FileField(upload_to=get_file_upload_path, max_length=1000, null=True, blank=True)
     story = models.ForeignKey(Story, related_name='story_media', on_delete=models.CASCADE)
     include_in_story = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -70,12 +70,21 @@ class StoryMedia(models.Model):
     base64_str = models.TextField(null=True, blank=True)
     source_path = models.TextField(null=True, blank=True)
     media_type = models.CharField(max_length=100, choices=MediaTypeChoices.choices, null=True, blank=True)
+    file_url = models.CharField(max_length=2000, null=True, blank=True)
 
     def get_public_url(self):
-        return f"{S3_BASE_URL}{self.file.name}"
+        if self.file:
+            return f"{S3_BASE_URL}{self.file.name}"
+        elif self.file_url:
+            return self.file_url
+        else:
+            return ""
 
     def save(self, *args, **kwargs):
         try:
+            if not self.file:
+                super().save(*args, **kwargs)
+                return
             self.file.seek(0)
             file_ext = os.path.splitext(self.file.name)[1].lower()
             print("file_ext:", file_ext)

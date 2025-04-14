@@ -123,15 +123,18 @@ def process_steps(raw_data, fallback_text, char_limit, first_char_limit=None, he
     current_number = 1  # Counter to maintain numbering across chunks
     for i, chunk in enumerate(chunks):
         # Do not apply page-break to the last chunk
-        page_break = "split-div;" if i < len(chunks) - 1 else ""
+        page_break = "split-div1" if i < len(chunks) - 1 else ""
         # Only add page break if it's not the last chunk
         html = (
-                f" <div class='second-main-sec-div {page_break}'> <div class='story-second-page-section'>" +
+                # f" <div class='second-main-sec-div {page_break}'> <div class='story-second-page-section'>" +
+                f"<div class='{page_break}'>"
+                f"<div class='second-main-sec-div'>"
+                f"<div class='story-second-page-section'>"
                 "<div class='split-div'>"
                 + (f"<h2>{heading}</h2>" if heading else "")
                 + "<ol class='secondpage-order-list'>"
                 + ''.join(f"<li>{current_number + idx}. {step}</li>" for idx, step in enumerate(chunk))
-                + "</ol></div></div></div>"
+                + "</ol></div></div></div></div>"
         )
         full_html += html
         # Update the current_number after the chunk
@@ -166,7 +169,7 @@ def get_user_details(story, profile, voice_provider):
     print("Author: ", author)
     print("address_string: ", address_string)
     if story and story.language and story.language != 'en':
-        if author:
+        if author and author not in ["None", None]:
             author = translate_field(
                 voice_provider=voice_provider, message_body=author, target_language=story.language
             )

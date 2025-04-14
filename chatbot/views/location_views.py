@@ -46,6 +46,7 @@ def get_location_view(request):
 def get_ip_location_view(request):
     try:
         #Gget the user's real IP address from headers
+        ip = None
         x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
         if x_forwarded_for:
             ip = x_forwarded_for.split(',')[0]  # get the first IP if multiple
@@ -60,7 +61,7 @@ def get_ip_location_view(request):
         print("Client IP:", ip)
 
         url = f"http://ip-api.com/json/{ip}"
-        response = requests.get(url)
+        response = requests.get(url, timeout=10)
 
         if response.status_code == 200:
             location_data = response.json()

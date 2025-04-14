@@ -1,11 +1,15 @@
 import traceback
 from celery import shared_task
-from chatbot.models import CompanyChat, Profile, CompanyBot, ChatSession, LLMProvider, BotVernacular
+from chatbot.models import CompanyChat, Profile, CompanyBot, ChatSession, LLMProvider, BotVernacular, \
+    CompanyBotDynamicContextType
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.chat_utils import get_guided_chat
 import logging
 from jinja2 import Template
 from chatbot.utils.chaupal_tool_call import get_chaupal_tool_call_response
+from chatbot.utils.sql_utils import run_sql_from_string, get_todays_date
+import json_repair
+
 
 logger = logging.getLogger('django')
 
@@ -84,12 +88,14 @@ def get_guided_prompt(company_bot, system_context, state_machine, intro_mssg=Non
     ]
     address_string = ", ".join(filter(None, address_components))
 
+    today_date = get_todays_date(company_bot=company_bot)
 
     state_machine_context = state_machine.context
     if intro_mssg:
         context_data = {
             "intro_message": intro_mssg,
-            "user_location": address_string
+            "user_location": address_string,
+            "todays_date": today_date
         }
         template = Template(state_machine_context)
         state_machine_context = template.render(context_data)
@@ -102,10 +108,12 @@ def get_guided_prompt(company_bot, system_context, state_machine, intro_mssg=Non
             {
                 'text': """
                 {}
+                
+                {}
 
                 Completion Criteria for function calling:
                 {}
-                """.format(state_machine_context, state_machine.completion_criteria)
+                """.format(today_date, state_machine_context, state_machine.completion_criteria)
             },
             {
                 'text': company_bot.tool_context
@@ -116,11 +124,12 @@ def get_guided_prompt(company_bot, system_context, state_machine, intro_mssg=Non
             {
                 'role': 'system',
                 'content': """{}
-
+                            {}
                             {}
 
                             Completion Criteria:
                             {}""".format(
+                    today_date,
                     system_context,
                     state_machine_context,
                     state_machine.completion_criteria
