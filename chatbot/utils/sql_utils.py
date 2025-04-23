@@ -59,10 +59,10 @@ def get_todays_date(company_bot):
                 if isinstance(val, date):
                     parsed_date = val
                 elif isinstance(val, str):
-                    parsed_date = datetime.strptime(val, "%Y-%m-%d").date()
+                    parsed_date = datetime.strptime(val, "%d %B %Y").date()
             print("parsed_date: ", parsed_date)
             if parsed_date:
-                today_date = f"{dynamic_date_text} {parsed_date.strftime('%Y-%m-%d')}"
+                today_date = f"{dynamic_date_text} {parsed_date.strftime('%d %B %Y')}"
                 print("parsed today_date: ", today_date)
 
     except Exception as e:

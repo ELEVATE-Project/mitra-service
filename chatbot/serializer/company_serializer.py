@@ -30,7 +30,12 @@ class CompanyStateMachineSerializer(serializers.ModelSerializer):
 
 class BotVernacularSerializer(serializers.ModelSerializer):
     company_bot = CompanyBotSerializer(read_only=True)
+    default_name = serializers.SerializerMethodField()
 
     class Meta:
         model = BotVernacular
         fields = '__all__'
+
+    def get_default_name(self, obj):
+        english_bot = BotVernacular.objects.filter(company_bot=obj.company_bot, language='en').first()
+        return english_bot.name if english_bot else ""
