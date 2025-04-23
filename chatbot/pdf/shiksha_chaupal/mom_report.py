@@ -2,6 +2,7 @@ import re
 import json_repair
 from chatbot.pdf.shiksha_chaupal.story_images_page import get_report_images_page_html
 from chatbot.utils.story_llama_utils import translate_field
+from datetime import datetime
 
 
 def get_mom_report_html(story, story_vernacular, voice_provider, profile):
@@ -39,9 +40,9 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
         story=story, profile=profile, voice_provider=voice_provider
     )
     info_parts = []
-    if date_of_discussion:
+    if date_of_discussion and date_of_discussion != '':
         info_parts.append(f"<span>{translation_json.get('dateHeader', '')}:</span> {date_of_discussion}")
-    if number_of_people:
+    if number_of_people and number_of_people != '':
         info_parts.append(f"<span>{translation_json.get('memberHeader', '')}:</span> {number_of_people}")
     info_html = f"<p>{' &nbsp;&nbsp; '.join(info_parts)}</p>" if info_parts else ''
 
@@ -185,8 +186,21 @@ def get_user_details(story, profile, voice_provider):
                 voice_provider=voice_provider, message_body=address_string, target_language=story.language
             )
     date_of_discussion = story.other_params.get('discussion_date', None)
+    date_of_discussion = format_date_to_ddmmyyyy(date_of_discussion)
     print("date_of_discussion: ", date_of_discussion)
     number_of_people = story.other_params.get('participants_count', None)
     print("number_of_people: ", number_of_people)
 
     return author, address_string, company_logo, date_of_discussion, number_of_people
+
+
+def format_date_to_ddmmyyyy(date_value):
+    if isinstance(date_value, datetime):
+        return date_value.strftime("%d/%m/%Y")
+    elif isinstance(date_value, str):
+        for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%m/%d/%Y", "%Y/%m/%d", "%d/%m/%Y"):
+            try:
+                return datetime.strptime(date_value, fmt).strftime("%d/%m/%Y")
+            except ValueError:
+                continue
+    return ""
