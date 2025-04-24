@@ -41,7 +41,7 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
     )
     # info_parts = []
     if date_of_discussion and date_of_discussion != '':
-        info_html = f"<span>{translation_json.get('dateHeader', '')}:</span> {date_of_discussion}"
+        info_html = f"<span style='text-align: center'>{translation_json.get('dateHeader', '')}:</span> {date_of_discussion}"
     # info_html = f"<p>{' &nbsp;&nbsp; '.join(info_parts)}</p>" if info_parts else ''
     else:
         info_html=''
