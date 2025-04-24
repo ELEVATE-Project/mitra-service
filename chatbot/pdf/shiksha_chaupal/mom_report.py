@@ -39,13 +39,12 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
     author, address_string, company_logo, date_of_discussion, number_of_people = get_user_details(
         story=story, profile=profile, voice_provider=voice_provider
     )
-    info_parts = []
+    # info_parts = []
     if date_of_discussion and date_of_discussion != '':
-        info_parts.append(f"<span>{translation_json.get('dateHeader', '')}:</span> {date_of_discussion}")
-    if number_of_people and number_of_people != '':
-        info_parts.append(f"<span>{translation_json.get('memberHeader', '')}:</span> {number_of_people}")
-    info_html = f"<p>{' &nbsp;&nbsp; '.join(info_parts)}</p>" if info_parts else ''
-
+        info_html = f"<span>{translation_json.get('dateHeader', '')}:</span> {date_of_discussion}"
+    # info_html = f"<p>{' &nbsp;&nbsp; '.join(info_parts)}</p>" if info_parts else ''
+    else:
+        info_html=''
     page_html = f"""
     <div class="story-second-page-container">
         <div style="width: 100%; margin-top: 10px;">
