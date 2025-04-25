@@ -177,9 +177,11 @@ def get_user_details(story, profile, voice_provider):
     print("address_string: ", address_string)
     if story and story.language and story.language != 'en':
         if author and author not in ["None", None]:
+            author = f"<username> {author} </username>"
             author = translate_field(
                 voice_provider=voice_provider, message_body=author, target_language=story.language
             )
+            author = re.sub(r"</?username>", "", author).strip()
         if address_string:
             address_string = translate_field(
                 voice_provider=voice_provider, message_body=address_string, target_language=story.language
