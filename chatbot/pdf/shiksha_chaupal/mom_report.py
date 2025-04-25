@@ -181,7 +181,7 @@ def get_user_details(story, profile, voice_provider):
             author = translate_field(
                 voice_provider=voice_provider, message_body=author, target_language=story.language
             )
-            author = re.sub(r"</?username>", "", author).strip()
+            author = re.sub(r"<[^>]+>", "", author).strip()
         if address_string:
             address_string = translate_field(
                 voice_provider=voice_provider, message_body=address_string, target_language=story.language

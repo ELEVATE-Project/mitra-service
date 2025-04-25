@@ -31,8 +31,7 @@ def get_first_page_html(profile, project, voice_provider):
             author = translate_field(
                 voice_provider=voice_provider, message_body=author, target_language=project.project_language
             )
-            author = re.sub(r"</?username>", "", author).strip()
-
+            author = re.sub(r"<[^>]+>", "", author).strip()
         if address_string:
             address_string = translate_field(
                 voice_provider=voice_provider, message_body=address_string, target_language=project.project_language
