@@ -1,4 +1,6 @@
 import json
+import re
+
 from bs4 import BeautifulSoup
 from chatbot.utils.story_llama_utils import translate_field
 
@@ -98,9 +100,12 @@ def get_thirdpage_html(profile, story, project, voice_provider, story_vernacular
 
     if project and project.project_language and project.project_language != 'en':
         if author:
+            author = f"<username> {author} </username>"
             author = translate_field(
                 voice_provider=voice_provider, message_body=author, target_language=project.project_language
             )
+            author = re.sub(r"<[^>]+>", "", author).strip()
+
         if address_string:
             address_string = translate_field(
                 voice_provider=voice_provider, message_body=address_string, target_language=project.project_language
