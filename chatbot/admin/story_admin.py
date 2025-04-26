@@ -3,6 +3,7 @@ from django.contrib import admin
 from django.db.models import Q
 from chatbot.filter.admin_filter import StoryCompanyFilter, StoryStateFilter, StoryDistrictFilter, StoryBlockFilter
 from chatbot.models import StoryTag, StoryMedia, Story, Profile, ProfileType, MediaTypeChoices
+from chatbot.models.geo_models import ProfileAddress
 from chatbot.resources.story_resource import (
     redirect_to_export_view, generate_csv_response, generate_xls_response, generate_docx_response,
     get_story_fields, get_story_data, generate_zip_response
@@ -54,7 +55,13 @@ class StoryAdmin(admin.ModelAdmin):
         if request.user.is_superuser:
             return qs
         elif profile and profile.profile_type == ProfileType.MODERATOR:
-            return qs.filter(Q(author__company=profile.company))
+            profile_address = ProfileAddress.objects.filter(profile=profile).first()
+            query = Q(author__company=profile.company)
+            if profile_address and profile_address.district:
+                query &= Q(author__profile__profile_address__district=profile_address.district)
+            if profile_address and profile_address.state:
+                query &= Q(author__profile__profile_address__state=profile_address.state)
+            return qs.filter(query)
         else:
             return qs.none()
 
