@@ -62,11 +62,11 @@ def get_todays_date(company_bot):
                     parsed_date = datetime.strptime(val, "%d %B %Y").date()
             print("parsed_date: ", parsed_date)
             if parsed_date:
-                today_date = f"{dynamic_date_text} {parsed_date.strftime('%d %B %Y')}"
+                weekday = parsed_date.strftime('%A')
+                today_date = f"{dynamic_date_text} {parsed_date.strftime('%d %B %Y')} ({weekday})"
                 print("parsed today_date: ", today_date)
 
     except Exception as e:
         print("Error while parsing today's date:", e)
-
     print("DATE:", today_date)
     return today_date
