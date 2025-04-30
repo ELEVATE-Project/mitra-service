@@ -63,14 +63,8 @@ def get_todays_date(company_bot):
             print("parsed_date: ", parsed_date)
             if parsed_date:
                 today_weekday = parsed_date.strftime('%A')
-                yesterday = parsed_date - timedelta(days=1)
-                tomorrow = parsed_date + timedelta(days=1)
-                last_week = parsed_date - timedelta(weeks=1)
 
-                today_date = f"{parsed_date.strftime('%d %B %Y')} ({today_weekday}), " \
-                             f"Yesterday: {yesterday.strftime('%d %B %Y')} ({yesterday.strftime('%A')}), " \
-                             f"Tomorrow: {tomorrow.strftime('%d %B %Y')} ({tomorrow.strftime('%A')}), " \
-                             f"Last Week: {last_week.strftime('%d %B %Y')} ({last_week.strftime('%A')})"
+                today_date = f"{parsed_date.strftime('%d %B %Y')} ({today_weekday}), "
                 print("parsed today_date: ", today_date)
 
     except Exception as e:
