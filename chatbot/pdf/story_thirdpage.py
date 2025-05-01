@@ -91,7 +91,7 @@ def get_thirdpage_html(profile, story, project, voice_provider, story_vernacular
     ]
 
     address_string = ", ".join(filter(None, address_components))
-    author = profile.first_name if profile and profile.first_name else ""
+    author = story.other_params.get('user_name', '') if story.other_params else ''
 
     sanitized_content = json_to_html(story.formatted_content)
     should_show_story_heading = True
@@ -99,13 +99,6 @@ def get_thirdpage_html(profile, story, project, voice_provider, story_vernacular
     content_chunks = split_content_based_on_words(sanitized_content)
 
     if project and project.project_language and project.project_language != 'en':
-        if author:
-            author = f"<username> {author} </username>"
-            author = translate_field(
-                voice_provider=voice_provider, message_body=author, target_language=project.project_language
-            )
-            author = re.sub(r"<[^>]+>", "", author).strip()
-
         if address_string:
             address_string = translate_field(
                 voice_provider=voice_provider, message_body=address_string, target_language=project.project_language

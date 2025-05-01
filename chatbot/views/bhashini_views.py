@@ -3,6 +3,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from chatbot.models import CompanyBot, Voice, VoiceType
 from chatbot.utils.audio_provider_utils import text_speech_provider, speech_text_provider, text_translate_provider
+from chatbot.utils.transliterate_utils import transliterate_text
 
 ai4bharat_api_key = os.getenv("BHASHANI_API_KEY")
 
@@ -123,6 +124,35 @@ def text_translation_view(request):
                 'status': 'error',
                 'message': response.get('content')
             }, status=response.get('status'))
+
+    except Exception as e:
+        return Response({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+
+@api_view(['POST'])
+def text_transliterate_view(request):
+    try:
+        body = request.data
+        source_language =  body.get('source_language', 'en')
+        target_language =  body.get('target_language', 'en')
+        message_body = body.get('message_body')
+
+        company_bot = CompanyBot.objects.filter(route='/transliterate').first()
+        response = transliterate_text(company_bot, source_language, target_language, message_body)
+
+        if response:
+            return Response({
+                'status': 'ok',
+                'transcript': response
+            }, status=200)
+        else:
+            return Response({
+                'status': 'error',
+                'message': response
+            }, status=500)
 
     except Exception as e:
         return Response({

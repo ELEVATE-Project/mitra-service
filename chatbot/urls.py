@@ -6,7 +6,7 @@ from chatbot.views.location_views import get_location_view, get_ip_location_view
 from chatbot.views.profile_views import create_profile_views
 from django.urls import path
 from chatbot.views import api_views
-from chatbot.views.bhashini_views import text_speech_view, speech_text, text_translation_view
+from chatbot.views.bhashini_views import text_speech_view, speech_text, text_translation_view, text_transliterate_view
 from chatbot.views.chat_view import save_chats_view, create_chatsession
 from chatbot.views.drf_views import CompanyChatListCreateView, CompanyChatRetrieveUpdateDestroyView, \
     CompanyBotListCreateView, CompanyBotRetrieveUpdateDestroyView, ProfileListCreateView, \
@@ -34,6 +34,7 @@ urlpatterns = [
     path('api/text_to_speech/', text_speech_view, name='text_speech_view'),
     path('api/asr/', speech_text, name='speech_text'),
     path('api/text_translate/', text_translation_view, name='text_translation_view'),
+    path('api/text_transliterate/', text_transliterate_view, name='text_transliterate_view'),
 
     path('api/companychat/', CompanyChatListCreateView.as_view(), name='companychat-list-create'),
     path('api/companychat/<int:pk>/', CompanyChatRetrieveUpdateDestroyView.as_view(),
