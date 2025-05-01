@@ -162,8 +162,8 @@ def generate_zip_response(stories):
                         # Use pdf.name, fallback to something if it's missing
                         base_name = get_filename_from_url(url) or pdf.name or f"story_{story.id}_media_{i}"
                         print("Pdf name: ", base_name)
-                        safe_name = slugify(base_name)
-                        filename = f"{safe_name}_{story.id}.pdf"
+                        # safe_name = slugify(base_name)
+                        filename = f"{base_name}_{story.id}.pdf"
                         zip_file.writestr(filename, response.content)
                     else:
                         print(f"Failed to download from {url}, status code {response.status_code}")
