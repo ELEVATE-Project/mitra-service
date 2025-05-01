@@ -118,7 +118,7 @@ def get_chaupal_tool_call_response(
                 bot_question = 'I am sorry, I could not understood completely. Could you rephrase this please?'
         if state_machine.name == 'SOLUTIONS':
             solution_res = get_chaupal_solution_response(messages=messages)
-            if solution_res == "":
+            if solution_res in ["", '', '""', None]:
                 chat_session.current_step += 1
                 chat_session.save()
                 state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
