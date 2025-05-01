@@ -158,6 +158,7 @@ def generate_zip_response(stories):
                     response = requests.get(url)
                     if response.status_code == 200:
                         # Use pdf.name, fallback to something if it's missing
+                        print("Pdf name: ", pdf.name)
                         base_name = pdf.name or f"story_{story.id}_media_{i}"
                         safe_name = slugify(base_name)
                         filename = f"{safe_name}_{story.id}.pdf"
