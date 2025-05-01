@@ -32,32 +32,6 @@ class ProfileMediaInline(admin.TabularInline):
 @admin.register(Profile)
 class ProfileAdmin(ImportMixin, ExportActionMixin, SimpleHistoryAdmin):
     resource_class = ProfileResource
-    zeiss_list_display = (
-        'first_name',
-        'email',
-        'created_at',
-        'org_associated',
-        'designation',
-        'phone',
-        'company_spoc',
-        'sector',
-        'product',
-        'other_params_model_name',  # Custom method for other_params->>'model_name'
-        'other_params_inquiry_status',  # Custom method for other_params->>'inquiry_status'
-        'other_params_discussion_details',  # Custom method for other_params->>'discussion_details'
-        'other_params_others_budget_planning',  # Custom method for other_params->>'others_budget_planning_etc'
-        'state',
-        'city',
-        'source'
-    )
-    fmch_list_display = (
-        'email',
-        'first_name',
-        'created_at',
-        'state',
-        'city',
-        'company',
-    )
     list_display = (
         'email',
         'first_name',
@@ -65,7 +39,7 @@ class ProfileAdmin(ImportMixin, ExportActionMixin, SimpleHistoryAdmin):
         'org_associated',
         'company_spoc'
     )
-    list_filter = (CustomAdvanceDateFilter, 'email', 'phone', ProfileCompanyFilter, 'profile_type')
+    list_filter = ('created_at', 'email', 'phone', ProfileCompanyFilter, 'profile_type')
     actions = ['export_selected']
     inlines = [ProfileAddressInline, ProfileMediaInline]
     search_fields = ['first_name', 'email']
@@ -82,25 +56,9 @@ class ProfileAdmin(ImportMixin, ExportActionMixin, SimpleHistoryAdmin):
             return qs.none()
 
     def get_list_filter(self, request):
-        user = request.user
-        user_email = request.user.email
-        profile = Profile.objects.filter(email=user_email)
-        if not user.is_superuser and len(profile) > 0 and profile[0].profile_type == ProfileType.MODERATOR:
-            company = profile[0].company
-            if company.slug == 'zeiss':
-                return CustomAdvanceDateFilter, 'email', 'source', 'first_name', 'company_spoc'
         return super().get_list_filter(request)
 
     def get_list_display(self, request):
-        user = request.user
-        user_email = request.user.email
-        profile = Profile.objects.filter(email=user_email)
-        if not user.is_superuser and len(profile) > 0 and profile[0].profile_type == ProfileType.MODERATOR:
-            company = profile[0].company
-            if company.slug == 'zeiss':
-                return self.zeiss_list_display
-            elif company.slug == 'fmch':
-                return self.fmch_list_display
         return 'email', 'first_name', 'created_at', 'company',
 
     def get_form(self, request, obj=None, **kwargs):

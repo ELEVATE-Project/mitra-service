@@ -12,7 +12,9 @@ from django.http import HttpResponse
 from django.forms.models import model_to_dict
 from docx.shared import Inches
 import tempfile
-from chatbot.models import Story, MediaTypeChoices
+import os
+from chatbot.models import MediaTypeChoices
+from urllib.parse import urlparse
 
 
 @admin.action(description='Export selected stories')
@@ -158,7 +160,8 @@ def generate_zip_response(stories):
                     response = requests.get(url)
                     if response.status_code == 200:
                         # Use pdf.name, fallback to something if it's missing
-                        base_name = pdf.name or f"story_{story.id}_media_{i}"
+                        base_name = get_filename_from_url(url) or pdf.name or f"story_{story.id}_media_{i}"
+                        print("Pdf name: ", base_name)
                         safe_name = slugify(base_name)
                         filename = f"{safe_name}_{story.id}.pdf"
                         zip_file.writestr(filename, response.content)
@@ -172,3 +175,8 @@ def generate_zip_response(stories):
     response['Content-Disposition'] = 'attachment; filename=stories.zip'
     return response
 
+def get_filename_from_url(url):
+    path = urlparse(url).path
+    filename = os.path.basename(path)
+    print("Filename from url is: ", filename)
+    return filename

@@ -90,7 +90,7 @@ class CompanyBotAdmin(SimpleHistoryAdmin):
 @admin.register(CompanyChat)
 class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
     list_display = ('session', 'sender', 'receiver', 'message', 'created_at', 'message_type')
-    list_filter = (CustomAdvanceDateFilter, ProfileCompanyChatFilter, ProfileEmailFilter, 'session', CompanyChatCompanyFilter)
+    list_filter = ('created_at', ProfileCompanyChatFilter, ProfileEmailFilter, 'session', CompanyChatCompanyFilter)
     search_fields = ('session', 'message__icontains')
     actions = ['export_selected']
     list_export = ('csv', 'xlsx')
