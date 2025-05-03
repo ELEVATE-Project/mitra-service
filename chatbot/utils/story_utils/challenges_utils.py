@@ -40,10 +40,15 @@ def handle_challenges_solutions(challenges_faced, solutions_discussed, profile, 
             if isinstance(value, str) and value.strip():
                 value = json_repair.repair_json(value, return_objects=True)
             response_json = value
-        new_challenges_faced = response_json.get('original_challenges_faced', challenges_faced)
-        new_solutions_discussed = response_json.get('rearranged_solutions_discussed', solutions_discussed)
+        reorder_steps = response_json.get('reorder_steps', [])
+        new_solutions_discussed=[]
+        for steps in reorder_steps:
+            solution_matched = steps.get('solution_matched', None)
+            if solution_matched:
+                new_solutions_discussed.append(solution_matched)
+        if not new_solutions_discussed or len(new_solutions_discussed) == 0:
+            new_solutions_discussed = solutions_discussed
     else:
-        new_challenges_faced = challenges_faced
         new_solutions_discussed = solutions_discussed
 
-    return new_challenges_faced, new_solutions_discussed
+    return challenges_faced, new_solutions_discussed
