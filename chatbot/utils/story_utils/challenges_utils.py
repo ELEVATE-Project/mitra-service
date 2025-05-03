@@ -34,6 +34,10 @@ def handle_challenges_solutions(challenges_faced, solutions_discussed, profile, 
         response_json = json_repair.repair_json(response_json, return_objects=True)
 
     if response_json and isinstance(response_json, dict):
+        extracted_data = response_json.pop("parameters", response_json.pop("input", None))
+        if extracted_data and isinstance(extracted_data, dict):
+            response_json.clear()
+            response_json.update(extracted_data)
         if (isinstance(response_json, dict) and response_json.get("type") and
                 "value" in response_json):
             value = response_json.get("value")
