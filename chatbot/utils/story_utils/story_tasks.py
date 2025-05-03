@@ -184,11 +184,11 @@ def save_chaupal_report(response_json_story, language, voice_provider, profile, 
         discussion_date = response_json_story.get('discussion_date', '')
 
         title = clean_escaped_text(text=title)
-
-        challenges_faced, solutions_discussed = handle_challenges_solutions(
-            challenges_faced=challenges_faced, solutions_discussed=solutions_discussed, profile=profile,
-            messages=messages
-        )
+        if solutions_discussed and len(solutions_discussed) > 0 and challenges_faced and len(challenges_faced) > 0:
+            challenges_faced, solutions_discussed = handle_challenges_solutions(
+                challenges_faced=challenges_faced, solutions_discussed=solutions_discussed, profile=profile,
+                messages=messages
+            )
 
         print("language used: ", language)
         if language != 'en':
