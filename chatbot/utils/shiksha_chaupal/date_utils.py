@@ -50,8 +50,11 @@ def handle_date_prompt(intro_mssg, profile, company_chats, other_info):
         return "I am sorry, I could not understand completely. Could you rephrase this please?"
 
     date_type = interpret_date_response(response)
+    print("date_type: ", date_type)
 
     end_context = json_repair.repair_json(company_bot.end_context, return_objects=True)
+    print("end_context: ", end_context)
+
     if end_context:
         bot_question = end_context.get(date_type)
 
@@ -63,10 +66,11 @@ def handle_date_prompt(intro_mssg, profile, company_chats, other_info):
 
 def interpret_date_response(date_response):
     user_date = date_response.get("parsed_date", '')
-
+    print("user_date: ", user_date)
     try:
         parsed_date = parser.parse(user_date, dayfirst=True)
         today = datetime.now(INDIA_TZ).date()
+        print("today date: ", today)
 
         if parsed_date.date() > today:
             return "FUTURE_DATE"
