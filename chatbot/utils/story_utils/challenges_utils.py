@@ -20,7 +20,7 @@ def handle_challenges_solutions(challenges_faced, solutions_discussed, profile, 
         if tool and isinstance(tool, str):
             tool = json_repair.repair_json(tool, return_objects=True)
         response_json = handle_bedrock_model(
-            system_prompt=system_context, messages=messages, model_name=company_bot.llm_model,
+            system_prompt=system_context, messages=[], model_name=company_bot.llm_model,
             temperature=company_bot.bot_temperature, max_token=company_bot.max_token,
             tools=tool, company_bot=company_bot
         )
@@ -40,8 +40,8 @@ def handle_challenges_solutions(challenges_faced, solutions_discussed, profile, 
             if isinstance(value, str) and value.strip():
                 value = json_repair.repair_json(value, return_objects=True)
             response_json = value
-        new_challenges_faced = response_json.get('challenges_faced', challenges_faced)
-        new_solutions_discussed = response_json.get('solutions_discussed', solutions_discussed)
+        new_challenges_faced = response_json.get('original_challenges_faced', challenges_faced)
+        new_solutions_discussed = response_json.get('rearranged_solutions_discussed', solutions_discussed)
     else:
         new_challenges_faced = challenges_faced
         new_solutions_discussed = solutions_discussed
