@@ -22,11 +22,11 @@ def handle_date_prompt(intro_mssg, profile, company_chats, other_info):
         company_bot = CompanyBot.objects.get(route='/date-validator')
 
     prompt_to_use = get_guided_prompt(
-        company_bot=company_bot, system_context=company_bot.context, intro_mssg=intro_mssg, profile=profile
+        company_bot=company_bot, system_context=company_bot.context
     )
 
     messages = get_guided_chat(
-        company_bot=company_bot, company_chats=company_chats, intro=intro_mssg, other_info=other_info
+        company_bot=company_bot, company_chats=company_chats
     )
 
     response = None

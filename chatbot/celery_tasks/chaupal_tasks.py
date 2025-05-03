@@ -53,7 +53,7 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
                 intro_mssg = bot_vernacular.alt_introductory_message
         else:
             intro_mssg = None
-
+        skip_llm_call=False
         if state_machine and state_machine.name == 'EVENT':
             bot_question=handle_date_prompt(
                 intro_mssg=intro_mssg, profile=profile, company_chats=company_chats, other_info=other_info
@@ -61,11 +61,7 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
             if bot_question is None:
                 bot_question = 'I am sorry, I could not understood completely. Could you rephrase this please?'
             if bot_question == '':
-                chat_session.current_step += 1
-                chat_session.save()
-                state_machine = CompanyStateMachine.objects.get(
-                    company_bot=company_bot, step=chat_session.current_step
-                )
+                skip_llm_call=True
             else:
                 translated_message = translate_and_send_message(
                     accumulated_message=bot_question, current_channel_name=channel_name,
@@ -78,18 +74,23 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
                 )
                 return bot_question
 
-        prompt_to_use = get_guided_prompt(
-            company_bot=company_bot, system_context=system_context, state_machine=state_machine,
-            intro_mssg=intro_mssg, profile=profile
-        )
+        if not skip_llm_call:
+            prompt_to_use = get_guided_prompt(
+                company_bot=company_bot, system_context=system_context, state_machine=state_machine,
+                intro_mssg=intro_mssg, profile=profile
+            )
 
-        messages = get_guided_chat(
-            company_bot=company_bot, company_chats=company_chats, intro=intro_mssg, other_info=other_info
-        )
+            messages = get_guided_chat(
+                company_bot=company_bot, company_chats=company_chats, intro=intro_mssg, other_info=other_info
+            )
+        else:
+            prompt_to_use = ""
+            messages=[]
 
         response = get_chaupal_tool_call_response(
             system_prompt=prompt_to_use, messages=messages, company_bot=company_bot, session_id=session_id,
-            channel_name=channel_name, route=route, profile_id=profile_id, profile=profile
+            channel_name=channel_name, route=route, profile_id=profile_id, profile=profile,
+            skip_llm_call=skip_llm_call
         )
         logger.info('Bedrock Final response: %s', response)
 
