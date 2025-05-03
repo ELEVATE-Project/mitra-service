@@ -62,6 +62,16 @@ def handle_date_prompt(intro_mssg, profile, company_chats, other_info):
 
 
 def interpret_date_response(date_response):
+    if date_response and isinstance(date_response, str):
+        date_response = json_repair.repair_json(date_response, return_objects=True)
+
+    if date_response and isinstance(date_response, dict):
+        if (isinstance(date_response, dict) and date_response.get("type") and
+                "value" in date_response):
+            value = date_response.get("value")
+            if isinstance(value, str) and value.strip():
+                value = json_repair.repair_json(value, return_objects=True)
+            date_response = value
     user_date = date_response.get("parsed_date", '')
     print("user_date: ", user_date)
     try:

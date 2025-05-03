@@ -3,6 +3,7 @@ import traceback
 from chatbot.models import StoryLanguageChoices, StoryStatusChoices, Story, SessionFlowName, CompanyBot
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.story_llama_utils import translate_field, create_project
+from chatbot.utils.story_utils.challenges_utils import handle_challenges_solutions
 from chatbot.utils.story_utils.format_utils import clean_escaped_text
 from chatbot.utils.transliterate_utils import transliterate_text
 from shikshalokam.models import Project, Task
@@ -183,6 +184,10 @@ def save_chaupal_report(response_json_story, language, voice_provider, profile, 
         discussion_date = response_json_story.get('discussion_date', '')
 
         title = clean_escaped_text(text=title)
+
+        challenges_faced, solutions_discussed = handle_challenges_solutions(
+            challenges_faced=challenges_faced, solutions_discussed=solutions_discussed, profile=profile
+        )
 
         print("language used: ", language)
         if language != 'en':
