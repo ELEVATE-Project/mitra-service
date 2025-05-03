@@ -56,10 +56,7 @@ def handle_date_prompt(intro_mssg, profile, company_chats, other_info):
     print("end_context: ", end_context)
 
     if end_context:
-        bot_question = end_context.get(date_type)
-
-    if not bot_question:
-        bot_question = "I am sorry, I could not understand completely. Could you rephrase this please?"
+        bot_question = end_context.get(date_type, None)
 
     return bot_question
 
