@@ -44,7 +44,12 @@ def handle_challenges_solutions(challenges_faced, solutions_discussed, profile, 
             if isinstance(value, str) and value.strip():
                 value = json_repair.repair_json(value, return_objects=True)
             response_json = value
+        print("\n\nresponse_json: ", response_json)
         reorder_steps = response_json.get('reorder_steps', [])
+        if reorder_steps and isinstance(reorder_steps, str):
+            reorder_steps = json_repair.repair_json(reorder_steps, return_objects=True)
+        print("\n\nreorder_steps: ", reorder_steps)
+
         new_solutions_discussed=[]
         for step in reorder_steps:
             matched = step.get('solution_matched', [])
