@@ -55,12 +55,10 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
             intro_mssg = None
 
         if state_machine and state_machine.name == 'EVENT':
-            response=handle_date_prompt(
+            bot_question=handle_date_prompt(
                 intro_mssg=intro_mssg, profile=profile, company_chats=company_chats, other_info=other_info
             )
-            if response and isinstance(response, dict):
-                bot_question = response.get('content_question', None)
-            else:
+            if bot_question is None:
                 bot_question = 'I am sorry, I could not understood completely. Could you rephrase this please?'
             if bot_question == '':
                 chat_session.current_step += 1
