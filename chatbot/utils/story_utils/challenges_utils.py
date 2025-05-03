@@ -46,10 +46,12 @@ def handle_challenges_solutions(challenges_faced, solutions_discussed, profile, 
             response_json = value
         reorder_steps = response_json.get('reorder_steps', [])
         new_solutions_discussed=[]
-        for steps in reorder_steps:
-            solution_matched = steps.get('solution_matched', None)
-            if solution_matched:
-                new_solutions_discussed.append(solution_matched)
+        for step in reorder_steps:
+            matched = step.get('solution_matched', [])
+            if isinstance(matched, list) and matched:
+                new_solutions_discussed.extend(matched)
+            elif isinstance(matched, str):
+                new_solutions_discussed.append(matched)
         if not new_solutions_discussed or len(new_solutions_discussed) == 0:
             new_solutions_discussed = solutions_discussed
     else:
