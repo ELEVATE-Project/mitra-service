@@ -74,18 +74,14 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
                 )
                 return bot_question
 
-        if not skip_llm_call:
-            prompt_to_use = get_guided_prompt(
-                company_bot=company_bot, system_context=system_context, state_machine=state_machine,
-                intro_mssg=intro_mssg, profile=profile
-            )
+        prompt_to_use = get_guided_prompt(
+            company_bot=company_bot, system_context=system_context, state_machine=state_machine,
+            intro_mssg=intro_mssg, profile=profile
+        )
 
-            messages = get_guided_chat(
-                company_bot=company_bot, company_chats=company_chats, intro=intro_mssg, other_info=other_info
-            )
-        else:
-            prompt_to_use = ""
-            messages=[]
+        messages = get_guided_chat(
+            company_bot=company_bot, company_chats=company_chats, intro=intro_mssg, other_info=other_info
+        )
 
         response = get_chaupal_tool_call_response(
             system_prompt=prompt_to_use, messages=messages, company_bot=company_bot, session_id=session_id,
