@@ -4,7 +4,7 @@ from chatbot.utils.story_utils.get_story_prompts import get_challenges_prompt
 import json_repair
 
 
-def handle_challenges_solutions(challenges_faced, solutions_discussed, profile):
+def handle_challenges_solutions(challenges_faced, solutions_discussed, profile, messages):
     if profile:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/chaupal-story-challenge')
     else:
@@ -20,7 +20,7 @@ def handle_challenges_solutions(challenges_faced, solutions_discussed, profile):
         if tool and isinstance(tool, str):
             tool = json_repair.repair_json(tool, return_objects=True)
         response_json = handle_bedrock_model(
-            system_prompt=system_context, messages=[], model_name=company_bot.llm_model,
+            system_prompt=system_context, messages=messages, model_name=company_bot.llm_model,
             temperature=company_bot.bot_temperature, max_token=company_bot.max_token,
             tools=tool, company_bot=company_bot
         )

@@ -168,7 +168,7 @@ def save_story(
         raise Exception("Failed to save mi story")
 
 
-def save_chaupal_report(response_json_story, language, voice_provider, profile, session, combined_reason, flow=None):
+def save_chaupal_report(response_json_story, language, voice_provider, profile, session, combined_reason, flow=None, messages=[]):
     try:
         title = response_json_story['title']
         print('title: ', title)
@@ -186,7 +186,8 @@ def save_chaupal_report(response_json_story, language, voice_provider, profile, 
         title = clean_escaped_text(text=title)
 
         challenges_faced, solutions_discussed = handle_challenges_solutions(
-            challenges_faced=challenges_faced, solutions_discussed=solutions_discussed, profile=profile
+            challenges_faced=challenges_faced, solutions_discussed=solutions_discussed, profile=profile,
+            messages=messages
         )
 
         print("language used: ", language)
