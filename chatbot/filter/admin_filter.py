@@ -175,6 +175,7 @@ class StoryStateFilter(admin.SimpleListFilter):
     def queryset(self, request, queryset):
         if self.value():
             return queryset.filter(author__profile_address__state=self.value())
+        return queryset
 
 
 class StoryDistrictFilter(admin.SimpleListFilter):
@@ -202,6 +203,7 @@ class StoryDistrictFilter(admin.SimpleListFilter):
     def queryset(self, request, queryset):
         if self.value():
             return queryset.filter(author__profile_address__district=self.value())
+        return queryset
 
 
 class StoryBlockFilter(admin.SimpleListFilter):
@@ -229,6 +231,7 @@ class StoryBlockFilter(admin.SimpleListFilter):
     def queryset(self, request, queryset):
         if self.value():
             return queryset.filter(author__profile_address__block=self.value())
+        return queryset
 
 
 class ChatSessionFilter(admin.SimpleListFilter):
