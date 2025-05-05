@@ -166,7 +166,7 @@ class StoryStateFilter(admin.SimpleListFilter):
                     state_filters.append((state, state))
             return state_filters
         elif len(profile) > 0 and profile[0].profile_type == ProfileType.MODERATOR:
-            profile_address = ProfileAddress.objects.filter(profile=profile).first()
+            profile_address = ProfileAddress.objects.filter(profile=profile[0]).first()
             if profile_address and profile_address.state:
                 return [(profile_address.state, profile_address.state)]
             else:
