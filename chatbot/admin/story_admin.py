@@ -39,7 +39,7 @@ class StoryMediaInline(admin.TabularInline):
 class StoryAdmin(admin.ModelAdmin):
     list_display = ('title', 'author', 'session', 'created_at',)
     list_filter = (
-        'created_at'
+        'created_at',
     )
     # list_filter = (
     #     'created_at', StoryCompanyFilter, 'author', 'session', StoryStateFilter,
