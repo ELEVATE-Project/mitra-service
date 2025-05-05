@@ -63,7 +63,10 @@ class StoryAdmin(admin.ModelAdmin):
                 query &= Q(author__profile__profile_address__district=profile_address.district)
             if profile_address and profile_address.state:
                 query &= Q(author__profile__profile_address__state=profile_address.state)
-            return qs.filter(query)
+            results = qs.filter(query)
+            print("Filtered results:", results)
+            return results
+            # return qs.filter(query)
         else:
             return qs.none()
 
