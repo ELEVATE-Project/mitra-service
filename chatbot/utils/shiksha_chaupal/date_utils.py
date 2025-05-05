@@ -49,8 +49,17 @@ def handle_date_prompt(intro_mssg, profile, company_chats, other_info):
     if not response:
         return "I am sorry, I could not understand completely. Could you rephrase this please?"
 
-    date_type = interpret_date_response(response)
+    date_type, user_date = interpret_date_response(response)
     print("date_type: ", date_type)
+
+    try:
+        last_ai_message = company_chats.filter(receiver__id=1).order_by('-created_at').first()
+        if last_ai_message:
+            last_ai_message.translated_message = user_date
+            last_ai_message.save()
+            print("Updated last AI message with user_date:", user_date)
+    except Exception as e:
+        logger.error(f"Error updating translated_message: {e}")
 
     end_context = json_repair.repair_json(company_bot.end_context, return_objects=True)
     print("end_context: ", end_context)
@@ -84,7 +93,7 @@ def interpret_date_response(date_response):
         print("normalized_user_date date: ", normalized_user_date)
 
         if parsed_date.year == today.year and str(today.year) not in normalized_user_date:
-            return "PHRASE"
+            return "PHRASE", user_date
         if (parsed_date.month == today.month and
                 str(parsed_date.month) not in normalized_user_date and
                 parsed_date.strftime('%B').lower() not in normalized_user_date and
@@ -92,14 +101,14 @@ def interpret_date_response(date_response):
             return "PHRASE"
 
         if parsed_date.day == today.day and str(parsed_date.day) not in normalized_user_date:
-            return "PHRASE"
+            return "PHRASE", user_date
 
         if parsed_date.date() > today:
-            return "FUTURE_DATE"
+            return "FUTURE_DATE", user_date
         elif parsed_date.date() == today:
-            return "PAST_DATE"
+            return "PAST_DATE", user_date
         else:
-            return "PAST_DATE"
+            return "PAST_DATE", user_date
 
     except Exception:
-        return "PHRASE"
+        return "PHRASE", user_date
