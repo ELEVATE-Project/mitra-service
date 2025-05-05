@@ -181,3 +181,27 @@ def get_tool_values(company_bot):
     tool_content = tool_context.get('content_tool')
 
     return tool_content, tool_story
+
+
+def get_challenges_prompt(challenges_faced, solutions_discussed, company_bot):
+    context_data = {
+        "challenges_faced": challenges_faced,
+        "solutions_discussed": solutions_discussed,
+    }
+    template = Template(company_bot.context)
+    updated_context = template.render(context_data)
+    content_prompt=""
+    if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
+        content_prompt = [
+            {
+                'text': updated_context
+            },
+        ]
+    elif company_bot.provider == LLMProvider.OPENAI:
+        content_prompt = [
+            {
+                'role': 'system',
+                'content': updated_context
+            },
+        ]
+    return content_prompt

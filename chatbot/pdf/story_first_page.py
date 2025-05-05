@@ -3,7 +3,7 @@ import re
 from chatbot.utils.story_llama_utils import translate_field
 
 
-def get_first_page_html(profile, project, voice_provider):
+def get_first_page_html(profile, project, voice_provider, story):
     profile_addresses=None
     if profile and profile.first_name:
         profile_addresses = profile.profile_address.all().first()
@@ -23,15 +23,9 @@ def get_first_page_html(profile, project, voice_provider):
     print("current_state: ", current_state)
     title = project.expected_title or project.actual_title or "mi_story"
 
-    author = profile.first_name if profile and profile.first_name else ""
+    author = story.other_params.get('user_name', '') if story.other_params else ''
 
     if project and project.project_language and project.project_language != 'en':
-        if author:
-            author = f"<username> {author} </username>"
-            author = translate_field(
-                voice_provider=voice_provider, message_body=author, target_language=project.project_language
-            )
-            author = re.sub(r"<[^>]+>", "", author).strip()
         if address_string:
             address_string = translate_field(
                 voice_provider=voice_provider, message_body=address_string, target_language=project.project_language

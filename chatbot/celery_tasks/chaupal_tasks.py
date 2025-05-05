@@ -1,15 +1,15 @@
 import traceback
 from celery import shared_task
-from chatbot.models import CompanyChat, Profile, CompanyBot, ChatSession, LLMProvider, BotVernacular, \
-    CompanyBotDynamicContextType
+
+from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
+from chatbot.celery_tasks.handle_message import translate_and_send_message
+from chatbot.models import CompanyChat, Profile, CompanyBot, ChatSession, BotVernacular, ChatStatus
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.chat_utils import get_guided_chat
 import logging
-from jinja2 import Template
 from chatbot.utils.chaupal_tool_call import get_chaupal_tool_call_response
-from chatbot.utils.sql_utils import run_sql_from_string, get_todays_date
-import json_repair
-
+from chatbot.utils.shiksha_chaupal.base_utils import get_guided_prompt
+from chatbot.utils.shiksha_chaupal.date_utils import handle_date_prompt
 
 logger = logging.getLogger('django')
 
@@ -53,6 +53,26 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
                 intro_mssg = bot_vernacular.alt_introductory_message
         else:
             intro_mssg = None
+        skip_llm_call=False
+        if state_machine and state_machine.name == 'EVENT':
+            bot_question=handle_date_prompt(
+                intro_mssg=intro_mssg, profile=profile, company_chats=company_chats, other_info=other_info
+            )
+            if bot_question is None:
+                bot_question = 'I am sorry, I could not understood completely. Could you rephrase this please?'
+            if bot_question == '':
+                skip_llm_call=True
+            else:
+                translated_message = translate_and_send_message(
+                    accumulated_message=bot_question, current_channel_name=channel_name,
+                    current_step_number=chat_session.current_step, finish_reason="stop", route=route,
+                    company_bot=company_bot
+                )
+                save_in_company_db(
+                    session_id, profile_id, 'AI', bot_question, None, ChatStatus.IN_PROGRESS,
+                    translated_message
+                )
+                return bot_question
 
         prompt_to_use = get_guided_prompt(
             company_bot=company_bot, system_context=system_context, state_machine=state_machine,
@@ -65,7 +85,8 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
 
         response = get_chaupal_tool_call_response(
             system_prompt=prompt_to_use, messages=messages, company_bot=company_bot, session_id=session_id,
-            channel_name=channel_name, route=route, profile_id=profile_id, profile=profile
+            channel_name=channel_name, route=route, profile_id=profile_id, profile=profile,
+            skip_llm_call=skip_llm_call
         )
         logger.info('Bedrock Final response: %s', response)
 
@@ -74,68 +95,3 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
         print(e)
         logger.error('error: %s', e, exc_info=True)
         traceback.print_exc()
-
-
-def get_guided_prompt(company_bot, system_context, state_machine, intro_mssg=None, profile=None):
-    prompt_to_use=[]
-    profile_addresses=None
-    if profile and profile.first_name:
-        profile_addresses = profile.profile_address.all().first()
-    address_components = [
-        profile_addresses.district if profile_addresses and profile_addresses.district else "",
-        profile_addresses.block if profile_addresses and profile_addresses.block else "",
-        profile_addresses.state if profile_addresses and profile_addresses.state else ""
-    ]
-    address_string = ", ".join(filter(None, address_components))
-
-    today_date = get_todays_date(company_bot=company_bot)
-
-    state_machine_context = state_machine.context
-    if intro_mssg:
-        context_data = {
-            "intro_message": intro_mssg,
-            "user_location": address_string,
-            "todays_date": today_date
-        }
-        template = Template(state_machine_context)
-        state_machine_context = template.render(context_data)
-
-    if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
-        prompt_to_use = [
-            {
-                'text': system_context
-            },
-            {
-                'text': """
-                {}
-                
-                {}
-
-                Completion Criteria for function calling:
-                {}
-                """.format(today_date, state_machine_context, state_machine.completion_criteria)
-            },
-            {
-                'text': company_bot.tool_context
-            }
-        ]
-    elif company_bot.provider == LLMProvider.OPENAI:
-        prompt_to_use = [
-            {
-                'role': 'system',
-                'content': """{}
-                            {}
-                            {}
-
-                            Completion Criteria:
-                            {}""".format(
-                    today_date,
-                    system_context,
-                    state_machine_context,
-                    state_machine.completion_criteria
-                )
-            }
-        ]
-
-    return prompt_to_use
-

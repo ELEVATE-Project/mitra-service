@@ -5,9 +5,11 @@ from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.base_consumer import BaseConsumer
 from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType, ChatType, CompanyChat
 from chatbot.celery_tasks.chaupal_tasks import get_chaupal_response
+from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.audio_provider_utils import text_translate_provider
 import logging
 
+from chatbot.utils.transliterate_utils import transliterate_text
 
 logger = logging.getLogger('django')
 
@@ -81,16 +83,24 @@ class ShikshalokamChaupalConsumer(BaseConsumer):
                     voice_provider = Voice.objects.filter(company_bot=self.company_bot, type=VoiceType.TextToText).first()
                     if text_data_json and text_data_json.get('text'):
                         existing_chats = CompanyChat.objects.filter(session=self.session_id)
-                        if len(existing_chats) == 0:
-                            text_data_json['text'] = f"Username: {text_data_json['text']}"
-                        response = text_translate_provider(
-                            voice_provider=voice_provider, message_body=text_data_json['text'], target_language='en',
-                            source_language=self.route
+                        chat_session = ChatSession.objects.filter(session=self.session_id).first()
+                        state_machine = CompanyStateMachine.objects.get(
+                            company_bot=self.company_bot, step=chat_session.current_step
                         )
-                        if response.get('status') == 200:
-                            translated_message = response.get('content')
+                        if state_machine and state_machine.name in ['INTRODUCTION', 'ORGANIZATION']:
+                            transliterate_bot = CompanyBot.objects.filter(route='/transliterate').first()
+                            translated_message = transliterate_text(
+                                transliterate_bot, self.route, 'en', text_data_json['text']
+                            )
                         else:
-                            translated_message = text_data_json['text']
+                            response = text_translate_provider(
+                                voice_provider=voice_provider, message_body=text_data_json['text'], target_language='en',
+                                source_language=self.route
+                            )
+                            if response.get('status') == 200:
+                                translated_message = response.get('content')
+                            else:
+                                translated_message = text_data_json['text']
                     else:
                         translated_message=None
                 else:

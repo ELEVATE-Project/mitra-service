@@ -14,7 +14,7 @@ channel_layer = get_channel_layer()
 
 
 def get_chaupal_tool_call_response(
-        system_prompt, messages, company_bot, session_id, channel_name, route, profile_id, profile
+        system_prompt, messages, company_bot, session_id, channel_name, route, profile_id, profile, skip_llm_call
 ):
 
     chat_session = ChatSession.objects.get(session=session_id)
@@ -22,93 +22,64 @@ def get_chaupal_tool_call_response(
     chunks = []
 
     response = None
-    if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
-        try:
-            response = handle_bedrock_model(
-                system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
-                temperature=company_bot.bot_temperature, max_token=company_bot.max_token, company_bot=company_bot
-            )
-        except Exception as e:
-            logger.error(f"Got Error: %s", e)
-            print(f"Got Error: {e}")
-            response = None
-    elif company_bot.provider == LLMProvider.OPENAI:
-        tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_state_information",
-                    "description": "Get the information of the state you want to be in.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "state_name": {
-                                "type": "string",
-                                "description": "Name of the next state provided in the context."
-                            }
-                        },
-                        "required": ["state_name"]
+    if not skip_llm_call:
+        if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
+            try:
+                response = handle_bedrock_model(
+                    system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
+                    temperature=company_bot.bot_temperature, max_token=company_bot.max_token, company_bot=company_bot
+                )
+            except Exception as e:
+                logger.error(f"Got Error: %s", e)
+                print(f"Got Error: {e}")
+                response = None
+        elif company_bot.provider == LLMProvider.OPENAI:
+            tools = [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": "get_state_information",
+                        "description": "Get the information of the state you want to be in.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "state_name": {
+                                    "type": "string",
+                                    "description": "Name of the next state provided in the context."
+                                }
+                            },
+                            "required": ["state_name"]
+                        }
                     }
                 }
-            }
-        ]
-        response = handle_openai_model(
-            system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
-            temperature=company_bot.bot_temperature, max_token=company_bot.max_token,
-            tools=tools, tool_choice='auto', is_json_response=False
-        )
+            ]
+            response = handle_openai_model(
+                system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
+                temperature=company_bot.bot_temperature, max_token=company_bot.max_token,
+                tools=tools, tool_choice='auto', is_json_response=False
+            )
 
-    print("response_body bedrock: ", response)
-    if response is None:
-        response = 'I am sorry, I could not understood completely. Could you rephrase this please?'
-
-    print("Response: ", response)
-    is_function_call = False
-    if isinstance(response, dict):
-        is_function_call = True
-    elif isinstance(response, str):
-        if 'get_state_information' in response:
+        print("response_body bedrock: ", response)
+        if response is None:
+            response = 'I am sorry, I could not understood completely. Could you rephrase this please?'
+        print("Response: ", response)
+        is_function_call = False
+        if isinstance(response, dict):
             is_function_call = True
-    print("is_function_call: ", is_function_call)
+        elif isinstance(response, str):
+            if 'get_state_information' in response:
+                is_function_call = True
+        print("is_function_call: ", is_function_call)
+    else:
+        is_function_call = True
     if is_function_call:
         bot_question = ""
         print("its func call")
-        extra_question = None
         chat_session.current_step += 1
         chat_session.save()
         state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
         print("Statemachine we using: ", state_machine.name, " with step: ", state_machine.step)
-        if state_machine and state_machine.name == "CHECKER":
-            checker_response = prepare_missing_stage_questions(
-                company_bot=company_bot, state_machine=state_machine, messages=messages, profile=profile
-            )
-            print("checker_response: ", checker_response)
-            chat_session.session_context = checker_response
-            chat_session.current_step += 1
-            chat_session.save()
-            state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
-            extra_question = prepare_missing_stage_questions(
-                company_bot=company_bot, state_machine=state_machine, messages=messages,
-                extra_data=checker_response
-            )
-        if extra_question:
-            if isinstance(extra_question, dict):
-                is_function_call = True
-            elif isinstance(response, str):
-                if 'get_state_information' in response:
-                    is_function_call = True
-            else:
-                is_function_call = False
-                bot_question = extra_question
-            if is_function_call:
-                chat_session.current_step += 1
-                chat_session.save()
-                state_machine = CompanyStateMachine.objects.get(
-                    company_bot=company_bot, step=chat_session.current_step
-                )
-                bot_question = state_machine.bot_question
-        else:
-            bot_question = state_machine.bot_question
+        bot_question = state_machine.bot_question
 
         if state_machine.name == 'CHALLENGES':
             challenge_res = get_chaupal_challenge_response(messages=messages)
