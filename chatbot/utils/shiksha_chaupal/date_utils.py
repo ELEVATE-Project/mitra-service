@@ -76,8 +76,23 @@ def interpret_date_response(date_response):
     print("user_date: ", user_date)
     try:
         parsed_date = parser.parse(user_date, dayfirst=True)
+        print("parsed_date date: ", parsed_date)
         today = datetime.now(INDIA_TZ).date()
         print("today date: ", today)
+
+        normalized_user_date = user_date.lower()
+        print("normalized_user_date date: ", normalized_user_date)
+
+        if parsed_date.year == today.year and str(today.year) not in normalized_user_date:
+            return "PHRASE"
+        if (parsed_date.month == today.month and
+                str(parsed_date.month) not in normalized_user_date and
+                parsed_date.strftime('%B').lower() not in normalized_user_date and
+                parsed_date.strftime('%b').lower() not in normalized_user_date):
+            return "PHRASE"
+
+        if parsed_date.day == today.day and str(parsed_date.day) not in normalized_user_date:
+            return "PHRASE"
 
         if parsed_date.date() > today:
             return "FUTURE_DATE"
