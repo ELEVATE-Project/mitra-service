@@ -39,9 +39,12 @@ class StoryMediaInline(admin.TabularInline):
 class StoryAdmin(admin.ModelAdmin):
     list_display = ('title', 'author', 'session', 'created_at',)
     list_filter = (
-        'created_at', StoryCompanyFilter, 'author', 'session', StoryStateFilter,
-        StoryDistrictFilter, StoryBlockFilter
+        'created_at'
     )
+    # list_filter = (
+    #     'created_at', StoryCompanyFilter, 'author', 'session', StoryStateFilter,
+    #     StoryDistrictFilter, StoryBlockFilter
+    # )
     search_fields = ('title', 'session',)
     exclude = ('formatted_content', )
     inlines = [StoryTagInline, StoryMediaInline]
