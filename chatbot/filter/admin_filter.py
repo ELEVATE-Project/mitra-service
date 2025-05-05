@@ -196,7 +196,7 @@ class StoryDistrictFilter(admin.SimpleListFilter):
                     district_filters.append((district, district))
             return district_filters
         elif len(profile) > 0 and profile[0].profile_type == ProfileType.MODERATOR:
-            profile_address = ProfileAddress.objects.filter(profile=profile).first()
+            profile_address = ProfileAddress.objects.filter(profile=profile[0]).first()
             if profile_address and profile_address.district:
                 return [(profile_address.district, profile_address.district)]
         else:
@@ -224,7 +224,7 @@ class StoryBlockFilter(admin.SimpleListFilter):
                     block_filters.append((block, block))
             return block_filters
         elif len(profile) > 0 and profile[0].profile_type == ProfileType.MODERATOR:
-            profile_address = ProfileAddress.objects.filter(profile=profile).first()
+            profile_address = ProfileAddress.objects.filter(profile=profile[0]).first()
             if profile_address and profile_address.block:
                 return [(profile_address.block, profile_address.block)]
         else:
