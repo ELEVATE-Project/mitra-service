@@ -169,6 +169,8 @@ class StoryStateFilter(admin.SimpleListFilter):
             profile_address = ProfileAddress.objects.filter(profile=profile).first()
             if profile_address and profile_address.state:
                 return [(profile_address.state, profile_address.state)]
+            else:
+                return [()]
         else:
             return [()]
 
