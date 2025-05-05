@@ -50,16 +50,20 @@ def handle_challenges_solutions(challenges_faced, solutions_discussed, profile, 
             reorder_steps = json_repair.repair_json(reorder_steps, return_objects=True)
         print("\n\nreorder_steps: ", reorder_steps)
 
-        new_solutions_discussed = set()
+        seen = set()
+        new_solutions_discussed = []
+
         for step in reorder_steps:
             matched = step.get('solution_matched', [])
             if isinstance(matched, list) and matched:
                 for solution in matched:
-                    if solution:
-                        new_solutions_discussed.add(solution)
+                    if solution and solution not in seen:
+                        seen.add(solution)
+                        new_solutions_discussed.append(solution)
             elif isinstance(matched, str) and matched:
-                new_solutions_discussed.add(matched)
-        new_solutions_discussed = list(new_solutions_discussed)
+                if matched not in seen:
+                    seen.add(matched)
+                    new_solutions_discussed.append(matched)
 
         if not new_solutions_discussed or len(new_solutions_discussed) == 0:
             new_solutions_discussed = solutions_discussed
