@@ -56,7 +56,9 @@ class StoryAdmin(admin.ModelAdmin):
             return qs
         elif profile and profile.profile_type == ProfileType.MODERATOR:
             profile_address = ProfileAddress.objects.filter(profile=profile).first()
+            print("profile_address: ", profile_address)
             query = Q(author__company=profile.company)
+            print("Query: ", query)
             if profile_address and profile_address.district:
                 query &= Q(author__profile__profile_address__district=profile_address.district)
             if profile_address and profile_address.state:
