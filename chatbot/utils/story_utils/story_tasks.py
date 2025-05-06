@@ -50,7 +50,8 @@ def save_story(
         print("language used: ", language)
         if language != 'en':
             transliterate_bot = CompanyBot.objects.filter(route='/transliterate').first()
-            user_name = transliterate_text(transliterate_bot, 'en', language, profile.first_name)
+            if user_name and user_name != '':
+                user_name = transliterate_text(transliterate_bot, 'en', language, profile.first_name)
 
             title = translate_field(
                 voice_provider=voice_provider, message_body=title, target_language=language
@@ -193,8 +194,10 @@ def save_chaupal_report(response_json_story, language, voice_provider, profile, 
         print("language used: ", language)
         if language != 'en':
             transliterate_bot = CompanyBot.objects.filter(route='/transliterate').first()
-            user_name = transliterate_text(transliterate_bot, 'en', language, user_name)
-            organization = transliterate_text(voice_provider.company_bot, 'en', language, organization)
+            if user_name and user_name != '':
+                user_name = transliterate_text(transliterate_bot, 'en', language, user_name)
+            if organization and organization != '':
+                organization = transliterate_text(voice_provider.company_bot, 'en', language, organization)
 
             title = translate_field(
                 voice_provider=voice_provider, message_body=title, target_language=language
