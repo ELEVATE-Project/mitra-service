@@ -50,7 +50,7 @@ def save_story(
         print("language used: ", language)
         if language != 'en':
             transliterate_bot = CompanyBot.objects.filter(route='/transliterate').first()
-            if user_name and user_name != '':
+            if profile and profile.first_name and profile.first_name != "":
                 user_name = transliterate_text(transliterate_bot, 'en', language, profile.first_name)
 
             title = translate_field(
