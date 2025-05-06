@@ -43,14 +43,14 @@ def save_story(
         blurb = clean_escaped_text(text=blurb)
         impact = clean_escaped_text(text=impact)
         problem_statement = clean_escaped_text(text=problem_statement)
-        user_name=''
+        user_name=profile.first_name if profile and profile.first_name else ''
         if not title or not objective or not action_steps or not problem_statement:
             raise Exception("Empty fields found")
 
         print("language used: ", language)
         if language != 'en':
             transliterate_bot = CompanyBot.objects.filter(route='/transliterate').first()
-            if profile and profile.first_name and profile.first_name != "":
+            if user_name and user_name != "":
                 user_name = transliterate_text(transliterate_bot, 'en', language, profile.first_name)
 
             title = translate_field(
