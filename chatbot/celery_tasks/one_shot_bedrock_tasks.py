@@ -75,9 +75,16 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
             return translated_message
         remaining_stages = remaining_stages_response.get('remaining_stages', [])
         print("remaining_stages: ", remaining_stages)
+
         if remaining_stages and isinstance(remaining_stages, str):
             remaining_stages = []
+
+        if profile and profile.first_name and remaining_stages:
+            unwanted_stages = {'PERSONAL_INFO', 'LOCATION_INFO'}
+            remaining_stages = [stage for stage in remaining_stages if stage not in unwanted_stages]
+
         remaining_stages.append('APPRECIATION')
+
         chat_session.session_context['remaining_stages'] = remaining_stages
         chat_session.save()
         print("Remaining Strands: ", remaining_stages)
