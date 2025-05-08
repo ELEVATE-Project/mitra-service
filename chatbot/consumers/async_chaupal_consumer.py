@@ -23,7 +23,6 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
         self.profile_id = None
         self.route = None
         self.company_bot = None
-        self.ping_task = None
         self.background_tasks = set()
 
     # async def send_ping(self):
@@ -42,18 +41,6 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
     async def disconnect(self, code):
         try:
             print(f'Websocket closed with code: {code}')
-
-            # Cancel the ping task
-            if self.ping_task and not self.ping_task.done():
-                self.ping_task.cancel()
-                try:
-                    await self.ping_task
-                except asyncio.CancelledError:
-                    pass
-
-            # Cancel all remaining background tasks
-            for task in list(self.background_tasks):
-                task.cancel()
         except Exception as e:
             logger.error('Disconnect Error: %s', e, exc_info=True)
             print(f"Disconnect Error: {e}")
@@ -123,11 +110,6 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
         try:
             print('Attempting to connect to websocket')
             await super().connect()
-            self.ping_task = asyncio.create_task(self.send_ping())
-            # Add task to the set first
-            self.background_tasks.add(self.ping_task)
-            # Then set up callback to remove it when done
-            self.ping_task.add_done_callback(self.background_tasks.discard)
         except Exception as e:
             logger.error('Connect Error: %s', e, exc_info=True)
             print(f"Connect Error: {e}")
