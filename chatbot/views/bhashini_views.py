@@ -4,6 +4,9 @@ from rest_framework.response import Response
 from chatbot.models import CompanyBot, Voice, VoiceType
 from chatbot.utils.audio_provider_utils import text_speech_provider, speech_text_provider, text_translate_provider
 from chatbot.utils.transliterate_utils import transliterate_text
+import base64
+import requests
+
 
 ai4bharat_api_key = os.getenv("BHASHANI_API_KEY")
 
@@ -53,10 +56,15 @@ def text_speech_view(request):
 def speech_text(request):
     try:
         body = request.data
-        base64 =  body.get('base_64')
+        s3_url =  body.get('s3Url')
         audio_format =  body.get('audio_format', 'wav')
         source_language = body.get('source_language', 'en')
         route = body.get('route')
+
+        response = requests.get(s3_url)
+        response.raise_for_status()
+        audio_bytes = response.content
+        encoded_audio = base64.b64encode(audio_bytes).decode("utf-8")
 
         if not route:
             return Response({
@@ -68,7 +76,7 @@ def speech_text(request):
         voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.SpeechToText).first()
 
         response = speech_text_provider(
-            voice_provider=voice_provider, base64=base64, audio_format=audio_format,
+            voice_provider=voice_provider, base64=encoded_audio, audio_format=audio_format,
             source_language=source_language
         )
 
