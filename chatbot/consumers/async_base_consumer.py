@@ -30,6 +30,9 @@ class AsyncBaseConsumer(AsyncWebsocketConsumer):
             print(f"Error in disconnect: {e}")
         finally:
             # Always close the connection
+            import traceback
+            print(f"Disconnect stack trace: {traceback.format_stack()}")
+
             await self.close()
 
     async def receive(self, text_data):

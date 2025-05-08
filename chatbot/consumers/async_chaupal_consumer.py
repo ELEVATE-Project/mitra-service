@@ -24,23 +24,23 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
         self.company_bot = None
         self.background_tasks = set()
 
-    async def disconnect(self, code):
-        try:
-            print('Websocket closed')
-
-            if self.session_id:
-                await self.save_chat_session(self.session_id)
-
-                company_chat_status = await self.determine_company_chat_status_async(
-                    session_id=self.session_id, profile_id=self.profile_id, is_disconnected=True, route='/'
-                )
-                print("COMPANY CHAT STATUS: ", company_chat_status)
-                await self.update_last_chat_status_async(chat_status=company_chat_status)
-        except Exception as e:
-            logger.error('Disconnect Error: %s', e, exc_info=True)
-            print(f"Disconnect Error: {e}")
-        finally:
-            await super().disconnect(code)
+    # async def disconnect(self, code):
+    #     try:
+    #         print('Websocket closed')
+    #
+    #         if self.session_id:
+    #             await self.save_chat_session(self.session_id)
+    #
+    #             company_chat_status = await self.determine_company_chat_status_async(
+    #                 session_id=self.session_id, profile_id=self.profile_id, is_disconnected=True, route='/'
+    #             )
+    #             print("COMPANY CHAT STATUS: ", company_chat_status)
+    #             await self.update_last_chat_status_async(chat_status=company_chat_status)
+    #     except Exception as e:
+    #         logger.error('Disconnect Error: %s', e, exc_info=True)
+    #         print(f"Disconnect Error: {e}")
+    #     finally:
+    #         await super().disconnect(code)
 
     async def receive(self, text_data):
         try:
