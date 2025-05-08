@@ -20,6 +20,12 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'shikshalokam_mohini.settings')
 
 django_asgi_app = get_asgi_application()
 
+# Import AFTER Django initialization
+import django
+django.setup()  # Extra insurance that Django is fully set up
+import chatbot.routing
+
+
 application = ProtocolTypeRouter(
     {
         "http": django_asgi_app,
