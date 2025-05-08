@@ -8,13 +8,7 @@ https://docs.djangoproject.com/en/5.0/howto/deployment/asgi/
 """
 
 import os
-from channels.sessions import CookieMiddleware, SessionMiddleware
-from channels.auth import AuthMiddlewareStack
-from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.security.websocket import AllowedHostsOriginValidator
 from django.core.asgi import get_asgi_application
-from chatbot import routing
-
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'shikshalokam_mohini.settings')
 
@@ -25,13 +19,18 @@ import django
 django.setup()  # Extra insurance that Django is fully set up
 import chatbot.routing
 
+from channels.sessions import CookieMiddleware, SessionMiddleware
+from channels.auth import AuthMiddlewareStack
+from channels.routing import ProtocolTypeRouter, URLRouter
+from channels.security.websocket import AllowedHostsOriginValidator
+
 
 application = ProtocolTypeRouter(
     {
         "http": django_asgi_app,
         "websocket": AllowedHostsOriginValidator(
             AuthMiddlewareStack(
-                CookieMiddleware(SessionMiddleware(URLRouter(routing.websocket_urlpatterns)))
+                CookieMiddleware(SessionMiddleware(URLRouter(chatbot.routing.websocket_urlpatterns)))
             )
         ),
     }
