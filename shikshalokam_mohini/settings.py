@@ -198,10 +198,11 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
             "hosts": [("127.0.0.1", 6379)],
+            "capacity": 100000,
             "channel_capacity": {
-                "http.request": 20000,
-                "http.response!*": 20000,
-                re.compile(r"^websocket.send\!.+"): 40000,
+                "http.request": 50000,
+                "http.response!*": 50000,
+                re.compile(r"^websocket.send\!.+"): 100000,
             }
         },
     },
@@ -352,3 +353,5 @@ LOGGING = {
         },
     },
 }
+
+ASGI_APPLICATION_SHUTDOWN_TIMEOUT = 30
