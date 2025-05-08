@@ -1,6 +1,6 @@
 import json
 import traceback
-from asgiref.sync import async_to_sync
+from asgiref.sync import async_to_sync  # Ensure asgiref is installed
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.base_consumer import BaseConsumer
 from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType, ChatType, CompanyChat
