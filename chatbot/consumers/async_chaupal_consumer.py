@@ -26,18 +26,18 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
         self.ping_task = None
         self.background_tasks = set()
 
-    async def send_ping(self):
-        while True:
-            await asyncio.sleep(25)  # Send ping every 25 seconds
-            if self.scope["type"] == "websocket":
-                try:
-                    # Send ping frame
-                    await self.send({"type": "websocket.ping"})  # Empty ping
-                    # Or send a text ping
-                    # await self.send(text_data=json.dumps({"type": "ping"}))
-                except Exception as e:
-                    print(f"Error sending ping: {e}")
-                    break
+    # async def send_ping(self):
+    #     while True:
+    #         await asyncio.sleep(25)  # Send ping every 25 seconds
+    #         if self.scope["type"] == "websocket":
+    #             try:
+    #                 # Send ping frame
+    #                 await self.send({"type": "websocket.ping"})  # Empty ping
+    #                 # Or send a text ping
+    #                 # await self.send(text_data=json.dumps({"type": "ping"}))
+    #             except Exception as e:
+    #                 print(f"Error sending ping: {e}")
+    #                 break
 
     async def disconnect(self, code):
         try:
