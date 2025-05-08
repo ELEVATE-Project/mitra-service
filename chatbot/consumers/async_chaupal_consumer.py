@@ -32,7 +32,7 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
             if self.scope["type"] == "websocket":
                 try:
                     # Send ping frame
-                    await self.send(bytes_data=b"")  # Empty ping
+                    await self.send({"type": "websocket.ping"})  # Empty ping
                     # Or send a text ping
                     # await self.send(text_data=json.dumps({"type": "ping"}))
                 except Exception as e:
