@@ -10,11 +10,18 @@ def get_presigned_url(request):
     file_name = request.data.get("fileName")
     file_type = request.data.get("fileType")
     story_id = request.data.get("storyId")
+    folder_structure = request.data.get("folder_structure")
 
+    print(f"file_name: {file_name}, file_type: {file_type}, story_id: {story_id}")
     if not file_name or not file_type:
         return Response({"error": "Missing fileName or fileType"}, status=400)
 
-    key = f"chatbot/storymedia/{story_id}/{int(time.time())}-{file_name}"
+    if story_id and story_id != '':
+        id_to_use = '{story_id}/'
+    else:
+        id_to_use = ''
+
+    key = f"{folder_structure}{id_to_use}{int(time.time())}-{file_name}"
 
     s3_client = boto3.client(
         "s3",

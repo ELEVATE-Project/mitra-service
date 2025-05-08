@@ -24,17 +24,17 @@ def save_in_company_db(
     last_chat = CompanyChat.objects.filter(session=session_id).order_by('-created_at').first()
     print(last_chat)
 
-    if audio_base64:
-        audio_file = base64_to_audio_file(base64_string=audio_base64, session_id=session_id)
-    else:
-        audio_file=None
+    # if audio_base64:
+    #     audio_file = base64_to_audio_file(base64_string=audio_base64, session_id=session_id)
+    # else:
+    #     audio_file=None
 
     if last_chat and last_chat.sender == sender:
         last_chat.message = message
         last_chat.translated_message = translated_message
         last_chat.chunks = chunks
         last_chat.status = status
-        last_chat.audio_file = audio_file
+        last_chat.audio_file = audio_base64
         last_chat.save()
     else:
         company_chat = CompanyChat(
@@ -45,7 +45,7 @@ def save_in_company_db(
             receiver=receiver,
             session=session_id,
             status=status,
-            audio_file=audio_file
+            file_url=audio_base64
         )
         company_chat.save()
 

@@ -8,7 +8,7 @@ import base64
 import concurrent.futures
 
 
-def split_audio(audio_bytes, chunk_duration=50):
+def split_audio(audio_bytes, chunk_duration=10):
     """
     Splits audio into strictly 50-second chunks.
     """
