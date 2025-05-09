@@ -1,8 +1,4 @@
 import os
-
-import django
-django.setup()  # Extra insurance that Django is fully set up
-
 from celery import Celery
 
 
