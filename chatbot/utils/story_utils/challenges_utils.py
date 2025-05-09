@@ -2,6 +2,11 @@ from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_mo
 from chatbot.models import CompanyBot, LLMProvider
 from chatbot.utils.story_utils.get_story_prompts import get_challenges_prompt
 import json_repair
+import logging
+
+
+logger = logging.getLogger('django')
+
 
 
 def handle_challenges_solutions(challenges_faced, solutions_discussed, profile, messages):
@@ -44,11 +49,12 @@ def handle_challenges_solutions(challenges_faced, solutions_discussed, profile, 
             if isinstance(value, str) and value.strip():
                 value = json_repair.repair_json(value, return_objects=True)
             response_json = value
-        print("\n\nresponse_json: ", response_json)
+        logger.info(f"response_json: %s", response_json)
+
         reorder_steps = response_json.get('reorder_steps', [])
         if reorder_steps and isinstance(reorder_steps, str):
             reorder_steps = json_repair.repair_json(reorder_steps, return_objects=True)
-        print("\n\nreorder_steps: ", reorder_steps)
+        logger.info(f"reorder_steps: %s", reorder_steps)
 
         seen = set()
         new_solutions_discussed = []

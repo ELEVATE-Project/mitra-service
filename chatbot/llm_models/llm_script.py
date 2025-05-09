@@ -179,7 +179,6 @@ def handle_bedrock_model(
     inference_config = {}
     additional_model_fields = {}
 
-    print("USING MODEL ID: ", model_id)
     if max_token:
         inference_config['maxTokens'] = max_token
     if temperature is not None:
@@ -200,12 +199,9 @@ def handle_bedrock_model(
         if tools:
             request_payload['toolConfig'] = tools.get('toolConfig')
 
-        print("request_payload: ", request_payload)
         logger.info('Bedrock request payload: %s', request_payload)
         response = bedrock_runtime.converse(**request_payload)
         logger.info('Bedrock response: %s', response)
-
-        print("Response:", response)
 
         content_arr = response['output']['message']['content']
         content = content_arr[0]
@@ -225,10 +221,8 @@ def handle_bedrock_model(
                     json_str = json_str[:-1].strip()
                 try:
                     final_output = json_repair.repair_json(json_str, return_objects=True)
-                    print("Loads final_output: ", final_output)
-                    print("type final_output: ", type(final_output))
+                    logger.info('Loads final_output: %s', final_output)
                 except json.JSONDecodeError as e:
-                    print(f"Error decoding JSON: {e}")
                     logger.error('Error decoding JSON: %s', e, exc_info=True)
                     return None
             elif is_json_response:
@@ -239,7 +233,6 @@ def handle_bedrock_model(
         return final_output
 
     except Exception as e:
-        print(f"Error processing request: {e}")
         logger.error('Error processing request: %s', e, exc_info=True)
         return None
 

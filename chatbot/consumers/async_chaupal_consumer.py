@@ -40,17 +40,15 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
 
     async def disconnect(self, code):
         try:
-            print(f'Websocket closed with code: {code}')
+            logger.info(f"Websocket closed with code: %s", code)
         except Exception as e:
             logger.error('Disconnect Error: %s', e, exc_info=True)
-            print(f"Disconnect Error: {e}")
         finally:
             # Don't call self.close() here - let the parent handle that
             await super().disconnect(code)
 
     async def receive(self, text_data):
         try:
-            print(text_data)
             text_data_json = json.loads(text_data)
             message_type = text_data_json.get('type', None)
 
@@ -60,8 +58,10 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
                 self.route = text_data_json.get('route')
 
                 profile = await self.get_profile(self.profile_id)
-                print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
-                      f"route: {self.route}")
+                logger.info(
+                    f"channel_name: %s, session_id: %s, profile_id: %s, route: %s",
+                    self.channel_name, self.session_id, self.profile_id, self.route
+                )
 
                 self.company_bot = await self.get_company_bot(profile, '/shikshalokam_chaupal')
 
@@ -71,7 +71,6 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
                 company_chat_status = await self.determine_company_chat_status_async(
                     session_id=self.session_id, profile_id=self.profile_id, route='/shikshalokam_chaupal'
                 )
-                print("COMPANY CHAT STATUS: ", company_chat_status)
                 await self.channel_layer.send(
                     self.channel_name,
                     {
@@ -92,8 +91,10 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
                     translated_message=translated_message, audio_base64=text_data_json.get('asr_audio')
                 )
 
-            print(f"channel_name: {self.channel_name}, session_id: {self.session_id}, profile_id: "
-                  f"{self.profile_id}, route: {self.route}")
+            logger.info(
+                f"channel_name: %s, session_id: %s, profile_id: %s, route: %s",
+                self.channel_name, self.session_id, self.profile_id, self.route
+            )
 
             if message_type != 'authenticate':
                 # Start the Celery task but don't wait for it
@@ -103,16 +104,14 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
 
         except Exception as e:
             logger.error('Receive Error: %s', e, exc_info=True)
-            print(f"Receive Error: {e}")
             traceback.print_exc()
 
     async def connect(self):
         try:
-            print('Attempting to connect to websocket')
+            logger.info(f"Attempting to connect to websocket")
             await super().connect()
         except Exception as e:
             logger.error('Connect Error: %s', e, exc_info=True)
-            print(f"Connect Error: {e}")
             traceback.print_exc()
 
     @database_sync_to_async
@@ -140,7 +139,7 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
                 'session_type': ChatType.shikshaChaupal
             }
         )
-        print(cs, cs_created)
+        logger.info(f"Chatsession: %s %s", cs, cs_created)
         return cs
 
     @database_sync_to_async

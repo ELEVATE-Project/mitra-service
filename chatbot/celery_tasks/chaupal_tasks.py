@@ -18,7 +18,7 @@ logger = logging.getLogger('django')
 def get_chaupal_response(channel_name, session_id, profile_id, route):
     try:
         company_chats = CompanyChat.objects.filter(session=session_id).order_by('created_at')
-        print(session_id)
+        logger.info(f"SessionId: %s", session_id)
         chat_session = ChatSession.objects.filter(session=session_id).first()
         profile = Profile.objects.filter(id=profile_id).first()
         if profile:
@@ -92,6 +92,5 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
 
         return response
     except Exception as e:
-        print(e)
         logger.error('error: %s', e, exc_info=True)
         traceback.print_exc()

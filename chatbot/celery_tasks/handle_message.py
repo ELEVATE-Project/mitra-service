@@ -2,8 +2,11 @@ from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from chatbot.models import RouteLanguageChoices, Voice, VoiceType
 from chatbot.utils.audio_provider_utils import text_translate_provider
+import logging
+
 
 channel_layer = get_channel_layer()
+logger = logging.getLogger('django')
 
 
 def translate_and_send_message(
@@ -13,7 +16,7 @@ def translate_and_send_message(
 
     if route != 'en' and accumulated_message and accumulated_message!= '':
         target_language_code = get_language_code_from_route(route)
-        print("target_language_code: ", target_language_code)
+        logger.info(f"target_language_code date: %s", target_language_code)
         voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
 
         response = text_translate_provider(
@@ -38,10 +41,10 @@ def translate_and_send_message(
                 },
             },
         )
-        print("Translated message: ", translated_messages)
+        logger.info(f"Translated message: %s", translated_messages)
         return translated_messages
     else:
-        print("Sending  accumulated_message: ", accumulated_message)
+        logger.info(f"Sending  accumulated_message: %s", accumulated_message)
         async_to_sync(channel_layer.send)(
             current_channel_name,
             {
@@ -61,6 +64,5 @@ def get_language_code_from_route(route):
     route = route.strip()
     for choice in RouteLanguageChoices:
         if choice.value == route:
-            print("Match found!")
             return choice.value
     return RouteLanguageChoices.ENGLISH.value

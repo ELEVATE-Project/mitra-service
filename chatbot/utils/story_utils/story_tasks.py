@@ -1,5 +1,5 @@
 import traceback
-
+import logging
 from chatbot.models import StoryLanguageChoices, StoryStatusChoices, Story, SessionFlowName, CompanyBot
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.story_llama_utils import translate_field, create_project
@@ -11,33 +11,26 @@ from shikshalokam.serializer import TaskSerializer
 import json_repair
 
 
+logger = logging.getLogger('django')
+
+
 def save_story(
         response_json_story, language, voice_provider, profile, session, combined_reason, flow=None, project_id=None
 ):
     try:
         title = response_json_story['title']
-        print('title: ', title)
         tweet = response_json_story.get('tweet', '')
-        print('tweet: ', tweet)
         objective = response_json_story['objective']
-        print('objective: ', objective)
         action_steps = response_json_story['action_steps']
-        print('action_steps: ', action_steps)
         impact = response_json_story.get('impact', '')
-        print('impact: ', impact)
         micro_improvement = response_json_story.get('micro_improvement', '')
-        print('micro_improvement: ', micro_improvement)
         problem_statement = response_json_story['problem_statement']
-        print('problem_statement: ', problem_statement)
 
         duration = response_json_story.get('duration', '')
 
         content = response_json_story['content']
-        print('content: ', content)
         blurb = response_json_story.get('blurb', '')
-        print('blurb: ', blurb)
         content = clean_escaped_text(text=content)
-        print('clean content: ', content)
         title = clean_escaped_text(text=title)
         objective = clean_escaped_text(text=objective)
         blurb = clean_escaped_text(text=blurb)
@@ -47,7 +40,7 @@ def save_story(
         if not title or not objective or not action_steps or not problem_statement:
             raise Exception("Empty fields found")
 
-        print("language used: ", language)
+        logger.info(f"language used: %s", language)
         if language != 'en':
             transliterate_bot = CompanyBot.objects.filter(route='/transliterate').first()
             if user_name and user_name != "":
@@ -93,16 +86,13 @@ def save_story(
             )
 
         if flow == SessionFlowName.Reflection and project_id:
-            print("project_id: ", project_id)
+            logger.info(f"project_id: %s", project_id)
             project = Project.objects.get(project_id=project_id)
             if project:
-                print("project: ", project)
                 tasks = Task.objects.filter(project=project)
                 serialized_tasks = TaskSerializer(tasks, many=True).data
-                print("tasks serialized_tasks: ", serialized_tasks)
                 # action_steps = [task.get('task_name') for task in serialized_tasks]
                 action_steps = [f"{idx + 1}. {task.get('task_name')}" for idx, task in enumerate(serialized_tasks)]
-                print("tasks action_steps: ", action_steps)
 
         if profile:
             address = ProfileAddress.objects.filter(profile=profile).first()
@@ -164,7 +154,7 @@ def save_story(
 
         return story, problem_statement
     except Exception as e:
-        print("Error Occured: ", e)
+        logger.error('Error Occured: %s', e, exc_info=True)
         traceback.print_exc()
         raise Exception("Failed to save mi story")
 
@@ -172,11 +162,8 @@ def save_story(
 def save_chaupal_report(response_json_story, language, voice_provider, profile, session, combined_reason, flow=None, messages=[]):
     try:
         title = response_json_story['title']
-        print('title: ', title)
         challenges_faced = response_json_story['challenges_faced']
-        print('challenges_faced: ', challenges_faced)
         solutions_discussed = response_json_story['solutions_discussed']
-        print('solutions_discussed: ', solutions_discussed)
 
         user_name = response_json_story.get('user_name', '')
         user_location = response_json_story.get('location', '')
@@ -191,7 +178,7 @@ def save_chaupal_report(response_json_story, language, voice_provider, profile, 
                 messages=messages
             )
 
-        print("language used: ", language)
+        logger.info(f"language used: %s", language)
         if language != 'en':
             transliterate_bot = CompanyBot.objects.filter(route='/transliterate').first()
             if user_name and user_name != '':
@@ -269,6 +256,6 @@ def save_chaupal_report(response_json_story, language, voice_provider, profile, 
 
         return story, None
     except Exception as e:
-        print("Error Occured: ", e)
+        logger.error('Error Occured: %s', e, exc_info=True)
         traceback.print_exc()
         raise Exception("Failed to save chaupal report")

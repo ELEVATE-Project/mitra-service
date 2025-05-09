@@ -6,6 +6,10 @@ import io
 import wave
 import base64
 import concurrent.futures
+import logging
+
+
+logger = logging.getLogger('django')
 
 
 def split_audio(audio_bytes, chunk_duration=10):
@@ -39,7 +43,7 @@ def split_audio(audio_bytes, chunk_duration=10):
 
             chunk_seconds = chunk_size / frame_rate
             chunk_kb = len(output.getvalue()) / 1024
-            print(f"Chunk {chunk_number}: {chunk_seconds:.2f} sec, {chunk_kb:.2f} KB")
+            logger.info("Chunk %s: %.2f sec, %.2f KB", chunk_number, chunk_seconds, chunk_kb)
 
             chunks.append((chunk_number, output.getvalue()))
             i += chunk_size
@@ -64,7 +68,7 @@ def transcribe_chunk(client, project_id, config, chunk_number, chunk):
                     transcript += res_result.alternatives[0].transcript + " "
         return (chunk_number, transcript.strip())
     except Exception as e:
-        print(f"Error during API request for chunk {chunk_number}: {e}")
+        logger.error('Error during API request for chunk %s : %s', chunk_number, e, exc_info=True)
         traceback.print_exc()
         return (chunk_number, "")
 
@@ -77,7 +81,7 @@ def transcribe_multiple_languages_v2(
     client = SpeechClient()
 
     try:
-        print("language_codes:", language_codes)
+        logger.info("language_codes %s", language_codes)
         config = cloud_speech.RecognitionConfig(
             auto_decoding_config=cloud_speech.AutoDetectDecodingConfig(),
             language_codes=language_codes,
@@ -100,12 +104,12 @@ def transcribe_multiple_languages_v2(
                 results.append((chunk_number, transcript))
 
         results.sort()  # Ensure correct order
-        print("sorted results: ", results)
+        logger.info("sorted results %s", results)
         full_transcript = " ".join(transcript for _, transcript in results)
 
         return {'status': 200, 'content': full_transcript}
 
     except Exception as e:
-        print(f"Error processing file: {e}")
+        logger.error('Error processing file: %s', e, exc_info=True)
         traceback.print_exc()
         return {'status': 500, 'content': f"Error processing file: {e}"}

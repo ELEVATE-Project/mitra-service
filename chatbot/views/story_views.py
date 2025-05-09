@@ -24,9 +24,6 @@ def end_story(request):
         flow = request.data.get('flow')
         language = request.data.get('language', 'en')
 
-        print("profile_id:", profile_id)
-        print("session:", session)
-        print("access_token:", access_token)
         if session is None:
             return Response({
                 'status': 'error',
@@ -47,7 +44,6 @@ def end_story(request):
                 'error_message': error_msg
             }, status=200)
     except Exception as e:
-        print(e)
         traceback.print_exc()
         return Response({
             'status': 'error',
