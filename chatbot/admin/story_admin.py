@@ -24,7 +24,6 @@ class StoryMediaInline(admin.TabularInline):
     model = StoryMedia
     exclude = ['base64_str', 'file']
     extra = 0
-    readonly_fields = ['public_url']
 
     def public_url(self, obj):
         url = obj.get_public_url()
@@ -33,6 +32,8 @@ class StoryMediaInline(admin.TabularInline):
         return format_html('<img src="%s" width="100" height="100" />' % url)
 
     public_url.short_description = 'Public URL'
+
+    readonly_fields = ['public_url']
 
 
 @admin.register(Story)
