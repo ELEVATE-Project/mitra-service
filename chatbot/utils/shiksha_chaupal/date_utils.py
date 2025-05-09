@@ -50,19 +50,18 @@ def handle_date_prompt(intro_mssg, profile, company_chats, other_info):
         return "I am sorry, I could not understand completely. Could you rephrase this please?"
 
     date_type, user_date = interpret_date_response(response)
-    print("date_type: ", date_type)
+    logger.info(f"date_type: %s", date_type)
 
     try:
         last_ai_message = company_chats.filter(receiver__id=1).order_by('-created_at').first()
         if last_ai_message:
             last_ai_message.translated_message = user_date
             last_ai_message.save()
-            print("Updated last AI message with user_date:", user_date)
+            logger.info(f"Updated last AI message with user_date: %s", user_date)
     except Exception as e:
         logger.error(f"Error updating translated_message: {e}")
 
     end_context = json_repair.repair_json(company_bot.end_context, return_objects=True)
-    print("end_context: ", end_context)
 
     if end_context:
         bot_question = end_context.get(date_type, None)
@@ -82,15 +81,15 @@ def interpret_date_response(date_response):
                 value = json_repair.repair_json(value, return_objects=True)
             date_response = value
     user_date = date_response.get("parsed_date", '')
-    print("user_date: ", user_date)
+    logger.info(f"user_date: %s", user_date)
     try:
         parsed_date = parser.parse(user_date, dayfirst=True)
-        print("parsed_date date: ", parsed_date)
+        logger.info(f"parsed_date: %s", parsed_date)
         today = datetime.now(INDIA_TZ).date()
-        print("today date: ", today)
+        logger.info(f"today: %s", today)
 
         normalized_user_date = user_date.lower()
-        print("normalized_user_date date: ", normalized_user_date)
+        logger.info(f"normalized_user_date date: %s", normalized_user_date)
 
         if parsed_date.year == today.year and str(today.year) not in normalized_user_date:
             return "PHRASE", user_date

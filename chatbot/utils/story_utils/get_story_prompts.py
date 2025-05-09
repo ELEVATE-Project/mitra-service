@@ -34,8 +34,6 @@ def get_creation_promt(company_bot, profile):
                 {today_date}
                 {project_data}
             """
-    print('-------------------------------')
-    print(story_prompt)
     formatted_content_prompt = []
     formatted_story_prompt = []
 
@@ -70,7 +68,6 @@ def get_creation_promt(company_bot, profile):
 def get_validation_prompt(
         response_json_story, validate_bot, response_json_content, tag_context, project_data, profile
 ):
-    print("Got profile: ", profile)
     address = ProfileAddress.objects.filter(profile=profile)
 
     validate_context_data = {
@@ -78,8 +75,6 @@ def get_validation_prompt(
         "profile": profile,
         "address": address if address else [{}]
     }
-    print("Validate Bot Tag Context:", validate_bot.tag_context)
-    print("Validate validate_context_data:", validate_context_data)
 
     validate_template = Template(validate_bot.tag_context)
     validate_tag_context = validate_template.render(validate_context_data)

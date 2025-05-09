@@ -17,7 +17,7 @@ def get_presigned_url(request):
         return Response({"error": "Missing fileName or fileType"}, status=400)
 
     if story_id and story_id != '':
-        id_to_use = '{story_id}/'
+        id_to_use = f'{story_id}/'
     else:
         id_to_use = ''
 

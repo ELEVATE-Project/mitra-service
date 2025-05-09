@@ -3,6 +3,10 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from chatbot.models import ChatSession, CompanyChat, ChatStatus, Profile, CompanyBot
 from chatbot.models.company_models import CompanyStateMachine
+import logging
+import traceback
+
+logger = logging.getLogger('django')
 
 
 class AsyncBaseConsumer(AsyncWebsocketConsumer):
@@ -27,11 +31,11 @@ class AsyncBaseConsumer(AsyncWebsocketConsumer):
                     )
                     await self.update_last_chat_status_async(chat_status=company_chat_status)
         except Exception as e:
-            print(f"Error in disconnect: {e}")
+            logger.error('Receive Error: %s', e, exc_info=True)
+
         finally:
             # Always close the connection
-            import traceback
-            print(f"Disconnect stack trace: {traceback.format_stack()}")
+            logger.info('Disconnect stack trace: %s', {traceback.format_stack()}, exc_info=True)
 
             await self.close()
 
@@ -89,7 +93,8 @@ class AsyncBaseConsumer(AsyncWebsocketConsumer):
 
             return ChatStatus.IN_PROGRESS
         except Exception as e:
-            print(f"Error in determine_company_chat_status: {e}")
+            logger.info('Error in determine_company_chat_status: %s', e, exc_info=True)
+
             return ChatStatus.PAUSED  # Default safe value
 
     async def determine_company_chat_status_async(self, session_id, profile_id, route, is_disconnected=False):
@@ -109,7 +114,7 @@ class AsyncBaseConsumer(AsyncWebsocketConsumer):
                 existing_chat.status = chat_status
                 existing_chat.save()
         except Exception as e:
-            print(f"Error in update_last_chat_status: {e}")
+            logger.info('Error in update_last_chat_status: %s', e, exc_info=True)
 
     async def update_last_chat_status_async(self, chat_status):
         await self.update_last_chat_status(chat_status)

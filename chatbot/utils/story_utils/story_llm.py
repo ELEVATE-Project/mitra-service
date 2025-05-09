@@ -3,12 +3,15 @@ import functools
 import json_repair
 from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_model
 from chatbot.models import LLMProvider, SessionFlowName
+import logging
+
+
+logger = logging.getLogger('django')
 
 
 async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, messages, tool_content, tool_story,
                              company_bot, flow):
     async def func1():
-        print("Running func1")
         if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
             return await asyncio.to_thread(
                 functools.partial(
@@ -37,7 +40,6 @@ async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, m
             )
 
     async def func2():
-        print("Running func2")
         if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
             return await asyncio.to_thread(
                 functools.partial(
@@ -70,8 +72,8 @@ async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, m
     else:
         response_json_content = await func1()
         response_json_story = None
-    print("response_json_content: ", response_json_content)
-    print("response_json_story: ", response_json_story)
+    logger.info(f"response_json_content: %s", response_json_content)
+    logger.info(f"response_json_story: %s", response_json_story)
 
     if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
         for response in [response_json_content, response_json_story]:
@@ -84,8 +86,9 @@ async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, m
     elif company_bot.provider == LLMProvider.OPENAI:
         pass
 
-    print("\n\nresponse_json_content: ", response_json_content)
-    print("\n\nresponse_json_story: ", response_json_story)
+    logger.info(f"Final response_json_content: %s", response_json_content)
+    logger.info(f"Final response_json_story: %s", response_json_story)
+
 
     return response_json_content, response_json_story
 
@@ -93,7 +96,6 @@ async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, m
 async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, messages, tool_content, tool_story,
                              company_bot, flow):
     async def func1():
-        print("Running func1")
         if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
             return await asyncio.to_thread(
                 functools.partial(
@@ -122,7 +124,6 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
             )
 
     async def func2():
-        print("Running func2")
         if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
             return await asyncio.to_thread(
                 functools.partial(
@@ -155,8 +156,8 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
     else:
         response_json_content = await func1()
         response_json_story = None
-    print("response_json_content: ", response_json_content)
-    print("response_json_story: ", response_json_story)
+    logger.info(f"Validation: response_json_content: %s", response_json_content)
+    logger.info(f"Validation: response_json_story: %s", response_json_story)
     if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
         for response in [response_json_content, response_json_story]:
             if response and isinstance(response, dict):
@@ -180,8 +181,8 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
     if response_json_story and isinstance(response_json_story, str):
         response_json_story = json_repair.repair_json(response_json_story, return_objects=True)
 
-    print("response_json_content: ", response_json_content)
-    print("response_json_story: ", response_json_story)
+    logger.info(f"Final Validation: response_json_content: %s", response_json_content)
+    logger.info(f"Final Validation: response_json_story: %s", response_json_story)
 
     if (isinstance(response_json_story, dict) and response_json_story.get("type") and
             "value" in response_json_story):

@@ -55,7 +55,6 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
                 flow=flow
             )
         )
-        print("Using profile: ", profile)
 
         validate_content_prompt, validate_story_prompt = get_validation_prompt(
             response_json_story=response_json_story, validate_bot=validate_bot,
@@ -66,7 +65,6 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         tool_content, tool_story = get_tool_values(company_bot=validate_bot)
 
         if company_bot.provider != validate_bot.provider:
-            print("Provider is not same! Getting new message format.")
             messages = get_guided_chat(
                 company_bot=validate_bot, company_chats=company_chats
             )
