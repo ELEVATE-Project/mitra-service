@@ -90,7 +90,9 @@ class MitraBedrockConsumer(BaseConsumer):
                     if self.route != 'en':
                         profile = Profile.objects.get(id=self.profile_id)
                         company_bot = CompanyBot.objects.filter(company=profile.company, route='/mitra-create').first()
-                        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+                        voice_provider = Voice.objects.filter(
+                            company_bot=company_bot, type=VoiceType.TextToText, language=self.route
+                        ).first()
 
                         response = text_translate_provider(
                             voice_provider=voice_provider, message_body=text_data_json['text'], target_language='en',

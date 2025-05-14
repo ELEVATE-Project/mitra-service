@@ -2,6 +2,7 @@ from django.utils.html import format_html
 from django.contrib import admin
 from django.db.models import Q
 from chatbot.filter.admin_filter import StoryCompanyFilter, StoryStateFilter, StoryDistrictFilter, StoryBlockFilter
+from chatbot.filter.story_filter import UserNameFilter
 from chatbot.models import StoryTag, StoryMedia, Story, Profile, ProfileType, MediaTypeChoices
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.resources.story_resource import (
@@ -38,16 +39,20 @@ class StoryMediaInline(admin.TabularInline):
 
 @admin.register(Story)
 class StoryAdmin(admin.ModelAdmin):
-    list_display = ('title', 'author', 'session', 'created_at',)
+    list_display = ('title', 'user_name_from_other_params', 'author', 'session', 'created_at',)
     list_filter = (
         'created_at', StoryCompanyFilter, 'author', 'session', StoryStateFilter,
-        StoryDistrictFilter, StoryBlockFilter
+        StoryDistrictFilter, StoryBlockFilter, UserNameFilter
     )
     search_fields = ('title', 'session',)
     exclude = ('formatted_content', )
     inlines = [StoryTagInline, StoryMediaInline]
     list_per_page = 20
 
+    def user_name_from_other_params(self, obj):
+        return obj.other_params.get('user_name') if obj.other_params else ''
+
+    user_name_from_other_params.short_description = 'User Name'
 
     def get_queryset(self, request):
         qs = super().get_queryset(request).select_related('author').defer('formatted_content')

@@ -149,8 +149,11 @@ def get_story_html(story, profile, flow):
         else:
             company_bot = CompanyBot.objects.get(route='/chaupal-story')
 
-    voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
     language_used = project.project_language if project else story.language
+
+    voice_provider = Voice.objects.filter(
+        company_bot=company_bot, type=VoiceType.TextToText, language=language_used
+    ).first()
 
     story_vernacular = StoryVernacular.objects.filter(
         company_bot=company_bot, language=language_used

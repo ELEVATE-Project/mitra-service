@@ -68,7 +68,9 @@ def get_mitra_bedrock_response(channel_name, session_id, profile_id, route):
         if response:
             problem_statement = response.get("problem_statement", "")
             if route != 'en' and problem_statement and problem_statement != '':
-                voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+                voice_provider = Voice.objects.filter(
+                    company_bot=company_bot, type=VoiceType.TextToText, language=route
+                ).first()
                 problem_statement = translate_field(
                     voice_provider=voice_provider, message_body=problem_statement, target_language=route,
                     source_language='en'

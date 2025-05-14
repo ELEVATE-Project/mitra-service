@@ -27,7 +27,9 @@ def paraphrase_view(request):
     print("User Input: ", user_input)
 
     company_bot = CompanyBot.objects.get(route='/paraphrase')
-    voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+    voice_provider = Voice.objects.filter(
+        company_bot=company_bot, type=VoiceType.TextToText, language=language
+    ).first()
     if language != 'en':
         user_input = translate_field(
             voice_provider=voice_provider, message_body=user_input, source_language=language,
@@ -64,7 +66,9 @@ def generate_objectives_view(request):
 
     profile = Profile.objects.filter(id=profile_id).first()
     company_bot = CompanyBot.objects.get(company=profile.company, route='/objective')
-    voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+    voice_provider = Voice.objects.filter(
+        company_bot=company_bot, type=VoiceType.TextToText, language=language
+    ).first()
     if language != 'en':
         user_input = translate_field(
             voice_provider=voice_provider, message_body=user_input, source_language=language,
@@ -111,7 +115,9 @@ def validate_objectives_view(request):
     bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
     error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
     if language !='en':
-        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+        voice_provider = Voice.objects.filter(
+            company_bot=company_bot, type=VoiceType.TextToText, language=language
+        ).first()
         user_input = translate_field(
             voice_provider=voice_provider, message_body=user_input, source_language=language,
             target_language='en'
@@ -140,7 +146,9 @@ def validate_actions_view(request):
     bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
     error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
     if language !='en':
-        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+        voice_provider = Voice.objects.filter(
+            company_bot=company_bot, type=VoiceType.TextToText, language=language
+        ).first()
 
         if isinstance(user_input, list):
             user_input = [
@@ -188,7 +196,9 @@ def generate_action_list_view(request):
 
     profile = Profile.objects.filter(id=profile_id).first()
     company_bot = CompanyBot.objects.get(company=profile.company, route='/action_list')
-    voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+    voice_provider = Voice.objects.filter(
+        company_bot=company_bot, type=VoiceType.TextToText, language=language
+    ).first()
     if language != 'en':
         user_problem_statement = translate_field(
             voice_provider=voice_provider, message_body=user_problem_statement, source_language=language,
@@ -249,7 +259,9 @@ def generate_title_view(request):
 
     profile = Profile.objects.filter(id=profile_id).first()
     company_bot = CompanyBot.objects.get(company=profile.company, route='/title')
-    voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+    voice_provider = Voice.objects.filter(
+        company_bot=company_bot, type=VoiceType.TextToText, language=language
+    ).first()
     if language != 'en':
         user_problem_statement = translate_field(
             voice_provider=voice_provider, message_body=user_problem_statement, source_language=language,
@@ -317,7 +329,9 @@ def validate_title_view(request):
     bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
     error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
     if language != 'en':
-        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+        voice_provider = Voice.objects.filter(
+            company_bot=company_bot, type=VoiceType.TextToText, language=language
+        ).first()
 
         if isinstance(user_actions, list):
             user_actions = user_actions[0]

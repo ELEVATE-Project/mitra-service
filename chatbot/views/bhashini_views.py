@@ -2,9 +2,9 @@ import os
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from chatbot.models import CompanyBot, Voice, VoiceType
+from chatbot.utils.audio_converter_utils import convert_s3_audio_to_wav_base64
 from chatbot.utils.audio_provider_utils import text_speech_provider, speech_text_provider, text_translate_provider
 from chatbot.utils.transliterate_utils import transliterate_text
-import base64
 import requests
 
 
@@ -63,8 +63,7 @@ def speech_text(request):
 
         response = requests.get(s3_url)
         response.raise_for_status()
-        audio_bytes = response.content
-        encoded_audio = base64.b64encode(audio_bytes).decode("utf-8")
+        encoded_audio = convert_s3_audio_to_wav_base64(s3_url=s3_url)
 
         if not route:
             return Response({
@@ -115,7 +114,9 @@ def text_translation_view(request):
             }, status=500)
 
         company_bot = CompanyBot.objects.filter(route=route).first()
-        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+        voice_provider = Voice.objects.filter(
+            company_bot=company_bot, type=VoiceType.TextToText, language=source_language
+        ).first()
 
         response = text_translate_provider(
             voice_provider=voice_provider, message_body=message_body, target_language=target_language,

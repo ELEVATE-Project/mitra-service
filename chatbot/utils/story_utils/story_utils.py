@@ -34,7 +34,9 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
                 company_bot = CompanyBot.objects.get(route='/chaupal-story')
                 validate_bot = CompanyBot.objects.get(route='/chaupal-_validation')
 
-        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+        voice_provider = Voice.objects.filter(
+            company_bot=company_bot, type=VoiceType.TextToText, language=language
+        ).first()
 
         chat_session = ChatSession.objects.get(session=session)
 
