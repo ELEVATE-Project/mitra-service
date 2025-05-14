@@ -114,7 +114,9 @@ def text_translation_view(request):
             }, status=500)
 
         company_bot = CompanyBot.objects.filter(route=route).first()
-        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+        voice_provider = Voice.objects.filter(
+            company_bot=company_bot, type=VoiceType.TextToText, language=source_language
+        ).first()
 
         response = text_translate_provider(
             voice_provider=voice_provider, message_body=message_body, target_language=target_language,

@@ -1,5 +1,6 @@
 from chatbot.llm_models.llm_script import handle_bedrock_model
 from jinja2 import Template
+import json_repair
 
 
 def transliterate_text(company_bot, source_language, target_language, message_body):
@@ -29,5 +30,14 @@ def transliterate_text(company_bot, source_language, target_language, message_bo
         system_prompt=prompt_to_use, messages=messages, model_name=company_bot.llm_model,
         temperature=company_bot.bot_temperature, max_token=company_bot.max_token, company_bot=company_bot
     )
+    print("Response: ", response)
 
-    return response
+    if response and isinstance(response, str):
+        response = json_repair.repair_json(response, return_objects=True)
+        transliterated_text = response.get('transliteration', message_body)
+    elif response and isinstance(response, dict):
+        transliterated_text = response.get('transliteration', message_body)
+    else:
+        transliterated_text = message_body
+
+    return transliterated_text

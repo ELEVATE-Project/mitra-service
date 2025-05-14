@@ -40,7 +40,7 @@ class CompanyAdmin(admin.ModelAdmin):
 
 @admin.register(CompanyBot)
 class CompanyBotAdmin(SimpleHistoryAdmin):
-    list_display = ('name', 'company', 'context')
+    list_display = ('name', 'company',)
     list_filter = ('company', 'name', 'provider', 'llm_model')
     inlines = [VoiceProviderAdmin]
 

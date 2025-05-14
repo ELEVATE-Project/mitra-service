@@ -80,7 +80,9 @@ class ShikshalokamChaupalConsumer(BaseConsumer):
 
                 if self.route != 'en':
                     print("Company bot: ", self.company_bot)
-                    voice_provider = Voice.objects.filter(company_bot=self.company_bot, type=VoiceType.TextToText).first()
+                    voice_provider = Voice.objects.filter(
+                        company_bot=self.company_bot, type=VoiceType.TextToText, language=self.route
+                    ).first()
                     if text_data_json and text_data_json.get('text'):
                         existing_chats = CompanyChat.objects.filter(session=self.session_id)
                         chat_session = ChatSession.objects.filter(session=self.session_id).first()

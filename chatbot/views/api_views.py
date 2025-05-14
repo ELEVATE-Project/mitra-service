@@ -3,16 +3,16 @@ import traceback
 from django.contrib.auth.hashers import check_password
 from rest_framework.response import Response
 from rest_framework.decorators import api_view, authentication_classes
-from chatbot.auth import ProfileJWTAuthentication
 from chatbot.models import ProfileType
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.auth_models import BlacklistedToken
-from chatbot.models.base_models import Profile, Company
+from chatbot.models.base_models import Profile, Company, CompanyBot
 from chatbot.serializer.profile_serializer import ProfileSerializer
 from django.http import JsonResponse
 from django.contrib.sessions.backends.db import SessionStore
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from chatbot.utils.transliterate_utils import transliterate_text
 
 logger = logging.getLogger('django')
 
@@ -39,6 +39,18 @@ def post_profile(request):
             }, status=400)
         company_slug = data.get('company') if 'company' in data else data.get('subdomain')
         company = Company.objects.filter(slug=company_slug)
+
+        transliterate_bot = CompanyBot.objects.filter(route='/transliterate').first()
+        target_language = data.get('preferred_route', 'en')
+        user_name = data.get('first_name')
+        if target_language and user_name and user_name != '':
+            print("user_name: ", user_name)
+            print("target_language: ", target_language)
+            data['first_name'] = transliterate_text(
+                transliterate_bot, '', target_language, user_name
+            )
+            print("data['first_name']: ", data['first_name'])
+
         if len(company) > 0:
             company = company[0]
             email = data['email']

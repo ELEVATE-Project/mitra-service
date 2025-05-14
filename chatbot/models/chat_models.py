@@ -47,7 +47,9 @@ class ChatSession(models.Model):
             print("Error: ", e)
             output_title = 'MI Story'
         if language != 'en':
-            voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText).first()
+            voice_provider = Voice.objects.filter(
+                company_bot=company_bot, type=VoiceType.TextToText, language=language
+            ).first()
 
             response = text_translate_provider(
                 voice_provider=voice_provider, message_body=output_title, target_language=language,

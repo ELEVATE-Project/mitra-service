@@ -42,9 +42,9 @@ def save_story(
 
         logger.info(f"language used: %s", language)
         if language != 'en':
-            transliterate_bot = CompanyBot.objects.filter(route='/transliterate').first()
-            if user_name and user_name != "":
-                user_name = transliterate_text(transliterate_bot, 'en', language, profile.first_name)
+            # transliterate_bot = CompanyBot.objects.filter(route='/transliterate').first()
+            # if user_name and user_name != "":
+            #     user_name = transliterate_text(transliterate_bot, 'en', language, profile.first_name)
 
             title = translate_field(
                 voice_provider=voice_provider, message_body=title, target_language=language
