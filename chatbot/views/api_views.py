@@ -40,17 +40,6 @@ def post_profile(request):
         company_slug = data.get('company') if 'company' in data else data.get('subdomain')
         company = Company.objects.filter(slug=company_slug)
 
-        transliterate_bot = CompanyBot.objects.filter(route='/transliterate').first()
-        target_language = data.get('preferred_route', 'en')
-        user_name = data.get('first_name')
-        if target_language and user_name and user_name != '':
-            print("user_name: ", user_name)
-            print("target_language: ", target_language)
-            data['first_name'] = transliterate_text(
-                transliterate_bot, '', target_language, user_name
-            )
-            print("data['first_name']: ", data['first_name'])
-
         if len(company) > 0:
             company = company[0]
             email = data['email']
