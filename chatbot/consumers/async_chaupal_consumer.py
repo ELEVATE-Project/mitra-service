@@ -150,7 +150,8 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
 
             voice_provider = Voice.objects.filter(
                 company_bot=self.company_bot,
-                type=VoiceType.TextToText
+                type=VoiceType.TextToText,
+                language=self.route
             ).first()
 
             if not voice_provider:
