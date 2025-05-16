@@ -92,7 +92,7 @@ class OneShotBedrockConsumer(BaseConsumer):
                     },
                 )
 
-                if self.route != 'en':
+                if self.route != 'en'  and text_data_json and text_data_json.get('text'):
                     voice_provider = Voice.objects.filter(
                         company_bot=self.company_bot, type=VoiceType.TextToText, language=self.route
                     ).first()

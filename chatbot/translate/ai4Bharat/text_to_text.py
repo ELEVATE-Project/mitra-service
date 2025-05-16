@@ -29,6 +29,7 @@ def call_ai4bharat_translation_api(source_language, target_language, message_bod
 
     try:
         response = requests.post(api_url, json=payload, headers=headers, timeout=10)
+        print("Response: ", response)
         if response.status_code == 200:
             translated_data = response.json()
             if isinstance(translated_data, dict) and 'output' in translated_data:

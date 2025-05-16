@@ -15,14 +15,14 @@ def translate_and_send_message(
 ):
 
     if route != 'en' and accumulated_message and accumulated_message!= '':
-        target_language_code = get_language_code_from_route(route)
-        logger.info(f"target_language_code date: %s", target_language_code)
+        # target_language_code = get_language_code_from_route(route)
+        logger.info(f"target_language_code date: %s", route)
         voice_provider = Voice.objects.filter(
             company_bot=company_bot, type=VoiceType.TextToText, language=route
         ).first()
 
         response = text_translate_provider(
-            voice_provider=voice_provider, message_body=accumulated_message, target_language=target_language_code,
+            voice_provider=voice_provider, message_body=accumulated_message, target_language=route,
             source_language='en'
         )
         if response.get('status') == 200:
