@@ -150,6 +150,7 @@ class RouteLanguageChoices(models.TextChoices):
     ENGLISH = 'en', _('/')
     HINDI = 'hi', _('/hindi')
     KANNADA = 'kn', _('/kannada')
+    TELUGU = 'te', _('/telugu')
 
 
 class VoiceProvider(models.TextChoices):
