@@ -161,24 +161,14 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
             if not chat_session:
                 return message
 
-            state_machine = CompanyStateMachine.objects.get(
-                company_bot=self.company_bot, step=chat_session.current_step
+            response = text_translate_provider(
+                voice_provider=voice_provider, message_body=message,
+                target_language='en', source_language=self.route
             )
-
-            if state_machine and state_machine.name in ['INTRODUCTION', 'ORGANIZATION']:
-                transliterate_bot = CompanyBot.objects.filter(route='/transliterate').first()
-                return transliterate_text(
-                    transliterate_bot, self.route, 'en', message
-                )
+            if response.get('status') == 200:
+                return response.get('content')
             else:
-                response = text_translate_provider(
-                    voice_provider=voice_provider, message_body=message,
-                    target_language='en', source_language=self.route
-                )
-                if response.get('status') == 200:
-                    return response.get('content')
-                else:
-                    return message
+                return message
         except Exception as e:
             logger.error('Translation Error: %s', e, exc_info=True)
             return message

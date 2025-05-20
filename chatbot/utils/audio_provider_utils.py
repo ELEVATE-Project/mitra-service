@@ -1,5 +1,5 @@
 from chatbot.models import VoiceProvider, LanguageMapping
-from chatbot.translate.ai4Bharat.speech_to_text import ai4bharat_speech_text
+from chatbot.translate.ai4Bharat.speech_to_text import ai4bharat_speech_text, transcribe_ai4bharat_multiple_chunks
 from chatbot.translate.ai4Bharat.text_to_speech import ai4bharat_text_speech
 from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
 from chatbot.translate.google.google_stt import transcribe_multiple_languages_v2
@@ -29,7 +29,9 @@ def text_speech_provider(voice_provider, text, gender, source_language):
 
 def speech_text_provider(voice_provider, base64, audio_format, source_language):
     if voice_provider.provider == VoiceProvider.AI4Bharat:
-        response = ai4bharat_speech_text(base64=base64, audio_format=audio_format, source_language=source_language)
+        response = transcribe_ai4bharat_multiple_chunks(
+            base64_audio_file=base64, source_language=source_language, audio_format=audio_format
+        )
     elif voice_provider.provider == VoiceProvider.GOOGLE:
         if source_language == 'en':
             region = "US"

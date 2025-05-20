@@ -11,8 +11,7 @@ from chatbot.serializer.profile_serializer import ProfileSerializer
 from django.http import JsonResponse
 from django.contrib.sessions.backends.db import SessionStore
 from rest_framework_simplejwt.tokens import RefreshToken
-
-from chatbot.utils.transliterate_utils import transliterate_text
+from chatbot.translate.ai4Bharat.transliterate import call_ai4bharat_transliterate_api
 
 logger = logging.getLogger('django')
 
@@ -43,6 +42,24 @@ def post_profile(request):
         if len(company) > 0:
             company = company[0]
             email = data['email']
+            first_name = data.get('first_name', '')
+            target_language = data.get('preferred_route', 'en')
+            if first_name and first_name != '' and target_language:
+                source_language='en'
+                # source_language=call_ai4bharat_text_lang_detect_api(message_body=first_name)
+                # if source_language and source_language.get('status') == 200:
+                #     source_language = source_language.get('content', 'en')
+                # else:
+                #     source_language='en'
+                first_names = call_ai4bharat_transliterate_api(
+                    source_language=source_language, target_language=target_language, message_body=first_name
+                )
+                print("first_names: ", first_names)
+                print("type first_names: ", type(first_names))
+                if first_names and isinstance(first_names, dict):
+                    first_names = first_names.get('content', [])
+                if first_names and isinstance(first_names, list) and len(first_names) > 0:
+                    data['first_name'] = first_names[0]
             profile = Profile.objects.filter(email=email, company=company).first()
             if profile:
                 serializer = ProfileSerializer(profile, data=request.data)

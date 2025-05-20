@@ -16,10 +16,18 @@ class CompanyStateMachineAdmin(admin.TabularInline):
     model = CompanyStateMachine
     extra = 1
 
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.order_by('step')
+
 
 class VoiceProviderAdmin(admin.TabularInline):
     model = Voice
     extra = 1
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.order_by('type', 'language')
 
 
 class CompanyAdmin(admin.ModelAdmin):

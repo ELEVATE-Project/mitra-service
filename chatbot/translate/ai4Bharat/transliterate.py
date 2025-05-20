@@ -9,11 +9,11 @@ ai4bharat_user_id = os.getenv("BHASHANI_USER_ID")
 ai4bharat_authorization = os.getenv("BHASHANI_AUTHORIZATION")
 
 
-def call_ai4bharat_translation_api(source_language, target_language, message_body):
+def call_ai4bharat_transliterate_api(source_language, target_language, message_body):
     api_url = ai4bharat_base_url
     service_id = None
     pipeline_response = get_service_id(
-        task_type='translation', source_language=source_language, target_language=target_language
+        task_type='transliteration', source_language=source_language, target_language=target_language
     )
     if pipeline_response and pipeline_response.get('success'):
         service_id = pipeline_response.get('service_id', '')
@@ -22,14 +22,14 @@ def call_ai4bharat_translation_api(source_language, target_language, message_bod
     payload = {
         "pipelineTasks": [
             {
-                "taskType": "translation",
+                "taskType": "transliteration",
                 "config": {
                     "language": {
                         "sourceLanguage": source_language,
                         "targetLanguage": target_language,
                     },
                     "serviceId": service_id,
-                    "isSentence": True,
+                    "isSentence": False,
                     "numSuggestions": 7
                 }
             }
@@ -56,23 +56,23 @@ def call_ai4bharat_translation_api(source_language, target_language, message_bod
         print("Response: ", response)
         print("Res text: ", response.json())
         if response.status_code == 200:
-            translated_data = response.json()
-            if isinstance(translated_data, dict) and 'pipelineResponse' in translated_data:
-                translated_message = translated_data['pipelineResponse'][0].get('output', [{}])[0].get('target', '')
+            transliteration_message_data = response.json()
+            if isinstance(transliteration_message_data, dict) and 'pipelineResponse' in transliteration_message_data:
+                transliteration_message = transliteration_message_data['pipelineResponse'][0].get('output', [{}])[0].get('target', '')
 
-                print("translated_message: ", translated_message)
+                print("transliteration: ", transliteration_message)
                 return {
                     'status': 200,
-                    'content': translated_message
+                    'content': transliteration_message
                 }
         return {
             'status': 200,
             'content': message_body
         }
     except Exception as e:
-        print(f"Error during translation API call: {str(e)}")
+        print(f"Error during transliteration API call: {str(e)}")
         traceback.print_exc()
         return {
             'status': 500,
-            'content': f"Error during translation API call: {str(e)}"
+            'content': f"Error during transliteration API call: {str(e)}"
         }
