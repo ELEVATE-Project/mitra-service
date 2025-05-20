@@ -77,7 +77,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
             story, problem_statement = save_chaupal_report(
                 response_json_story=response_json_story, language=language, voice_provider=voice_provider,
                 profile=profile, session=session, combined_reason=combined_reason, flow=flow,
-                messages=messages
+                messages=messages, company_bot=company_bot
             )
         if story:
             formatted_content = get_formatted_story(story)

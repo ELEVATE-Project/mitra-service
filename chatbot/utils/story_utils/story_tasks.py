@@ -1,6 +1,7 @@
 import traceback
 import logging
-from chatbot.models import StoryLanguageChoices, StoryStatusChoices, Story, SessionFlowName, CompanyBot
+from chatbot.models import StoryLanguageChoices, StoryStatusChoices, Story, SessionFlowName, CompanyBot, Voice, \
+    VoiceType
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.story_llama_utils import translate_field, create_project
 from chatbot.utils.story_utils.challenges_utils import handle_challenges_solutions
@@ -155,7 +156,9 @@ def save_story(
         raise Exception("Failed to save mi story")
 
 
-def save_chaupal_report(response_json_story, language, voice_provider, profile, session, combined_reason, flow=None, messages=[]):
+def save_chaupal_report(
+        response_json_story, language, company_bot, voice_provider, profile, session, combined_reason, flow=None, messages=[]
+):
     try:
         title = response_json_story['title']
         challenges_faced = response_json_story['challenges_faced']
@@ -176,15 +179,18 @@ def save_chaupal_report(response_json_story, language, voice_provider, profile, 
 
         logger.info(f"language used: %s", language)
         if language != 'en':
+            voice_transliterate_provider = Voice.objects.filter(
+                company_bot=company_bot, type=VoiceType.Transliterate, language=language
+            ).first()
             if user_name and user_name != '':
                 user_name = transliterate_text(
-                    voice_provider=voice_provider, message_body=user_name, target_language=language,
+                    voice_provider=voice_transliterate_provider, message_body=user_name, target_language=language,
                     source_language='en'
                 )
                 user_name=get_transliteration_output(data=user_name)
             if organization and organization != '':
                 organization = transliterate_text(
-                    voice_provider=voice_provider, message_body=organization, target_language=language,
+                    voice_provider=voice_transliterate_provider, message_body=organization, target_language=language,
                     source_language='en'
                 )
                 organization = get_transliteration_output(data=organization)
