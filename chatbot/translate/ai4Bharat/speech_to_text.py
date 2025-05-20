@@ -14,12 +14,13 @@ ai4bharat_user_id = os.getenv("BHASHANI_USER_ID")
 ai4bharat_authorization = os.getenv("BHASHANI_AUTHORIZATION")
 
 
-def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language):
+def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language, service_id):
     b64_chunk = base64.b64encode(chunk).decode('utf-8')
     response = ai4bharat_speech_text(
         base64=b64_chunk,
         audio_format=audio_format,
-        source_language=source_language
+        source_language=source_language,
+        service_id=service_id
     )
     if response['status'] == 200:
         return (chunk_number, response['content'])
@@ -32,9 +33,19 @@ def transcribe_ai4bharat_multiple_chunks(base64_audio_file, source_language, aud
         audio_bytes = base64.b64decode(base64_audio_file)
         chunks = split_audio(audio_bytes, chunk_duration=10)
 
+        service_id = None
+        pipeline_response = get_service_id(
+            task_type='asr', source_language=source_language
+        )
+        if pipeline_response and pipeline_response.get('success'):
+            service_id = pipeline_response.get('service_id', '')
+            print("service_id: ", service_id)
+
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [
-                executor.submit(transcribe_single_chunk, chunk_number, chunk, audio_format, source_language)
+                executor.submit(
+                    transcribe_single_chunk, chunk_number, chunk, audio_format, source_language, service_id
+                )
                 for chunk_number, chunk in chunks
             ]
             transcripts = [future.result() for future in concurrent.futures.as_completed(futures)]
@@ -49,16 +60,8 @@ def transcribe_ai4bharat_multiple_chunks(base64_audio_file, source_language, aud
 
 
 
-def ai4bharat_speech_text(base64, audio_format, source_language):
+def ai4bharat_speech_text(base64, audio_format, source_language, service_id):
     try:
-
-        service_id = None
-        pipeline_response = get_service_id(
-            task_type='asr', source_language=source_language
-        )
-        if pipeline_response and pipeline_response.get('success'):
-            service_id = pipeline_response.get('service_id', '')
-            print("service_id: ", service_id)
 
         payload = {
             "pipelineTasks": [
