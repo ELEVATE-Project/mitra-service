@@ -11,6 +11,10 @@ class BotVernacularAdmin(SimpleHistoryAdmin):
     inlines = []
     raw_id_fields = ('company_bot', )
 
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.order_by('company_bot', 'language')
+
 
 @admin.register(StoryVernacular)
 class StoryVernacularAdmin(SimpleHistoryAdmin):
@@ -18,3 +22,7 @@ class StoryVernacularAdmin(SimpleHistoryAdmin):
     list_filter = ('company_bot', 'language')
     inlines = []
     raw_id_fields = ('company_bot', )
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs.order_by('company_bot', 'language')
