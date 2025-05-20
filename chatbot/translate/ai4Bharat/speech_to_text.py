@@ -14,27 +14,27 @@ ai4bharat_user_id = os.getenv("BHASHANI_USER_ID")
 ai4bharat_authorization = os.getenv("BHASHANI_AUTHORIZATION")
 
 
+def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language):
+    b64_chunk = base64.b64encode(chunk).decode('utf-8')
+    response = ai4bharat_speech_text(
+        base64=b64_chunk,
+        audio_format=audio_format,
+        source_language=source_language
+    )
+    if response['status'] == 200:
+        return (chunk_number, response['content'])
+    else:
+        return (chunk_number, '')
+
 
 def transcribe_ai4bharat_multiple_chunks(base64_audio_file, source_language, audio_format):
     try:
         audio_bytes = base64.b64decode(base64_audio_file)
         chunks = split_audio(audio_bytes, chunk_duration=10)
 
-        def transcribe_single_chunk(chunk_number, chunk):
-            b64_chunk = base64.b64encode(chunk).decode('utf-8')
-            response = ai4bharat_speech_text(
-                base64=b64_chunk,
-                audio_format=audio_format,
-                source_language=source_language
-            )
-            if response['status'] == 200:
-                return (chunk_number, response['content'])
-            else:
-                return (chunk_number, '')
-
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [
-                executor.submit(transcribe_single_chunk, chunk_number, chunk)
+                executor.submit(transcribe_single_chunk, chunk_number, chunk, audio_format, source_language)
                 for chunk_number, chunk in chunks
             ]
             transcripts = [future.result() for future in concurrent.futures.as_completed(futures)]
