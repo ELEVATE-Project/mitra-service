@@ -70,6 +70,7 @@ def ai4bharat_speech_text(base64, audio_format, source_language):
                     'content': 'Unexpected response format from AI4Bharat API'
                 }
         else:
+            print("Error in response: ", response.text)
             return {
                 'status': response.status_code,
                 'content': 'Failed to fetch audio from AI4Bharat API'
