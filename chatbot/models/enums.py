@@ -164,6 +164,7 @@ class VoiceType(models.TextChoices):
     SpeechToText = 'SpeechToText', _('Speech To Text')
     TextToText = 'TextToText', _('Text To Text')
     TextToSpeech = 'TextToSpeech', _('Text To Speech')
+    Transliterate = 'Transliterate', _('Transliteration')
 
 
 class LanguageMapping:

@@ -63,6 +63,11 @@ def speech_text(request):
 
         response = requests.get(s3_url)
         response.raise_for_status()
+        company_bot = CompanyBot.objects.filter(route=route).first()
+        voice_provider = Voice.objects.filter(
+            company_bot=company_bot, type=VoiceType.SpeechToText, language=source_language
+        ).first()
+
         encoded_audio = convert_s3_audio_to_wav_base64(s3_url=s3_url)
 
         if not route:
@@ -70,9 +75,6 @@ def speech_text(request):
                 'status': 'error',
                 'message': 'route is a required field'
             }, status=500)
-
-        company_bot = CompanyBot.objects.filter(route=route).first()
-        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.SpeechToText).first()
 
         response = speech_text_provider(
             voice_provider=voice_provider, base64=encoded_audio, audio_format=audio_format,
@@ -115,7 +117,7 @@ def text_translation_view(request):
 
         company_bot = CompanyBot.objects.filter(route=route).first()
         voice_provider = Voice.objects.filter(
-            company_bot=company_bot, type=VoiceType.TextToText, language=source_language
+            company_bot=company_bot, type=VoiceType.TextToText, language=target_language
         ).first()
 
         response = text_translate_provider(
@@ -148,9 +150,23 @@ def text_transliterate_view(request):
         source_language =  body.get('source_language', 'en')
         target_language =  body.get('target_language', 'en')
         message_body = body.get('message_body')
+        route = body.get('route')
 
-        company_bot = CompanyBot.objects.filter(route='/transliterate').first()
-        response = transliterate_text(company_bot, source_language, target_language, message_body)
+        if not route:
+            return Response({
+                'status': 'error',
+                'message': 'route is a required field'
+            }, status=500)
+
+        company_bot = CompanyBot.objects.filter(route=route).first()
+        voice_provider = Voice.objects.filter(
+            company_bot=company_bot, type=VoiceType.Transliterate, language=target_language
+        ).first()
+
+        response = transliterate_text(
+            voice_provider=voice_provider, message_body=message_body, target_language=target_language,
+            source_language=source_language
+        )
 
         if response:
             return Response({

@@ -9,8 +9,6 @@ from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.audio_provider_utils import text_translate_provider
 import logging
 
-from chatbot.utils.transliterate_utils import transliterate_text
-
 logger = logging.getLogger('django')
 
 
@@ -89,20 +87,14 @@ class ShikshalokamChaupalConsumer(BaseConsumer):
                         state_machine = CompanyStateMachine.objects.get(
                             company_bot=self.company_bot, step=chat_session.current_step
                         )
-                        if state_machine and state_machine.name in ['INTRODUCTION', 'ORGANIZATION']:
-                            transliterate_bot = CompanyBot.objects.filter(route='/transliterate').first()
-                            translated_message = transliterate_text(
-                                transliterate_bot, self.route, 'en', text_data_json['text']
-                            )
+                        response = text_translate_provider(
+                            voice_provider=voice_provider, message_body=text_data_json['text'], target_language='en',
+                            source_language=self.route
+                        )
+                        if response.get('status') == 200:
+                            translated_message = response.get('content')
                         else:
-                            response = text_translate_provider(
-                                voice_provider=voice_provider, message_body=text_data_json['text'], target_language='en',
-                                source_language=self.route
-                            )
-                            if response.get('status') == 200:
-                                translated_message = response.get('content')
-                            else:
-                                translated_message = text_data_json['text']
+                            translated_message = text_data_json['text']
                     else:
                         translated_message=None
                 else:

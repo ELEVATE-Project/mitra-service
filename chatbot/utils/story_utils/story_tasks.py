@@ -42,10 +42,6 @@ def save_story(
 
         logger.info(f"language used: %s", language)
         if language != 'en':
-            # transliterate_bot = CompanyBot.objects.filter(route='/transliterate').first()
-            # if user_name and user_name != "":
-            #     user_name = transliterate_text(transliterate_bot, 'en', language, profile.first_name)
-
             title = translate_field(
                 voice_provider=voice_provider, message_body=title, target_language=language
             )
@@ -180,12 +176,18 @@ def save_chaupal_report(response_json_story, language, voice_provider, profile, 
 
         logger.info(f"language used: %s", language)
         if language != 'en':
-            transliterate_bot = CompanyBot.objects.filter(route='/transliterate').first()
             if user_name and user_name != '':
-                user_name = transliterate_text(transliterate_bot, 'en', language, user_name)
+                user_name = transliterate_text(
+                    voice_provider=voice_provider, message_body=user_name, target_language=language,
+                    source_language='en'
+                )
+                user_name=get_transliteration_output(data=user_name)
             if organization and organization != '':
-                organization = transliterate_text(voice_provider.company_bot, 'en', language, organization)
-
+                organization = transliterate_text(
+                    voice_provider=voice_provider, message_body=organization, target_language=language,
+                    source_language='en'
+                )
+                organization = get_transliteration_output(data=organization)
             title = translate_field(
                 voice_provider=voice_provider, message_body=title, target_language=language
             )
@@ -259,3 +261,12 @@ def save_chaupal_report(response_json_story, language, voice_provider, profile, 
         logger.error('Error Occured: %s', e, exc_info=True)
         traceback.print_exc()
         raise Exception("Failed to save chaupal report")
+
+
+def get_transliteration_output(data):
+    if data and isinstance(data, dict):
+        data = data.get('content', [])
+    if data and isinstance(data, list) and len(data) > 0:
+        return data[0]
+
+    return None
