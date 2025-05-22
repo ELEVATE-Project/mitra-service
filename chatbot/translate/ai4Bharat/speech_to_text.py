@@ -24,7 +24,7 @@ def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language, 
         source_language=source_language,
         service_id=service_id
     )
-    logger.info(f"response: {response.text}")
+    logger.info(f"response: {response}")
     if response['status'] == 200:
         return (chunk_number, response['content'])
     else:
