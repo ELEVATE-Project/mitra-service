@@ -2,6 +2,10 @@ import base64
 import io
 import os
 from openai import OpenAI
+import logging
+
+
+logger = logging.getLogger('django')
 
 
 def transcribe_audio(
@@ -33,7 +37,7 @@ def transcribe_audio(
             'content': transcription
         }
     except Exception as e:
-        print(f"Error during API request: {e}")
+        logger.error('Error processing file: %s', e, exc_info=True)
         return {
             'status': 500,
             'content': f"Error during API request: {e}"

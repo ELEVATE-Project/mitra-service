@@ -4,10 +4,12 @@ import traceback
 import requests
 import json_repair
 from chatbot.translate.ai4Bharat.base_translation import get_service_id
-from chatbot.translate.google.google_stt import split_audio
 import concurrent.futures
+import logging
+from chatbot.translate.base.speech_to_text import split_audio
 
 
+logger = logging.getLogger('django')
 ai4bharat_api_key = os.getenv("BHASHANI_API_KEY")
 ai4bharat_base_url = os.getenv("BHASHANI_BASE_URL")
 ai4bharat_user_id = os.getenv("BHASHANI_USER_ID")
@@ -22,6 +24,7 @@ def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language, 
         source_language=source_language,
         service_id=service_id
     )
+    logger.info(f"response: {response}")
     if response['status'] == 200:
         return (chunk_number, response['content'])
     else:
@@ -39,7 +42,7 @@ def transcribe_ai4bharat_multiple_chunks(base64_audio_file, source_language, aud
         )
         if pipeline_response and pipeline_response.get('success'):
             service_id = pipeline_response.get('service_id', '')
-            print("service_id: ", service_id)
+            logger.info(f"service_id {service_id}")
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [
@@ -55,6 +58,7 @@ def transcribe_ai4bharat_multiple_chunks(base64_audio_file, source_language, aud
         return {'status': 200, 'content': transcript}
 
     except Exception as e:
+        logger.error('Error processing file: %s', e, exc_info=True)
         traceback.print_exc()
         return {'status': 500, 'content': str(e)}
 
@@ -73,7 +77,13 @@ def ai4bharat_speech_text(base64, audio_format, source_language, service_id):
                         },
                         "serviceId": service_id,
                         "audioFormat": audio_format,
-                        "samplingRate": 16000
+                        "samplingRate": 16000,
+                        "preProcessors": [],
+                        "postProcessors": [
+                            "punctuation",
+                            "denoiser",
+                            "itn"
+                        ]
                     }
                 }
             ],
@@ -118,6 +128,7 @@ def ai4bharat_speech_text(base64, audio_format, source_language, service_id):
             }
 
     except Exception as e:
+        logger.error('Error processing file: %s', e, exc_info=True)
         traceback.print_exc()
         return {
             'status': 500,

@@ -1,5 +1,8 @@
 import traceback
 from google.cloud import translate
+import logging
+
+logger = logging.getLogger('django')
 
 
 def translate_text(
@@ -27,6 +30,8 @@ def translate_text(
             }
         )
 
+        logger.info(f"Response {response}")
+
         for translation in response.translations:
             return {
                 'status': 200,
@@ -34,6 +39,7 @@ def translate_text(
             }
 
     except Exception as e:
+        logger.error('Error processing: %s', e, exc_info=True)
         print(f"Error during translation API call: {str(e)}")
         traceback.print_exc()
         return {

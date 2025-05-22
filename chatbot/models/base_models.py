@@ -251,6 +251,8 @@ class Voice(models.Model):
         validators=[MinValueValidator(0.25), MaxValueValidator(4.0)]
     )
 
+    other_params = models.JSONField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
