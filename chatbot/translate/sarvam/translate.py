@@ -3,8 +3,10 @@ import re
 import traceback
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from sarvamai import SarvamAI
+import logging
 
 
+logger = logging.getLogger('django')
 sarvam_api_key = os.getenv("SARVAM_API_KEY")
 
 
@@ -65,11 +67,14 @@ def translate_chunk(client, chunk, source_lang, target_lang, gender, mode, outpu
             output_script=output_script,
             enable_preprocessing=enable_preprocessing,
         )
+        logger.info(f"Response {response}")
+
         translated = response.translated_text if hasattr(response, 'translated_text') else chunk
         print(f"[Translate] Done. Translated length: {len(translated)}")
 
         return translated
     except Exception as e:
+        logger.error('Error processing: %s', e, exc_info=True)
         print(f"Error translating chunk: {chunk[:30]}... - {str(e)}")
         return chunk
 
@@ -125,6 +130,7 @@ def sarvam_translate_text(voice_provider, input_text, source_lang, target_lang, 
         }
 
     except Exception as e:
+        logger.error('Error processing: %s', e, exc_info=True)
         print(f"Error during translation API call: {str(e)}")
         traceback.print_exc()
         return {

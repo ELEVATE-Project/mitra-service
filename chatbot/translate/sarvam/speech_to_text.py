@@ -5,9 +5,11 @@ import traceback
 import concurrent.futures
 from chatbot.translate.google.google_stt import split_audio
 from sarvamai import SarvamAI
+import logging
 
 
 sarvam_api_key = os.getenv("SARVAM_API_KEY")
+logger = logging.getLogger('django')
 
 
 def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language):
@@ -55,5 +57,6 @@ def transcribe_sarvam_multiple_chunks(base64_audio_file, source_language, audio_
         return {'status': 200, 'content': transcript}
 
     except Exception as e:
+        logger.error('Error processing: %s', e, exc_info=True)
         traceback.print_exc()
         return {'status': 500, 'content': str(e)}
