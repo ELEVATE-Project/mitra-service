@@ -8,7 +8,7 @@ from sarvamai import SarvamAI
 sarvam_api_key = os.getenv("SARVAM_API_KEY")
 
 
-def split_text_into_chunks_safely(text, max_chars=1000):
+def split_text_into_chunks_safely(text, max_chars=990):
     """
     Splits text into chunks under max_chars.
     Tries to split on sentence boundaries (., ?, !).
