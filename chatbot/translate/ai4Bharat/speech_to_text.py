@@ -73,7 +73,13 @@ def ai4bharat_speech_text(base64, audio_format, source_language, service_id):
                         },
                         "serviceId": service_id,
                         "audioFormat": audio_format,
-                        "samplingRate": 16000
+                        "samplingRate": 16000,
+                        "preProcessors": [],
+                        "postProcessors": [
+                            "punctuation",
+                            "denoiser",
+                            "itn"
+                        ]
                     }
                 }
             ],
