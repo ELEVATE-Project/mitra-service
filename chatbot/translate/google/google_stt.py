@@ -8,13 +8,14 @@ import base64
 import concurrent.futures
 import logging
 
+from chatbot.translate.base.speech_to_text import is_silent_chunk
 
 logger = logging.getLogger('django')
 
 
 def split_audio(audio_bytes, chunk_duration=10):
     """
-    Splits audio into strictly 50-second chunks.
+    Splits audio into strictly 50-second chunks and skips silent ones.
     """
     with wave.open(io.BytesIO(audio_bytes), "rb") as wf:
         frame_rate = wf.getframerate()
@@ -41,11 +42,21 @@ def split_audio(audio_bytes, chunk_duration=10):
                 chunk_wf.setframerate(frame_rate)
                 chunk_wf.writeframes(chunk_data)
 
-            chunk_seconds = chunk_size / frame_rate
-            chunk_kb = len(output.getvalue()) / 1024
-            logger.info("Chunk %s: %.2f sec, %.2f KB", chunk_number, chunk_seconds, chunk_kb)
+            chunk_audio_bytes = output.getvalue()
+            if is_silent_chunk(chunk_audio_bytes):
+                logger.info(f"Skipping silent chunk {chunk_number}")
+            else:
+                chunk_seconds = chunk_size / frame_rate
+                chunk_kb = len(chunk_audio_bytes) / 1024
+                logger.info("Chunk %s: %.2f sec, %.2f KB", chunk_number, chunk_seconds, chunk_kb)
 
-            chunks.append((chunk_number, output.getvalue()))
+                chunks.append((chunk_number, chunk_audio_bytes))
+
+            # chunk_seconds = chunk_size / frame_rate
+            # chunk_kb = len(output.getvalue()) / 1024
+            # logger.info("Chunk %s: %.2f sec, %.2f KB", chunk_number, chunk_seconds, chunk_kb)
+
+            # chunks.append((chunk_number, output.getvalue()))
             i += chunk_size
             chunk_number += 1
 
