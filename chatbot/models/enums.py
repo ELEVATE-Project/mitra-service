@@ -158,6 +158,7 @@ class VoiceProvider(models.TextChoices):
     GOOGLE_V1 = 'GOOGLE_V1', _('GOOGLE v1 STT')
     AI4Bharat = 'AI4Bharat', _('AI4Bharat')
     OPENAI_WHISPER = 'OPENAI_WHISPER', _('OpenAI Whisper')
+    SARVAM = 'Sarvam', _('Sarvam')
 
 
 class VoiceType(models.TextChoices):
@@ -172,6 +173,7 @@ class LanguageMapping:
         "en": {"IN": "en-IN", "US": "en-US"},
         "hi": {"IN": "hi-IN"},
         "kn": {"IN": "kn-IN"},
+        "te": {"IN": "te-IN"},
     }
 
     @classmethod

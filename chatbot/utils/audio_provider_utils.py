@@ -7,6 +7,7 @@ from chatbot.translate.google.google_stt_v1 import transcribe_multiple_languages
 from chatbot.translate.google.google_translate import translate_text
 from chatbot.translate.google.google_tts import google_text_to_speech
 from chatbot.translate.openai.openai_stt import transcribe_audio
+from chatbot.translate.sarvam.translate import sarvam_translate_text
 from shikshalokam_mohini.settings import load_secrets
 
 
@@ -77,6 +78,12 @@ def text_translate_provider(voice_provider, message_body, target_language, sourc
             project_id=secret.get('project_id'), text=message_body,
             source_language_code=LanguageMapping.get_mapped_language(source_language),
             target_language_code=LanguageMapping.get_mapped_language(target_language)
+        )
+    elif voice_provider.provider == VoiceProvider.SARVAM:
+        response = sarvam_translate_text(
+            input_text=message_body, source_lang=LanguageMapping.get_mapped_language(source_language),
+            target_lang=LanguageMapping.get_mapped_language(target_language), gender=voice_provider.gender,
+            voice_provider=voice_provider
         )
     else:
         return {
