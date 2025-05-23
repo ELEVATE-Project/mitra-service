@@ -1,5 +1,5 @@
 from chatbot.models import VoiceProvider, LanguageMapping
-from chatbot.translate.ai4Bharat.speech_to_text import ai4bharat_speech_text, transcribe_ai4bharat_multiple_chunks
+from chatbot.translate.ai4Bharat.speech_to_text import transcribe_ai4bharat_multiple_chunks
 from chatbot.translate.ai4Bharat.text_to_speech import ai4bharat_text_speech
 from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
 from chatbot.translate.google.google_stt import transcribe_multiple_languages_v2
@@ -14,7 +14,9 @@ from shikshalokam_mohini.settings import load_secrets
 
 def text_speech_provider(voice_provider, text, gender, source_language):
     if voice_provider.provider == VoiceProvider.AI4Bharat:
-        response = ai4bharat_text_speech(text=text, gender=gender, source_language=source_language)
+        response = ai4bharat_text_speech(
+            text=text, gender=gender, source_language=source_language, voice_provider=voice_provider
+        )
     elif voice_provider.provider == VoiceProvider.GOOGLE:
         response = google_text_to_speech(
             message=text, language_code=LanguageMapping.get_mapped_language(source_language),
@@ -32,7 +34,8 @@ def text_speech_provider(voice_provider, text, gender, source_language):
 def speech_text_provider(voice_provider, base64, audio_format, source_language):
     if voice_provider.provider == VoiceProvider.AI4Bharat:
         response = transcribe_ai4bharat_multiple_chunks(
-            base64_audio_file=base64, source_language=source_language, audio_format=audio_format
+            base64_audio_file=base64, source_language=source_language, audio_format=audio_format,
+            voice_provider=voice_provider
         )
     elif voice_provider.provider == VoiceProvider.GOOGLE:
         if source_language == 'en':
@@ -76,7 +79,8 @@ def speech_text_provider(voice_provider, base64, audio_format, source_language):
 def text_translate_provider(voice_provider, message_body, target_language, source_language):
     if voice_provider.provider == VoiceProvider.AI4Bharat:
         response = call_ai4bharat_translation_api(
-            source_language=source_language, target_language=target_language, message_body=message_body
+            source_language=source_language, target_language=target_language, message_body=message_body,
+            voice_provider=voice_provider
         )
     elif voice_provider.provider == VoiceProvider.GOOGLE:
         secret = load_secrets()

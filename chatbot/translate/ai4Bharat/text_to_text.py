@@ -1,7 +1,6 @@
 import os
 import traceback
 import requests
-from chatbot.translate.ai4Bharat.base_translation import get_service_id
 import logging
 
 
@@ -12,15 +11,10 @@ ai4bharat_authorization = os.getenv("BHASHANI_AUTHORIZATION")
 logger = logging.getLogger('django')
 
 
-def call_ai4bharat_translation_api(source_language, target_language, message_body):
+def call_ai4bharat_translation_api(voice_provider, source_language, target_language, message_body):
     api_url = ai4bharat_base_url
-    service_id = None
-    pipeline_response = get_service_id(
-        task_type='translation', source_language=source_language, target_language=target_language
-    )
-    if pipeline_response and pipeline_response.get('success'):
-        service_id = pipeline_response.get('service_id', '')
-        print("service_id: ", service_id)
+
+    other_params = voice_provider.other_params if voice_provider.other_params else {}
 
     payload = {
         "pipelineTasks": [
@@ -31,9 +25,7 @@ def call_ai4bharat_translation_api(source_language, target_language, message_bod
                         "sourceLanguage": source_language,
                         "targetLanguage": target_language,
                     },
-                    "serviceId": service_id,
-                    "isSentence": True,
-                    "numSuggestions": 7
+                    "serviceId": other_params.get('serviceId', 'bhashini/iiith/nmt-all'),
                 }
             }
         ],
@@ -50,8 +42,6 @@ def call_ai4bharat_translation_api(source_language, target_language, message_bod
         'accept': '*/*',
         'content-type': 'application/json',
         'Authorization': ai4bharat_authorization,
-        'userID': ai4bharat_user_id,
-        'ulcaApiKey': ai4bharat_api_key
     }
 
     try:
