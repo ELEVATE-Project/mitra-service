@@ -3,7 +3,6 @@ import os
 import traceback
 import requests
 import json_repair
-from chatbot.translate.ai4Bharat.base_translation import get_service_id
 import concurrent.futures
 import logging
 from chatbot.translate.base.speech_to_text import split_audio
@@ -16,13 +15,13 @@ ai4bharat_user_id = os.getenv("BHASHANI_USER_ID")
 ai4bharat_authorization = os.getenv("BHASHANI_AUTHORIZATION")
 
 
-def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language, service_id):
+def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language, voice_provider):
     b64_chunk = base64.b64encode(chunk).decode('utf-8')
     response = ai4bharat_speech_text(
         base64=b64_chunk,
         audio_format=audio_format,
         source_language=source_language,
-        service_id=service_id
+        voice_provider=voice_provider
     )
     logger.info(f"response: {response}")
     if response['status'] == 200:
@@ -31,23 +30,16 @@ def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language, 
         return (chunk_number, '')
 
 
-def transcribe_ai4bharat_multiple_chunks(base64_audio_file, source_language, audio_format):
+def transcribe_ai4bharat_multiple_chunks(voice_provider, base64_audio_file, source_language, audio_format):
     try:
         audio_bytes = base64.b64decode(base64_audio_file)
         chunks = split_audio(audio_bytes, chunk_duration=10)
 
-        service_id = None
-        pipeline_response = get_service_id(
-            task_type='asr', source_language=source_language
-        )
-        if pipeline_response and pipeline_response.get('success'):
-            service_id = pipeline_response.get('service_id', '')
-            logger.info(f"service_id {service_id}")
-
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(
-                    transcribe_single_chunk, chunk_number, chunk, audio_format, source_language, service_id
+                    transcribe_single_chunk, chunk_number, chunk, audio_format, source_language,
+                    voice_provider
                 )
                 for chunk_number, chunk in chunks
             ]
@@ -64,8 +56,9 @@ def transcribe_ai4bharat_multiple_chunks(base64_audio_file, source_language, aud
 
 
 
-def ai4bharat_speech_text(base64, audio_format, source_language, service_id):
+def ai4bharat_speech_text(voice_provider, base64, audio_format, source_language):
     try:
+        other_params = voice_provider.other_params if voice_provider.other_params else {}
 
         payload = {
             "pipelineTasks": [
@@ -75,15 +68,16 @@ def ai4bharat_speech_text(base64, audio_format, source_language, service_id):
                         "language": {
                             "sourceLanguage": source_language,
                         },
-                        "serviceId": service_id,
+                        "serviceId": other_params.get('serviceId', "bhashini/iitm/asr-dravidian--gpu--t4"),
                         "audioFormat": audio_format,
-                        "samplingRate": 16000,
-                        "preProcessors": [],
-                        "postProcessors": [
-                            "punctuation",
-                            "denoiser",
-                            "itn"
-                        ]
+                        "samplingRate": int(other_params.get('samplingRate', 16000)) if isinstance(
+                            other_params.get('samplingRate'), int) or str(
+                            other_params.get('samplingRate')).isdigit() else 16000,
+                        "preProcessors": other_params.get('preProcessors') if isinstance(
+                            other_params.get('preProcessors'), list) else [],
+                        "postProcessors": other_params.get('postProcessors') if isinstance(
+                            other_params.get('postProcessors'), list) else [],
+
                     }
                 }
             ],
