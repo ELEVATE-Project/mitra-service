@@ -36,6 +36,7 @@ def transcribe_multiple_languages_v2(
         project_id: str,
         language_codes: List[str],
         audio_file: str,
+        voice_provider: any
 ) -> dict:
     client = SpeechClient()
 
@@ -48,7 +49,10 @@ def transcribe_multiple_languages_v2(
         )
 
         audio_bytes = base64.b64decode(audio_file)
-        chunks = split_audio(audio_bytes)
+        duration = 10
+        if voice_provider.other_params:
+            duration = int(voice_provider.other_params.get('chunk_duration', 10))
+        chunks = split_audio(audio_bytes, chunk_duration=duration)
 
         transcripts = []
         with concurrent.futures.ThreadPoolExecutor() as executor:

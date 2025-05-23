@@ -38,10 +38,13 @@ def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language):
         return (chunk_number, '')
 
 
-def transcribe_sarvam_multiple_chunks(base64_audio_file, source_language, audio_format="wav"):
+def transcribe_sarvam_multiple_chunks(voice_provider, base64_audio_file, source_language, audio_format="wav"):
     try:
         audio_bytes = base64.b64decode(base64_audio_file)
-        chunks = split_audio(audio_bytes, chunk_duration=10)
+        duration = 10
+        if voice_provider.other_params:
+            duration = int(voice_provider.other_params.get('chunk_duration', 10))
+        chunks = split_audio(audio_bytes, chunk_duration=duration)
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [
