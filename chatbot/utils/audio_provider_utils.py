@@ -46,7 +46,8 @@ def speech_text_provider(voice_provider, base64, audio_format, source_language):
         secret = load_secrets()
         response = transcribe_multiple_languages_v2(
             project_id=secret.get('project_id'), audio_file=base64,
-            language_codes=[LanguageMapping.get_mapped_language(source_language, region)]
+            language_codes=[LanguageMapping.get_mapped_language(source_language, region)],
+            voice_provider=voice_provider
         )
     elif voice_provider.provider == VoiceProvider.GOOGLE_V1:
         if source_language == 'en':
@@ -65,7 +66,8 @@ def speech_text_provider(voice_provider, base64, audio_format, source_language):
     elif voice_provider.provider == VoiceProvider.SARVAM:
         response = transcribe_sarvam_multiple_chunks(
             base64_audio_file=base64, audio_format=audio_format,
-            source_language=LanguageMapping.get_mapped_language(source_language)
+            source_language=LanguageMapping.get_mapped_language(source_language),
+            voice_provider=voice_provider
         )
 
     else:
