@@ -9,7 +9,7 @@ ai4bharat_user_id = os.getenv("BHASHANI_USER_ID")
 ai4bharat_authorization = os.getenv("BHASHANI_AUTHORIZATION")
 
 
-def call_ai4bharat_transliterate_api(source_language, target_language, message_body):
+def call_ai4bharat_transliterate_api(source_language, target_language, message_body, is_sentence=False):
     api_url = ai4bharat_base_url
     service_id = None
     pipeline_response = get_service_id(
@@ -29,7 +29,7 @@ def call_ai4bharat_transliterate_api(source_language, target_language, message_b
                         "targetLanguage": target_language,
                     },
                     "serviceId": service_id,
-                    "isSentence": False,
+                    "isSentence": is_sentence,
                     "numSuggestions": 7
                 }
             }
