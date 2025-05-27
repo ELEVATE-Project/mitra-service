@@ -161,14 +161,38 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
             if not chat_session:
                 return message
 
-            response = text_translate_provider(
-                voice_provider=voice_provider, message_body=message,
-                target_language='en', source_language=self.route
+            state_machine = CompanyStateMachine.objects.get(
+                company_bot=self.company_bot, step=chat_session.current_step
             )
-            if response.get('status') == 200:
-                return response.get('content')
+
+            if state_machine and state_machine.name in ['INTRODUCTION', 'ORGANIZATION']:
+                transliterate_voice_provider = Voice.objects.filter(
+                    company_bot=self.company_bot,
+                    type=VoiceType.Transliterate,
+                    language=self.route
+                ).first()
+                response =  transliterate_text(
+                    voice_provider=transliterate_voice_provider, source_language=self.route, target_language='en',
+                    message_body=message, is_sentence=True
+                )
+                print("Trans response: ", response)
+                if response and response.get('content'):
+                    content = response.get('content')
+                    print("Trans content: ", content)
+                    if content and isinstance(content, list) and len(content)>0:
+                        content = content[0]
+                    return content
             else:
-                return message
+                response = text_translate_provider(
+                    voice_provider=voice_provider, message_body=message,
+                    target_language='en', source_language=self.route
+                )
+
+                if response.get('status') == 200:
+                    return response.get('content')
+                else:
+                    return message
+
         except Exception as e:
             logger.error('Translation Error: %s', e, exc_info=True)
             return message
