@@ -24,6 +24,11 @@ def handle_elevate_profile(access_token):
         first_name, last_name = (full_name.split(' ', 1) + [''])[:2]
         phone = user_data.get('phone')
         email = user_data.get('email')
+        language = user_data.get('preferred_language', {})
+        if language and language.get('value'):
+            language = language.get('value', 'en')
+        else:
+            language = 'en'
 
         company = Company.objects.filter(slug='shikshalokamstaging').first()
 
@@ -48,7 +53,7 @@ def handle_elevate_profile(access_token):
                 'designation': user_data.get('professional_role', {}),
                 'other_params': {'elevate_profile_details': user_data},
                 'source': 'elevate',
-                'preferred_route': user_data.get('preferred_language', 'en'),
+                'preferred_route': language,
             }
         )
 
