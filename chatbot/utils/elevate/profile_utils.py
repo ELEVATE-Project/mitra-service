@@ -1,11 +1,13 @@
+import os
 import requests
 from chatbot.models import Profile, Company, SessionFlowName
 from chatbot.models.geo_models import ProfileAddress
 
+elevate_base_url = os.getenv('ELEVATE_BASE_URL')
 
 def handle_elevate_profile(access_token):
     try:
-        url = "https://elevate-api.sunbirdsaas.com/user/v1/user/read"
+        url = f"{elevate_base_url}/user/v1/user/read"
         headers = {
             'X-auth-token': access_token
         }
