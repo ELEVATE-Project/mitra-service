@@ -44,6 +44,12 @@ def read_elevate_profile(request):
 
     profile_details = handle_elevate_profile(access_token=access_token)
 
+    if not profile_details or not profile_details.get('profileid'):
+        return Response({
+            'status': 'error',
+            'message': 'Failed to fetch or create profile from Elevate.'
+        }, status=500)
+
     return Response({
         'status': 'ok',
         'profile_details': profile_details

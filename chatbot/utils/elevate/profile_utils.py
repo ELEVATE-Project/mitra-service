@@ -22,10 +22,18 @@ def handle_elevate_profile(access_token):
         user_data = json_data.get('result', {})
         full_name = user_data.get('name', '')
         first_name, last_name = (full_name.split(' ', 1) + [''])[:2]
+        phone = user_data.get('phone')
+        email = user_data.get('email')
 
         company = Company.objects.filter(slug='shikshalokamstaging').first()
-        if user_data.email:
-            pass
+
+        if (not email or email == '') and phone and phone != '':
+            email = f"{phone}@shikshalokam.org"
+
+        if not email or email == '':
+            print("No valid email or phone found to generate email.")
+            return {}
+
         profile, _ = Profile.objects.update_or_create(
             email=user_data.get('email'),
             defaults={
