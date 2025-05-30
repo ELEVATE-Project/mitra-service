@@ -3,7 +3,7 @@ from chatbot.views.aws_views import get_presigned_url
 from chatbot.views.gotenberg_view import generate_pdf_view
 from chatbot.views.kafka_views import sync_user_project_view
 from chatbot.views.location_views import get_location_view, get_ip_location_view
-from chatbot.views.profile_views import create_profile_views
+from chatbot.views.profile_views import create_profile_views, read_elevate_profile
 from django.urls import path
 from chatbot.views import api_views
 from chatbot.views.bhashini_views import text_speech_view, speech_text, text_translation_view, text_transliterate_view
@@ -24,6 +24,8 @@ app_name = "chatbot"
 
 urlpatterns = [
     path('api/profile/', api_views.post_profile),
+    path('api/user_profile/', ProfileListCreateView.as_view(), name='profile-list-create'),
+
     path('api/generate-session/', api_views.generate_session_id, name='generate_session_id'),
     path('api/login/', api_views.login, name='login'),
     path('api/logout/', api_views.logout, name='logout'),
@@ -86,4 +88,5 @@ urlpatterns = [
     path('api/get-ip-location/', get_ip_location_view, name='get-ip-location'),
     path("api/get-presigned-url/", get_presigned_url,  name='get-presigned-url'),
     path("api/image-converter/", convert_image, name='image-converter'),
+    path("api/read-elevate-profile/", read_elevate_profile, name='read-elevate-profile'),
 ]

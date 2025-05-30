@@ -43,19 +43,12 @@ def post_profile(request):
             company = company[0]
             email = data['email']
             first_name = data.get('first_name', '')
-            target_language = data.get('preferred_route', 'en')
+            target_language = data.get('preferred_route', None)
             if first_name and first_name != '' and target_language:
                 source_language='en'
-                # source_language=call_ai4bharat_text_lang_detect_api(message_body=first_name)
-                # if source_language and source_language.get('status') == 200:
-                #     source_language = source_language.get('content', 'en')
-                # else:
-                #     source_language='en'
                 first_names = call_ai4bharat_transliterate_api(
                     source_language=source_language, target_language=target_language, message_body=first_name
                 )
-                print("first_names: ", first_names)
-                print("type first_names: ", type(first_names))
                 if first_names and isinstance(first_names, dict):
                     first_names = first_names.get('content', [])
                 if first_names and isinstance(first_names, list) and len(first_names) > 0:
