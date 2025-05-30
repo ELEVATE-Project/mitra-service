@@ -26,9 +26,12 @@ def handle_elevate_profile(access_token):
         first_name, last_name = (full_name.split(' ', 1) + [''])[:2]
         phone = user_data.get('phone')
         email = user_data.get('email')
-        language = user_data.get('preferred_language', {})
-        if language and language.get('value'):
-            language = language.get('value', 'en')
+        language = user_data.get('preferred_language')
+        if language:
+            if isinstance(language, dict):
+                language = language.get('value', 'en')
+            else:
+                language = user_data.get('preferred_language')
         else:
             language = 'en'
 
