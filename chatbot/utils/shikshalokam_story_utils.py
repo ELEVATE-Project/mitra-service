@@ -161,7 +161,8 @@ def get_story_html(story, profile, flow):
     print("Generating for FLOW: ", flow)
     if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
         html_content += get_first_page_html(
-            profile=profile, project=project, voice_provider=voice_provider, story=story
+            profile=profile, project=project, voice_provider=voice_provider, story=story,
+            story_vernacular=story_vernacular
         )
         html_content += get_story_secondpage_html(
             story=story, project=project, story_vernacular=story_vernacular

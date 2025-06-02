@@ -3,13 +3,20 @@ import re
 from chatbot.utils.story_llama_utils import translate_field
 
 
-def get_first_page_html(profile, project, voice_provider, story):
+def get_first_page_html(profile, project, voice_provider, story, story_vernacular):
     profile_addresses=None
+    translation_json = story_vernacular.translation_json
+    if translation_json:
+        translation_json = translation_json.get('first_page', {})
+    else:
+        translation_json = {}
+
+    company_logo = translation_json.get('main_logo', '')
     if profile and profile.first_name:
         profile_addresses = profile.profile_address.all().first()
-        company_logo = profile.company.get_public_url()
-    else:
-        company_logo = voice_provider.company_bot.company.get_public_url()
+    #     company_logo = profile.company.get_public_url()
+    # else:
+    #     company_logo = voice_provider.company_bot.company.get_public_url()
     print("logo: ", company_logo)
     current_state = profile_addresses.state if profile_addresses else ""
     address_components = [

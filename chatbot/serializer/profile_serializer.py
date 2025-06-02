@@ -33,6 +33,10 @@ class ProfileSerializer(serializers.ModelSerializer):
         model = Profile
         fields = '__all__'
 
+    def list(self, request, *args, **kwargs):
+        print("GET request received")
+        return super().list(request, *args, **kwargs)
+
     def create(self, validated_data):
         profile_address_data = validated_data.pop('profile_address', None)
         profile_media_data = validated_data.pop('profile_media', None)

@@ -2,6 +2,7 @@ import os
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from chatbot.models import CompanyBot, Voice, VoiceType
+from chatbot.translate.ai4Bharat.text_lang_detect import call_ai4bharat_text_lang_detect_api
 from chatbot.utils.audio_converter_utils import convert_s3_audio_to_wav_base64
 from chatbot.utils.audio_provider_utils import text_speech_provider, speech_text_provider, text_translate_provider
 from chatbot.utils.transliterate_utils import transliterate_text
@@ -150,6 +151,7 @@ def text_transliterate_view(request):
         source_language =  body.get('source_language', 'en')
         target_language =  body.get('target_language', 'en')
         message_body = body.get('message_body')
+        detect_language = body.get('detect_language', False)
         route = body.get('route')
 
         if not route:
@@ -162,6 +164,13 @@ def text_transliterate_view(request):
         voice_provider = Voice.objects.filter(
             company_bot=company_bot, type=VoiceType.Transliterate, language=target_language
         ).first()
+
+        if detect_language:
+            detected_body = call_ai4bharat_text_lang_detect_api(message_body=message_body)
+            if detected_body and detected_body.get('content'):
+                source_language = detected_body.get('content')
+            print("detected_body: ", detected_body)
+        print("setting source_language: ", source_language)
 
         response = transliterate_text(
             voice_provider=voice_provider, message_body=message_body, target_language=target_language,

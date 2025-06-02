@@ -37,7 +37,7 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
     )
 
     author, address_string, company_logo, date_of_discussion, number_of_people = get_user_details(
-        story=story, profile=profile, voice_provider=voice_provider
+        story=story, profile=profile, voice_provider=voice_provider, translation_json=translation_json
     )
     # if date_of_discussion and date_of_discussion != '':
     #     info_html = f"<p style='text-align: center'>{translation_json.get('dateHeader', '')}: {date_of_discussion}<p>"
@@ -156,13 +156,14 @@ def process_steps(raw_data, fallback_text, char_limit, first_char_limit=None, he
     return full_html or fallback_text
 
 
-def get_user_details(story, profile, voice_provider):
+def get_user_details(story, profile, voice_provider, translation_json):
     profile_addresses=None
+    company_logo = translation_json.get('main_logo', '')
     if profile and profile.first_name:
         profile_addresses = profile.profile_address.all().first()
-        company_logo = profile.company.get_public_url()
-    else:
-        company_logo = voice_provider.company_bot.company.get_public_url()
+    #     company_logo = profile.company.get_public_url()
+    # else:
+    #     company_logo = voice_provider.company_bot.company.get_public_url()
     print("logo: ", company_logo)
 
     address_components = [
