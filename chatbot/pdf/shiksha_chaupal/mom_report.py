@@ -158,9 +158,9 @@ def process_steps(raw_data, fallback_text, char_limit, first_char_limit=None, he
 
 def get_user_details(story, profile, voice_provider, translation_json):
     profile_addresses=None
-    company_logo = translation_json.get('main_logo')
-    # if profile and profile.first_name:
-    #     profile_addresses = profile.profile_address.all().first()
+    company_logo = translation_json.get('main_logo', '')
+    if profile and profile.first_name:
+        profile_addresses = profile.profile_address.all().first()
     #     company_logo = profile.company.get_public_url()
     # else:
     #     company_logo = voice_provider.company_bot.company.get_public_url()
