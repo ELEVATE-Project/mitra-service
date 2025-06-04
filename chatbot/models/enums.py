@@ -111,6 +111,7 @@ class StoryLanguageChoices(models.TextChoices):
     ENGLISH = 'en', _('English')
     HINDI = 'hi', _('Hindi')
     KANNADA = 'kn', _('Kannada')
+    TELUGU = 'te', _('Telugu')
 
 
 class StorySourceChoices(models.TextChoices):

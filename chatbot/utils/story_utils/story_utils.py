@@ -46,6 +46,11 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
                 flow=flow
             )
         )
+        print("---------------STORY BOT RESPONSE-------------------")
+        print("response_json_content: ", response_json_content)
+        print("\n----------------------------------\n")
+        print("response_json_story: ", response_json_story)
+        print("----------------------------------")
 
         validate_content_prompt, validate_story_prompt = get_validation_prompt(
             response_json_story=response_json_story, validate_bot=validate_bot,
@@ -67,6 +72,9 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
                 flow=flow
             )
         )
+        print("---------------Validate BOT RESPONSE-------------------")
+        print("response_json_story: ", response_json_story)
+        print("----------------------------------")
         if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
             story, problem_statement = save_story(
                 response_json_story=response_json_story, language=language, voice_provider=voice_provider,
