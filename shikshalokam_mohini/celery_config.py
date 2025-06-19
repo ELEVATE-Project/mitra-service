@@ -14,4 +14,7 @@ app.autodiscover_tasks([
     'chatbot.celery_tasks.reflection_bedrock_tasks',
     'chatbot.celery_tasks.mitra_bedrock_tasks',
     'chatbot.utils.story_utils',
+    'chatbot.celery_tasks.guided_guest_tasks',
+    'chatbot.celery_tasks.oneshot_guest_tasks',
+
 ])
