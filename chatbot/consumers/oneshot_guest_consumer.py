@@ -2,7 +2,7 @@ import json
 from asgiref.sync import async_to_sync
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.base_consumer import BaseConsumer
-from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType, ChatType
+from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType, ChatType, CompanyChat
 from chatbot.celery_tasks.oneshot_guest_tasks import get_oneshot_guest_response
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.audio_provider_utils import text_translate_provider
@@ -46,7 +46,10 @@ class OneShotGuestConsumer(BaseConsumer):
                     company_bot=self.company_bot, step=chat_session.current_step
                 )
 
-                if state_machine and state_machine.name in ['INTRODUCTION', 'ORGANIZATION', 'DESIGNATION']:
+                company_chats = CompanyChat.objects.filter(session=self.session_id).order_by('created_at')
+
+                if (state_machine and state_machine.name in ['INTRODUCTION', 'ORGANIZATION', 'DESIGNATION'] and
+                        company_chats and len(company_chats)>1):
                     transliterate_voice_provider = Voice.objects.filter(
                         company_bot=self.company_bot,
                         type=VoiceType.Transliterate,
@@ -150,7 +153,7 @@ class OneShotGuestConsumer(BaseConsumer):
 
                 translated_message = None
 
-                if self.route != 'en'  and text_data_json and text_data_json.get('text'):
+                if self.route != 'en'  and text_data_json and text_data_json.get('text') :
                     translated_message = self.translate_message(message=text_data_json['text'])
 
                 if message_type != 'authenticate' and text_data_json and text_data_json.get('text'):
