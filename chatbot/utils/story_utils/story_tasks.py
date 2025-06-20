@@ -106,23 +106,29 @@ def save_story(
                 ).first()
 
                 if user_name and user_name != '':
+                    is_sentence = ' ' in user_name
                     user_name = transliterate_text(
                         voice_provider=voice_transliterate_provider, message_body=user_name, target_language=language,
-                        source_language='en'
+                        source_language='en',
+                        is_sentence=is_sentence
                     )
                     user_name = get_transliteration_output(data=user_name)
                 if organization and organization != '':
+                    is_sentence = ' ' in organization
                     organization = transliterate_text(
                         voice_provider=voice_transliterate_provider, message_body=organization,
                         target_language=language,
-                        source_language='en'
+                        source_language='en',
+                        is_sentence=is_sentence
                     )
                     organization = get_transliteration_output(data=organization)
                 if designation and designation != '':
+                    is_sentence = ' ' in designation
                     designation = transliterate_text(
                         voice_provider=voice_transliterate_provider, message_body=designation,
                         target_language=language,
-                        source_language='en'
+                        source_language='en',
+                        is_sentence=is_sentence
                     )
                     designation = get_transliteration_output(data=designation)
 
@@ -158,7 +164,7 @@ def save_story(
             story.action_steps = action_steps
             story.impact = impact
             story.micro_improvement = micro_improvement
-            story.language = StoryLanguageChoices.ENGLISH
+            story.language = language
             story.stage = StoryStatusChoices.COMPLETED
             story.other_params = other_params
             story.location = location if location else ""
@@ -175,7 +181,7 @@ def save_story(
                 action_steps=action_steps,
                 impact=impact,
                 micro_improvement=micro_improvement,
-                language=StoryLanguageChoices.ENGLISH,
+                language=language,
                 stage=StoryStatusChoices.COMPLETED,
                 other_params=other_params,
                 location=location if location else "",
