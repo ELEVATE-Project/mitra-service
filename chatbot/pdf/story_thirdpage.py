@@ -2,6 +2,8 @@ import json
 import re
 
 from bs4 import BeautifulSoup
+
+from chatbot.models import SessionFlowName
 from chatbot.utils.story_llama_utils import translate_field
 
 
@@ -79,18 +81,21 @@ def split_content_based_on_words(content, max_words_per_page=400):
     return chunks
 
 
-def get_thirdpage_html(profile, story, project, voice_provider, story_vernacular):
+def get_thirdpage_html(profile, story, project, voice_provider, story_vernacular, flow):
     profile_addresses=None
     if profile and profile.first_name:
         profile_addresses = profile.profile_address.all().first()
 
-    address_components = [
-        profile_addresses.district if profile_addresses and profile_addresses.district else "",
-        profile_addresses.block if profile_addresses and profile_addresses.block else "",
-        profile_addresses.state if profile_addresses and profile_addresses.state else ""
-    ]
+    if flow and flow in [SessionFlowName.GuestMiStory]:
+        address_string = story.other_params.get('location', '') if story.other_params else ''
+    else:
+        address_components = [
+            profile_addresses.district if profile_addresses and profile_addresses.district else "",
+            profile_addresses.block if profile_addresses and profile_addresses.block else "",
+            profile_addresses.state if profile_addresses and profile_addresses.state else ""
+        ]
+        address_string = ", ".join(filter(None, address_components))
 
-    address_string = ", ".join(filter(None, address_components))
     author = story.other_params.get('user_name', '') if story.other_params else ''
 
     sanitized_content = json_to_html(story.formatted_content)

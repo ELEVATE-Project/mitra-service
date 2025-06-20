@@ -4,10 +4,12 @@ from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.base_consumer import BaseConsumer
 from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType, ChatType
 from chatbot.celery_tasks.oneshot_guest_tasks import get_oneshot_guest_response
+from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.audio_provider_utils import text_translate_provider
 import jwt
 import logging
 
+from chatbot.utils.transliterate_utils import transliterate_text
 
 logger = logging.getLogger('django')
 
@@ -21,6 +23,60 @@ class OneShotGuestConsumer(BaseConsumer):
         access_token = None
         route = None
         company_bot = None
+
+        def translate_message(self, message):
+            try:
+                if not self.company_bot:
+                    return message
+
+                voice_provider = Voice.objects.filter(
+                    company_bot=self.company_bot,
+                    type=VoiceType.TextToText,
+                    language=self.route
+                ).first()
+
+                if not voice_provider:
+                    return message
+
+                chat_session = ChatSession.objects.filter(session=self.session_id).first()
+                if not chat_session:
+                    return message
+
+                state_machine = CompanyStateMachine.objects.get(
+                    company_bot=self.company_bot, step=chat_session.current_step
+                )
+
+                if state_machine and state_machine.name in ['INTRODUCTION', 'ORGANIZATION', 'DESIGNATION']:
+                    transliterate_voice_provider = Voice.objects.filter(
+                        company_bot=self.company_bot,
+                        type=VoiceType.Transliterate,
+                        language=self.route
+                    ).first()
+                    response = transliterate_text(
+                        voice_provider=transliterate_voice_provider, source_language=self.route, target_language='en',
+                        message_body=message, is_sentence=True
+                    )
+                    print("Trans response: ", response)
+                    if response and response.get('content'):
+                        content = response.get('content')
+                        print("Trans content: ", content)
+                        if content and isinstance(content, list) and len(content) > 0:
+                            content = content[0]
+                        return content
+                else:
+                    response = text_translate_provider(
+                        voice_provider=voice_provider, message_body=message,
+                        target_language='en', source_language=self.route
+                    )
+
+                    if response.get('status') == 200:
+                        return response.get('content')
+                    else:
+                        return message
+
+            except Exception as e:
+                logger.error('Translation Error: %s', e, exc_info=True)
+                return message
 
         def disconnect(self, code):
             chat_session = ChatSession.objects.filter(session=self.session_id)
@@ -92,21 +148,10 @@ class OneShotGuestConsumer(BaseConsumer):
                     },
                 )
 
-                if self.route != 'en'  and text_data_json and text_data_json.get('text'):
-                    voice_provider = Voice.objects.filter(
-                        company_bot=self.company_bot, type=VoiceType.TextToText, language=self.route
-                    ).first()
+                translated_message = None
 
-                    response = text_translate_provider(
-                        voice_provider=voice_provider, message_body=text_data_json['text'], target_language='en',
-                        source_language=self.route
-                    )
-                    if response.get('status') == 200:
-                        translated_message = response.get('content')
-                    else:
-                        translated_message = text_data_json['text']
-                else:
-                    translated_message = None
+                if self.route != 'en'  and text_data_json and text_data_json.get('text'):
+                    translated_message = self.translate_message(message=text_data_json['text'])
 
                 if message_type != 'authenticate' and text_data_json and text_data_json.get('text'):
                     save_in_company_db(

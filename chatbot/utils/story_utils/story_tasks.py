@@ -16,7 +16,8 @@ logger = logging.getLogger('django')
 
 
 def save_story(
-        response_json_story, language, voice_provider, profile, session, combined_reason, flow=None, project_id=None
+        response_json_story, language, voice_provider, profile, session, combined_reason, flow=None, project_id=None,
+        company_bot=None
 ):
     try:
         title = response_json_story['title']
@@ -37,7 +38,25 @@ def save_story(
         blurb = clean_escaped_text(text=blurb)
         impact = clean_escaped_text(text=impact)
         problem_statement = clean_escaped_text(text=problem_statement)
-        user_name=profile.first_name if profile and profile.first_name else ''
+
+        if flow and flow in [SessionFlowName.GuestMiStory]:
+            user_name = response_json_story.get('user_name', '')
+            location = response_json_story.get('location', '')
+            organization = response_json_story.get('organization', '')
+            designation = response_json_story.get('designation', '')
+        else:
+            user_name=profile.first_name if profile and profile.first_name else ''
+            organization=None
+            designation=None
+            location = None
+            if profile:
+                address = ProfileAddress.objects.filter(profile=profile).first()
+                if address:
+                    location_parts = filter(None, [address.block, address.district, address.state])
+                    location = ", ".join(location_parts)
+                else:
+                    location = ""
+
         if not title or not objective or not action_steps or not problem_statement:
             raise Exception("Empty fields found")
 
@@ -81,6 +100,32 @@ def save_story(
             blurb = translate_field(
                 voice_provider=voice_provider, message_body=blurb, target_language=language
             )
+            if flow and flow in [SessionFlowName.GuestMiStory] and company_bot:
+                voice_transliterate_provider = Voice.objects.filter(
+                    company_bot=company_bot, type=VoiceType.Transliterate, language=language
+                ).first()
+
+                if user_name and user_name != '':
+                    user_name = transliterate_text(
+                        voice_provider=voice_transliterate_provider, message_body=user_name, target_language=language,
+                        source_language='en'
+                    )
+                    user_name = get_transliteration_output(data=user_name)
+                if organization and organization != '':
+                    organization = transliterate_text(
+                        voice_provider=voice_transliterate_provider, message_body=organization,
+                        target_language=language,
+                        source_language='en'
+                    )
+                    organization = get_transliteration_output(data=organization)
+                if designation and designation != '':
+                    designation = transliterate_text(
+                        voice_provider=voice_transliterate_provider, message_body=designation,
+                        target_language=language,
+                        source_language='en'
+                    )
+                    designation = get_transliteration_output(data=designation)
+
 
         if flow == SessionFlowName.Reflection and project_id:
             logger.info(f"project_id: %s", project_id)
@@ -91,21 +136,17 @@ def save_story(
                 # action_steps = [task.get('task_name') for task in serialized_tasks]
                 action_steps = [f"{idx + 1}. {task.get('task_name')}" for idx, task in enumerate(serialized_tasks)]
 
-        if profile:
-            address = ProfileAddress.objects.filter(profile=profile).first()
-            if address:
-                location_parts = filter(None, [address.block, address.district, address.state])
-                location = ", ".join(location_parts)
-            else:
-                location = ""
-        else:
-            location = ""
-
         other_params = {
             'duration': duration,
             'flow': flow,
             'user_name': user_name,
         }
+
+        if flow and flow in [SessionFlowName.GuestMiStory]:
+            other_params['user_name'] = user_name
+            other_params['location'] = location
+            other_params['organization'] = organization
+            other_params['designation'] = designation
 
         story = Story.objects.filter(session=session).first()
         if story:
@@ -120,7 +161,7 @@ def save_story(
             story.language = StoryLanguageChoices.ENGLISH
             story.stage = StoryStatusChoices.COMPLETED
             story.other_params = other_params
-            story.location = location
+            story.location = location if location else ""
             story.blurb = blurb
             story.validation_logs = combined_reason
         else:
@@ -137,7 +178,7 @@ def save_story(
                 language=StoryLanguageChoices.ENGLISH,
                 stage=StoryStatusChoices.COMPLETED,
                 other_params=other_params,
-                location=location,
+                location=location if location else "",
                 blurb=blurb,
                 validation_logs=combined_reason
             )

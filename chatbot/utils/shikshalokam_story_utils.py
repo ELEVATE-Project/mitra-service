@@ -162,7 +162,7 @@ def get_story_html(story, profile, flow):
     if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
         html_content += get_first_page_html(
             profile=profile, project=project, voice_provider=voice_provider, story=story,
-            story_vernacular=story_vernacular
+            story_vernacular=story_vernacular, flow=flow
         )
         html_content += get_story_secondpage_html(
             story=story, project=project, story_vernacular=story_vernacular
@@ -170,7 +170,7 @@ def get_story_html(story, profile, flow):
         html_content += get_story_images_page_html(story=story, story_vernacular=story_vernacular)
         html_content += get_thirdpage_html(
             story=story, profile=profile, project=project, voice_provider=voice_provider,
-            story_vernacular=story_vernacular
+            story_vernacular=story_vernacular, flow=flow
         )
     else:
         html_content += get_mom_report_html(

@@ -43,7 +43,7 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
                 "user_location": address_string
             }
         else:
-            intro_mssg = None
+            intro_mssg = bot_vernacular.introductory_message
     else:
         intro_mssg = None
 
