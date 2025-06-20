@@ -1,9 +1,10 @@
 import re
 
+from chatbot.models import SessionFlowName
 from chatbot.utils.story_llama_utils import translate_field
 
 
-def get_first_page_html(profile, project, voice_provider, story, story_vernacular):
+def get_first_page_html(profile, project, voice_provider, story, story_vernacular, flow):
     profile_addresses=None
     translation_json = story_vernacular.translation_json
     if translation_json:
@@ -19,13 +20,17 @@ def get_first_page_html(profile, project, voice_provider, story, story_vernacula
     #     company_logo = voice_provider.company_bot.company.get_public_url()
     print("logo: ", company_logo)
     current_state = profile_addresses.state if profile_addresses else ""
-    address_components = [
-        profile_addresses.district if profile_addresses and profile_addresses.district else "",
-        profile_addresses.block if profile_addresses and profile_addresses.block else "",
-        profile_addresses.state if profile_addresses and profile_addresses.state else ""
-    ]
 
-    address_string = ", ".join(filter(None, address_components))
+    if flow and flow in [SessionFlowName.GuestMiStory]:
+        address_string = story.other_params.get('location', '') if story.other_params else ''
+    else:
+        address_components = [
+            profile_addresses.district if profile_addresses and profile_addresses.district else "",
+            profile_addresses.block if profile_addresses and profile_addresses.block else "",
+            profile_addresses.state if profile_addresses and profile_addresses.state else ""
+        ]
+
+        address_string = ", ".join(filter(None, address_components))
 
     print("current_state: ", current_state)
     title = project.expected_title or project.actual_title or "mi_story"

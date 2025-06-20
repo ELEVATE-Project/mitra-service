@@ -33,8 +33,15 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
             company_bot=company_bot, profile=profile
         )
 
+        intro_to_pass = None
+
+        if flow and flow in [SessionFlowName.GuestMiStory]:
+            bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot).first()
+            if bot_vernacular:
+                intro_to_pass = bot_vernacular.introductory_message
+
         messages = get_guided_chat(
-            company_bot=company_bot, company_chats=company_chats
+            company_bot=company_bot, company_chats=company_chats, intro=intro_to_pass
         )
 
         tool_content, tool_story = get_tool_values(company_bot=company_bot)
@@ -79,7 +86,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
             story, problem_statement = save_story(
                 response_json_story=response_json_story, language=language, voice_provider=voice_provider,
                 profile=profile, session=session, combined_reason=combined_reason, flow=flow,
-                project_id=chat_session.project_id
+                project_id=chat_session.project_id, company_bot=company_bot
             )
         else:
             story, problem_statement = save_chaupal_report(
@@ -132,16 +139,22 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
 
 def get_story_company_bot(profile, flow):
     if profile:
-        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
+        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.Reflection]:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/story')
             validate_bot = CompanyBot.objects.get(company=profile.company, route='/story_validation')
+        elif flow in [SessionFlowName.GuestMiStory]:
+            company_bot = CompanyBot.objects.get(company=profile.company, route='/guest-story')
+            validate_bot = CompanyBot.objects.get(company=profile.company, route='/guest-story_validation')
         else:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/chaupal-story')
             validate_bot = CompanyBot.objects.get(company=profile.company, route='/chaupal-_validation')
     else:
-        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
+        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.Reflection]:
             company_bot = CompanyBot.objects.get(route='/story')
             validate_bot = CompanyBot.objects.get(route='/story_validation')
+        elif flow in [SessionFlowName.GuestMiStory]:
+            company_bot = CompanyBot.objects.get(company=profile.company, route='/guest-story')
+            validate_bot = CompanyBot.objects.get(company=profile.company, route='/guest-story_validation')
         else:
             company_bot = CompanyBot.objects.get(route='/chaupal-story')
             validate_bot = CompanyBot.objects.get(route='/chaupal-_validation')

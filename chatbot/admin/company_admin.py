@@ -6,10 +6,12 @@ from chatbot.filter.admin_filter import (CompanyChatCompanyFilter, ChatSessionFi
                                          ProfileStateFilter, ProfileCompanyChatFilter, ProfileEmailFilter)
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import Company, Profile, ProfileType, CompanyBot, CompanyChat, ChatSession, \
-    CompanyBotTypeChoices, Voice
+    CompanyBotTypeChoices, Voice, VoiceProvider
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.resources.resource import CompanyChatResource
 from chatbot.resources.company_resource import ChatSessionResource
+from django.shortcuts import redirect
+from django.contrib import messages
 
 
 class CompanyStateMachineAdmin(admin.TabularInline):
@@ -51,6 +53,7 @@ class CompanyBotAdmin(SimpleHistoryAdmin):
     list_display = ('name', 'company',)
     list_filter = ('company', 'name', 'provider', 'llm_model')
     inlines = [VoiceProviderAdmin]
+    actions = ['duplicate_bot']
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -93,6 +96,39 @@ class CompanyBotAdmin(SimpleHistoryAdmin):
             # This example assumes not.
             self.inlines = [VoiceProviderAdmin]
         return super().changeform_view(request, object_id, form_url, extra_context)
+
+    def duplicate_bot(self, request, queryset):
+        if queryset.count() != 1:
+            self.message_user(request, "Please select exactly one bot to duplicate.", level=messages.ERROR)
+            return
+
+        original = queryset.first()
+
+        # Duplicate the bot
+        new_bot = CompanyBot.objects.get(pk=original.pk)
+        new_bot.pk = None
+        new_bot.name = f"{original.name} (Copy)"
+        new_bot.save()
+
+        # Duplicate VoiceProvider inlines
+        original_voice_providers = Voice.objects.filter(company_bot=original)
+        for voice in original_voice_providers:
+            voice.pk = None
+            voice.company_bot = new_bot
+            voice.save()
+
+        # Duplicate StateMachine if present
+        if original.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
+            original_state_machines = CompanyStateMachine.objects.filter(company_bot=queryset.first())
+            for sm in original_state_machines:
+                sm.pk = None
+                sm.company_bot = new_bot
+                sm.save()
+
+        self.message_user(request, "Bot duplicated successfully!", level=messages.SUCCESS)
+        return redirect(f"/admin/chatbot/companybot/{new_bot.id}/change/")  # Update app label accordingly
+
+    duplicate_bot.short_description = "Duplicate selected bot"
 
 
 @admin.register(CompanyChat)

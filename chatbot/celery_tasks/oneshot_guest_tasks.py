@@ -3,23 +3,23 @@ from chatbot.celery_tasks.handle_message import translate_and_send_message
 from chatbot.models import CompanyChat, Profile, CompanyBot, ChatSession, LLMProvider, BotVernacular
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.chat_utils import get_guided_chat
-from chatbot.utils.one_shot_bedrock_tool_call import get_one_shot_bedrock_tool_call_response
-from chatbot.utils.one_shot_utils import get_remaining_strands
+from chatbot.utils.oneshot_guest_tool_call import get_oneshot_guest_tool_call_response
 import logging
+from chatbot.utils.oneshot_guest_utils import get_remaining_strands
 
 
 logger = logging.getLogger('django')
 
 
 @shared_task
-def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
+def get_oneshot_guest_response(channel_name, session_id, profile_id, route):
     company_chats = CompanyChat.objects.filter(session=session_id).order_by('created_at')
     chat_session = ChatSession.objects.get(session=session_id)
     profile = Profile.objects.filter(id=profile_id).first()
     if profile:
-        company_bot = CompanyBot.objects.get(company=profile.company, route='/oneshot_bot')
+        company_bot = CompanyBot.objects.get(company=profile.company, route='/oneshot_guest')
     else:
-        company_bot = CompanyBot.objects.get(route='/oneshot_bot')
+        company_bot = CompanyBot.objects.get(route='/oneshot_guest')
 
     bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot).first()
     other_info=None
@@ -43,7 +43,7 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
                 "user_location": address_string
             }
         else:
-            intro_mssg = bot_vernacular.introductory_message
+            intro_mssg = None
     else:
         intro_mssg = None
 
@@ -103,7 +103,7 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
         company_bot=company_bot, state_machine=state_machine
     )
 
-    response = get_one_shot_bedrock_tool_call_response(
+    response = get_oneshot_guest_tool_call_response(
         system_prompt=prompt_to_use, messages=messages, company_bot=company_bot, session_id=session_id,
         channel_name=channel_name, route=route, profile_id=profile_id, remaining_stages=remaining_stages,
         intro_mssg=intro_mssg

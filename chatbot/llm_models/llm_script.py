@@ -10,6 +10,7 @@ import json_repair
 from retrying import retry, RetryError
 import logging
 from botocore.client import Config as BotoConfig
+from botocore.exceptions import ClientError
 
 
 logger = logging.getLogger('django')
@@ -231,7 +232,13 @@ def handle_bedrock_model(
                 return content_text
 
         return final_output
-
+    except ClientError as e:
+            error_response = e.response
+            print("❌ ClientError:")
+            print("Error Code:", error_response["Error"]["Code"])
+            print("Error Message:", error_response["Error"]["Message"])
+            print("Request ID:", error_response.get("ResponseMetadata", {}).get("RequestId"))
+            return None
     except Exception as e:
         logger.error('Error processing request: %s', e, exc_info=True)
         return None

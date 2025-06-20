@@ -27,6 +27,8 @@ class LLMProvider(models.TextChoices):
 
 class LLMModel(models.TextChoices):
     GPT4 = 'gpt-4', _('GPT4')
+    GPT4_1 = 'gpt-4.1', _('GPT4_1')
+    GPT4_1_MINI = 'gpt-4.1-mini', _('GPT4_1-MINI')
     GPT4_128K = 'gpt-4-1106-preview', _('GPT4-128k')
     GPT4_TURBO = 'gpt-4-turbo', _('GPT4_TURBO')
     LLAMA_3_8B_8192 = 'llama3-8b-8192', _('LLAMA_3_8B_8192')
