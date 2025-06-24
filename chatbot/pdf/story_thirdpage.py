@@ -83,46 +83,45 @@ def split_content_based_on_words(content, max_words_per_page=400):
 
 def get_thirdpage_html(profile, story, project, voice_provider, story_vernacular, flow):
     profile_addresses=None
-    if profile and profile.first_name:
-        profile_addresses = profile.profile_address.all().first()
+    # if profile and profile.first_name:
+        # profile_addresses = profile.profile_address.all().first()
 
-    if flow and flow in [SessionFlowName.GuestMiStory]:
-        address_string = story.other_params.get('location', '') if story.other_params else ''
-    else:
-        address_components = [
-            profile_addresses.district if profile_addresses and profile_addresses.district else "",
-            profile_addresses.block if profile_addresses and profile_addresses.block else "",
-            profile_addresses.state if profile_addresses and profile_addresses.state else ""
-        ]
-        address_string = ", ".join(filter(None, address_components))
+    # if flow and flow in [SessionFlowName.GuestMiStory]:
+    #     address_string = story.other_params.get('location', '') if story.other_params else ''
+    # else:
+    #     address_components = [
+    #         profile_addresses.district if profile_addresses and profile_addresses.district else "",
+    #         profile_addresses.block if profile_addresses and profile_addresses.block else "",
+    #         profile_addresses.state if profile_addresses and profile_addresses.state else ""
+    #     ]
+    #     address_string = ", ".join(filter(None, address_components))
 
-    author = story.other_params.get('user_name', '') if story.other_params else ''
+    # author = story.other_params.get('user_name', '') if story.other_params else ''
 
     sanitized_content = json_to_html(story.formatted_content)
     should_show_story_heading = True
 
     content_chunks = split_content_based_on_words(sanitized_content)
 
-    if project and project.project_language and project.project_language != 'en':
-        if address_string:
-            address_string = translate_field(
-                voice_provider=voice_provider, message_body=address_string, target_language=project.project_language
-            )
+    # if project and project.project_language and project.project_language != 'en':
+    #     if address_string:
+    #         address_string = translate_field(
+    #             voice_provider=voice_provider, message_body=address_string, target_language=project.project_language
+    #         )
 
-    translation_json = story_vernacular.translation_json
-    if translation_json:
-        translation_json = translation_json.get('third_page', {})
-    else:
-        translation_json = {}
+    # translation_json = story_vernacular.translation_json
+    # if translation_json:
+    #     translation_json = translation_json.get('third_page', {})
+    # else:
+    #     translation_json = {}
 
-    if profile and profile.first_name:
-        author_title = translation_json.get('title', '')
-    else:
-        author_title = translation_json.get('title1', '')
+    # if profile and profile.first_name:
+    #     author_title = translation_json.get('title', '')
+    # else:
+    #     author_title = translation_json.get('title1', '')
 
     title = (
-        f"{story.title or ''} {address_string} "
-        f"{author or ''}{author_title}"
+        f"{story.title or ''}"
     )
 
     html_pages = []
