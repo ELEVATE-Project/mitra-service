@@ -188,7 +188,10 @@ class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
 
 @admin.register(ChatSession)
 class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
-    list_display = ('session', 'get_first_name', 'created_at', 'session_type', 'current_question', 'total_steps')
+    list_display = (
+        'session', 'get_first_name', 'session_status', 'session_type', 'current_question', 'total_steps',
+        'created_at'
+    )
     list_filter = ('session', 'title', ChatSessionFilter, 'project_id', 'session_status', 'session_type')
     search_fields = ('session', 'title', 'profile__first_name')
     raw_id_fields = ('profile',)
@@ -222,8 +225,8 @@ class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
         user_email = request.user.email
         profile = Profile.objects.filter(email=user_email)
         if not user.is_superuser and len(profile) > 0 and profile[0].profile_type == ProfileType.MODERATOR:
-            return 'session', 'get_first_name', 'created_at', 'current_question', 'total_steps'
-        return 'session', 'get_first_name', 'created_at', 'current_question', 'total_steps'
+            return 'session', 'get_first_name', 'current_question', 'total_steps', 'session_status', 'created_at'
+        return 'session', 'get_first_name', 'current_question', 'total_steps', 'session_status', 'created_at'
 
     def get_first_name(self, obj):
         return obj.profile.first_name if obj.profile else None
