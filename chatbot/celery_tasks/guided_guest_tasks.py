@@ -36,8 +36,20 @@ def get_guided_guest_response(channel_name, session_id, profile_id, route):
         else:
             intro_mssg = None
 
-        temp_company_chats = CompanyChat.objects.filter(session=session_id).order_by('-created_at')[:5]
-        temp_company_chats=list(reversed(temp_company_chats))
+        state_machine = CompanyStateMachine.objects.get(
+            company_bot=company_bot,
+            step=chat_session.current_step
+        )
+
+        if state_machine.use_stage_chats:
+            temp_company_chats = CompanyChat.objects.filter(
+                session=session_id,
+                stage=state_machine.name
+            ).order_by('created_at')
+        else:
+            temp_company_chats=company_chats
+            # temp_company_chats = CompanyChat.objects.filter(session=session_id).order_by('-created_at')[:5]
+            # temp_company_chats=list(reversed(temp_company_chats))
         prompt_to_use = get_guided_prompt(
             company_bot=company_bot, system_context=system_context, state_machine=state_machine,
         )
