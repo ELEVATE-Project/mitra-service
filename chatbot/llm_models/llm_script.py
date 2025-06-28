@@ -204,6 +204,7 @@ def handle_bedrock_model(
         print('Conversation Bedrock request payload: ', request_payload)
         response = bedrock_runtime.converse(**request_payload)
         logger.info('Bedrock response: %s', response)
+        print('Bedrock response: ', response)
 
         content_arr = response['output']['message']['content']
         content = content_arr[0]
