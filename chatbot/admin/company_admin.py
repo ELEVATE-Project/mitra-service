@@ -201,7 +201,7 @@ class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
     current_question.short_description = 'Current Question'
 
     def total_steps(self, obj):
-        if obj.company_bot:
+        if obj.company_bot and CompanyStateMachine.objects.filter(company_bot=obj.company_bot).exists():
             return CompanyStateMachine.objects.filter(company_bot=obj.company_bot).count()
         return 0
     total_steps.short_description = 'Total Questions'
@@ -222,8 +222,8 @@ class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
         user_email = request.user.email
         profile = Profile.objects.filter(email=user_email)
         if not user.is_superuser and len(profile) > 0 and profile[0].profile_type == ProfileType.MODERATOR:
-            return 'session', 'get_first_name', 'created_at'
-        return 'session', 'get_first_name', 'created_at'
+            return 'session', 'get_first_name', 'created_at', 'current_question', 'total_steps'
+        return 'session', 'get_first_name', 'created_at', 'current_question', 'total_steps'
 
     def get_first_name(self, obj):
         return obj.profile.first_name if obj.profile else None
