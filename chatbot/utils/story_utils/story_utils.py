@@ -36,7 +36,8 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         intro_to_pass = None
 
         if flow and flow in [SessionFlowName.GuestMiStory]:
-            bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot).first()
+            flow_company_bot = CompanyBot.objects.get(company=profile.company, route='/guided_guest')
+            bot_vernacular = BotVernacular.objects.filter(company_bot=flow_company_bot).first()
             if bot_vernacular:
                 intro_to_pass = bot_vernacular.introductory_message
 
