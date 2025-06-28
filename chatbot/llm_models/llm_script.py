@@ -201,6 +201,7 @@ def handle_bedrock_model(
             request_payload['toolConfig'] = tools.get('toolConfig')
 
         logger.info('Bedrock request payload: %s', request_payload)
+        print('Conversation Bedrock request payload: ', request_payload)
         response = bedrock_runtime.converse(**request_payload)
         logger.info('Bedrock response: %s', response)
 
