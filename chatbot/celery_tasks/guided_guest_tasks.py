@@ -36,11 +36,13 @@ def get_guided_guest_response(channel_name, session_id, profile_id, route):
         else:
             intro_mssg = None
 
+        temp_company_chats = CompanyChat.objects.filter(session=session_id).order_by('-created_at')[:5]
+
         prompt_to_use = get_guided_prompt(
             company_bot=company_bot, system_context=system_context, state_machine=state_machine,
         )
         messages = get_guided_chat(
-            company_bot=company_bot, company_chats=company_chats, intro=intro_mssg
+            company_bot=company_bot, company_chats=temp_company_chats, intro=intro_mssg
         )
 
         response = get_guided_guest_tool_call_response(
