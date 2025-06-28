@@ -84,12 +84,17 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
                 translated_message = await self.translate_message(text_data_json['text'])
 
             if message_type != 'authenticate' and text_data_json and text_data_json.get('text'):
-                chat_session = ChatSession.objects.filter(session=self.session_id).order_by('-created_at').first()
+                chat_session = await database_sync_to_async(
+                    lambda: ChatSession.objects.filter(session=self.session_id).order_by('-created_at').first()
+                )()
+
                 current_stage = None
                 if chat_session and self.company_bot:
-                    state_machine = CompanyStateMachine.objects.get(
-                        company_bot=self.company_bot, step=chat_session.current_step
-                    )
+                    state_machine = await database_sync_to_async(
+                        lambda: CompanyStateMachine.objects.get(
+                            company_bot=self.company_bot, step=chat_session.current_step
+                        )
+                    )()
                     if state_machine:
                         current_stage = state_machine.name
                 # Use a task for database operations
