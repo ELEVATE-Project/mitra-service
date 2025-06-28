@@ -139,7 +139,7 @@ class GuidedGuestConsumer(BaseConsumer):
 
                 print("text_data_json: ", text_data_json)
                 if message_type != 'authenticate' and text_data_json and text_data_json.get('text'):
-                    chat_session = ChatSession.objects.filter(session=self.session_id)
+                    chat_session = ChatSession.objects.filter(session=self.session_id).order_by('-created_at').first()
                     current_stage=None
                     if chat_session and self.company_bot:
                         state_machine = CompanyStateMachine.objects.get(
