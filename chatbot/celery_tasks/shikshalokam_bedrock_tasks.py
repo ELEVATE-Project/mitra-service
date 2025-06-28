@@ -36,11 +36,19 @@ def get_shikshalokam_bedrock_response(channel_name, session_id, profile_id, rout
         else:
             intro_mssg = None
 
+        if state_machine.use_stage_chats:
+            temp_company_chats = CompanyChat.objects.filter(
+                session=session_id,
+                stage=state_machine.name
+            ).order_by('created_at')
+        else:
+            temp_company_chats=company_chats
+
         prompt_to_use = get_guided_prompt(
             company_bot=company_bot, system_context=system_context, state_machine=state_machine,
         )
         messages = get_guided_chat(
-            company_bot=company_bot, company_chats=company_chats, intro=intro_mssg
+            company_bot=company_bot, company_chats=temp_company_chats, intro=intro_mssg
         )
 
         response = get_bedrock_tool_call_response(

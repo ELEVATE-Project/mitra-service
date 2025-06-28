@@ -79,8 +79,16 @@ def get_chaupal_response(channel_name, session_id, profile_id, route):
             intro_mssg=intro_mssg, profile=profile
         )
 
+        if state_machine.use_stage_chats:
+            temp_company_chats = CompanyChat.objects.filter(
+                session=session_id,
+                stage=state_machine.name
+            ).order_by('created_at')
+        else:
+            temp_company_chats=company_chats
+
         messages = get_guided_chat(
-            company_bot=company_bot, company_chats=company_chats, intro=intro_mssg, other_info=other_info
+            company_bot=company_bot, company_chats=temp_company_chats, intro=intro_mssg, other_info=other_info
         )
 
         response = get_chaupal_tool_call_response(

@@ -48,8 +48,6 @@ def get_guided_guest_response(channel_name, session_id, profile_id, route):
             ).order_by('created_at')
         else:
             temp_company_chats=company_chats
-            # temp_company_chats = CompanyChat.objects.filter(session=session_id).order_by('-created_at')[:5]
-            # temp_company_chats=list(reversed(temp_company_chats))
         prompt_to_use = get_guided_prompt(
             company_bot=company_bot, system_context=system_context, state_machine=state_machine,
         )
