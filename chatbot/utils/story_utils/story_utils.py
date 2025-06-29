@@ -12,6 +12,9 @@ from chatbot.utils.story_utils.get_story_prompts import get_creation_promt, get_
     get_validation_prompt
 from chatbot.utils.story_utils.story_llm import generate_story_llm, validate_story_llm
 from chatbot.utils.story_utils.story_tasks import save_story, save_chaupal_report
+import logging
+
+logger = logging.getLogger('django')
 
 
 def create_story_object(profile_id, session, access_token, flow, language='en'):
@@ -54,11 +57,13 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
                 flow=flow
             )
         )
-        print("---------------STORY BOT RESPONSE-------------------")
-        print("response_json_content: ", response_json_content)
-        print("\n----------------------------------\n")
-        print("response_json_story: ", response_json_story)
-        print("----------------------------------")
+        # print("---------------STORY BOT RESPONSE-------------------")
+        logger.info(f"STORY response_json_content: %s", response_json_content)
+        logger.info(f"STORY response_json_story: %s", response_json_story)
+        # print("response_json_content: ", response_json_content)
+        # print("\n----------------------------------\n")
+        # print("response_json_story: ", response_json_story)
+        # print("----------------------------------")
 
         validate_content_prompt, validate_story_prompt = get_validation_prompt(
             response_json_story=response_json_story, validate_bot=validate_bot,
@@ -80,9 +85,11 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
                 flow=flow
             )
         )
-        print("---------------Validate BOT RESPONSE-------------------")
-        print("response_json_story: ", response_json_story)
-        print("----------------------------------")
+        # print("---------------Validate BOT RESPONSE-------------------")
+        # print("response_json_story: ", response_json_story)
+        logger.info(f"VALIDATION STORY response_json_story: %s", response_json_story)
+
+        # print("----------------------------------")
         if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
             story, problem_statement = save_story(
                 response_json_story=response_json_story, language=language, voice_provider=voice_provider,
