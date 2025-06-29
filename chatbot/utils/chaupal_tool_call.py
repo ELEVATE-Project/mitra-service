@@ -114,10 +114,12 @@ def get_chaupal_tool_call_response(
             chat_status = ChatStatus.IN_PROGRESS
 
         save_in_company_db(
-            session_id, profile_id, 'AI', bot_question, chunks, chat_status, translated_message
+            session_id=session_id, profile_id=profile_id, initiated_by='AI', message=bot_question,
+            chunks=chunks, status=chat_status, translated_message=translated_message, stage=state_machine.name
         )
         return response
     else:
+        state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=chat_session.current_step)
         print("its not a  func call")
         translated_message = translate_and_send_message(
             accumulated_message=response, current_channel_name=channel_name,
@@ -125,7 +127,9 @@ def get_chaupal_tool_call_response(
             company_bot=company_bot
         )
         save_in_company_db(
-            session_id, profile_id, 'AI', response, chunks, ChatStatus.IN_PROGRESS, translated_message
+            session_id=session_id, profile_id=profile_id, initiated_by='AI', message=response,
+            chunks=chunks, status=ChatStatus.IN_PROGRESS, translated_message=translated_message,
+            stage=state_machine.name
         )
 
         return response

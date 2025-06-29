@@ -5,6 +5,7 @@ from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.base_consumer import BaseConsumer
 from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType, ChatType
 from chatbot.celery_tasks.shikshalokam_bedrock_tasks import get_shikshalokam_bedrock_response
+from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.audio_provider_utils import text_translate_provider
 import logging
 
@@ -95,10 +96,19 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
 
                 print("text_data_json: ", text_data_json)
                 if message_type != 'authenticate' and text_data_json and text_data_json.get('text'):
+                    chat_session = ChatSession.objects.filter(session=self.session_id).order_by('-created_at').first()
+                    current_stage = None
+                    if chat_session and self.company_bot:
+                        state_machine = CompanyStateMachine.objects.get(
+                            company_bot=self.company_bot, step=chat_session.current_step
+                        )
+                        if state_machine:
+                            current_stage = state_machine.name
                     save_in_company_db(
                         session_id=self.session_id, profile_id=self.profile_id, initiated_by='User',
                         message=text_data_json['text'], chunks=None, status=company_chat_status,
-                        translated_message=translated_message, audio_base64=text_data_json.get('asr_audio')
+                        translated_message=translated_message, audio_base64=text_data_json.get('asr_audio'),
+                        stage=current_stage
                     )
 
                 print(f"channel_name: {self.channel_name}, session_id: {self.session_id}, profile_id: "

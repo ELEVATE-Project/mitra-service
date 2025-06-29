@@ -10,6 +10,11 @@ class CompanyStateMachine(models.Model):
         help_text="Integer representing the order in which state function calling happens. Lower values are "
                   "called first."
     )
+    use_stage_chats = models.BooleanField(
+        default=False,
+        verbose_name="Use Stage Chats",
+        help_text="If True, only chats from this stage will be included and passed to the LLM."
+    )
     type = models.CharField(
         max_length=10, choices=EntityTypeChoices.choices, default=EntityTypeChoices.MANDATORY,
         help_text="Specify whether the state is mandatory or optional."

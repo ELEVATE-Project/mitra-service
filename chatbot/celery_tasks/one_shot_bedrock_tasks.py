@@ -99,6 +99,18 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
         print("Error: ", e)
         return
 
+    if state_machine.use_stage_chats:
+        temp_company_chats = CompanyChat.objects.filter(
+            session=session_id,
+            stage=state_machine.name
+        ).order_by('created_at')
+    else:
+        temp_company_chats = company_chats
+
+    temp_messages = get_guided_chat(
+        company_bot=company_bot, company_chats=temp_company_chats, intro=intro_mssg, other_info=other_info
+    )
+
     prompt_to_use = get_onestep_prompt(
         company_bot=company_bot, state_machine=state_machine
     )
@@ -106,7 +118,7 @@ def get_one_shot_bedrock_response(channel_name, session_id, profile_id, route):
     response = get_one_shot_bedrock_tool_call_response(
         system_prompt=prompt_to_use, messages=messages, company_bot=company_bot, session_id=session_id,
         channel_name=channel_name, route=route, profile_id=profile_id, remaining_stages=remaining_stages,
-        intro_mssg=intro_mssg
+        intro_mssg=intro_mssg, temp_messages=temp_messages
     )
 
     return response

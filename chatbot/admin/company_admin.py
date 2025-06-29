@@ -133,8 +133,10 @@ class CompanyBotAdmin(SimpleHistoryAdmin):
 
 @admin.register(CompanyChat)
 class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
-    list_display = ('session', 'sender', 'receiver', 'message', 'created_at', 'message_type')
-    list_filter = ('created_at', ProfileCompanyChatFilter, ProfileEmailFilter, 'session', CompanyChatCompanyFilter)
+    list_display = ('session', 'sender', 'receiver', 'message', 'created_at', 'stage')
+    list_filter = (
+        'created_at', ProfileCompanyChatFilter, ProfileEmailFilter, 'session', CompanyChatCompanyFilter, 'stage'
+    )
     search_fields = ('session', 'message__icontains')
     actions = ['export_selected']
     list_export = ('csv', 'xlsx')
@@ -186,12 +188,26 @@ class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
 
 @admin.register(ChatSession)
 class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
-    list_display = ('session', 'get_first_name', 'created_at')
-    list_filter = ('session', 'title', ChatSessionFilter, 'project_id', 'session_status')
+    list_display = (
+        'session', 'get_first_name', 'session_status', 'session_type', 'current_question', 'total_steps',
+        'created_at'
+    )
+    list_filter = ('session', 'title', ChatSessionFilter, 'project_id', 'session_status', 'session_type')
     search_fields = ('session', 'title', 'profile__first_name')
     raw_id_fields = ('profile',)
 
     resource_class = ChatSessionResource
+
+    def current_question(self, obj):
+        return obj.current_step
+
+    current_question.short_description = 'Current Question'
+
+    def total_steps(self, obj):
+        if obj.company_bot and CompanyStateMachine.objects.filter(company_bot=obj.company_bot).exists():
+            return CompanyStateMachine.objects.filter(company_bot=obj.company_bot).count()
+        return 0
+    total_steps.short_description = 'Total Questions'
 
     def get_queryset(self, request):
         qs = super().get_queryset(request).select_related('profile', 'company_bot')
@@ -209,8 +225,8 @@ class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
         user_email = request.user.email
         profile = Profile.objects.filter(email=user_email)
         if not user.is_superuser and len(profile) > 0 and profile[0].profile_type == ProfileType.MODERATOR:
-            return 'session', 'get_first_name', 'created_at'
-        return 'session', 'get_first_name', 'created_at'
+            return 'session', 'get_first_name', 'current_question', 'total_steps', 'session_status', 'created_at'
+        return 'session', 'get_first_name', 'current_question', 'total_steps', 'session_status', 'created_at'
 
     def get_first_name(self, obj):
         return obj.profile.first_name if obj.profile else None
