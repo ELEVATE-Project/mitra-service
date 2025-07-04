@@ -17,7 +17,8 @@ def get_bot_from_flow(flow):
 
 def save_question_answer_utils(
     profile_id, flow, session, sequence, status, language, question_id,
-    sent_at, question, translated_message, answer, should_transliterate, audio_file
+    sent_at, question, translated_message, answer, should_transliterate, audio_file,
+    answer_id
 ):
     try:
         with transaction.atomic():
@@ -47,10 +48,11 @@ def save_question_answer_utils(
                 "language": language,
                 "sent_at": sent_at,
                 "sequence": sequence,
+                "question_id": question_id,
             }
 
             question_params = {**other_params, "message_type": "question"}
-            answer_params = {**other_params, "message_type": "answer"}
+            answer_params = {**other_params, "message_type": "answer", "answer_id": answer_id}
 
             CompanyChat.objects.update_or_create(
                 session=session,
@@ -107,7 +109,7 @@ def save_question_answer_utils(
 
             CompanyChat.objects.update_or_create(
                 session=session,
-                source_msg_id=sent_at,
+                source_msg_id=answer_id,
                 defaults={
                     "message": answer,
                     "status": status,

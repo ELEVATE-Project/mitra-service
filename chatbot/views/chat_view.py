@@ -127,6 +127,7 @@ def save_ptm_chats(request):
     flow = body.get('flow')
     profile_id = body.get('profile_id')
     question_id = body.get('id')
+    answer_id = body.get('answer_id')
     sequence = body.get('sequence')
     question = body.get('question')
     translated_message = body.get('translated_question')
@@ -143,7 +144,7 @@ def save_ptm_chats(request):
         profile_id=profile_id, flow=flow, session=session, sequence=sequence, status=status,
         language=language, question_id=question_id, sent_at=sent_at, question=question,
         translated_message=translated_message, answer=answer, should_transliterate=should_transliterate,
-        audio_file=audio_file
+        audio_file=audio_file, answer_id=answer_id
     )
 
     if res.get("status") != 200:
