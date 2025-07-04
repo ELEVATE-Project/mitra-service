@@ -135,7 +135,7 @@ def save_ptm_chats(request):
     language = body.get('language')
     sent_at = body.get('sent_at')
     audio_file = body.get('audio_url')
-    should_transliterate = body.get('should_transliterate', False)
+    # should_transliterate = body.get('should_transliterate', False)
 
     if not question or not session or not answer:
         return Response({"error": "question, answer and session are required."}, status=400)
@@ -143,20 +143,21 @@ def save_ptm_chats(request):
     res = save_question_answer_utils(
         profile_id=profile_id, flow=flow, session=session, sequence=sequence, status=status,
         language=language, question_id=question_id, sent_at=sent_at, question=question,
-        translated_message=translated_message, answer=answer, should_transliterate=should_transliterate,
-        audio_file=audio_file, answer_id=answer_id
+        translated_message=translated_message, answer=answer,
+        audio_file=audio_file, answer_id=answer_id,
+        # should_transliterate=should_transliterate,
     )
 
     if res.get("status") != 200:
         return Response(res, status=res.get("status"))
 
-    if status == "COMPLETED":
-        create_ptm_report.delay(
-            profile_id=profile_id,
-            session=session,
-            flow=flow,
-            language=language
-        )
+    # if status == "COMPLETED":
+    #     create_ptm_report.delay(
+    #         profile_id=profile_id,
+    #         session=session,
+    #         flow=flow,
+    #         language=language
+    #     )
 
     return Response({
         "status": "ok",

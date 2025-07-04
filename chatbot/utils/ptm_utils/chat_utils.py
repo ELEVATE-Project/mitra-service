@@ -17,8 +17,8 @@ def get_bot_from_flow(flow):
 
 def save_question_answer_utils(
     profile_id, flow, session, sequence, status, language, question_id,
-    sent_at, question, translated_message, answer, should_transliterate, audio_file,
-    answer_id
+    sent_at, question, translated_message, answer, audio_file, answer_id
+    # , should_transliterate
 ):
     try:
         with transaction.atomic():
@@ -69,43 +69,43 @@ def save_question_answer_utils(
             )
             logger.info("Saved question with ID %s for session %s", question_id, session)
             user_translated_msg=None
-            if language != 'en' and answer and answer.strip():
-                if should_transliterate:
-                    voice_provider = Voice.objects.filter(
-                        company_bot=company_bot, type=VoiceType.Transliterate, language=language
-                    ).first()
-                    if not voice_provider:
-                        logger.error("No transliterate voice provider found for language %s", language)
-                        return {"error": "No voice provider found for this flow", "status": 404}
-
-                    is_sentence = ' ' in answer.strip()
-                    user_translated_msg = transliterate_text(
-                        voice_provider=voice_provider, source_language=language, target_language='en',
-                        message_body=answer, is_sentence=is_sentence
-                    )
-                    if user_translated_msg and isinstance(user_translated_msg, dict) and user_translated_msg.get('content'):
-                        content = user_translated_msg.get('content')
-                        if content and isinstance(content, list) and len(content) > 0:
-                            content = content[0]
-                        user_translated_msg = content
-                    else:
-                        user_translated_msg=None
-                else:
-                    voice_provider = Voice.objects.filter(
-                        company_bot=company_bot, type=VoiceType.TextToText, language=language
-                    ).first()
-                    if not voice_provider:
-                        logger.error("No translate voice provider found for language %s", language)
-                        return {"error": "No voice provider found for this flow", "status": 404}
-
-                    user_translated_msg = text_translate_provider(
-                        voice_provider=voice_provider, message_body=answer, target_language='en',
-                        source_language=language
-                    )
-                    if isinstance(user_translated_msg, dict) and user_translated_msg.get('status') == 200:
-                        user_translated_msg = user_translated_msg.get('content')
-                    else:
-                        user_translated_msg=None
+            # if language != 'en' and answer and answer.strip():
+            #     if should_transliterate:
+            #         voice_provider = Voice.objects.filter(
+            #             company_bot=company_bot, type=VoiceType.Transliterate, language=language
+            #         ).first()
+            #         if not voice_provider:
+            #             logger.error("No transliterate voice provider found for language %s", language)
+            #             return {"error": "No voice provider found for this flow", "status": 404}
+            #
+            #         is_sentence = ' ' in answer.strip()
+            #         user_translated_msg = transliterate_text(
+            #             voice_provider=voice_provider, source_language=language, target_language='en',
+            #             message_body=answer, is_sentence=is_sentence
+            #         )
+            #         if user_translated_msg and isinstance(user_translated_msg, dict) and user_translated_msg.get('content'):
+            #             content = user_translated_msg.get('content')
+            #             if content and isinstance(content, list) and len(content) > 0:
+            #                 content = content[0]
+            #             user_translated_msg = content
+            #         else:
+            #             user_translated_msg=None
+            #     else:
+            #         voice_provider = Voice.objects.filter(
+            #             company_bot=company_bot, type=VoiceType.TextToText, language=language
+            #         ).first()
+            #         if not voice_provider:
+            #             logger.error("No translate voice provider found for language %s", language)
+            #             return {"error": "No voice provider found for this flow", "status": 404}
+            #
+            #         user_translated_msg = text_translate_provider(
+            #             voice_provider=voice_provider, message_body=answer, target_language='en',
+            #             source_language=language
+            #         )
+            #         if isinstance(user_translated_msg, dict) and user_translated_msg.get('status') == 200:
+            #             user_translated_msg = user_translated_msg.get('content')
+            #         else:
+            #             user_translated_msg=None
 
             CompanyChat.objects.update_or_create(
                 session=session,
