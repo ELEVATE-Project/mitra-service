@@ -7,7 +7,7 @@ from chatbot.views.profile_views import create_profile_views, read_elevate_profi
 from django.urls import path
 from chatbot.views import api_views
 from chatbot.views.bhashini_views import text_speech_view, speech_text, text_translation_view, text_transliterate_view
-from chatbot.views.chat_view import save_chats_view, create_chatsession
+from chatbot.views.chat_view import save_chats_view, create_chatsession, save_ptm_chats
 from chatbot.views.drf_views import CompanyChatListCreateView, CompanyChatRetrieveUpdateDestroyView, \
     CompanyBotListCreateView, CompanyBotRetrieveUpdateDestroyView, ProfileListCreateView, \
     ProfileRetrieveUpdateDestroyView, ChatSessionListCreateView, ChatSessionRetrieveUpdateDestroyView, \
@@ -89,4 +89,5 @@ urlpatterns = [
     path("api/get-presigned-url/", get_presigned_url,  name='get-presigned-url'),
     path("api/image-converter/", convert_image, name='image-converter'),
     path("api/read-elevate-profile/", read_elevate_profile, name='read-elevate-profile'),
+    path('api/questions/save/', save_ptm_chats, name="save_ptm_chats"),
 ]

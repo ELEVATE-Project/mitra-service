@@ -1,0 +1,130 @@
+from chatbot.models import ChatType, Profile, CompanyBot, ChatSession, CompanyChat, Voice, VoiceType
+from django.db import transaction
+from chatbot.utils.audio_provider_utils import text_translate_provider
+from chatbot.utils.transliterate_utils import transliterate_text
+import logging
+
+logger = logging.getLogger('django')
+
+
+def get_bot_from_flow(flow):
+    route = None
+    if flow == ChatType.megaPTM:
+        route = '/mega_ptm'
+
+    return route
+
+
+def save_question_answer_utils(
+    profile_id, flow, session, sequence, status, language, question_id,
+    sent_at, question, translated_message, answer, should_transliterate, audio_file
+):
+    try:
+        with transaction.atomic():
+            logger.info("Started saving Q&A for session %s", session)
+            ai_user = Profile.objects.get(id=1)
+            user_profile = Profile.objects.get(id=profile_id)
+
+            route = get_bot_from_flow(flow=flow)
+            company_bot = CompanyBot.objects.filter(route=route).first()
+            if not company_bot:
+                logger.error("No bots found for route %s", route)
+                return {"error": "No bots found for this flow", "status": 404}
+
+            chat_session, created = ChatSession.objects.update_or_create(
+                session=session,
+                defaults={
+                    "profile": user_profile,
+                    "company_bot": company_bot,
+                    "current_step": sequence,
+                    "session_status": status,
+                    "session_type": flow,
+                }
+            )
+            logger.info("Chat session %s %s", "created" if created else "updated", session)
+
+            other_params = {
+                "language": language,
+                "sent_at": sent_at,
+                "sequence": sequence,
+            }
+
+            question_params = {**other_params, "message_type": "question"}
+            answer_params = {**other_params, "message_type": "answer"}
+
+            CompanyChat.objects.update_or_create(
+                session=session,
+                source_msg_id=question_id,
+                defaults={
+                    "message": question,
+                    "status": status,
+                    "sender": ai_user,
+                    "receiver": user_profile,
+                    "chunks": None,
+                    "translated_message": translated_message,
+                    "other_params": question_params,
+                }
+            )
+            logger.info("Saved question with ID %s for session %s", question_id, session)
+            user_translated_msg=None
+            if language != 'en' and answer and answer.strip():
+                if should_transliterate:
+                    voice_provider = Voice.objects.filter(
+                        company_bot=company_bot, type=VoiceType.Transliterate, language=language
+                    ).first()
+                    if not voice_provider:
+                        logger.error("No transliterate voice provider found for language %s", language)
+                        return {"error": "No voice provider found for this flow", "status": 404}
+
+                    is_sentence = ' ' in answer.strip()
+                    user_translated_msg = transliterate_text(
+                        voice_provider=voice_provider, source_language=language, target_language='en',
+                        message_body=answer, is_sentence=is_sentence
+                    )
+                    if user_translated_msg and isinstance(user_translated_msg, dict) and user_translated_msg.get('content'):
+                        content = user_translated_msg.get('content')
+                        if content and isinstance(content, list) and len(content) > 0:
+                            content = content[0]
+                        user_translated_msg = content
+                    else:
+                        user_translated_msg=None
+                else:
+                    voice_provider = Voice.objects.filter(
+                        company_bot=company_bot, type=VoiceType.TextToText, language=language
+                    ).first()
+                    if not voice_provider:
+                        logger.error("No translate voice provider found for language %s", language)
+                        return {"error": "No voice provider found for this flow", "status": 404}
+
+                    user_translated_msg = text_translate_provider(
+                        voice_provider=voice_provider, message_body=answer, target_language='en',
+                        source_language=language
+                    )
+                    if isinstance(user_translated_msg, dict) and user_translated_msg.get('status') == 200:
+                        user_translated_msg = user_translated_msg.get('content')
+                    else:
+                        user_translated_msg=None
+
+            CompanyChat.objects.update_or_create(
+                session=session,
+                source_msg_id=sent_at,
+                defaults={
+                    "message": answer,
+                    "status": status,
+                    "sender": user_profile,
+                    "receiver": ai_user,
+                    "chunks": None,
+                    "translated_message": user_translated_msg,
+                    "other_params": answer_params,
+                    "file_url": audio_file
+                }
+            )
+            logger.info("Saved answer with source_msg_id %s for session %s", sent_at, session)
+            return {"message": "Message saved successfully!", "status": 200}
+
+    except Profile.DoesNotExist:
+        logger.error('Profile with id %s does not exist', profile_id, exc_info=True)
+        return {"error": "Profile not found.", "status": 404}
+    except Exception as e:
+        logger.error('Error processing session %s: %s', session, e, exc_info=True)
+        return {"error": str(e), "status": 500}
