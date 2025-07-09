@@ -72,6 +72,12 @@ def format_message_as_per_bedrock_format(chats, intro=None, other_info=None):
                 "content": [{'text': chat.message}]
             })
 
+    if not messages or messages[0].get('role') != 'user':
+        messages.insert(0, {
+            'role': 'user',
+            'content': [{'text': 'Hello'}]
+        })
+
     return messages
 
 

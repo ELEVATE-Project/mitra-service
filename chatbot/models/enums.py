@@ -13,11 +13,12 @@ class ChatStatus(models.TextChoices):
 
 
 class ChatType(models.TextChoices):
-    guidedReflection = 'normal', _('guidedReflection')
-    oneStepReflection = 'oneshot', _('oneStepReflection')
-    shikshaChaupal = 'shikshalokam_chaupal', _('shikshaChaupal')
-    reflection = 'reflection', _('reflection')
-    creation = 'creation', _('creation')
+    guidedReflection = 'normal', _('Guided Reflection')
+    oneStepReflection = 'oneshot', _('One Step Reflection')
+    shikshaChaupal = 'shikshalokam_chaupal', _('Shiksha Chaupal')
+    reflection = 'reflection', _('Reflection')
+    creation = 'creation', _('Creation')
+    megaPTM = 'megaPTM', _('Mega PTM')
 
 
 class LLMProvider(models.TextChoices):
@@ -202,3 +203,4 @@ class SessionFlowName(models.TextChoices):
     GuestMiStory = 'guest-mi-story', _('guest-mi-story')
     LoginMiStory = 'login', _('login')
     Reflection = 'reflection', _('reflection')
+    megaPTM = 'megaPTM', _('Mega PTM')

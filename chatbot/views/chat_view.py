@@ -3,6 +3,8 @@ from rest_framework.response import Response
 from chatbot.models import CompanyChat, ChatSession, ChatStatus, Profile, Company
 import jwt
 from django.http import JsonResponse
+from chatbot.celery_tasks.ptm_report_tasks import create_ptm_report
+from chatbot.utils.ptm_utils.chat_utils import save_question_answer_utils
 
 
 @api_view(['POST'])
@@ -114,4 +116,50 @@ def create_chatsession(request):
             'session_status': c.session_status,
             'profile_id': profile.id
         }
+    }, status=200)
+
+
+@api_view(['POST'])
+def save_ptm_chats(request):
+    body = request.data
+    session = body.get('session')
+    status = body.get('status', 'COMPLETED')
+    flow = body.get('flow')
+    profile_id = body.get('profile_id')
+    question_id = body.get('id')
+    answer_id = body.get('answer_id')
+    sequence = body.get('sequence')
+    question = body.get('question')
+    translated_message = body.get('translated_question')
+    answer = body.get('answer')
+    language = body.get('language')
+    sent_at = body.get('sent_at')
+    audio_file = body.get('audio_url')
+    # should_transliterate = body.get('should_transliterate', False)
+
+    if not question or not session or not answer:
+        return Response({"error": "question, answer and session are required."}, status=400)
+
+    res = save_question_answer_utils(
+        profile_id=profile_id, flow=flow, session=session, sequence=sequence, status=status,
+        language=language, question_id=question_id, sent_at=sent_at, question=question,
+        translated_message=translated_message, answer=answer,
+        audio_file=audio_file, answer_id=answer_id,
+        # should_transliterate=should_transliterate,
+    )
+
+    if res.get("status") != 200:
+        return Response(res, status=res.get("status"))
+
+    # if status == "COMPLETED":
+    #     create_ptm_report.delay(
+    #         profile_id=profile_id,
+    #         session=session,
+    #         flow=flow,
+    #         language=language
+    #     )
+
+    return Response({
+        "status": "ok",
+        "message": res.get("message", "Message saved successfully!")
     }, status=200)
