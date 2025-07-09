@@ -17,6 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.documentation import include_docs_urls
+from shikshalokam.views import health_views
 
 
 admin.site.site_header = 'Mohini Admin Panel'
@@ -24,6 +25,7 @@ admin.site.site_header = 'Mohini Admin Panel'
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('health/', health_views.health_check, name='health_check'),
     path('docs/', include_docs_urls(title='API Documentation')),
     path('api/shikshalokam/', include('shikshalokam.urls')),
     path("", include("chatbot.urls", namespace="chatbot")),
