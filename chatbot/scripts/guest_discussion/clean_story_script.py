@@ -1,6 +1,6 @@
 import json
 import os
-from chatbot.models import Story, Profile, ChatSession, CompanyChat, CompanyBot, Voice, VoiceType
+from chatbot.models import Story, Profile, ChatSession, CompanyChat, CompanyBot, Voice, VoiceType, ChatType
 from langfuse.decorators import observe
 from langfuse.openai import openai
 from chatbot.utils.audio_provider_utils import text_translate_provider
@@ -11,6 +11,10 @@ from datetime import datetime
 
 
 logger = logging.getLogger('django')
+
+###Steps To Follow:
+    #First step is to call get_story_count() and store the ids (Adjust the date as needed)
+    #Second step is to call clean_specific_stories() and pass the story ids we collected in First Step
 
 
 def translate_field(voice_provider, message_body, target_language, source_language="en"):
@@ -185,7 +189,7 @@ def handle_openai_model(
 
 def clean_all_stories(start=0, end=100):
     session_ids = list(
-        ChatSession.objects.filter(session_type='shikshalokam_chaupal')
+        ChatSession.objects.filter(session_type=ChatType.shikshaChaupal)
         .values_list('session', flat=True)
     )
 
@@ -205,7 +209,7 @@ def get_story_count():
 
     session_ids = list(
         ChatSession.objects.filter(
-            session_type='shikshalokam_chaupal',
+            session_type=ChatType.shikshaChaupal,
             created_at__gt=start_time,
             created_at__lt=end_time
         )
