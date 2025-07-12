@@ -1,10 +1,16 @@
-from chatbot.models import Story, Voice, VoiceType, CompanyBot, ChatSession
+from chatbot.models import Story, Voice, VoiceType, CompanyBot, ChatSession, ChatType
 from django.db import transaction
 import json
 from django.db.models import Q
 from chatbot.utils.audio_provider_utils import text_translate_provider
 from django.utils.timezone import make_aware
 from datetime import datetime
+
+
+###Steps To Follow:
+    #First step is to call get_story_count() (Adjust the date as needed)
+    #Second step is to call translate_specific_story_ids() and pass the story_ids we collected in First Step to
+    #translate stories and save english version
 
 
 def translate_field(voice_provider, message_body, target_language, source_language="en"):
@@ -46,7 +52,7 @@ def process_story(story):
             except:
                 raw_solutions = []
 
-        company_bot = CompanyBot.objects.get(route='/story')
+        company_bot = CompanyBot.objects.get(route='/chaupal-story')
         voice_provider = Voice.objects.filter(
             company_bot=company_bot, type=VoiceType.TextToText
         ).first()
@@ -80,7 +86,7 @@ def process_story(story):
 
 def translate_stories_to_english(start=0, end=100):
     session_ids = list(
-        ChatSession.objects.filter(session_type='shikshalokam_chaupal')
+        ChatSession.objects.filter(session_type=ChatType.shikshaChaupal)
         .values_list('session', flat=True)
     )
 
@@ -100,7 +106,7 @@ def get_story_count():
 
     session_ids = list(
         ChatSession.objects.filter(
-            session_type='shikshalokam_chaupal',
+            session_type=ChatType.shikshaChaupal,
             created_at__gt=start_time,
             created_at__lt=end_time
         )

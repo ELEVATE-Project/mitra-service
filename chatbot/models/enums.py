@@ -204,3 +204,27 @@ class SessionFlowName(models.TextChoices):
     LoginMiStory = 'login', _('login')
     Reflection = 'reflection', _('reflection')
     megaPTM = 'megaPTM', _('Mega PTM')
+
+
+class PreProcessType(models.TextChoices):
+    NONE = 'NONE', _('None')
+    SIMPLE = 'SIMPLE', _('Simple Prompt')
+    COMPLEX = 'COMPLEX', _('Use Preprocess Bot')
+
+
+class PreProcessOutputMode(models.TextChoices):
+    NONE = 'NONE', 'None'
+    SKIP = 'SKIP', 'Skip This Stage'
+    ENRICH = 'ENRICH', 'Add Output to Prompt'
+    CUSTOM = 'CUSTOM', 'Run Custom Logic'
+
+
+class PostProcessType(models.TextChoices):
+    NONE = 'NONE', _('None')
+    SIMPLE = 'SIMPLE', _('Simple Prompt')
+    COMPLEX = 'COMPLEX', _('Use Postprocess Bot')
+
+
+class PostProcessOutputMode(models.TextChoices):
+    NONE = 'NONE', 'None'
+    SKIP = 'SKIP', 'Skip Next Stage'

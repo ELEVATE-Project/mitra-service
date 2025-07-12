@@ -16,7 +16,9 @@ from django.contrib import messages
 
 class CompanyStateMachineAdmin(admin.TabularInline):
     model = CompanyStateMachine
+    fk_name = 'company_bot'
     extra = 1
+    raw_id_fields = ['preprocess_bot', 'postprocess_bot']
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
