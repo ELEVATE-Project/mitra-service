@@ -9,14 +9,16 @@ import logging
 logger = logging.getLogger('django')
 
 
-def get_remaining_strands(messages, company_chats, oneshot_bot, profile, intro=None, other_info=None):
+def get_remaining_strands(messages, company_chats, oneshot_bot, profile, intro=None, other_info=None, extra_params=None):
 
+    assistant_route = extra_params.get('assistant_route','/oneshot_assistant')
+    validator_route = extra_params.get('validator_route','/oneshot_validator')
     if profile:
-        company_bot = CompanyBot.objects.filter(company=profile.company, route='/oneshot_assistant').first()
-        validate_bot = CompanyBot.objects.filter(company=profile.company, route='/oneshot_validator').first()
+        company_bot = CompanyBot.objects.filter(company=profile.company, route=assistant_route).first()
+        validate_bot = CompanyBot.objects.filter(company=profile.company, route=validator_route).first()
     else:
-        company_bot = CompanyBot.objects.filter(route='/oneshot_assistant').first()
-        validate_bot = CompanyBot.objects.filter(route='/oneshot_validator').first()
+        company_bot = CompanyBot.objects.filter(route=assistant_route).first()
+        validate_bot = CompanyBot.objects.filter(route=validator_route).first()
 
     tool = company_bot.tool_context
     if tool and isinstance(tool, str):
