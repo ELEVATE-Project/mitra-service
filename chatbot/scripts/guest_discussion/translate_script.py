@@ -101,8 +101,8 @@ def translate_stories_to_english(start=0, end=100):
 
 
 def get_story_count():
-    start_time = make_aware(datetime(2025, 6, 1, 0, 0))
-    end_time = make_aware(datetime(2025, 6, 7, 23, 59, 59))
+    start_time = make_aware(datetime(2025, 7, 1, 0, 0))
+    end_time = make_aware(datetime(2025, 8, 7, 23, 59, 59))
 
     session_ids = list(
         ChatSession.objects.filter(

@@ -11,7 +11,7 @@ from chatbot.utils.story_utils.format_utils import get_formatted_story
 from chatbot.utils.story_utils.get_story_prompts import get_creation_promt, get_chat_message, get_tool_values, \
     get_validation_prompt
 from chatbot.utils.story_utils.story_llm import generate_story_llm, validate_story_llm
-from chatbot.utils.story_utils.story_tasks import save_story, save_chaupal_report
+from chatbot.utils.story_utils.story_tasks import save_story, save_chaupal_report, save_ptm_story
 import logging
 
 logger = logging.getLogger('django')
@@ -95,6 +95,12 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
                 response_json_story=response_json_story, language=language, voice_provider=voice_provider,
                 profile=profile, session=session, combined_reason=combined_reason, flow=flow,
                 project_id=chat_session.project_id, company_bot=company_bot
+            )
+        elif flow == SessionFlowName.megaPTM:
+            story, problem_statement = save_ptm_story(
+                response_json_story=response_json_story, language=language, voice_provider=voice_provider,
+                profile=profile, session=session, combined_reason=combined_reason, flow=flow,
+                company_bot=company_bot
             )
         else:
             story, problem_statement = save_chaupal_report(

@@ -26,13 +26,16 @@ def transliterate_field(voice_provider, message_body, target_language, source_la
         source_language=source_language, is_sentence=is_sentence
     )
     if response.get("status") == 200:
-        return response.get("content")
+        res = response.get('content')
+        if res and isinstance(res, list):
+            res = res[0]
+        return res
     return message_body
 
 
 def process_mega_ptm_chats():
     start_time = make_aware(datetime(2025, 7, 1, 0, 0))
-    end_time = make_aware(datetime(2025, 7, 10, 23, 59, 59))
+    end_time = make_aware(datetime(2025, 7, 17, 23, 59, 59))
 
     company_bot = CompanyBot.objects.get(route='/mega_ptm')
     translate_voice_provider = Voice.objects.filter(
@@ -55,9 +58,9 @@ def process_mega_ptm_chats():
         if not company_chats.exists():
             continue
 
-        if company_chats.filter(translated_message__isnull=False).exists():
-            print(f"Skipping session {session.session}: Already translated.")
-            continue
+        # if company_chats.filter(translated_message__isnull=False).exclude(translated_message="").exists():
+        #     print(f"Skipping session {session.session}: Already translated.")
+        #     continue
 
         language = None
         for chat in company_chats:
@@ -71,8 +74,8 @@ def process_mega_ptm_chats():
 
         for chat in company_chats:
             sequence = chat.other_params.get("sequence") if chat.other_params else None
-
-            if sequence in [1, 2] and chat.message_type != "question":
+            print("len: ", len(chat.message.strip().split()))
+            if len(chat.message.strip().split()) == 1 and sequence in [1, 2, 3] and chat.other_params.get('message_type') != "question":
                 word_count = len(chat.message.strip().split())
                 is_sentence = word_count > 1
                 translated = transliterate_field(
