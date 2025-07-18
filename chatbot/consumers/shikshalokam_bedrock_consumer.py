@@ -19,6 +19,8 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
         profile_id = None
         route = None
         company_bot = None
+        project_id = None
+        task_id = None
 
         def disconnect(self, code):
             print('Websocket closed')
@@ -45,14 +47,21 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
                     self.session_id = text_data_json.get('sessionid')
                     self.profile_id = text_data_json.get('profileid')
                     self.route = text_data_json.get('route')
+                    self.project_id = text_data_json.get('projectid')
+                    self.task_id = text_data_json.get('taskid')
                     profile = Profile.objects.filter(id=self.profile_id).first()
                     print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
-                          f"route: {self.route}")
+                          f"route: {self.route}, projectId: {self.project_id}, taskId: {self.task_id}")
                     if profile:
                         self.company_bot = CompanyBot.objects.get(company=profile.company, route='/')
                     else:
                         self.company_bot = CompanyBot.objects.get(route='/')
-
+                    if self.task_id:
+                        other_params = {
+                            "task_id": self.task_id
+                        }
+                    else:
+                        other_params = {}
                     # chat session create (session, profile)
                     cs, cs_created = ChatSession.objects.get_or_create(
                         session=self.session_id,
@@ -61,7 +70,9 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
                             'current_step': 1,
                             'company_bot': self.company_bot,
                             'session_status': ChatStatus.IN_PROGRESS,
-                            'session_type': ChatType.guidedReflection
+                            'session_type': ChatType.guidedReflection,
+                            'project_id': self.project_id,
+                            'other_params': other_params
                         }
                     )
                     print(cs, cs_created)
