@@ -20,6 +20,7 @@ class ChatSession(models.Model):
     project_id = models.CharField(max_length=400, null=True, blank=True)
     user_id = models.CharField(max_length=400, null=True, blank=True)
     session_type = models.CharField(max_length=100, choices=ChatType.choices, null=True, blank=True)
+    other_params = models.JSONField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
