@@ -12,6 +12,7 @@ def handle_elevate_profile(access_token):
             'X-auth-token': access_token
         }
         response = requests.get(url=url, headers=headers)
+        print("Read response: ", response.text)
         response.raise_for_status()
 
         json_data = response.json()
