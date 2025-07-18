@@ -84,8 +84,8 @@ def handle_elevate_profile(access_token):
             "first_name": profile.first_name,
             "company": profile.company.slug if profile.company else None,
             "state": profile_address.state if profile_address else None,
-            "has_accepted_tnc": True,
-            "flow": SessionFlowName.LoginMiStory,
+            "has_accepted_tnc": "ONGOING",
+            "flow": SessionFlowName.SsoFlow,
             "route": profile.preferred_route,
             "profileid": profile.id,
         }
