@@ -66,7 +66,7 @@ class ChatSessionListCreateView(generics.ListCreateAPIView):
         queryset = super().get_queryset()
         flow = self.request.query_params.get('flow')
 
-        if flow in [SessionFlowName.LoginMiStory.value, SessionFlowName.GuestMiStory.value]:
+        if flow in [SessionFlowName.LoginMiStory.value, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory.value]:
             queryset = queryset.filter(session_type__in=[
                 ChatType.guidedReflection, ChatType.oneStepReflection
             ])

@@ -192,7 +192,8 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
                 flow=flow
             )
         )
-        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
+        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection,
+                    SessionFlowName.SsoFlow]:
             story, problem_statement = save_story(
                 response_json_story=response_json_story, language=language, voice_provider=voice_provider,
                 profile=profile, session=session, combined_reason=combined_reason, flow=flow,
@@ -254,7 +255,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
 
 
 def get_story_company_bot(profile, flow):
-    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.Reflection]:
+    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.Reflection, SessionFlowName.SsoFlow]:
         company_bot = CompanyBot.objects.get(route='/story')
         validate_bot = CompanyBot.objects.get(route='/story_validation')
     elif flow in [SessionFlowName.GuestMiStory]:
@@ -712,7 +713,7 @@ async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, m
 
 
     if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection,
-        SessionFlowName.megaPTM
+        SessionFlowName.megaPTM, SessionFlowName.SsoFlow
     ]:
         response_json_content, response_json_story = await asyncio.gather(func1(), func2())
     else:
@@ -777,7 +778,7 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
 
 
     if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection,
-                SessionFlowName.megaPTM
+                SessionFlowName.megaPTM, SessionFlowName.SsoFlow
     ]:
         response_json_content, response_json_story = await asyncio.gather(func1(), func2())
     else:
