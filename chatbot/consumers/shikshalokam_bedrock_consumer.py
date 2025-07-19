@@ -9,6 +9,7 @@ from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.audio_provider_utils import text_translate_provider
 import logging
 
+from shikshalokam.models import Project, ProjectStatus
 
 logger = logging.getLogger('django')
 
@@ -76,6 +77,17 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
                         }
                     )
                     print(cs, cs_created)
+                    project = Project.objects.filter(project_id=self.project_id).first()
+                    if not project:
+                        print(f"Project with ID {self.project_id} not found. Creating a new one.")
+                        project = Project.objects.create(
+                            project_id=self.project_id,
+                            author=profile,
+                            project_status=ProjectStatus.STARTED,
+                        )
+                        print(f"Project created with id {project.id}")
+                    else:
+                        print(f"Found existing project: {project.id}")
                 else:
                     company_chat_status = self.determine_company_chat_status(
                         session_id=self.session_id, profile_id=self.profile_id, route='/'

@@ -135,7 +135,7 @@ def save_story(
 
         if flow in [SessionFlowName.Reflection, SessionFlowName.SsoFlow] and project_id:
             logger.info(f"project_id: %s", project_id)
-            project = Project.objects.get(project_id=project_id)
+            project = Project.objects.filter(project_id=project_id).first()
             if project:
                 tasks = Task.objects.filter(project=project)
                 serialized_tasks = TaskSerializer(tasks, many=True).data
