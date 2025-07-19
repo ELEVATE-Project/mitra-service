@@ -90,7 +90,8 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         logger.info(f"VALIDATION STORY response_json_story: %s", response_json_story)
 
         # print("----------------------------------")
-        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
+        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
+                    SessionFlowName.Reflection]:
             story, problem_statement = save_story(
                 response_json_story=response_json_story, language=language, voice_provider=voice_provider,
                 profile=profile, session=session, combined_reason=combined_reason, flow=flow,

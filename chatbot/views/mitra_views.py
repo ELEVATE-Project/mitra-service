@@ -1,6 +1,7 @@
 import json
 import traceback
-from chatbot.models import Profile, CompanyBot, Voice, VoiceType, BotVernacular, StoryMedia, MediaTypeChoices
+from chatbot.models import Profile, CompanyBot, Voice, VoiceType, BotVernacular, StoryMedia, MediaTypeChoices, \
+    SessionFlowName
 from chatbot.serializer.story_serializer import StoryMediaRetrieveSerializer
 from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_mitra_project_utils
@@ -443,6 +444,7 @@ def update_project_status_view(request):
     access_token = body.get('access_token')
     project_id = body.get('project_id')
     flow = body.get('flow')
+    status = body.get("status", "completed")
     try:
         project = Project.objects.filter(project_id=project_id).first()
         print("project: ", project)
@@ -450,22 +452,23 @@ def update_project_status_view(request):
         session = project.story.session
         print("session: ", session)
 
-        story_media_objects = StoryMedia.objects.filter(
-            story=project.story, include_in_story=True
-        ).exclude(media_type=MediaTypeChoices.PDF)
-        serialized_data = StoryMediaRetrieveSerializer(story_media_objects, many=True).data
+        if flow in [SessionFlowName.Reflection]:
+            story_media_objects = StoryMedia.objects.filter(
+                story=project.story, include_in_story=True
+            ).exclude(media_type=MediaTypeChoices.PDF)
+            serialized_data = StoryMediaRetrieveSerializer(story_media_objects, many=True).data
 
-        with ThreadPoolExecutor() as executor:
-            futures = [executor.submit(
-                upload_to_cloud, session_value=session, access_token=access_token, instance=story_obj, story=None
-            ) for story_obj in serialized_data]
+            with ThreadPoolExecutor() as executor:
+                futures = [executor.submit(
+                    upload_to_cloud, session_value=session, access_token=access_token, instance=story_obj, story=None
+                ) for story_obj in serialized_data]
 
-            for future in as_completed(futures):
-                future.result()
+                for future in as_completed(futures):
+                    future.result()
 
-        update_story_pdf(is_edit_story=True, session=session, access_token=access_token, flow=flow)
+            update_story_pdf(is_edit_story=True, session=session, access_token=access_token, flow=flow)
         response = update_project_status_utils(
-            project_id=project_id, access_token=access_token, flow=flow
+            project_id=project_id, access_token=access_token, flow=flow, status=status
         )
         return JsonResponse(response.get("message"), status=response.get("status"), safe=False)
     except Exception as e:
