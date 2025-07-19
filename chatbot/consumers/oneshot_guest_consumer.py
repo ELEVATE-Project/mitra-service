@@ -21,7 +21,6 @@ class OneShotGuestConsumer(BaseConsumer):
         session_id = None
         profile_id = None
         project_id = None
-        task_id = None
         access_token = None
         route = None
         company_bot = None
@@ -107,20 +106,13 @@ class OneShotGuestConsumer(BaseConsumer):
                 self.project_id = text_data_json.get('projectid')
                 self.access_token = text_data_json.get('access_token')
                 self.route = text_data_json.get('route')
-                self.task_id = text_data_json.get('taskid')
                 profile = Profile.objects.filter(id=self.profile_id).first()
                 print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
-                      f"route: {self.route}, projectId: {self.project_id}, taskId: {self.task_id}")
+                      f"route: {self.route}")
                 if profile:
                     self.company_bot = CompanyBot.objects.get(company=profile.company, route='/oneshot_guest')
                 else:
                     self.company_bot = CompanyBot.objects.get(route='/oneshot_guest')
-                if self.task_id:
-                    other_params = {
-                        "task_id": self.task_id
-                    }
-                else:
-                    other_params = {}
 
                 if self.access_token:
                     decoded = jwt.decode(self.access_token, options={"verify_signature": False})
@@ -144,22 +136,10 @@ class OneShotGuestConsumer(BaseConsumer):
                         'project_id': self.project_id,
                         'user_id': user_id,
                         'session_type': ChatType.oneStepReflection,
-                        'other_params': other_params
                     }
                 )
 
                 print(cs, cs_created)
-                project = Project.objects.filter(project_id=self.project_id).first()
-                if not project:
-                    print(f"Project with ID {self.project_id} not found. Creating a new one.")
-                    project = Project.objects.create(
-                        project_id=self.project_id,
-                        author=profile,
-                        project_status=ProjectStatus.STARTED,
-                    )
-                    print(f"Project created with id {project.id}")
-                else:
-                    print(f"Found existing project: {project.id}")
 
             else:
                 company_chat_status = self.determine_company_chat_status(

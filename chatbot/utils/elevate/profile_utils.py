@@ -88,6 +88,7 @@ def handle_elevate_profile(access_token):
             "flow": SessionFlowName.SsoFlow,
             "route": profile.preferred_route,
             "profileid": profile.id,
+            'reroute_url': os.getenv('SSO_REROUTE_URL')
         }
         return profile_response
 
