@@ -447,12 +447,13 @@ def update_project_status_view(request):
     status = body.get("status", "completed")
     try:
         project = Project.objects.filter(project_id=project_id).first()
-        print("project: ", project)
-        print("story: ", project.story)
-        session = project.story.session
-        print("session: ", session)
+        if project:
+            print("project: ", project)
+            print("story: ", project.story)
+            session = project.story.session
+            print("session: ", session)
 
-        if flow in [SessionFlowName.Reflection]:
+        if project and flow in [SessionFlowName.Reflection]:
             story_media_objects = StoryMedia.objects.filter(
                 story=project.story, include_in_story=True
             ).exclude(media_type=MediaTypeChoices.PDF)
