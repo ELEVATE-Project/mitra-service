@@ -12,6 +12,7 @@ from chatbot.pdf.story_first_page import get_first_page_html
 from chatbot.pdf.story_images_page import get_story_images_page_html
 from chatbot.pdf.story_secondpage import get_story_secondpage_html
 from chatbot.pdf.story_thirdpage import get_thirdpage_html
+from chatbot.utils.elevate.project_detail import fetch_existing_project_attachments
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
@@ -257,9 +258,13 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         story_media_objects = StoryMedia.objects.filter(
             story=story, include_in_story=True
         ).exclude(media_type=MediaTypeChoices.PDF)
-
+        attachments=[]
         if is_edit_story:
-            attachments = [
+            existing_attachments = fetch_existing_project_attachments(project_id, access_token)
+            if existing_attachments:
+                attachments.extend(existing_attachments)
+
+            attachments.extend([
                 {
                     "name": media.name,
                     "sourcePath": media.source_path,
@@ -268,9 +273,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
 
                 }
                 for media in story_media_objects
-            ]
-        else:
-            attachments = []
+            ])
         print("attachments: ", attachments)
 
         pdf_information = upload_response_json.get('pdfInformation')
