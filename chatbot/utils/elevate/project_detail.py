@@ -21,8 +21,8 @@ def fetch_existing_project_attachments(project_id, access_token):
         response_json = response.json()
         print("Project detail response received.")
 
-        result = response_json.get("result", {})
-        existing_attachments = result.get("attachments", [])
+        story = response_json.get("result", {}).get("story", {})
+        existing_attachments = story.get("attachments", [])
 
         print("Existing attachments:", existing_attachments)
         return existing_attachments
