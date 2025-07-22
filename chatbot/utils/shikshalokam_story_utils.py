@@ -295,7 +295,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
                 "pdfInformation": pdf_information,
                 "tasks": [
                     {
-                        "_id": chat_session.other_params.get('taskId'),
+                        "_id": chat_session.other_params.get('task_id'),
                         "status": "completed"
                     }
                 ]
