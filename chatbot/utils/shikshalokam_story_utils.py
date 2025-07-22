@@ -315,7 +315,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         }
 
         response = requests.put(url, headers=headers, json=request_body)
-        print("response: ", response.json())
+        print("Response: ", response)
         response.raise_for_status()
 
         print(f"Story successfully updated to Shikshalokam: {response.status_code}")
