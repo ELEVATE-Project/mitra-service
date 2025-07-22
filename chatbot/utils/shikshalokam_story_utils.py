@@ -241,7 +241,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         project_id = chat_session.project_id
 
         if (access_token in [None, "", "null"] or not session or not project_id or
-                flow not in[SessionFlowName.Reflection, SessionFlowName.SsoFlow]):
+                flow not in[SessionFlowName.Reflection, SessionFlowName.GuestMiStory]):
             print("Not calling shikshalokam api as access_tokne or session or project_id is missing")
             return
 
@@ -297,7 +297,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         }
         print("request_body: ", request_body)
 
-        if flow in [SessionFlowName.SsoFlow]:
+        if flow in [SessionFlowName.GuestMiStory]:
             url = f"https://{base_url}/userProjects/update/{project_id}"
         else:
             url = f"https://{base_url}/userProjects/addStory/{project_id}"

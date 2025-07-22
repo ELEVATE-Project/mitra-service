@@ -133,7 +133,7 @@ def save_story(
                     designation = get_transliteration_output(data=designation)
 
 
-        if flow in [SessionFlowName.Reflection, SessionFlowName.SsoFlow] and project_id:
+        if flow in [SessionFlowName.Reflection] and project_id:
             logger.info(f"project_id: %s", project_id)
             project = Project.objects.filter(project_id=project_id).first()
             if project:

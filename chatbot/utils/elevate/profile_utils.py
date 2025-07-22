@@ -100,7 +100,6 @@ def handle_elevate_profile(access_token):
             "company": profile.company.slug if profile.company else None,
             "state": profile_address.state if profile_address else None,
             "has_accepted_tnc": "ONGOING",
-            "flow": SessionFlowName.SsoFlow,
             "route": profile.preferred_route,
             "profileid": profile.id,
             'reroute_url': os.getenv('SSO_REROUTE_URL')
