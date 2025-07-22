@@ -16,6 +16,7 @@ from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
 from shikshalokam.models import Project
+import json_repair
 
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
@@ -306,6 +307,8 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
                 }
             ]
         }
+        request_body = json_repair.repair_json(request_body, return_objects=True)
+
         print("request_body: ", request_body)
         print("type: ", type(request_body))
         print("type: ", type(request_body.get("story")))
