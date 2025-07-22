@@ -133,9 +133,9 @@ def save_story(
                     designation = get_transliteration_output(data=designation)
 
 
-        if flow == SessionFlowName.Reflection and project_id:
+        if flow in [SessionFlowName.Reflection] and project_id:
             logger.info(f"project_id: %s", project_id)
-            project = Project.objects.get(project_id=project_id)
+            project = Project.objects.filter(project_id=project_id).first()
             if project:
                 tasks = Task.objects.filter(project=project)
                 serialized_tasks = TaskSerializer(tasks, many=True).data
@@ -323,3 +323,77 @@ def get_transliteration_output(data):
         return data[0]
 
     return None
+
+
+def save_ptm_story(
+        response_json_story, language, voice_provider, profile, session, combined_reason, flow=None,
+        company_bot=None
+):
+    try:
+        name = response_json_story.get("name", "")
+        district = response_json_story.get("district", "")
+        school = response_json_story.get("school", "")
+        role = response_json_story.get("role", "")
+        ptm_experience_summary = response_json_story.get("ptm_experience_summary", "")
+        key_highlights = response_json_story.get("key_highlights", "")
+        perceived_changes_or_impact = response_json_story.get("perceived_changes_or_impact", "")
+
+        # if language != "en":
+        #     ptm_experience_summary = translate_field(voice_provider, ptm_experience_summary, target_language=language)
+        #     key_highlights = translate_field(voice_provider, key_highlights, target_language=language)
+        #     expected_impact = translate_field(voice_provider, expected_impact, target_language=language)
+        #
+        #     voice_transliterate_provider = Voice.objects.filter(
+        #         company_bot=company_bot, type=VoiceType.Transliterate, language=language
+        #     ).first()
+        #
+        #     if name and name != '':
+        #         is_sentence = ' ' in name
+        #         name = transliterate_text(
+        #             voice_provider=voice_transliterate_provider, message_body=name, target_language=language,
+        #             source_language='en',
+        #             is_sentence=is_sentence
+        #         )
+        #         name = get_transliteration_output(data=name)
+        #
+        #     name = translate_field(voice_provider, name, target_language=language)
+        #     district = translate_field(voice_provider, district, target_language=language)
+        #     school = translate_field(voice_provider, school, target_language=language)
+        #     role = translate_field(voice_provider, role, target_language=language)
+
+        other_params = {
+            "user_name": name,
+            "district": district,
+            "school": school,
+            "role": role,
+            "ptm_experience_summary": ptm_experience_summary,
+            "key_highlights": key_highlights,
+            "perceived_changes_or_impact": perceived_changes_or_impact,
+            "flow": flow,
+        }
+
+        title = f"{name}'s PTM Reflection" if name and name != '' else "PTM Reflection"
+
+        story = Story.objects.filter(session=session).first()
+        if story:
+            story.title = title
+            story.language = language
+            story.stage = StoryStatusChoices.COMPLETED
+            story.other_params = other_params
+            story.validation_logs = combined_reason
+        else:
+            story = Story(
+                title=title,
+                author=profile,
+                session=session,
+                language=language,
+                stage=StoryStatusChoices.COMPLETED,
+                other_params=other_params,
+                validation_logs=combined_reason
+            )
+        story.save()
+        return story, ptm_experience_summary
+    except Exception as e:
+        logger.error("Error in save_ptm_story: %s", e, exc_info=True)
+        traceback.print_exc()
+        raise Exception("Failed to save PTM story")

@@ -10,6 +10,7 @@ import jwt
 import logging
 
 from chatbot.utils.transliterate_utils import transliterate_text
+from shikshalokam.models import Project, ProjectStatus
 
 logger = logging.getLogger('django')
 
@@ -23,6 +24,7 @@ class OneShotGuestConsumer(BaseConsumer):
         access_token = None
         route = None
         company_bot = None
+        task_id = None
 
         def translate_message(self, message):
             try:
@@ -104,15 +106,22 @@ class OneShotGuestConsumer(BaseConsumer):
                 self.profile_id = text_data_json.get('profileid')
                 self.project_id = text_data_json.get('projectid')
                 self.access_token = text_data_json.get('access_token')
+                self.task_id = text_data_json.get('taskid')
                 self.route = text_data_json.get('route')
                 profile = Profile.objects.filter(id=self.profile_id).first()
                 print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
-                      f"route: {self.route}")
+                      f"route: {self.route}, projectId: {self.project_id}, taskId: {self.task_id}")
                 if profile:
                     self.company_bot = CompanyBot.objects.get(company=profile.company, route='/oneshot_guest')
                 else:
                     self.company_bot = CompanyBot.objects.get(route='/oneshot_guest')
 
+                if self.task_id:
+                    other_params = {
+                        "task_id": self.task_id
+                    }
+                else:
+                    other_params = {}
                 if self.access_token:
                     decoded = jwt.decode(self.access_token, options={"verify_signature": False})
                     print(decoded)
@@ -134,10 +143,24 @@ class OneShotGuestConsumer(BaseConsumer):
                         'session_status': ChatStatus.IN_PROGRESS,
                         'project_id': self.project_id,
                         'user_id': user_id,
-                        'session_type': ChatType.oneStepReflection
+                        'session_type': ChatType.oneStepReflection,
+                        'other_params': other_params
                     }
                 )
+
                 print(cs, cs_created)
+                project = Project.objects.filter(project_id=self.project_id).first()
+                if not project:
+                    print(f"Project with ID {self.project_id} not found. Creating a new one.")
+                    project = Project.objects.create(
+                        project_id=self.project_id,
+                        author=profile,
+                        project_status=ProjectStatus.STARTED,
+                    )
+                    print(f"Project created with id {project.id}")
+                else:
+                    print(f"Found existing project: {project.id}")
+
             else:
                 company_chat_status = self.determine_company_chat_status(
                     session_id=self.session_id, profile_id=self.profile_id, route='/oneshot_guest'

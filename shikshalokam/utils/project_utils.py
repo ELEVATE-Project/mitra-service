@@ -3,14 +3,15 @@ import traceback
 import os
 import requests
 
-from chatbot.models import SessionFlowName
+from chatbot.models import SessionFlowName, CompanyChat, Profile, StoryMedia, MediaTypeChoices
+from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
 from shikshalokam.models import Task, Project
 
 
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
 
-def update_project_status_utils(project_id, access_token, flow):
+def update_project_status_utils(project_id, access_token, flow, status):
     try:
         if flow != SessionFlowName.Reflection:
             return {'message': 'This api has no effect in the current flow', 'status': 200}
@@ -22,10 +23,14 @@ def update_project_status_utils(project_id, access_token, flow):
         }
 
         request_body = {
-            "reflectionStatus": "completed"
+            "reflectionStatus": status
         }
-
+        print("request_body: ", request_body)
+        print("request_body: ", request_body)
+        print("type: ", type(request_body))
+        print("type: ", type(request_body.get("story")))
         response = requests.post(url, headers=headers, json=request_body)
+        print("Response: ", response)
         print("response: ", response.json())
 
         return response.json()

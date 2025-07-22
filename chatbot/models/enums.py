@@ -202,6 +202,7 @@ class SessionFlowName(models.TextChoices):
     LoginDiscussion = 'login-discussion', _('login-discussion')
     GuestMiStory = 'guest-mi-story', _('guest-mi-story')
     LoginMiStory = 'login', _('login')
+    SsoFlow = 'sso', _('sso')
     Reflection = 'reflection', _('reflection')
     megaPTM = 'megaPTM', _('Mega PTM')
 

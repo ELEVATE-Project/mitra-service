@@ -12,10 +12,12 @@ from chatbot.pdf.story_first_page import get_first_page_html
 from chatbot.pdf.story_images_page import get_story_images_page_html
 from chatbot.pdf.story_secondpage import get_story_secondpage_html
 from chatbot.pdf.story_thirdpage import get_thirdpage_html
+from chatbot.utils.elevate.project_detail import fetch_existing_project_attachments
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
 from shikshalokam.models import Project
+import json_repair
 
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
@@ -88,6 +90,8 @@ def save_shikshalokam_story(
             }
         }
         print("request_body: ", request_body)
+        print("type: ", type(request_body))
+        print("type: ", type(request_body.get("story")))
 
         url = f"https://{base_url}/userProjects/addStory/{project_id}"
         print("Using url: ", url)
@@ -97,6 +101,7 @@ def save_shikshalokam_story(
         }
 
         response = requests.put(url, headers=headers, json=request_body)
+        print("Res:", response)
         print("response: ", response.json())
         response.raise_for_status()
 
@@ -108,7 +113,8 @@ def save_shikshalokam_story(
 
 def get_story_html(story, profile, flow):
     project = Project.objects.filter(story=story).first()
-    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
+    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
+                SessionFlowName.Reflection]:
         css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/story_pdf.css"))
     else:
         css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/shiksha_chaupal/mom_report_pdf.css"))
@@ -139,12 +145,12 @@ def get_story_html(story, profile, flow):
         """
 
     if profile:
-        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
+        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/story')
         else:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/chaupal-story')
     else:
-        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
+        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
             company_bot = CompanyBot.objects.get(route='/story')
         else:
             company_bot = CompanyBot.objects.get(route='/chaupal-story')
@@ -159,7 +165,7 @@ def get_story_html(story, profile, flow):
         company_bot=company_bot, language=language_used
     ).first()
     print("Generating for FLOW: ", flow)
-    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
+    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
         html_content += get_first_page_html(
             profile=profile, project=project, voice_provider=voice_provider, story=story,
             story_vernacular=story_vernacular, flow=flow
@@ -239,7 +245,8 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         chat_session = ChatSession.objects.get(session=session)
         project_id = chat_session.project_id
 
-        if access_token in [None, "", "null"] or not session or not project_id or flow != SessionFlowName.Reflection:
+        if (access_token in [None, "", "null"] or not session or not project_id or
+                flow not in[SessionFlowName.Reflection, SessionFlowName.GuestMiStory]):
             print("Not calling shikshalokam api as access_tokne or session or project_id is missing")
             return
 
@@ -251,18 +258,23 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         story_media_objects = StoryMedia.objects.filter(
             story=story, include_in_story=True
         ).exclude(media_type=MediaTypeChoices.PDF)
-
+        attachments=[]
         if is_edit_story:
-            attachments = [
+            existing_attachments = fetch_existing_project_attachments(project_id, access_token)
+            print("existing_attachments: ", existing_attachments)
+            if existing_attachments:
+                attachments.extend(existing_attachments)
+
+            attachments.extend([
                 {
                     "name": media.name,
                     "sourcePath": media.source_path,
-                    "type": media.media_type
+                    "type": media.media_type,
+                    "page": "story"
+
                 }
                 for media in story_media_objects
-            ]
-        else:
-            attachments = []
+            ])
         print("attachments: ", attachments)
 
         pdf_information = upload_response_json.get('pdfInformation')
@@ -291,20 +303,27 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
                 "chatHistory": chat_history,
                 "attachments": attachments,
                 "pdfInformation": pdf_information,
-            }
+            },
+            "tasks": [
+                {
+                    "_id": chat_session.other_params.get('task_id'),
+                    "status": "completed"
+                }
+            ]
         }
-        print("request_body: ", request_body)
-
-
-        url = f"https://{base_url}/userProjects/addStory/{project_id}"
-        print("Using url: ", url)
 
         headers = {
             "X-auth-token": access_token,
         }
+        print("Req body: ", request_body)
+        if flow in [SessionFlowName.GuestMiStory]:
+            url = f"https://{base_url}/userProjects/update/{project_id}"
+            response = requests.post(url, headers=headers, json=request_body)
+        else:
+            url = f"https://{base_url}/userProjects/addStory/{project_id}"
+            response = requests.put(url, headers=headers, json=request_body)
 
-        response = requests.put(url, headers=headers, json=request_body)
-        print("response: ", response.json())
+        print("Response: ", response.text)
         response.raise_for_status()
 
         print(f"Story successfully updated to Shikshalokam: {response.status_code}")
