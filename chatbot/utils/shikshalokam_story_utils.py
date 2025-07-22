@@ -323,14 +323,16 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
             "Accept": "application/json, text/plain, */*",
             "X-auth-token": access_token,
         }
-        try:
-            json_str = json.dumps(request_body)  # this will raise an error if not serializable
-            print("✅ request_body is valid JSON")
-            print("Sending this JSON:")
-            print(json.dumps(request_body, indent=2))
-        except TypeError as e:
-            print("❌ Invalid JSON structure in request_body:", e)
-            raise
+        url = "https://saas-qa.tekdinext.com/project/v1/userProjects/update/6879cebfc44d7c00148fc2d0"
+        # try:
+        #     json_str = json.dumps(request_body)  # this will raise an error if not serializable
+        #     print("✅ request_body is valid JSON")
+        #     print("Sending this JSON:")
+        #     print(json.dumps(request_body, indent=2))
+        # except TypeError as e:
+        #     print("❌ Invalid JSON structure in request_body:", e)
+        #     raise
+        print("Using url: ", url)
         response = requests.put(url, headers=headers, json=request_body)
         print("Response: ", response.text)
         response.raise_for_status()
