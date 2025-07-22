@@ -307,7 +307,6 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
                 }
             ]
         }
-        request_body = json_repair.repair_json(request_body, return_objects=True)
 
         print("request_body: ", request_body)
         print("type: ", type(request_body))
@@ -324,7 +323,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         }
 
         response = requests.put(url, headers=headers, json=request_body)
-        print("Response: ", response)
+        print("Response: ", response.text)
         response.raise_for_status()
 
         print(f"Story successfully updated to Shikshalokam: {response.status_code}")
