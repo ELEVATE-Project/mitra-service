@@ -25,8 +25,12 @@ def update_project_status_utils(project_id, access_token, flow, status):
         request_body = {
             "reflectionStatus": status
         }
-
+        print("request_body: ", request_body)
+        print("request_body: ", request_body)
+        print("type: ", type(request_body))
+        print("type: ", type(request_body.get("story")))
         response = requests.post(url, headers=headers, json=request_body)
+        print("Response: ", response)
         print("response: ", response.json())
 
         return response.json()

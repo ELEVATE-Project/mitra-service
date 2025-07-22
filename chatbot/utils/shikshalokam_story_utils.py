@@ -99,6 +99,7 @@ def save_shikshalokam_story(
         }
 
         response = requests.put(url, headers=headers, json=request_body)
+        print("Res:", response)
         print("response: ", response.json())
         response.raise_for_status()
 
@@ -305,6 +306,8 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
             }
         }
         print("request_body: ", request_body)
+        print("type: ", type(request_body))
+        print("type: ", type(request_body.get("story")))
 
         if flow in [SessionFlowName.GuestMiStory]:
             url = f"https://{base_url}/userProjects/update/{project_id}"
