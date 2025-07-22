@@ -44,7 +44,7 @@ def perform_cloud_upload(file_info, pdf_file):
     )
     print(response)
     print(response.status_code)
-    if response.status_code == 200:
+    if response.status_code in [200, 201]:
         print(f"File uploaded successfully")
         return True
     else:
