@@ -261,6 +261,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         attachments=[]
         if is_edit_story:
             existing_attachments = fetch_existing_project_attachments(project_id, access_token)
+            print("existing_attachments: ", existing_attachments)
             if existing_attachments:
                 attachments.extend(existing_attachments)
 
@@ -314,7 +315,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         headers = {
             "X-auth-token": access_token,
         }
-
+        print("Req body: ", request_body)
         if flow in [SessionFlowName.GuestMiStory]:
             url = f"https://{base_url}/userProjects/update/{project_id}"
             response = requests.post(url, headers=headers, json=request_body)

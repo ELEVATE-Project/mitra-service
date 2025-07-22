@@ -104,7 +104,8 @@ def handle_cloud_response(results, session_value, story=None, instance=None):
             data=binary_data,
             headers={
                 "Content-Type": "multipart/form-data",
-                "Access-Control-Allow-Origin": "*"
+                "Access-Control-Allow-Origin": "*",
+                "x-ms-blob-type": "BlockBlob",
             }
         )
         print('cloud response: ', response)
