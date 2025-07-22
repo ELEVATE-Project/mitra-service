@@ -110,11 +110,14 @@ class GuidedGuestConsumer(BaseConsumer):
                         self.company_bot = CompanyBot.objects.get(route='/guided_guest')
 
                     # chat session create (session, profile)
+                    step_number = 1
+                    if profile and profile.first_name and profile.first_name != '':
+                        step_number = 4
                     cs, cs_created = ChatSession.objects.get_or_create(
                         session=self.session_id,
                         defaults={
                             'profile': profile,
-                            'current_step': 1,
+                            'current_step': step_number,
                             'company_bot': self.company_bot,
                             'session_status': ChatStatus.IN_PROGRESS,
                             'session_type': ChatType.guidedReflection

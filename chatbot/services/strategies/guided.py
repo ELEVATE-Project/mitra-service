@@ -19,9 +19,9 @@ class GuidedGuestBotStrategy(BotStrategy):
         company_bot = session_data['company_bot']
 
         # Increment step for new profiles
-        if company_chats and len(company_chats) < 2 and profile and profile.first_name:
-            chat_session.current_step += 1
-            chat_session.save()
+        # if company_chats and len(company_chats) < 2 and profile and profile.first_name:
+        #     chat_session.current_step += 1
+        #     chat_session.save()
 
         try:
             state_machine = CompanyStateMachine.objects.get(
