@@ -319,6 +319,8 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         print("Using url: ", url)
 
         headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/plain, */*",
             "X-auth-token": access_token,
         }
         try:
