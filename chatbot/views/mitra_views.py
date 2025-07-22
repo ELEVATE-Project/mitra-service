@@ -453,7 +453,7 @@ def update_project_status_view(request):
             session = project.story.session
             print("session: ", session)
 
-        if project and flow in [SessionFlowName.Reflection, SessionFlowName.GuestMiStory]:
+        if project and flow in [SessionFlowName.Reflection, SessionFlowName.GuestMiStory] and status=='completed':
             story_media_objects = StoryMedia.objects.filter(
                 story=project.story, include_in_story=True
             ).exclude(media_type=MediaTypeChoices.PDF)
