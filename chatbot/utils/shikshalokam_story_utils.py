@@ -293,6 +293,13 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
                 "chatHistory": chat_history,
                 "attachments": attachments,
                 "pdfInformation": pdf_information,
+                "tasks": [
+                    {
+                        "_id": chat_session.other_params.get('taskId'),
+                        "status": "completed"
+                    }
+                ]
+
             }
         }
         print("request_body: ", request_body)

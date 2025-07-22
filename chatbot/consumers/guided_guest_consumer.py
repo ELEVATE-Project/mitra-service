@@ -10,6 +10,7 @@ from chatbot.celery_tasks.guided_guest_tasks import get_guided_guest_response
 import logging
 
 from chatbot.utils.transliterate_utils import transliterate_text
+from shikshalokam.models import Project, ProjectStatus
 
 logger = logging.getLogger('django')
 
@@ -20,6 +21,8 @@ class GuidedGuestConsumer(BaseConsumer):
         profile_id = None
         route = None
         company_bot = None
+        project_id = None
+        task_id = None
 
         def translate_message(self, message):
             try:
@@ -101,14 +104,21 @@ class GuidedGuestConsumer(BaseConsumer):
                     self.session_id = text_data_json.get('sessionid')
                     self.profile_id = text_data_json.get('profileid')
                     self.route = text_data_json.get('route')
+                    self.task_id = text_data_json.get('taskid')
+                    self.project_id = text_data_json.get('projectid')
                     profile = Profile.objects.filter(id=self.profile_id).first()
                     print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
-                          f"route: {self.route}")
+                          f"route: {self.route}, projectId: {self.project_id}, taskId: {self.task_id}")
                     if profile:
                         self.company_bot = CompanyBot.objects.get(company=profile.company, route='/guided_guest')
                     else:
                         self.company_bot = CompanyBot.objects.get(route='/guided_guest')
-
+                    if self.task_id:
+                        other_params = {
+                            "task_id": self.task_id
+                        }
+                    else:
+                        other_params = {}
                     # chat session create (session, profile)
                     step_number = 1
                     if profile and profile.first_name and profile.first_name != '':
@@ -120,10 +130,23 @@ class GuidedGuestConsumer(BaseConsumer):
                             'current_step': step_number,
                             'company_bot': self.company_bot,
                             'session_status': ChatStatus.IN_PROGRESS,
-                            'session_type': ChatType.guidedReflection
+                            'session_type': ChatType.guidedReflection,
+                            'project_id': self.project_id,
+                            'other_params': other_params
                         }
                     )
                     print(cs, cs_created)
+                    project = Project.objects.filter(project_id=self.project_id).first()
+                    if not project:
+                        print(f"Project with ID {self.project_id} not found. Creating a new one.")
+                        project = Project.objects.create(
+                            project_id=self.project_id,
+                            author=profile,
+                            project_status=ProjectStatus.STARTED,
+                        )
+                        print(f"Project created with id {project.id}")
+                    else:
+                        print(f"Found existing project: {project.id}")
                 else:
                     company_chat_status = self.determine_company_chat_status(
                         session_id=self.session_id, profile_id=self.profile_id, route='/guided_guest'
