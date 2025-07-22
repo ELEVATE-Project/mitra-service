@@ -42,7 +42,8 @@ def perform_cloud_upload(file_info, pdf_file):
         data=pdf_file,
         headers={"Content-Type": "multipart/form-data", "x-ms-blob-type": "BlockBlob",}
     )
-
+    print(response)
+    print(response.status_code)
     if response.status_code == 200:
         print(f"File uploaded successfully")
         return True
