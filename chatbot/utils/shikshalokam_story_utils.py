@@ -262,7 +262,9 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
                 {
                     "name": media.name,
                     "sourcePath": media.source_path,
-                    "type": media.media_type
+                    "type": media.media_type,
+                    "page": "story"
+
                 }
                 for media in story_media_objects
             ]
@@ -296,14 +298,13 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
                 "chatHistory": chat_history,
                 "attachments": attachments,
                 "pdfInformation": pdf_information,
-                "tasks": [
-                    {
-                        "_id": chat_session.other_params.get('task_id'),
-                        "status": "completed"
-                    }
-                ]
-
-            }
+            },
+            "tasks": [
+                {
+                    "_id": chat_session.other_params.get('task_id'),
+                    "status": "completed"
+                }
+            ]
         }
         print("request_body: ", request_body)
         print("type: ", type(request_body))
