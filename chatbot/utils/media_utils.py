@@ -40,7 +40,7 @@ def perform_cloud_upload(file_info, pdf_file):
     response = requests.put(
         presigned_url,
         data=pdf_file,
-        headers={"Content-Type": "multipart/form-data"}
+        headers={"Content-Type": "multipart/form-data", "x-ms-blob-type": "BlockBlob",}
     )
 
     if response.status_code == 200:
