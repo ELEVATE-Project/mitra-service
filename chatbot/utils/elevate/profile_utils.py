@@ -2,6 +2,7 @@ import os
 import requests
 from chatbot.models import Profile, Company, SessionFlowName
 from chatbot.models.geo_models import ProfileAddress
+import json_repair
 
 elevate_base_url = os.getenv('ELEVATE_BASE_URL')
 
@@ -28,6 +29,20 @@ def handle_elevate_profile(access_token):
         phone = user_data.get('phone')
         email = user_data.get('email')
         language = user_data.get('preferred_language')
+        raw_designation = user_data.get('professional_role')
+        designation_value = None
+        if isinstance(raw_designation, dict):
+            designation_value = raw_designation.get('label') or raw_designation
+        elif isinstance(raw_designation, str):
+            try:
+                designation_value = json_repair.repair_json(raw_designation, return_objects=True)
+                if isinstance(designation_value, dict):
+                    designation_value = designation_value.get('label')
+            except Exception:
+                designation_value = raw_designation
+        else:
+            designation_value = None
+
         if language:
             if isinstance(language, dict):
                 language = language.get('value', 'en')
@@ -56,7 +71,7 @@ def handle_elevate_profile(access_token):
                 'password': "grit@123",
                 'latest_flow_used': SessionFlowName.LoginMiStory,
                 'location': user_data.get('location'),
-                'designation': user_data.get('professional_role', {}),
+                'designation': designation_value,
                 'other_params': {'elevate_profile_details': user_data},
                 'source': 'elevate',
                 'preferred_route': language,
