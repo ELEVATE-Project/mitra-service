@@ -88,6 +88,8 @@ def save_shikshalokam_story(
             }
         }
         print("request_body: ", request_body)
+        print("type: ", type(request_body))
+        print("type: ", type(request_body.get("story")))
 
         url = f"https://{base_url}/userProjects/addStory/{project_id}"
         print("Using url: ", url)
