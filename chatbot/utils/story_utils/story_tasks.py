@@ -39,15 +39,15 @@ def save_story(
         impact = clean_escaped_text(text=impact)
         problem_statement = clean_escaped_text(text=problem_statement)
 
-        if flow and flow in [SessionFlowName.GuestMiStory]:
+        if flow and flow in [SessionFlowName.GuestMiStory] and not project_id:
             user_name = response_json_story.get('user_name', '')
             location = response_json_story.get('location', '')
             organization = response_json_story.get('organization', '')
             designation = response_json_story.get('designation', '')
         else:
             user_name=profile.first_name if profile and profile.first_name else ''
-            organization=None
-            designation=None
+            organization = response_json_story.get('organization', '')
+            designation = response_json_story.get('designation', '')
             location = None
             if profile:
                 address = ProfileAddress.objects.filter(profile=profile).first()
