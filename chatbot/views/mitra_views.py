@@ -446,11 +446,13 @@ def update_project_status_view(request):
     flow = body.get('flow')
     status = body.get("status", "completed")
     try:
+        session=None
         project = Project.objects.filter(project_id=project_id).first()
         if project:
             print("project: ", project)
             print("story: ", project.story)
-            session = project.story.session
+            if project.story:
+                session = project.story.session
             print("session: ", session)
 
         if project and flow in [SessionFlowName.Reflection, SessionFlowName.GuestMiStory] and status=='completed':
