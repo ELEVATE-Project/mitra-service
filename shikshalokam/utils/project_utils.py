@@ -14,9 +14,6 @@ base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 def update_project_status_utils(project_id, access_token, flow, status):
     try:
         print(f"flow: {flow}")
-        if flow != SessionFlowName.Reflection:
-            print("This api has no effect in the reflection flow")
-            return {'message': 'This api has no effect in the current flow', 'status': 200}
 
         url = f"https://{base_url}/userProjects/update/{project_id}"
         print("using url: ", url)
