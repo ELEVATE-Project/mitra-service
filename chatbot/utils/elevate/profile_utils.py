@@ -61,7 +61,7 @@ def handle_elevate_profile(access_token):
             return {}
 
         profile, _ = Profile.objects.update_or_create(
-            email=user_data.get('email'),
+            email=email,
             defaults={
                 'first_name': first_name,
                 'last_name': last_name,
