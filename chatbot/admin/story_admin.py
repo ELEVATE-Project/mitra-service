@@ -2,6 +2,7 @@ from django.utils.html import format_html
 from django.contrib import admin
 from django.db.models import Q
 from chatbot.filter.admin_filter import StoryCompanyFilter, StoryStateFilter, StoryDistrictFilter, StoryBlockFilter
+from chatbot.filter.flow_filter import FlowFilter
 from chatbot.filter.story_filter import UserNameFilter
 from chatbot.models import StoryTag, StoryMedia, Story, Profile, ProfileType, MediaTypeChoices
 from chatbot.models.geo_models import ProfileAddress
@@ -42,7 +43,7 @@ class StoryAdmin(admin.ModelAdmin):
     list_display = ('title', 'user_name_from_other_params', 'author', 'session', 'created_at',)
     list_filter = (
         'created_at', StoryCompanyFilter, 'author', 'session', StoryStateFilter,
-        StoryDistrictFilter, StoryBlockFilter, UserNameFilter
+        StoryDistrictFilter, StoryBlockFilter, UserNameFilter, FlowFilter,
     )
     search_fields = ('title', 'session',)
     exclude = ('formatted_content', )
