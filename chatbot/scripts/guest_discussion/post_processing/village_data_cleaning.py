@@ -524,32 +524,3 @@ def run_for_date_range(start_date, end_date) -> Dict[str, List[int]]:
     analyze_failed_stories(summary['failed_village_mapping'])
 
     return summary
-
-
-# if __name__ == "__main__":
-#     # Run for all stories that need village mapping
-#     summary = run_village_mapper()
-#
-#     print(f"\n🔍 DETAILED RESULTS:")
-#     print(f"📋 Skipped Story IDs (no english_json): {summary['skipped_no_english_json']}")
-#     print(f"💥 Failed Story IDs (village mapping failed): {summary['failed_village_mapping']}")
-#
-#     # Analyze results
-#     analyze_skipped_stories(summary['skipped_no_english_json'])
-#     analyze_failed_stories(summary['failed_village_mapping'])
-#
-#     # Get overall stats
-#     get_village_mapping_stats()
-#
-#     # Save summary to file for reference
-#     import datetime
-#
-#     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-#     summary_file = f"chatbot/scripts/guest_discussion/output/summary_{timestamp}.json"
-#
-#     try:
-#         with open(summary_file, 'w') as f:
-#             json.dump(summary, f, indent=2)
-#         print(f"📄 Summary saved to: {summary_file}")
-#     except Exception as e:
-#         print(f"⚠️  Could not save summary file: {e}")

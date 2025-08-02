@@ -197,6 +197,7 @@ class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
     list_filter = ('session', 'title', ChatSessionFilter, 'project_id', 'session_status', 'session_type')
     search_fields = ('session', 'title', 'profile__first_name')
     raw_id_fields = ('profile',)
+    readonly_fields = ('created_at',)
 
     resource_class = ChatSessionResource
 

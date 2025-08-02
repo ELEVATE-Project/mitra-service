@@ -92,7 +92,8 @@ INSTALLED_APPS = [
     'django_s3_storage',
     'import_export',
     'simple_history',
-    'storages'
+    'storages',
+    'django_crontab',
 ]
 
 MIDDLEWARE = [
@@ -355,3 +356,11 @@ LOGGING = {
 }
 
 ASGI_APPLICATION_SHUTDOWN_TIMEOUT = 30
+
+CRONJOBS = [
+    ('30 2 * * *', 'chatbot.cron_tasks.chaupal.chaupal_cront_tasks.handle_story_cleanup_cron',
+     '>> /tmp/handle_story_cleanup_cron.log 2>&1'),
+    ('30 4 * * *', 'chatbot.cron_tasks.chaupal.chaupal_cront_tasks.handle_village_ingestion_cron',
+     '>> /tmp/handle_village_ingestion_cron.log 2>&1'),
+]
+
