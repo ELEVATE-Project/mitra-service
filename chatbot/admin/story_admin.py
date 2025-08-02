@@ -46,6 +46,7 @@ class StoryAdmin(admin.ModelAdmin):
         StoryDistrictFilter, StoryBlockFilter, UserNameFilter, FlowFilter,
     )
     search_fields = ('title', 'session',)
+    readonly_fields = ('created_at',)
     exclude = ('formatted_content', )
     inlines = [StoryTagInline, StoryMediaInline]
     list_per_page = 20

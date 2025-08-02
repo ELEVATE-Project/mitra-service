@@ -5,7 +5,9 @@ from django.db.models import Q
 from chatbot.utils.audio_provider_utils import text_translate_provider
 from django.utils.timezone import make_aware
 from datetime import datetime
+import logging
 
+logger = logging.getLogger('django')
 
 ###Steps To Follow:
     #First step is to call get_story_count() (Adjust the date as needed)
@@ -94,15 +96,18 @@ def translate_stories_to_english(start=0, end=100):
                   .exclude(Q(other_params=None) | Q(language='en')) \
                   .order_by('-id')[start:end]
 
+    logger.info(f"Translating stories from {start} to {end}... Total: {stories.count()}")
     print(f"Translating stories from {start} to {end}... Total: {stories.count()}")
 
     for story in stories:
         print(process_story(story))
 
 
-def get_story_count():
-    start_time = make_aware(datetime(2025, 6, 6, 0, 0))
-    end_time = make_aware(datetime(2025, 8, 7, 23, 59, 59))
+def get_translate_story_count(start_time, end_time):
+    if not start_time:
+        start_time = make_aware(datetime(2025, 7, 15, 0, 0))
+    if not end_time:
+        end_time = make_aware(datetime(2025, 7, 28, 23, 59, 59))
 
     session_ids = list(
         ChatSession.objects.filter(
@@ -114,9 +119,13 @@ def get_story_count():
         .values_list('session', flat=True)
     )
     if session_ids:
+        logger.info(f"Found {len(session_ids)} sessions")
+        logger.info(f"First session ID: {session_ids[0]}, Last session ID: {session_ids[-1]}")
+
         print("First session id: ", session_ids[0])
         print("Last session id: ", session_ids[-1])
     else:
+        logger.info(f"No sessions found.")
         print("No sessions found.")
 
     story_ids = list(
@@ -126,13 +135,14 @@ def get_story_count():
         .values_list('id', flat=True)
     )
 
+    logger.info(f"Total stories: {len(story_ids)}")
     print(f"Total stories: {len(story_ids)}")
     return story_ids
 
 
 def translate_specific_story_ids(story_ids):
     stories = Story.objects.filter(id__in=story_ids)
-
+    logger.info(f"Translating specific stories: {story_ids}... Total: {stories.count()}")
     print(f"Translating specific stories: {story_ids}... Total: {stories.count()}")
 
     for story in stories:
