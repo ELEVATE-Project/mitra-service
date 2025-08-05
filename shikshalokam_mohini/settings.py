@@ -26,9 +26,21 @@ LOGGING_DIR = BASE_DIR + '/shikshalokam-mohini-service/logs'
 # BASE_DIR = Path(__file__).resolve().parent.parent
 
 def load_secrets():
+    alt_path = os.getcwd() + "/config/secrets.json"
     secrets_path = os.path.join(BASE_DIR, "shikshalokam-mohini-service/config/secrets.json")
-    with open(secrets_path) as f:
-        return json.load(f)
+
+    try:
+        with open(secrets_path, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        try:
+            with open(alt_path, 'r') as f:
+                return json.load(f)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"secrets.json not found in either {secrets_path} or {alt_path}")
+    except json.JSONDecodeError as e:
+        raise json.JSONDecodeError(f"Invalid JSON in secrets file: {e}")
+
 
 SECRETS = load_secrets()
 
