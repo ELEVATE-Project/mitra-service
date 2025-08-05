@@ -3,7 +3,7 @@ import logging
 from chatbot.models import StoryStatusChoices, Story, SessionFlowName, Voice, VoiceType, StoryTranslation
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.story_llama_utils import translate_field, create_project
-from chatbot.utils.story_utils.format_utils import clean_escaped_text
+from chatbot.utils.story_utils.format_utils import clean_escaped_text, get_formatted_story
 from chatbot.utils.transliterate_utils import transliterate_text, get_transliteration_output
 from shikshalokam.models import Project, Task
 from shikshalokam.serializer import TaskSerializer
@@ -184,7 +184,7 @@ def create_story_translation(story, language, english_data, voice_provider, flow
                 for action_step in action_steps
             ]
 
-        translated_other_params = {}
+        translated_other_params = story.other_params.copy() if story.other_params else {}
         if flow and flow in [SessionFlowName.GuestMiStory] and company_bot:
             voice_transliterate_provider = Voice.objects.filter(
                 company_bot=company_bot, type=VoiceType.Transliterate, language=language
@@ -215,7 +215,8 @@ def create_story_translation(story, language, english_data, voice_provider, flow
                 'impact': translated_impact,
                 'micro_improvement': translated_micro_improvement,
                 'blurb': translated_blurb,
-                'translated_other_params': translated_other_params
+                'translated_other_params': translated_other_params,
+                'formatted_content': ''
             }
         )
 
@@ -230,6 +231,10 @@ def create_story_translation(story, language, english_data, voice_provider, flow
             translation.blurb = translated_blurb
             translation.translated_other_params = translated_other_params
             translation.save()
+        formatted_translation_content = get_formatted_story(translation)
+        if formatted_translation_content:
+            translation.formatted_content = formatted_translation_content
+            translation.save(update_fields=['formatted_content'])
 
         logger.info(f"Created/Updated translation for story {story.id} in language {language}")
         return translation

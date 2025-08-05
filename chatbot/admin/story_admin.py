@@ -4,7 +4,7 @@ from django.db.models import Q
 from chatbot.filter.admin_filter import StoryCompanyFilter, StoryStateFilter, StoryDistrictFilter, StoryBlockFilter
 from chatbot.filter.flow_filter import FlowFilter
 from chatbot.filter.story_filter import UserNameFilter
-from chatbot.models import StoryTag, StoryMedia, Story, Profile, ProfileType, MediaTypeChoices
+from chatbot.models import StoryTag, StoryMedia, Story, Profile, ProfileType, MediaTypeChoices, StoryTranslation
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.resources.story_resource import (
     redirect_to_export_view, generate_csv_response, generate_xls_response, generate_docx_response,
@@ -126,3 +126,21 @@ class StoryAdmin(admin.ModelAdmin):
 
 
         return render(request, 'admin/export_story_format.html', {'ids': ids})
+
+
+@admin.register(StoryTranslation)
+class StoryTranslationAdmin(admin.ModelAdmin):
+    list_display = ('story', 'language', 'story_session', 'created_at')
+    list_filter = ('language', 'created_at', 'story', 'story__session')
+    search_fields = ('story__title', 'story__session', 'title')
+    readonly_fields = ('created_at',)
+    ordering = ('story__session', 'language')
+    exclude = ('formatted_content', )
+    raw_id_fields = ('story',)
+    list_per_page = 20
+
+    def story_session(self, obj):
+        """Display session from related story"""
+        return obj.story.session if obj.story else '-'
+
+    story_session.short_description = 'Session'

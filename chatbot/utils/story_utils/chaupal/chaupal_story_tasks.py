@@ -130,10 +130,11 @@ def create_chaupal_translation(story, language, english_title, english_challenge
             for solution in english_solutions_discussed
         ]
 
-        translated_other_params = {
+        translated_other_params = story.other_params.copy() if story.other_params else {}
+        translated_other_params.update({
             'challenges_faced': translated_challenges_faced,
             'solutions_discussed': translated_solutions_discussed
-        }
+        })
 
         voice_transliterate_provider = Voice.objects.filter(
             company_bot=company_bot, type=VoiceType.Transliterate, language=language

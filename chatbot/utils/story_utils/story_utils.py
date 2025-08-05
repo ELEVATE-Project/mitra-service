@@ -1,6 +1,6 @@
 import traceback
 from chatbot.models import (Profile, CompanyChat, CompanyBot,
-                            ChatSession, ChatStatus, Voice, VoiceType, SessionFlowName, BotVernacular)
+                            ChatSession, ChatStatus, Voice, VoiceType, SessionFlowName, BotVernacular, StoryTranslation)
 from chatbot.utils.chat_utils import get_guided_chat
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
 from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
@@ -116,6 +116,16 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
             if formatted_content:
                 story.formatted_content = formatted_content
                 story.save(update_fields=['formatted_content'])
+
+            if language != 'en':
+                try:
+                    translation = story.translations.get(language=language)
+                    formatted_translation_content = get_formatted_story(translation)
+                    if formatted_translation_content:
+                        translation.formatted_content = formatted_translation_content
+                        translation.save(update_fields=['formatted_content'])
+                except StoryTranslation.DoesNotExist:
+                    pass
 
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=['session_status'])

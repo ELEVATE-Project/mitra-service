@@ -63,6 +63,10 @@ class Story(models.Model):
         langs.extend(self.translations.values_list('language', flat=True))
         return langs
 
+    def get_translation_languages(self):
+        """Get only translation languages (excludes main story language)"""
+        return list(self.translations.values_list('language', flat=True))
+
     class Meta:
         indexes = [
             models.Index(fields=['title']),
@@ -185,6 +189,7 @@ class StoryTranslation(models.Model):
     action_steps = models.TextField(null=True, blank=True)
     impact = models.TextField(null=True, blank=True)
     micro_improvement = models.TextField(null=True, blank=True)
+    formatted_content = models.TextField(null=True, blank=True)
 
     translated_other_params = models.JSONField(null=True, blank=True)
 
