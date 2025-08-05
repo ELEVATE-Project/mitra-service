@@ -7,11 +7,13 @@ from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
 from chatbot.utils.story_llama_utils import translate_field
 import asyncio
 
+from chatbot.utils.story_utils.chaupal.chaupal_story_tasks import save_chaupal_report
 from chatbot.utils.story_utils.format_utils import get_formatted_story
 from chatbot.utils.story_utils.get_story_prompts import get_creation_promt, get_chat_message, get_tool_values, \
     get_validation_prompt
+from chatbot.utils.story_utils.mi_story_capture.mi_story_tasks import save_story
+from chatbot.utils.story_utils.ptm.ptm_story_tasks import save_ptm_story
 from chatbot.utils.story_utils.story_llm import generate_story_llm, validate_story_llm
-from chatbot.utils.story_utils.story_tasks import save_story, save_chaupal_report, save_ptm_story
 import logging
 
 logger = logging.getLogger('django')

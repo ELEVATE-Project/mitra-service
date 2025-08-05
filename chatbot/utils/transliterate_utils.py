@@ -14,3 +14,12 @@ def transliterate_text(voice_provider, source_language, target_language, message
             'content': "No provider found!"
         }
     return response
+
+
+def get_transliteration_output(data):
+    if data and isinstance(data, dict):
+        data = data.get('content', [])
+    if data and isinstance(data, list) and len(data) > 0:
+        return data[0]
+
+    return None
