@@ -40,15 +40,15 @@ def save_chaupal_report(
                 location_parts = filter(None, [address.block, address.district, address.state])
                 location = ", ".join(location_parts)
             else:
-                location = ""
+                location = user_location
         else:
-            location = ""
+            location = user_location
 
         other_params = {
             'challenges_faced': english_challenges_faced,
             'solutions_discussed': english_solutions_discussed,
             'user_name': user_name,
-            'location': user_location,
+            'location': location,
             'organization': organization,
             'participants_count': participants_count,
             'discussion_date': discussion_date,
@@ -87,7 +87,8 @@ def save_chaupal_report(
                 company_bot=company_bot,
                 other_data={
                     'user_name': user_name,
-                    'organization': organization
+                    'organization': organization,
+                    'location': location
                 }
             )
 
@@ -140,14 +141,16 @@ def create_chaupal_translation(story, language, english_title, english_challenge
             company_bot=company_bot, type=VoiceType.Transliterate, language=language
         ).first()
 
-        for field_name in ['user_name', 'organization']:
+        for field_name in ['user_name', 'organization', 'location']:
             field_value = other_data.get(field_name, '')
             if field_value and field_value != '':
+                is_sentence = ' ' in field_value
                 transliterated = transliterate_text(
                     voice_provider=voice_transliterate_provider,
                     message_body=field_value,
                     target_language=language,
-                    source_language='en'
+                    source_language='en',
+                    is_sentence = is_sentence
                 )
                 translated_other_params[field_name] = get_transliteration_output(data=transliterated)
 

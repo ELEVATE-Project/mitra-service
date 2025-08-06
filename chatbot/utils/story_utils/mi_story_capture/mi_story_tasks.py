@@ -126,7 +126,8 @@ def save_story(
                 other_data={
                     'user_name': user_name,
                     'organization': organization,
-                    'designation': designation
+                    'designation': designation,
+                    'location': location
                 }
             )
 
@@ -185,12 +186,23 @@ def create_story_translation(story, language, english_data, voice_provider, flow
             ]
 
         translated_other_params = story.other_params.copy() if story.other_params else {}
+
+        if translated_other_params.get('duration'):
+            duration_value = translated_other_params['duration']
+            if ' ' in str(duration_value):
+                translated_other_params['duration'] = translate_field(
+                    voice_provider=voice_provider,
+                    message_body=duration_value,
+                    target_language=language
+                )
+
         if flow and flow in [SessionFlowName.GuestMiStory] and company_bot:
             voice_transliterate_provider = Voice.objects.filter(
                 company_bot=company_bot, type=VoiceType.Transliterate, language=language
             ).first()
+            transliterate_fields = ['user_name', 'organization', 'designation', 'location']
 
-            for field_name in ['user_name', 'organization', 'designation']:
+            for field_name in transliterate_fields:
                 field_value = other_data.get(field_name, '')
                 if field_value and field_value != '':
                     is_sentence = ' ' in field_value
