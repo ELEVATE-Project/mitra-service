@@ -5,7 +5,7 @@ import traceback
 import requests
 from django.core.files.base import ContentFile
 from chatbot.models import StoryMedia, MediaTypeChoices, CompanyChat, Profile, Story, ChatSession, CompanyBot, Voice, \
-    VoiceType, SessionFlowName
+    VoiceType, SessionFlowName, StoryTranslation
 from chatbot.models.story_vernacular_model import StoryVernacular
 from chatbot.pdf.shiksha_chaupal.mom_report import get_mom_report_html
 from chatbot.pdf.story_first_page import get_first_page_html
@@ -16,8 +16,10 @@ from chatbot.utils.elevate.project_detail import fetch_existing_project_attachme
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
-from shikshalokam.models import Project
+from shikshalokam.models import Project, ProjectVernacular
 import json_repair
+
+from shikshalokam.serializer import ProjectSerializer
 
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
@@ -155,7 +157,13 @@ def get_story_html(story, profile, flow):
         else:
             company_bot = CompanyBot.objects.get(route='/chaupal-story')
 
-    language_used = project.project_language if project else story.language
+    translation_languages = list(story.translations.values_list('language', flat=True))
+    language_used = (
+        translation_languages[0] if translation_languages else
+        (project.project_language if project else None) or
+        story.language or
+        'en'
+    )
 
     voice_provider = Voice.objects.filter(
         company_bot=company_bot, type=VoiceType.TextToText, language=language_used
@@ -164,23 +172,50 @@ def get_story_html(story, profile, flow):
     story_vernacular = StoryVernacular.objects.filter(
         company_bot=company_bot, language=language_used
     ).first()
+
+    if language_used == 'en':
+        object_to_pass = story
+        project_serializer = ProjectSerializer(project)
+        project_to_pass = project_serializer.data
+    else:
+        try:
+            story_translation = story.translations.get(language=language_used)
+            object_to_pass = story_translation
+        except StoryTranslation.DoesNotExist:
+            print(f"Translation for language '{language_used}' not found, using English story")
+            object_to_pass = story
+
+        try:
+            project_vernacular = project.project_vernacular.get(language=language_used)
+            project_details = json.loads(project_vernacular.details)
+            project_to_pass = project_details.get('project', {})
+        except ProjectVernacular.DoesNotExist:
+            print(f"Project vernacular for language '{language_used}' not found, using English project")
+            project_serializer = ProjectSerializer(project)
+            project_to_pass = project_serializer.data
+        except (json.JSONDecodeError, KeyError) as e:
+            print(f"Error parsing project vernacular details: {e}, using English project")
+            project_serializer = ProjectSerializer(project)
+            project_to_pass = project_serializer.data
+
     print("Generating for FLOW: ", flow)
     if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
         html_content += get_first_page_html(
-            profile=profile, project=project, voice_provider=voice_provider, story=story,
+            profile=profile, project=project_to_pass, voice_provider=voice_provider, story=object_to_pass,
             story_vernacular=story_vernacular, flow=flow
         )
         html_content += get_story_secondpage_html(
-            story=story, project=project, story_vernacular=story_vernacular
+            story=object_to_pass, project=project_to_pass, story_vernacular=story_vernacular
         )
         html_content += get_story_images_page_html(story=story, story_vernacular=story_vernacular)
         html_content += get_thirdpage_html(
-            story=story, profile=profile, project=project, voice_provider=voice_provider,
+            story=object_to_pass, profile=profile, project=project_to_pass, voice_provider=voice_provider,
             story_vernacular=story_vernacular, flow=flow
         )
     else:
         html_content += get_mom_report_html(
-            story=story, story_vernacular=story_vernacular, profile=profile, voice_provider=voice_provider
+            story=object_to_pass, story_vernacular=story_vernacular, profile=profile,
+            voice_provider=voice_provider
         )
 
     html_content += f"""

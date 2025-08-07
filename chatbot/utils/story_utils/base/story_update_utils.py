@@ -24,7 +24,7 @@ def get_or_create_translation(story, language, update_data):
         defaults={
             'title': story.title,
             'content': story.content or '',
-            'translated_other_params': update_data['other_params'].copy()
+            'other_params': update_data['other_params'].copy()
         }
     )
     return translation
@@ -33,7 +33,7 @@ def get_or_create_translation(story, language, update_data):
 def update_translation_fields(translation, update_data, language):
     """Update translation fields with new data"""
     if update_data.get('other_params'):
-        translation.translated_other_params = update_data['other_params'].copy()
+        translation.other_params = update_data['other_params'].copy()
 
     if update_data.get('formatted_content'):
         process_formatted_content(

@@ -160,13 +160,13 @@ def create_chaupal_translation(story, language, english_title, english_challenge
             defaults={
                 'title': translated_title,
                 'content': '',
-                'translated_other_params': translated_other_params
+                'other_params': translated_other_params
             }
         )
 
         if not created:
             translation.title = translated_title
-            translation.translated_other_params = translated_other_params
+            translation.other_params = translated_other_params
             translation.save()
 
         return translation

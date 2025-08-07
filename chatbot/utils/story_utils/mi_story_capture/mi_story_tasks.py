@@ -133,7 +133,7 @@ def save_story(
 
         create_project(
             response_json=response_json_story, title=english_title, objective=english_objective, story=story,
-            profile=profile, problem_statement=english_problem_statement, language='en', voice_provider=voice_provider,
+            profile=profile, problem_statement=english_problem_statement, language=language, voice_provider=voice_provider,
             project_id=project_id
         )
 
@@ -227,7 +227,7 @@ def create_story_translation(story, language, english_data, voice_provider, flow
                 'impact': translated_impact,
                 'micro_improvement': translated_micro_improvement,
                 'blurb': translated_blurb,
-                'translated_other_params': translated_other_params,
+                'other_params': translated_other_params,
                 'formatted_content': ''
             }
         )
@@ -241,8 +241,9 @@ def create_story_translation(story, language, english_data, voice_provider, flow
             translation.impact = translated_impact
             translation.micro_improvement = translated_micro_improvement
             translation.blurb = translated_blurb
-            translation.translated_other_params = translated_other_params
+            translation.other_params = translated_other_params
             translation.save()
+
         formatted_translation_content = get_formatted_story(translation)
         if formatted_translation_content:
             translation.formatted_content = formatted_translation_content
@@ -282,7 +283,7 @@ def get_story_in_language(story, language='en'):
             'impact': translation.impact,
             'micro_improvement': translation.micro_improvement,
             'blurb': translation.blurb,
-            'other_params': story.other_params,  # Base other_params
+            'other_params': story.other_params,
             'translated_other_params': translation.translated_other_params  # Translated parts
         }
     except StoryTranslation.DoesNotExist:

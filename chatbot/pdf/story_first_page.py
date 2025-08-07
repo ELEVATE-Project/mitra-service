@@ -1,9 +1,3 @@
-import re
-
-from chatbot.models import SessionFlowName
-from chatbot.utils.story_llama_utils import translate_field
-
-
 def get_first_page_html(profile, project, voice_provider, story, story_vernacular, flow):
     profile_addresses=None
     translation_json = story_vernacular.translation_json
@@ -21,27 +15,12 @@ def get_first_page_html(profile, project, voice_provider, story, story_vernacula
     print("logo: ", company_logo)
     current_state = profile_addresses.state if profile_addresses else ""
 
-    if flow and flow in [SessionFlowName.GuestMiStory]:
-        address_string = story.other_params.get('location', '') if story.other_params else ''
-    else:
-        address_components = [
-            profile_addresses.district if profile_addresses and profile_addresses.district else "",
-            profile_addresses.block if profile_addresses and profile_addresses.block else "",
-            profile_addresses.state if profile_addresses and profile_addresses.state else ""
-        ]
-
-        address_string = ", ".join(filter(None, address_components))
+    address_string = story.other_params.get('location', '') if story.other_params else ''
 
     print("current_state: ", current_state)
-    title = project.expected_title or project.actual_title or "mi_story"
+    title = project.get('expected_title') or project.get('actual_title') or "mi_story"
 
     author = story.other_params.get('user_name', '') if story.other_params else ''
-
-    if project and project.project_language and project.project_language != 'en':
-        if address_string:
-            address_string = translate_field(
-                voice_provider=voice_provider, message_body=address_string, target_language=project.project_language
-            )
 
     if profile_addresses and profile_addresses.state and profile_addresses.state.lower() == 'nagaland':
         html = f"""

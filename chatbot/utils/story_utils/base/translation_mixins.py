@@ -70,10 +70,10 @@ class TranslationMixin(LanguageDetectionMixin):
             if translation.formatted_content:
                 data['formatted_content'] = translation.formatted_content
 
-            if translation.translated_other_params and data['other_params']:
-                data['other_params'].update(translation.translated_other_params)
-            elif translation.translated_other_params:
-                data['other_params'] = translation.translated_other_params
+            if translation.other_params and data['other_params']:
+                data['other_params'].update(translation.other_params)
+            elif translation.other_params:
+                data['other_params'] = translation.other_params
 
         except StoryTranslation.DoesNotExist:
             pass

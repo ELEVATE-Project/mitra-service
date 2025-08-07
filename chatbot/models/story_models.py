@@ -191,7 +191,7 @@ class StoryTranslation(models.Model):
     micro_improvement = models.TextField(null=True, blank=True)
     formatted_content = models.TextField(null=True, blank=True)
 
-    translated_other_params = models.JSONField(null=True, blank=True)
+    other_params = models.JSONField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

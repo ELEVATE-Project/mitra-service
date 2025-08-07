@@ -49,13 +49,14 @@ def get_story_secondpage_html(story, project, story_vernacular):
     )
     print("\n\nsteps_html: ", steps_html)
     print("story.objective: ", story.objective)
+    problem_statement = project.get('actual_problem_statement', '')
 
     page_html = f"""
     <div class="story-second-page-container">
         <h1>{translation_json.get('heading1', "")}</h1>
         <div class="story-second-page-section">
             <h2>{translation_json.get('heading2', "")}</h2>
-            <p>{project.actual_problem_statement or ""}</p>
+            <p>{problem_statement or ""}</p>
         </div>
         <div class="story-second-page-section">
             <h2>{translation_json.get('heading3', "")}</h2>

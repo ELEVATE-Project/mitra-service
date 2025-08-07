@@ -1,12 +1,10 @@
 import re
 import json_repair
 from chatbot.pdf.shiksha_chaupal.story_images_page import get_report_images_page_html
-from chatbot.utils.story_llama_utils import translate_field
 from datetime import datetime
 
 
 def get_mom_report_html(story, story_vernacular, voice_provider, profile):
-    print("story.action_steps: ", story.other_params)
     if story.other_params:
         challenges_faced = story.other_params.get('challenges_faced')
         solutions_discussed = story.other_params.get('solutions_discussed')
@@ -51,6 +49,11 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
         info_parts.append(f"<span>{translation_json.get('memberHeader', '')}:</span> {number_of_people}")
     info_html = f"<p>{' &nbsp;&nbsp; '.join(info_parts)}</p>" if info_parts else ''
 
+    if hasattr(story, 'story'):
+        story_obj = story.story
+    else:
+        story_obj = story
+
     page_html = f"""
     <div class="story-second-page-container">
         <div style="width: 100%; margin-top: 10px;">
@@ -67,7 +70,7 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
        
         {challenges_html if challenges_faced not in [None, [], [""]] else ""}
         {solutions_html if solutions_discussed not in [None, [], [""]] else ""}
-        {get_report_images_page_html(story=story)}
+        {get_report_images_page_html(story=story_obj)}
     </div>
     """
     return page_html
@@ -157,41 +160,17 @@ def process_steps(raw_data, fallback_text, char_limit, first_char_limit=None, he
 
 
 def get_user_details(story, profile, voice_provider, translation_json):
-    profile_addresses=None
     company_logo = translation_json.get('main_logo', '')
-    if profile and profile.first_name:
-        profile_addresses = profile.profile_address.all().first()
-    #     company_logo = profile.company.get_public_url()
-    # else:
-    #     company_logo = voice_provider.company_bot.company.get_public_url()
     print("logo: ", company_logo)
-
-    address_components = [
-        profile_addresses.district if profile_addresses and profile_addresses.district else "",
-        profile_addresses.block if profile_addresses and profile_addresses.block else "",
-        profile_addresses.state if profile_addresses and profile_addresses.state else ""
-    ]
-
-    address_string = ", ".join(filter(None, address_components))
 
     author = profile.first_name if profile and profile.first_name else ""
     if not profile or not profile.first_name:
-        print("story.other_params.get('user_name', ''): ", story.other_params.get('user_name', ''))
-        print("story.other_params.get('location', ''): ", story.other_params.get('location', ''))
         author = story.other_params.get('user_name', '') if story.other_params else ''
-        address_string = story.other_params.get('location', '') if story.other_params else ''
-    print("Author: ", author)
-    print("address_string: ", address_string)
-    if story and story.language and story.language != 'en':
-        if address_string:
-            address_string = translate_field(
-                voice_provider=voice_provider, message_body=address_string, target_language=story.language
-            )
+    address_string = story.other_params.get('location', '') if story.other_params else ''
+
     date_of_discussion = story.other_params.get('discussion_date', None)
     date_of_discussion = format_date_to_ddmmyyyy(date_of_discussion)
-    print("date_of_discussion: ", date_of_discussion)
     number_of_people = story.other_params.get('participants_count', None)
-    print("number_of_people: ", number_of_people)
 
     return author, address_string, company_logo, date_of_discussion, number_of_people
 
