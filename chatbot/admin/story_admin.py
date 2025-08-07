@@ -147,7 +147,7 @@ class StoryTranslationAdmin(admin.ModelAdmin):
     list_filter = ('language', 'created_at', 'story', 'story__session')
     search_fields = ('story__title', 'story__session', 'title')
     readonly_fields = ('created_at',)
-    ordering = ('story__session', 'language')
+    ordering = ('-created_at', 'story__session', 'language')
     exclude = ('formatted_content', )
     raw_id_fields = ('story',)
     list_per_page = 20

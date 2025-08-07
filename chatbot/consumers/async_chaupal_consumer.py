@@ -148,12 +148,16 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
             defaults={
                 'profile': profile,
                 'current_step': 1,
+                'language': self.route,
                 'company_bot': company_bot,
                 'session_status': ChatStatus.IN_PROGRESS,
                 'session_type': ChatType.shikshaChaupal
             }
         )
         logger.info(f"Chatsession: %s %s", cs, cs_created)
+        if not cs_created and cs.language != self.route:
+            cs.language = self.route
+            cs.save(update_fields=['language'])
         return cs
 
     @database_sync_to_async

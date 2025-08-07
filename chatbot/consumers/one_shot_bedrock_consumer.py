@@ -82,6 +82,7 @@ class OneShotBedrockConsumer(BaseConsumer):
                     defaults={
                         'profile': profile,
                         'current_step': 1,
+                        'language': self.route,
                         'company_bot': self.company_bot,
                         'session_status': ChatStatus.IN_PROGRESS,
                         'project_id': self.project_id,
@@ -91,6 +92,9 @@ class OneShotBedrockConsumer(BaseConsumer):
                     }
                 )
                 print(cs, cs_created)
+                if not cs_created and cs.language != self.route:
+                    cs.language = self.route
+                    cs.save(update_fields=['language'])
                 project = Project.objects.filter(project_id=self.project_id).first()
                 if not project:
                     print(f"Project with ID {self.project_id} not found. Creating a new one.")

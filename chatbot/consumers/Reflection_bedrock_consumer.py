@@ -73,6 +73,7 @@ class ReflectionBedrockConsumer(BaseConsumer):
                         defaults={
                             'profile': profile,
                             'current_step': 1,
+                            'language': self.route,
                             'company_bot': CompanyBot.objects.get(company=profile.company, route='/reflection'),
                             'session_status': ChatStatus.IN_PROGRESS,
                             'project_id': self.project_id,
@@ -81,6 +82,9 @@ class ReflectionBedrockConsumer(BaseConsumer):
                         }
                     )
                     print(cs, cs_created)
+                    if not cs_created and cs.language != self.route:
+                        cs.language = self.route
+                        cs.save(update_fields=['language'])
                 else:
                     company_chat_status = self.determine_company_chat_status(
                         session_id=self.session_id, profile_id=self.profile_id, route='/reflection'
