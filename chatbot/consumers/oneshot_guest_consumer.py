@@ -157,7 +157,7 @@ class OneShotGuestConsumer(BaseConsumer):
                     project = Project.objects.filter(project_id=self.project_id).first()
                 else:
                     project = None
-                if not project:
+                if not project and self.project_id:
                     print(f"Project with ID {self.project_id} not found. Creating a new one.")
                     project = Project.objects.create(
                         project_id=self.project_id,
