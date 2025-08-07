@@ -165,8 +165,6 @@ class OneShotGuestConsumer(BaseConsumer):
                         project_status=ProjectStatus.STARTED,
                     )
                     print(f"Project created with id {project.id}")
-                else:
-                    print(f"Found existing project: {project.id}")
 
             else:
                 company_chat_status = self.determine_company_chat_status(
