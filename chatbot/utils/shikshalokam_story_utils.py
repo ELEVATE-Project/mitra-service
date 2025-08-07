@@ -120,31 +120,6 @@ def get_story_html(story, profile, flow):
         css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/story_pdf.css"))
     else:
         css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/shiksha_chaupal/mom_report_pdf.css"))
-    if project:
-        pdf_file_name = project.expected_title or project.actual_title or "mi_story"
-    else:
-        pdf_file_name = story.title or "mi_story"
-
-    print("Using pdf name: ", pdf_file_name)
-    with open(css_path, 'r') as css_file:
-        inline_css = css_file.read()
-    html_content = f"""
-            <!DOCTYPE html>
-            <html>
-                <head>
-                    <meta charset="utf-8" />
-                    <title>{pdf_file_name}</title>
-                    <link rel="preconnect" href="https://fonts.googleapis.com">
-                    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-                    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Urbanist:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
-                    <style>
-                    #header, #footer {{ padding: 0 !important; }}
-                    {inline_css}
-                    </style>
-                </head>
-             <body>
-
-        """
 
     if profile:
         if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
@@ -158,7 +133,10 @@ def get_story_html(story, profile, flow):
             company_bot = CompanyBot.objects.get(route='/chaupal-story')
 
     translation_languages = list(story.translations.values_list('language', flat=True))
+    chat_session = ChatSession.objects.filter(session=story.session).first()
+
     language_used = (
+        chat_session.language or
         translation_languages[0] if translation_languages else
         (project.project_language if project else None) or
         story.language or
@@ -197,6 +175,32 @@ def get_story_html(story, profile, flow):
             print(f"Error parsing project vernacular details: {e}, using English project")
             project_serializer = ProjectSerializer(project)
             project_to_pass = project_serializer.data
+
+    if project_to_pass:
+        pdf_file_name = project_to_pass.get('expected_title') or project_to_pass.get('actual_title') or "mi_story"
+    else:
+        pdf_file_name = object_to_pass.title or "mi_story"
+
+    print("Using pdf name: ", pdf_file_name)
+    with open(css_path, 'r') as css_file:
+        inline_css = css_file.read()
+    html_content = f"""
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <meta charset="utf-8" />
+                    <title>{pdf_file_name}</title>
+                    <link rel="preconnect" href="https://fonts.googleapis.com">
+                    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+                    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Urbanist:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+                    <style>
+                    #header, #footer {{ padding: 0 !important; }}
+                    {inline_css}
+                    </style>
+                </head>
+             <body>
+
+        """
 
     print("Generating for FLOW: ", flow)
     if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
