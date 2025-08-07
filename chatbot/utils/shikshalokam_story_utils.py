@@ -153,8 +153,11 @@ def get_story_html(story, profile, flow):
 
     if language_used == 'en':
         object_to_pass = story
-        project_serializer = ProjectSerializer(project)
-        project_to_pass = project_serializer.data
+        if project:
+            project_serializer = ProjectSerializer(project)
+            project_to_pass = project_serializer.data
+        else:
+            project_to_pass = None
     else:
         try:
             story_translation = story.translations.get(language=language_used)
@@ -162,19 +165,22 @@ def get_story_html(story, profile, flow):
         except StoryTranslation.DoesNotExist:
             print(f"Translation for language '{language_used}' not found, using English story")
             object_to_pass = story
-
-        try:
-            project_vernacular = project.project_vernacular.get(language=language_used)
-            project_details = json.loads(project_vernacular.details)
-            project_to_pass = project_details.get('project', {})
-        except ProjectVernacular.DoesNotExist:
-            print(f"Project vernacular for language '{language_used}' not found, using English project")
-            project_serializer = ProjectSerializer(project)
-            project_to_pass = project_serializer.data
-        except (json.JSONDecodeError, KeyError) as e:
-            print(f"Error parsing project vernacular details: {e}, using English project")
-            project_serializer = ProjectSerializer(project)
-            project_to_pass = project_serializer.data
+        if project:
+            try:
+                project_vernacular = project.project_vernacular.get(language=language_used)
+                project_details = json.loads(project_vernacular.details)
+                project_to_pass = project_details.get('project', {})
+            except ProjectVernacular.DoesNotExist:
+                print(f"Project vernacular for language '{language_used}' not found, using English project")
+                project_serializer = ProjectSerializer(project)
+                project_to_pass = project_serializer.data
+            except (json.JSONDecodeError, KeyError) as e:
+                print(f"Error parsing project vernacular details: {e}, using English project")
+                project_serializer = ProjectSerializer(project)
+                project_to_pass = project_serializer.data
+        else:
+            print("No project found for story, using None for project_to_pass")
+            project_to_pass = None
 
     if project_to_pass:
         pdf_file_name = project_to_pass.get('expected_title') or project_to_pass.get('actual_title') or "mi_story"
