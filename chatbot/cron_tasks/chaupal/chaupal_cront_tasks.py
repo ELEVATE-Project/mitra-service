@@ -7,7 +7,7 @@ from django.db import connection
 from chatbot.models import CompanyBot
 from chatbot.scripts.guest_discussion.clean_story_script import get_story_count, clean_specific_stories
 from chatbot.scripts.guest_discussion.post_processing.village_data_cleaning import run_for_specific_stories
-from chatbot.scripts.guest_discussion.translate_script import get_translate_story_count, translate_specific_story_ids
+# from chatbot.scripts.guest_discussion.translate_script import get_translate_story_count, translate_specific_story_ids
 
 logger = logging.getLogger('django')
 
@@ -25,10 +25,10 @@ def handle_story_cleanup_cron():
         story_ids = get_story_count(start_time=start_time, end_time=end_time)
         clean_specific_stories(story_ids=story_ids)
         logger.info('✅ Story cleanup cron completed at: {}'.format(timezone.now()))
-        logger.info('🚀 Starting translation immediately after cleanup...')
-        story_ids = get_translate_story_count(start_time=start_time, end_time=end_time)
-        translate_specific_story_ids(story_ids=story_ids)
-        logger.info('✅ Story translation (chained) completed at: {}'.format(timezone.now()))
+        # logger.info('🚀 Starting translation immediately after cleanup...')
+        # story_ids = get_translate_story_count(start_time=start_time, end_time=end_time)
+        # translate_specific_story_ids(story_ids=story_ids)
+        # logger.info('✅ Story translation (chained) completed at: {}'.format(timezone.now()))
 
     except Exception as e:
         logger.exception("❌ Error during story cleanup/translation cron: %s", str(e))

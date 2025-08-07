@@ -13,7 +13,7 @@ from botocore.client import Config as BotoConfig
 from botocore.exceptions import ClientError
 
 from chatbot.utils.chat_utils import format_message_as_per_bedrock_format
-from chatbot.utils.transliterate_utils import transliterate_text, get_transliteration_output
+from chatbot.utils.transliterate_utils import get_transliteration_output
 
 logger = logging.getLogger('django')
 llm_retry_number = int(os.getenv('LLM_RETRY_NUMBER', 3))
@@ -81,7 +81,7 @@ def process_field_value(field_name, value, target_language, source_language, tra
         return value
 
     # Special handling for 'others' village
-    if field_name == 'village' and str(value).lower() in ['others', 'other']:
+    if field_name in ['village', 'district'] and str(value).lower() in ['others', 'other']:
         return value
 
     # Transliterate names and location fields
