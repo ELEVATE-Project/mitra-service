@@ -1,6 +1,7 @@
 import json
 import os
-from chatbot.models import Story, ChatSession, CompanyChat, CompanyBot, Voice, VoiceType, ChatType, BotVernacular
+from chatbot.models import Story, ChatSession, CompanyChat, CompanyBot, Voice, VoiceType, ChatType, BotVernacular, \
+    StoryTranslation
 from chatbot.utils.audio_provider_utils import text_translate_provider
 import json_repair
 import logging
@@ -12,47 +13,356 @@ from botocore.client import Config as BotoConfig
 from botocore.exceptions import ClientError
 
 from chatbot.utils.chat_utils import format_message_as_per_bedrock_format
-from chatbot.utils.transliterate_utils import transliterate_text
+from chatbot.utils.transliterate_utils import transliterate_text, get_transliteration_output
 
 logger = logging.getLogger('django')
 llm_retry_number = int(os.getenv('LLM_RETRY_NUMBER', 3))
 AWS_KEY = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 
-
-###Steps To Follow:
-    #First step is to call get_story_count() and store the ids (Adjust the date as needed)
-    #Second step is to call clean_specific_stories() and pass the story ids we collected in First Step
+# Constants for field categorization
+TRANSLITERATE_FIELDS = ["user_name", "organization", "location", "district", "village"]
+TRANSLATE_FIELDS = ["title", "challenges_faced", "solutions_discussed"]
+PASSTHROUGH_FIELDS = ["participants_count", "discussion_date", "flow"]
 
 
 def translate_field(voice_provider, message_body, target_language, source_language="en"):
-    """For regular translation (used for location)"""
+    """For regular translation (used for title and other text content)"""
     if not message_body or message_body == '':
         return message_body
-    response = text_translate_provider(
-        voice_provider=voice_provider, message_body=message_body, target_language=target_language,
-        source_language=source_language
-    )
-    if response.get('status') == 200:
-        return response.get('content')
-    else:
+
+    try:
+        response = text_translate_provider(
+            voice_provider=voice_provider,
+            message_body=message_body,
+            target_language=target_language,
+            source_language=source_language
+        )
+        if response.get('status') == 200:
+            return response.get('content')
+        else:
+            logger.warning(f"Translation failed, using original text: {message_body}")
+            return message_body
+    except Exception as e:
+        logger.error(f"Error translating text '{message_body}': {str(e)}")
         return message_body
 
 
 def transliterate_field(voice_provider, message_body, target_language, source_language="en"):
-    """For transliteration (used for names and organizations)"""
-    if not message_body or message_body == '':
+    """For transliteration (used for location names, districts, villages, names)"""
+    if not message_body or message_body == '' or source_language == target_language:
         return message_body
-    is_sentence = ' ' in message_body
-    response = transliterate_text(
-        voice_provider=voice_provider, message_body=message_body, target_language=target_language,
-        source_language=source_language,
-        is_sentence=is_sentence
-    )
-    if response.get('status') == 200:
-        return response.get('content')
-    else:
+
+    try:
+        from chatbot.utils.transliterate_utils import transliterate_text
+        is_sentence = ' ' in message_body
+        response = transliterate_text(
+            voice_provider=voice_provider,
+            message_body=message_body,
+            target_language=target_language,
+            source_language=source_language,
+            is_sentence=is_sentence
+        )
+        if response.get('status') == 200:
+            data = get_transliteration_output(response.get('content'))
+            return data if data else response.get('content')
+        else:
+            logger.warning(f"Transliteration failed, using original text: {message_body}")
+            return message_body
+    except Exception as e:
+        logger.error(f"Error transliterating text '{message_body}': {str(e)}")
         return message_body
+
+
+def process_field_value(field_name, value, target_language, source_language, translate_provider,
+                        transliterate_provider):
+    """Process a field value based on its type - DRY approach"""
+    if not value or value == '':
+        return value
+
+    # Special handling for 'others' village
+    if field_name == 'village' and str(value).lower() in ['others', 'other']:
+        return value
+
+    # Transliterate names and location fields
+    if field_name in TRANSLITERATE_FIELDS:
+        if transliterate_provider:
+            return transliterate_field(
+                voice_provider=transliterate_provider,
+                message_body=str(value),
+                target_language=target_language,
+                source_language=source_language
+            )
+
+    # Translate text content fields
+    elif field_name in TRANSLATE_FIELDS:
+        if translate_provider:
+            # Handle lists (like challenges_faced, solutions_discussed)
+            if isinstance(value, list):
+                return [translate_field(
+                    voice_provider=translate_provider,
+                    message_body=str(item),
+                    target_language=target_language,
+                    source_language=source_language
+                ) for item in value if item]
+            else:
+                return translate_field(
+                    voice_provider=translate_provider,
+                    message_body=str(value),
+                    target_language=target_language,
+                    source_language=source_language
+                )
+
+    # Passthrough fields (no translation/transliteration needed)
+    return value
+
+
+def get_voice_providers(company_bot, language=None):
+    """Get voice providers for translation and transliteration - DRY approach"""
+    providers = {}
+
+    # Try to get language-specific providers first
+    if language:
+        providers['translate'] = Voice.objects.filter(
+            company_bot=company_bot,
+            type=VoiceType.TextToText,
+            language=language
+        ).first()
+
+        providers['transliterate'] = Voice.objects.filter(
+            company_bot=company_bot,
+            type=VoiceType.Transliterate,
+            language=language
+        ).first()
+
+    # Fall back to default providers if language-specific not found
+    if not providers.get('translate'):
+        providers['translate'] = Voice.objects.filter(
+            company_bot=company_bot,
+            type=VoiceType.TextToText
+        ).first()
+
+    if not providers.get('transliterate'):
+        providers['transliterate'] = Voice.objects.filter(
+            company_bot=company_bot,
+            type=VoiceType.Transliterate
+        ).first()
+
+    return providers
+
+
+def update_or_create_story_translation(story, updated_fields, company_bot):
+    """Create or update translation based on ChatSession language"""
+    try:
+        # Get the language from ChatSession - YES, it's picking from ChatSession
+        chat_session = ChatSession.objects.filter(session=story.session).first()
+        if not chat_session or not chat_session.language:
+            logger.info(f"No ChatSession or language found for Story ID {story.id}")
+            return
+
+        session_language = chat_session.language
+
+        # Skip if the session language is English (main story should be in English)
+        if session_language == 'en':
+            logger.info(f"Session language is English for Story ID {story.id}, skipping translation")
+            return
+
+        # Get voice providers
+        providers = get_voice_providers(company_bot, session_language)
+        translate_provider = providers['translate']
+        transliterate_provider = providers['transliterate']
+
+        # Prepare translated other_params
+        translated_other_params = {}
+
+        # Process each updated field
+        for field in updated_fields:
+            if field in story.other_params:
+                value = story.other_params[field]
+                translated_value = process_field_value(
+                    field_name=field,
+                    value=value,
+                    target_language=session_language,
+                    source_language="en",
+                    translate_provider=translate_provider,
+                    transliterate_provider=transliterate_provider
+                )
+                translated_other_params[field] = translated_value
+
+        # Translate title from English to session language
+        translated_title = story.title
+        if translate_provider and story.title:
+            translated_title = translate_field(
+                voice_provider=translate_provider,
+                message_body=story.title,
+                target_language=session_language,
+                source_language="en"
+            )
+            logger.info(
+                f"Translated title from '{story.title}' to '{translated_title}' for language {session_language}")
+
+        # Get or create the translation
+        translation, created = StoryTranslation.objects.get_or_create(
+            story=story,
+            language=session_language,
+            defaults={
+                'title': translated_title,
+                'content': story.content if story.content else '',
+                'blurb': story.blurb if story.blurb else '',
+                'tweet': story.tweet if story.tweet else '',
+                'objective': story.objective if story.objective else '',
+                'action_steps': story.action_steps if story.action_steps else '',
+                'impact': story.impact if story.impact else '',
+                'micro_improvement': story.micro_improvement if story.micro_improvement else '',
+                'formatted_content': story.formatted_content if story.formatted_content else '',
+                'other_params': translated_other_params
+            }
+        )
+
+        if not created:
+            # Update existing translation
+            if not translation.other_params:
+                translation.other_params = {}
+
+            translation.other_params.update(translated_other_params)
+            translation.title = translated_title  # Update title as well
+            translation.save(update_fields=["other_params", "title"])
+            logger.info(f"✅ Updated existing translation for Story ID {story.id}, language: {session_language}")
+        else:
+            logger.info(f"✅ Created new translation for Story ID {story.id}, language: {session_language}")
+
+    except Exception as e:
+        logger.error(f"❌ Error updating/creating translation for Story ID {story.id}: {str(e)}")
+
+
+def correct_metadata_for_story(story):
+    """Main function to correct metadata and ensure English story with proper translations"""
+    try:
+        if not story.other_params:
+            return f"Story ID {story.id} skipped (no other_params)"
+
+        company_bot = CompanyBot.objects.get(route='/chaupal-story-script')
+
+        prompt = get_prompt_from_company_bot(company_bot)
+        if not prompt:
+            logger.error(f"No prompt found in company_bot context for {company_bot.id}")
+            return f"❌ No prompt found in company_bot context for Story ID {story.id}"
+
+        # Get chat history
+        company_chats = CompanyChat.objects.filter(session=story.session).order_by('created_at')
+
+        flow_company_bot = CompanyBot.objects.get(route='/guided_guest')
+        bot_vernacular = BotVernacular.objects.filter(company_bot=flow_company_bot).first()
+        intro_to_pass = None
+        if bot_vernacular:
+            if story.author.first_name == '' or not story.author.first_name:
+                intro_to_pass = bot_vernacular.alt_introductory_message
+            else:
+                intro_to_pass = bot_vernacular.introductory_message
+
+        messages = format_message_as_per_bedrock_format(chats=company_chats, intro=intro_to_pass)
+
+        # Get voice providers
+        providers = get_voice_providers(company_bot)
+        translate_provider = providers['translate']
+        transliterate_provider = providers['transliterate']
+
+        formatted_prompt = [{"text": prompt}]
+
+        tools = get_tools_from_company_bot(company_bot)
+        if not tools:
+            logger.error(f"No tools found in company_bot tool_context for {company_bot.id}")
+            return f"❌ No tools found in company_bot tool_context for Story ID {story.id}"
+
+        # Get metadata from LLM
+        response = handle_bedrock_model(
+            system_prompt=formatted_prompt,
+            messages=messages,
+            model_name=company_bot.llm_model,
+            temperature=company_bot.bot_temperature,
+            max_token=company_bot.max_token,
+            company_bot=company_bot,
+            tools=tools
+        )
+
+        logger.info(f"LLM response: {response}")
+        result = get_clean_output(response=response)
+        logger.info(f"Cleaned result: {result}")
+
+        if result and isinstance(result, str):
+            result = json_repair.repair_json(result, return_objects=True)
+
+        updated = False
+        updated_fields = []
+
+        # Extract title from result if available
+        if result.get('title'):
+            # Title should be in English for main story
+            english_title = result.get('title')
+            if story.language != 'en' and translate_provider:
+                # If story is not in English, translate title to English
+                english_title = translate_field(
+                    voice_provider=translate_provider,
+                    message_body=result.get('title'),
+                    target_language="en",
+                    source_language=story.language
+                )
+            story.title = english_title
+            updated_fields.append('title')
+            updated = True
+
+        # Process all metadata fields
+        all_fields = ["user_name", "location", "district", "village", "organization",
+                      "participants_count", "discussion_date", "challenges_faced", "solutions_discussed"]
+
+        for key in all_fields:
+            if value := result.get(key):
+                # Process to English (main story should be in English)
+                processed_value = process_field_value(
+                    field_name=key,
+                    value=value,
+                    target_language="en",  # Main story in English
+                    source_language=story.language if story.language != 'en' else "en",
+                    translate_provider=translate_provider,
+                    transliterate_provider=transliterate_provider
+                )
+
+                story.other_params[key] = processed_value
+                updated_fields.append(key)
+                updated = True
+            else:
+                # Handle missing fields
+                if key == "organization":
+                    story.other_params[key] = ""
+                    updated_fields.append(key)
+                logger.info(f"🔸 {key} missing in Story ID {story.id}")
+
+        # Ensure story language is set to English
+        if story.language != 'en':
+            story.language = 'en'
+            updated = True
+
+        if updated:
+            fields_to_update = ["other_params", "language"]
+            if 'title' in updated_fields:
+                fields_to_update.append("title")
+
+            story.save(update_fields=fields_to_update)
+            logger.info(f"✅ Updated Story ID {story.id} to English")
+
+            # Create/update translation for the original language (from ChatSession)
+            if updated_fields:
+                logger.info(f"🔄 Updating/creating translation for Story ID {story.id}")
+                update_or_create_story_translation(story, updated_fields, company_bot)
+
+            return f"✅ Updated Story ID {story.id} and its translation"
+        else:
+            logger.info(f"🟡 No changes for Story ID {story.id}")
+            return f"🟡 No changes for Story ID {story.id}"
+
+    except Exception as e:
+        logger.error(f"❌ Error in Story ID {story.id}: {str(e)}")
+        return f"❌ Error in Story ID {story.id}: {str(e)}"
 
 
 def get_prompt_from_company_bot(company_bot):
@@ -73,106 +383,8 @@ def get_tools_from_company_bot(company_bot):
         return None
 
 
-def correct_metadata_for_story(story):
-    try:
-        if not story.other_params:
-            return f"Story ID {story.id} skipped (not translated yet)"
-
-        company_bot = CompanyBot.objects.get(route='/chaupal-story-script')
-
-        prompt = get_prompt_from_company_bot(company_bot)
-        if not prompt:
-            logger.error(f"No prompt found in company_bot context for {company_bot.id}")
-            return f"❌ No prompt found in company_bot context for Story ID {story.id}"
-
-        company_chats = CompanyChat.objects.filter(session=story.session).order_by('created_at')
-
-        flow_company_bot = CompanyBot.objects.get(route='/guided_guest')
-        bot_vernacular = BotVernacular.objects.filter(company_bot=flow_company_bot).first()
-        intro_to_pass = None
-        if bot_vernacular:
-            if story.author.first_name == '' or not story.author.first_name:
-                intro_to_pass = bot_vernacular.alt_introductory_message
-            else:
-                intro_to_pass = bot_vernacular.introductory_message
-
-        messages = format_message_as_per_bedrock_format(chats=company_chats, intro=intro_to_pass)
-
-        translate_provider = Voice.objects.filter(
-            company_bot=company_bot, type=VoiceType.TextToText
-        ).first()
-
-        transliterate_provider = Voice.objects.filter(
-            company_bot=company_bot, type=VoiceType.Transliterate
-        ).first()
-
-        formatted_prompt = [{"text": prompt}]
-
-        tools = get_tools_from_company_bot(company_bot)
-        if not tools:
-            logger.error(f"No tools found in company_bot tool_context for {company_bot.id}")
-            return f"❌ No tools found in company_bot tool_context for Story ID {story.id}"
-
-        response = handle_bedrock_model(
-            system_prompt=formatted_prompt,
-            messages=messages,
-            model_name=company_bot.llm_model,
-            temperature=company_bot.bot_temperature,
-            max_token=company_bot.max_token,
-            company_bot=company_bot,
-            tools=tools
-        )
-        print("response: ", response)
-        logger.info(f"response: {response}")
-        result = get_clean_output(response=response)
-        print("result: ", result)
-        logger.info(f"result: {result}")
-
-        if result and isinstance(result, str):
-            result = json_repair.repair_json(result, return_objects=True)
-
-        updated = False
-        for key in ["user_name", "location", "organization", "participants_count", "discussion_date"]:
-            if value := result.get(key):
-                if key in ["user_name", "organization"]:
-                    if story.language != 'en':
-                        value = transliterate_field(
-                            voice_provider=transliterate_provider,
-                            message_body=str(value),
-                            target_language=story.language,
-                            source_language="en"
-                        )
-                elif key in ["location", "district"]:
-                    if story.language != 'en':
-                        value = translate_field(
-                            voice_provider=translate_provider,
-                            message_body=str(value),
-                            target_language=story.language,
-                            source_language="en"
-                        )
-
-                story.other_params[key] = value
-                updated = True
-            else:
-                if key == "organization":
-                    story.other_params[key] = ""
-                logger.info(f"🔸 {key} missing in Story ID {story.id}")
-                print(f"🔸 {key} missing in Story ID {story.id}")
-
-        if updated:
-            story.save(update_fields=["other_params"])
-            logger.info(f"✅ Updated Story ID {story.id}")
-            return f"✅ Updated Story ID {story.id}"
-        else:
-            logger.info(f"🟡 No changes for Story ID {story.id}")
-            return f"🟡 No changes for Story ID {story.id}"
-
-    except Exception as e:
-        logger.error(f"❌ Error in Story ID {story.id}: {str(e)}")
-        return f"❌ Error in Story ID {story.id}: {str(e)}"
-
-
 def clean_all_stories(start=0, end=100):
+    """Clean all stories in a range"""
     session_ids = list(
         ChatSession.objects.filter(session_type=ChatType.shikshaChaupal)
         .values_list('session', flat=True)
@@ -183,12 +395,33 @@ def clean_all_stories(start=0, end=100):
                   .order_by('-id')[start:end]
 
     print(f"Cleaning stories from {start} to {end}... Total: {stories.count()}")
+    logger.info(f"Cleaning stories from {start} to {end}... Total: {stories.count()}")
+
+    results = {
+        'success': 0,
+        'no_changes': 0,
+        'failed': 0
+    }
 
     for story in stories:
-        print(correct_metadata_for_story(story))
+        result = correct_metadata_for_story(story)
+        print(result)
+
+        if "✅" in result:
+            results['success'] += 1
+        elif "🟡" in result:
+            results['no_changes'] += 1
+        else:
+            results['failed'] += 1
+
+    summary = f"Cleaning completed: {results['success']} successful, {results['no_changes']} no changes, {results['failed']} failed"
+    print(summary)
+    logger.info(summary)
+    return summary
 
 
-def get_story_count(start_time, end_time):
+def get_story_count(start_time=None, end_time=None):
+    """Get story IDs for a specific time range"""
     if not start_time:
         start_time = make_aware(datetime(2025, 7, 15, 0, 0))
     if not end_time:
@@ -203,14 +436,15 @@ def get_story_count(start_time, end_time):
         .order_by('created_at')
         .values_list('session', flat=True)
     )
+
     if session_ids:
         logger.info(f"Found {len(session_ids)} sessions")
         logger.info(f"First session ID: {session_ids[0]}, Last session ID: {session_ids[-1]}")
-
-        print("First session id: ", session_ids[0])
-        print("Last session id: ", session_ids[-1])
+        print(f"First session id: {session_ids[0]}")
+        print(f"Last session id: {session_ids[-1]}")
     else:
         print("No sessions found.")
+        return []
 
     story_ids = list(
         Story.objects.filter(session__in=session_ids)
@@ -225,13 +459,33 @@ def get_story_count(start_time, end_time):
 
 
 def clean_specific_stories(story_ids):
+    """Clean specific stories by their IDs"""
     stories = Story.objects.filter(id__in=story_ids)
 
-    print(f"Cleaning {stories.count()} failed stories...")
-    logger.info(f"Cleaning {stories.count()} failed stories...")
+    print(f"Cleaning {stories.count()} stories...")
+    logger.info(f"Cleaning {stories.count()} stories...")
+
+    results = {
+        'success': 0,
+        'no_changes': 0,
+        'failed': 0
+    }
 
     for story in stories:
-        print(correct_metadata_for_story(story))
+        result = correct_metadata_for_story(story)
+        print(result)
+
+        if "✅" in result:
+            results['success'] += 1
+        elif "🟡" in result:
+            results['no_changes'] += 1
+        else:
+            results['failed'] += 1
+
+    summary = f"Cleaning completed: {results['success']} successful, {results['no_changes']} no changes, {results['failed']} failed"
+    print(summary)
+    logger.info(summary)
+    return summary
 
 
 def retry_if_result_none(result):
@@ -243,6 +497,7 @@ def handle_bedrock_model(
         company_bot, system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
         model_name=None, region_name='us-west-2', tools=None, is_json_response=False
 ):
+    """Handle Bedrock model calls with retry logic"""
     connect_timeout = company_bot.connect_timeout
     read_timeout = company_bot.read_timeout
 
@@ -330,6 +585,7 @@ def handle_bedrock_model(
 
 
 def get_clean_output(response):
+    """Clean and format the LLM response"""
     if response and isinstance(response, dict):
         extracted_data = response.pop("parameters", response.pop("input", None))
         if extracted_data and isinstance(extracted_data, dict):
@@ -354,3 +610,13 @@ def get_clean_output(response):
             response_json_content = {}
 
     return response_json_content
+
+# Usage instructions:
+# Step 1: Get story IDs for a date range
+# story_ids = get_story_count(start_time,end_time)
+#
+# Step 2: Clean the specific stories
+# clean_specific_stories(story_ids)
+#
+# Or clean all stories in a range:
+# clean_all_stories(start=0, end=100)

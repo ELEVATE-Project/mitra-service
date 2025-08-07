@@ -1,6 +1,6 @@
 from django.db import models
 from chatbot.models import CompanyChat, Profile, CompanyBot, ChatStatus, LLMModel, Voice, VoiceType, LLMProvider, \
-    ChatType
+    ChatType, StoryLanguageChoices
 from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_model
 from chatbot.utils.audio_provider_utils import text_translate_provider
 import json_repair
@@ -12,6 +12,8 @@ class ChatSession(models.Model):
     session = models.CharField(max_length=255, unique=True)
     profile = models.ForeignKey(Profile, on_delete=models.DO_NOTHING, null=True, blank=True)
     company_bot = models.ForeignKey(CompanyBot, on_delete=models.SET_NULL, null=True, blank=True)
+    language = models.CharField(max_length=1000, choices=StoryLanguageChoices.choices,
+                                default=StoryLanguageChoices.ENGLISH)
     title = models.CharField(max_length=255, null=True, blank=True)
     summary = models.TextField(null=True, blank=True)
     current_step = models.IntegerField(null=True, blank=True)
