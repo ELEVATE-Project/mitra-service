@@ -28,7 +28,7 @@ PASSTHROUGH_FIELDS = ["participants_count", "discussion_date", "flow"]
 
 def translate_field(voice_provider, message_body, target_language, source_language="en"):
     """For regular translation (used for title and other text content)"""
-    if not message_body or message_body == '':
+    if not message_body or message_body == '' or source_language == target_language:
         return message_body
 
     try:
@@ -151,10 +151,10 @@ def get_voice_providers(company_bot, language=None):
     return providers
 
 
-def update_or_create_story_translation(story, updated_fields, company_bot):
-    """Create or update translation based on ChatSession language"""
+def update_or_create_story_translation(story, company_bot):
+    """Create or update translation based on ChatSession language - processes ALL fields"""
     try:
-        # Get the language from ChatSession - YES, it's picking from ChatSession
+        # Get the language from ChatSession
         chat_session = ChatSession.objects.filter(session=story.session).first()
         if not chat_session or not chat_session.language:
             logger.info(f"No ChatSession or language found for Story ID {story.id}")
@@ -172,13 +172,12 @@ def update_or_create_story_translation(story, updated_fields, company_bot):
         translate_provider = providers['translate']
         transliterate_provider = providers['transliterate']
 
-        # Prepare translated other_params
+        # Prepare translated other_params - process ALL fields from story.other_params
         translated_other_params = {}
 
-        # Process each updated field
-        for field in updated_fields:
-            if field in story.other_params:
-                value = story.other_params[field]
+        # Process ALL fields in other_params, not just updated ones
+        if story.other_params:
+            for field, value in story.other_params.items():
                 translated_value = process_field_value(
                     field_name=field,
                     value=value,
@@ -188,6 +187,7 @@ def update_or_create_story_translation(story, updated_fields, company_bot):
                     transliterate_provider=transliterate_provider
                 )
                 translated_other_params[field] = translated_value
+                logger.debug(f"Translated field '{field}': {value} -> {translated_value}")
 
         # Translate title from English to session language
         translated_title = story.title
@@ -215,21 +215,20 @@ def update_or_create_story_translation(story, updated_fields, company_bot):
                 'impact': story.impact if story.impact else '',
                 'micro_improvement': story.micro_improvement if story.micro_improvement else '',
                 'formatted_content': story.formatted_content if story.formatted_content else '',
-                'other_params': translated_other_params
+                'other_params': translated_other_params  # All fields translated
             }
         )
 
         if not created:
-            # Update existing translation
-            if not translation.other_params:
-                translation.other_params = {}
-
-            translation.other_params.update(translated_other_params)
-            translation.title = translated_title  # Update title as well
+            # Update existing translation with ALL fields
+            translation.other_params = translated_other_params  # Replace entirely with all fields
+            translation.title = translated_title
             translation.save(update_fields=["other_params", "title"])
             logger.info(f"✅ Updated existing translation for Story ID {story.id}, language: {session_language}")
+            logger.info(f"Translation other_params now has {len(translated_other_params)} fields")
         else:
             logger.info(f"✅ Created new translation for Story ID {story.id}, language: {session_language}")
+            logger.info(f"Translation other_params has {len(translated_other_params)} fields")
 
     except Exception as e:
         logger.error(f"❌ Error updating/creating translation for Story ID {story.id}: {str(e)}")
@@ -293,28 +292,62 @@ def correct_metadata_for_story(story):
             result = json_repair.repair_json(result, return_objects=True)
 
         updated = False
-        updated_fields = []
 
-        # Extract title from result if available
-        if result.get('title'):
-            # Title should be in English for main story
-            english_title = result.get('title')
-            if story.language != 'en' and translate_provider:
-                # If story is not in English, translate title to English
-                english_title = translate_field(
-                    voice_provider=translate_provider,
-                    message_body=result.get('title'),
-                    target_language="en",
-                    source_language=story.language
-                )
-            story.title = english_title
-            updated_fields.append('title')
-            updated = True
+        # Get the session language to determine if we need to translate to English
+        chat_session = ChatSession.objects.filter(session=story.session).first()
+        session_language = chat_session.language if chat_session else 'en'
+
+        # Title should be in English for main story
+        english_title = story.title
+        if session_language != 'en' and translate_provider:
+            # If session is not in English, translate title to English
+            english_title = translate_field(
+                voice_provider=translate_provider,
+                message_body=english_title,
+                target_language="en",
+                source_language=session_language
+            )
+        story.title = english_title
+        updated = True
 
         # Process all metadata fields
         all_fields = ["user_name", "location", "district", "village", "organization",
-                      "participants_count", "discussion_date", "challenges_faced", "solutions_discussed"]
+                      "participants_count", "discussion_date", "challenges_faced", "solutions_discussed", "flow"]
 
+        # Check if we need to translate existing TRANSLATE_FIELDS to English
+        if session_language != 'en' and translate_provider:
+            # Translate existing non-English content in TRANSLATE_FIELDS to English
+            for field in TRANSLATE_FIELDS:
+                if field in story.other_params and field != 'title':  # title handled separately
+                    current_value = story.other_params[field]
+                    if current_value:
+                        # Check if it's already in English or needs translation
+                        if isinstance(current_value, list):
+                            # For lists, check if any item contains non-ASCII characters (likely non-English)
+                            if any(not all(ord(c) < 128 for c in str(item)) for item in current_value):
+                                english_value = [translate_field(
+                                    voice_provider=translate_provider,
+                                    message_body=str(item),
+                                    target_language="en",
+                                    source_language=session_language
+                                ) for item in current_value if item]
+                                story.other_params[field] = english_value
+                                updated = True
+                                logger.info(f"Translated {field} to English in main story")
+                        else:
+                            # For strings, check if it contains non-ASCII characters
+                            if not all(ord(c) < 128 for c in str(current_value)):
+                                english_value = translate_field(
+                                    voice_provider=translate_provider,
+                                    message_body=str(current_value),
+                                    target_language="en",
+                                    source_language=session_language
+                                )
+                                story.other_params[field] = english_value
+                                updated = True
+                                logger.info(f"Translated {field} to English in main story")
+
+        # Process new fields from LLM result
         for key in all_fields:
             if value := result.get(key):
                 # Process to English (main story should be in English)
@@ -322,20 +355,20 @@ def correct_metadata_for_story(story):
                     field_name=key,
                     value=value,
                     target_language="en",  # Main story in English
-                    source_language=story.language if story.language != 'en' else "en",
+                    source_language=session_language if session_language != 'en' else "en",
                     translate_provider=translate_provider,
                     transliterate_provider=transliterate_provider
                 )
 
                 story.other_params[key] = processed_value
-                updated_fields.append(key)
                 updated = True
             else:
                 # Handle missing fields
-                if key == "organization":
+                if key == "organization" and key not in story.other_params:
                     story.other_params[key] = ""
-                    updated_fields.append(key)
-                logger.info(f"🔸 {key} missing in Story ID {story.id}")
+                    updated = True
+                elif key not in story.other_params:
+                    logger.info(f"🔸 {key} missing in Story ID {story.id}")
 
         # Ensure story language is set to English
         if story.language != 'en':
@@ -344,21 +377,23 @@ def correct_metadata_for_story(story):
 
         if updated:
             fields_to_update = ["other_params", "language"]
-            if 'title' in updated_fields:
+            if hasattr(story, 'title'):
                 fields_to_update.append("title")
 
             story.save(update_fields=fields_to_update)
             logger.info(f"✅ Updated Story ID {story.id} to English")
+            logger.info(f"Story other_params now has {len(story.other_params)} fields")
 
-            # Create/update translation for the original language (from ChatSession)
-            if updated_fields:
-                logger.info(f"🔄 Updating/creating translation for Story ID {story.id}")
-                update_or_create_story_translation(story, updated_fields, company_bot)
+            # Create/update translation with ALL fields, not just updated ones
+            logger.info(f"🔄 Updating/creating translation for Story ID {story.id}")
+            update_or_create_story_translation(story, company_bot)
 
             return f"✅ Updated Story ID {story.id} and its translation"
         else:
-            logger.info(f"🟡 No changes for Story ID {story.id}")
-            return f"🟡 No changes for Story ID {story.id}"
+            # Even if no updates to main story, ensure translation has all fields
+            logger.info(f"🔄 Ensuring translation completeness for Story ID {story.id}")
+            update_or_create_story_translation(story, company_bot)
+            return f"✅ Ensured complete translation for Story ID {story.id}"
 
     except Exception as e:
         logger.error(f"❌ Error in Story ID {story.id}: {str(e)}")
