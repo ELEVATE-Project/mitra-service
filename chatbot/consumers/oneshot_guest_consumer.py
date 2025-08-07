@@ -153,7 +153,10 @@ class OneShotGuestConsumer(BaseConsumer):
                 if not cs_created and cs.language != self.route:
                     cs.language = self.route
                     cs.save(update_fields=['language'])
-                project = Project.objects.filter(project_id=self.project_id).first()
+                if self.project_id:
+                    project = Project.objects.filter(project_id=self.project_id).first()
+                else:
+                    project = None
                 if not project:
                     print(f"Project with ID {self.project_id} not found. Creating a new one.")
                     project = Project.objects.create(
