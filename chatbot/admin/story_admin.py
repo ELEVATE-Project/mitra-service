@@ -4,13 +4,13 @@ from django.db.models import Q
 from chatbot.filter.admin_filter import StoryCompanyFilter, StoryStateFilter, StoryDistrictFilter, StoryBlockFilter
 from chatbot.filter.flow_filter import FlowFilter
 from chatbot.filter.story_filter import UserNameFilter
-from chatbot.models import StoryTag, StoryMedia, Story, Profile, ProfileType, MediaTypeChoices
+from chatbot.models import StoryTag, StoryMedia, Story, Profile, ProfileType, MediaTypeChoices, StoryTranslation
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.resources.story_resource import (
     redirect_to_export_view, generate_csv_response, generate_xls_response, generate_docx_response,
     get_story_fields, get_story_data, generate_zip_response
 )
-from chatbot.utils.shikshalokam_story_utils import update_story_pdf
+from chatbot.utils.shikshalokam_story_utils import update_story_pdf, save_shikshalokam_story
 from django.urls import path
 from django.shortcuts import render
 import tablib
@@ -79,14 +79,27 @@ class StoryAdmin(admin.ModelAdmin):
             return qs.none()
 
     def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
         print(f"Story saved: {obj.title}")
         flow = obj.other_params.get('flow') if obj.other_params else None
-        update_story_pdf(
-            access_token=None, session=obj.session, flow=flow,
-            is_edit_story=False
-        )
-
-        super().save_model(request, obj, form, change)
+        story_pdf_exists = StoryMedia.objects.filter(
+            story=obj,
+            media_type=MediaTypeChoices.PDF
+        ).exists()
+        if story_pdf_exists:
+            # Update existing PDF
+            print(f"Updating existing PDF for story: {obj.title}")
+            update_story_pdf(
+                access_token=None, session=obj.session, flow=flow, is_edit_story=False
+            )
+        else:
+            # Create new PDF
+            print(f"Creating new PDF for story: {obj.title}")
+            save_shikshalokam_story(
+                story=obj, profile=obj.author,
+                problem_statement=None, chat_history=None, access_token=None,
+                project_id=None, session=obj.session, conversation=None, flow=flow
+            )
 
     actions = [redirect_to_export_view]
 
@@ -126,3 +139,21 @@ class StoryAdmin(admin.ModelAdmin):
 
 
         return render(request, 'admin/export_story_format.html', {'ids': ids})
+
+
+@admin.register(StoryTranslation)
+class StoryTranslationAdmin(admin.ModelAdmin):
+    list_display = ('story', 'language', 'story_session', 'created_at')
+    list_filter = ('language', 'created_at', 'story', 'story__session')
+    search_fields = ('story__title', 'story__session', 'title')
+    readonly_fields = ('created_at',)
+    ordering = ('-created_at', 'story__session', 'language')
+    exclude = ('formatted_content', )
+    raw_id_fields = ('story',)
+    list_per_page = 20
+
+    def story_session(self, obj):
+        """Display session from related story"""
+        return obj.story.session if obj.story else '-'
+
+    story_session.short_description = 'Session'

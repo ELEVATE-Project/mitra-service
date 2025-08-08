@@ -47,6 +47,26 @@ class Story(models.Model):
     def __str__(self):
         return self.title
 
+    def get_translation(self, language):
+        """Get story content in specified language"""
+        if language == self.language:
+            return self
+
+        try:
+            return self.translations.get(language=language)
+        except StoryTranslation.DoesNotExist:
+            return None
+
+    def get_available_languages(self):
+        """Get list of available languages for this story"""
+        langs = [self.language]
+        langs.extend(self.translations.values_list('language', flat=True))
+        return langs
+
+    def get_translation_languages(self):
+        """Get only translation languages (excludes main story language)"""
+        return list(self.translations.values_list('language', flat=True))
+
     class Meta:
         indexes = [
             models.Index(fields=['title']),
@@ -155,3 +175,32 @@ class StoryTag(models.Model):
 
     class Meta:
         unique_together = ('story', 'tag')
+
+
+class StoryTranslation(models.Model):
+    story = models.ForeignKey(Story, related_name='translations', on_delete=models.CASCADE)
+    language = models.CharField(max_length=10, choices=StoryLanguageChoices.choices)
+
+    title = models.CharField(max_length=1000)
+    content = models.TextField(null=True, blank=True)
+    blurb = models.TextField(null=True, blank=True)
+    tweet = models.TextField(null=True, blank=True)
+    objective = models.TextField(null=True, blank=True)
+    action_steps = models.TextField(null=True, blank=True)
+    impact = models.TextField(null=True, blank=True)
+    micro_improvement = models.TextField(null=True, blank=True)
+    formatted_content = models.TextField(null=True, blank=True)
+
+    other_params = models.JSONField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('story', 'language')
+        indexes = [
+            models.Index(fields=['story', 'language']),
+        ]
+
+    def __str__(self):
+        return f"{self.story.title} ({self.language})"

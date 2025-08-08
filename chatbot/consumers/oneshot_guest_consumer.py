@@ -139,6 +139,7 @@ class OneShotGuestConsumer(BaseConsumer):
                     defaults={
                         'profile': profile,
                         'current_step': 1,
+                        'language': self.route,
                         'company_bot': self.company_bot,
                         'session_status': ChatStatus.IN_PROGRESS,
                         'project_id': self.project_id,
@@ -149,8 +150,14 @@ class OneShotGuestConsumer(BaseConsumer):
                 )
 
                 print(cs, cs_created)
-                project = Project.objects.filter(project_id=self.project_id).first()
-                if not project:
+                if not cs_created and cs.language != self.route:
+                    cs.language = self.route
+                    cs.save(update_fields=['language'])
+                if self.project_id:
+                    project = Project.objects.filter(project_id=self.project_id).first()
+                else:
+                    project = None
+                if not project and self.project_id:
                     print(f"Project with ID {self.project_id} not found. Creating a new one.")
                     project = Project.objects.create(
                         project_id=self.project_id,
@@ -158,8 +165,6 @@ class OneShotGuestConsumer(BaseConsumer):
                         project_status=ProjectStatus.STARTED,
                     )
                     print(f"Project created with id {project.id}")
-                else:
-                    print(f"Found existing project: {project.id}")
 
             else:
                 company_chat_status = self.determine_company_chat_status(

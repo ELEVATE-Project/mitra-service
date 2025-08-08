@@ -1,17 +1,19 @@
 import traceback
 from chatbot.models import (Profile, CompanyChat, CompanyBot,
-                            ChatSession, ChatStatus, Voice, VoiceType, SessionFlowName, BotVernacular)
+                            ChatSession, ChatStatus, Voice, VoiceType, SessionFlowName, BotVernacular, StoryTranslation)
 from chatbot.utils.chat_utils import get_guided_chat
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
 from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
 from chatbot.utils.story_llama_utils import translate_field
 import asyncio
 
+from chatbot.utils.story_utils.chaupal.chaupal_story_tasks import save_chaupal_report
 from chatbot.utils.story_utils.format_utils import get_formatted_story
 from chatbot.utils.story_utils.get_story_prompts import get_creation_promt, get_chat_message, get_tool_values, \
     get_validation_prompt
+from chatbot.utils.story_utils.mi_story_capture.mi_story_tasks import save_story
+from chatbot.utils.story_utils.ptm.ptm_story_tasks import save_ptm_story
 from chatbot.utils.story_utils.story_llm import generate_story_llm, validate_story_llm
-from chatbot.utils.story_utils.story_tasks import save_story, save_chaupal_report, save_ptm_story
 import logging
 
 logger = logging.getLogger('django')
@@ -114,6 +116,16 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
             if formatted_content:
                 story.formatted_content = formatted_content
                 story.save(update_fields=['formatted_content'])
+
+            if language != 'en':
+                try:
+                    translation = story.translations.get(language=language)
+                    formatted_translation_content = get_formatted_story(translation)
+                    if formatted_translation_content:
+                        translation.formatted_content = formatted_translation_content
+                        translation.save(update_fields=['formatted_content'])
+                except StoryTranslation.DoesNotExist:
+                    pass
 
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=['session_status'])

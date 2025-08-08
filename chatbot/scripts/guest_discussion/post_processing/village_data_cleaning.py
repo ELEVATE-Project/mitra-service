@@ -1,6 +1,6 @@
 from typing import List, Dict, Any
 from tqdm import tqdm
-from chatbot.models import CompanyBot, Story
+from chatbot.models import CompanyBot, Story, StoryTranslation, ChatSession
 import json
 import os
 import boto3
@@ -64,20 +64,19 @@ def process_stories_parallel(stories: List[Story], master_villages: Dict[str, Li
 
     if not master_villages:
         print("❌ No master villages data available")
-        return {"skipped_no_english_json": [], "failed_village_mapping": []}
+        return {"skipped_no_location": [], "failed_village_mapping": []}
 
     # Filter stories and track skipped ones
     stories_to_process = []
-    skipped_no_english_json = []
+    skipped_no_location = []
 
     for story in stories:
         if story.other_params:
-            # Check if english_json exists
-            english_json = story.other_params.get('english_json', {})
-            location = english_json.get('location') or story.other_params.get('location')
+            # Only check location from other_params, NOT from english_json
+            location = story.other_params.get('location')
 
             if not location:
-                skipped_no_english_json.append(story.id)
+                skipped_no_location.append(story.id)
                 continue
 
             # Check if village mapping already exists
@@ -86,13 +85,13 @@ def process_stories_parallel(stories: List[Story], master_villages: Dict[str, Li
 
     print(f"📊 Summary:")
     print(f"   - Total stories: {len(stories)}")
-    print(f"   - Skipped (no english_json): {len(skipped_no_english_json)}")
+    print(f"   - Skipped (no location): {len(skipped_no_location)}")
     print(f"   - To process: {len(stories_to_process)}")
 
     if not stories_to_process:
         print("✅ No stories need village mapping")
         return {
-            "skipped_no_english_json": skipped_no_english_json,
+            "skipped_no_location": skipped_no_location,
             "failed_village_mapping": []
         }
 
@@ -129,11 +128,11 @@ def process_stories_parallel(stories: List[Story], master_villages: Dict[str, Li
     # Final summary
     print(f"\n📋 FINAL SUMMARY:")
     print(f"   ✅ Successfully processed: {len(all_updates)} stories")
-    print(f"   ⚠️  Skipped (no english_json): {len(skipped_no_english_json)} stories")
+    print(f"   ⚠️  Skipped (no location): {len(skipped_no_location)} stories")
     print(f"   ❌ Failed village mapping: {len(failed_village_mapping)} stories")
 
     return {
-        "skipped_no_english_json": skipped_no_english_json,
+        "skipped_no_location": skipped_no_location,
         "failed_village_mapping": failed_village_mapping
     }
 
@@ -142,17 +141,13 @@ def call_llm_for_village_mapping(story: Story, master_villages: Dict[str, List[s
     """Call LLM to map story location to village name"""
 
     try:
-        # Get location from english_json if available
+        # Get location ONLY from other_params, NOT from english_json
         location = ''
         if story.other_params:
-            english_json = story.other_params.get('english_json', {})
-            location = english_json.get('location', '')
-
-            if not location:
-                location = story.other_params.get('location', '')
+            location = story.other_params.get('location', '')
 
         if not location:
-            print(f"⚠️  Story {story.id}: No location found in english_json or other_params")
+            print(f"⚠️  Story {story.id}: No location found in other_params")
             return None
 
         messages = build_prompt(location, master_villages)
@@ -200,6 +195,101 @@ def call_llm_for_village_mapping(story: Story, master_villages: Dict[str, List[s
         return None
 
 
+def get_story_language_from_session(story_id: int) -> str:
+    """Get the language from the story's chat session"""
+    try:
+        story = Story.objects.get(id=story_id)
+
+        if hasattr(story, 'session'):
+            chat_session = ChatSession.objects.filter(session=story.session).first()
+            if chat_session and hasattr(chat_session, 'language'):
+                return chat_session.language
+
+        # Default to story's language if no session found
+        return story.language
+    except Exception as e:
+        print(f"Error getting language from session for story {story_id}: {e}")
+        return 'en'  # Default to English
+
+
+def transliterate_field(voice_provider, message_body, target_language, source_language="en"):
+    """For transliteration (used for location names, districts, villages, names)"""
+    if not message_body or message_body == '' or source_language == target_language:
+        return message_body
+
+    try:
+        from chatbot.utils.transliterate_utils import transliterate_text
+        is_sentence = ' ' in message_body
+        response = transliterate_text(
+            voice_provider=voice_provider,
+            message_body=message_body,
+            target_language=target_language,
+            source_language=source_language,
+            is_sentence=is_sentence
+        )
+        if response.get('status') == 200:
+            from chatbot.utils.transliterate_utils import get_transliteration_output
+            data = get_transliteration_output(response.get('content'))
+            return data if data else response.get('content')
+        else:
+            print(f"Transliteration failed, using original text: {message_body}")
+            return message_body
+    except Exception as e:
+        print(f"Error transliterating text '{message_body}': {str(e)}")
+        return message_body
+
+
+def update_story_translations(story_id: int, village: str, district: str, voice_provider: str = "google") -> None:
+    """Update StoryTranslation with transliterated village and district names"""
+    try:
+        story = Story.objects.get(id=story_id)
+
+        # Get language from chat session
+        session_language = get_story_language_from_session(story_id)
+
+        # Get all existing translations for this story
+        translations = StoryTranslation.objects.filter(story=story)
+
+        for translation in translations:
+            # Transliterate village and district names
+            if village and str(village).lower() not in ['others', 'other']:
+                transliterated_village = transliterate_field(
+                    voice_provider=voice_provider,
+                    message_body=village,
+                    target_language=translation.language,
+                    source_language=session_language
+                )
+            else:
+                transliterated_village = village
+
+            if district and str(district).lower() not in ['others', 'other']:
+                transliterated_district = transliterate_field(
+                    voice_provider=voice_provider,
+                    message_body=district,
+                    target_language=translation.language,
+                    source_language=session_language
+                )
+            else:
+                transliterated_district = district
+
+            # Update translation's other_params (get_or_update, don't create)
+            if not translation.other_params:
+                translation.other_params = {}
+
+            translation.other_params['village'] = transliterated_village
+            translation.other_params['district'] = transliterated_district
+
+            translation.save(update_fields=['other_params'])
+
+            print(f"✅ Updated translation for story {story_id} in {translation.language}: "
+                  f"{village} -> {transliterated_village}, {district} -> {transliterated_district}")
+
+    except Story.DoesNotExist:
+        print(f"❌ Story {story_id} not found for translation update")
+    except Exception as e:
+        print(f"❌ Error updating translations for story {story_id}: {e}")
+
+
 def update_stories_in_db(updates: List[Dict[str, Any]]) -> None:
     """Bulk update stories in database"""
 
@@ -215,19 +305,16 @@ def update_stories_in_db(updates: List[Dict[str, Any]]) -> None:
                     if not story.other_params:
                         story.other_params = {}
 
+                    # Update ONLY in other_params, NOT in english_json
                     story.other_params['village'] = village
                     story.other_params['district'] = district
-                    english_json = story.other_params.get('english_json')
-                    if not english_json or not isinstance(english_json, dict):
-                        pass
-                    else:
-                        story.other_params['english_json']['village'] = village
-                        story.other_params['english_json']['district'] = district
-
 
                     story.save(update_fields=['other_params'])
 
                     print(f"✅ Updated story {story_id}: {update['original_location']} -> {village}, {district}")
+
+                    # Update translations with transliterated values
+                    update_story_translations(story_id, village, district)
 
                 except Story.DoesNotExist:
                     print(f"❌ Story {story_id} not found")
@@ -246,7 +333,7 @@ def run_village_mapper(story_queryset=None) -> Dict[str, List[int]]:
     # Load master villages data
     master_villages = load_master_villages()
     if not master_villages:
-        return {"skipped_no_english_json": [], "failed_village_mapping": []}
+        return {"skipped_no_location": [], "failed_village_mapping": []}
 
     # Get stories to process
     if story_queryset is None:
@@ -264,7 +351,7 @@ def run_village_mapper(story_queryset=None) -> Dict[str, List[int]]:
 
     if not stories_list:
         print("✅ No stories found to process")
-        return {"skipped_no_english_json": [], "failed_village_mapping": []}
+        return {"skipped_no_location": [], "failed_village_mapping": []}
 
     return process_stories_parallel(stories_list, master_villages)
 
@@ -303,8 +390,6 @@ def handle_bedrock_model(
     else:
         model_id = 'meta.llama3-1-8b-instruct-v1:0'
 
-        # 'meta.llama3-1-70b-instruct-v1:0'
-
     inference_config = {}
 
     if max_token:
@@ -327,9 +412,7 @@ def handle_bedrock_model(
         if tools:
             request_payload['toolConfig'] = tools.get('toolConfig')
 
-        # print("request_payload: ", request_payload)
         response = bedrock_runtime.converse(**request_payload)
-        # print("Response: ", response)
         content_arr = response['output']['message']['content']
         content = content_arr[0]
         content_tool = content.get('toolUse')
@@ -348,8 +431,6 @@ def handle_bedrock_model(
                     json_str = json_str[:-1].strip()
                 try:
                     final_output = json_repair.repair_json(json_str, return_objects=True)
-                    # print(f"Loads final_output: {final_output}")
-
                 except json.JSONDecodeError as e:
                     print('Error decoding JSON: ', e)
                     return None
@@ -403,12 +484,10 @@ def get_clean_output(response):
     return response_json_content
 
 
-# -------------- USAGE EXAMPLES ------------------
-
 # -------------- ANALYSIS FUNCTIONS ------------------
 
 def analyze_skipped_stories(story_ids: List[int]) -> None:
-    """Analyze stories that were skipped due to missing english_json"""
+    """Analyze stories that were skipped due to missing location"""
     if not story_ids:
         print("✅ No stories were skipped")
         return
@@ -422,7 +501,6 @@ def analyze_skipped_stories(story_ids: List[int]) -> None:
         location = story.other_params.get('location', 'N/A') if story.other_params else 'N/A'
         print(f"Story ID: {story.id}")
         print(f"  Location: {location}")
-        print(f"  Has english_json: {'english_json' in (story.other_params or {})}")
         print("-" * 30)
 
     if len(stories) > 10:
@@ -441,10 +519,9 @@ def analyze_failed_stories(story_ids: List[int]) -> None:
     print("=" * 50)
 
     for story in stories[:10]:  # Show first 10 as sample
-        english_json = story.other_params.get('english_json', {}) if story.other_params else {}
-        location = english_json.get('location', 'N/A')
+        location = story.other_params.get('location', 'N/A') if story.other_params else 'N/A'
         print(f"Story ID: {story.id}")
-        print(f"  English Location: {location}")
+        print(f"  Location: {location}")
         print("-" * 30)
 
     if len(stories) > 10:
@@ -454,10 +531,6 @@ def analyze_failed_stories(story_ids: List[int]) -> None:
 def get_village_mapping_stats() -> Dict[str, Any]:
     """Get statistics about village mappings"""
     total_stories = Story.objects.filter(other_params__isnull=False).count()
-
-    stories_with_english_json = Story.objects.filter(
-        other_params__english_json__isnull=False
-    ).count()
 
     stories_with_village = Story.objects.filter(
         other_params__village__isnull=False
@@ -473,10 +546,15 @@ def get_village_mapping_stats() -> Dict[str, Any]:
         village = other_params.get('village', 'unknown')
         village_distribution[village] = village_distribution.get(village, 0) + 1
 
+    # Get translation stats
+    translations_with_village = StoryTranslation.objects.filter(
+        other_params__village__isnull=False
+    ).count()
+
     stats = {
         'total_stories_with_other_params': total_stories,
-        'stories_with_english_json': stories_with_english_json,
         'stories_with_village_mapping': stories_with_village,
+        'translations_with_village': translations_with_village,
         'village_distribution': village_distribution,
         'most_common_villages': sorted(village_distribution.items(), key=lambda x: x[1], reverse=True)[:10]
     }
@@ -484,8 +562,8 @@ def get_village_mapping_stats() -> Dict[str, Any]:
     print(f"\n📊 VILLAGE MAPPING STATISTICS:")
     print("=" * 40)
     print(f"Total stories with other_params: {stats['total_stories_with_other_params']}")
-    print(f"Stories with english_json: {stats['stories_with_english_json']}")
     print(f"Stories with village mapping: {stats['stories_with_village_mapping']}")
+    print(f"Translations with village mapping: {stats['translations_with_village']}")
     print(f"Unique villages mapped: {len(village_distribution)}")
     print(f"\nTop 10 villages:")
     for village, count in stats['most_common_villages']:
@@ -502,7 +580,7 @@ def run_for_specific_stories(story_ids: List[int]) -> Dict[str, List[int]]:
     summary = run_village_mapper(story_queryset=stories)
 
     # Analyze results
-    analyze_skipped_stories(summary['skipped_no_english_json'])
+    analyze_skipped_stories(summary['skipped_no_location'])
     analyze_failed_stories(summary['failed_village_mapping'])
 
     return summary
@@ -520,7 +598,7 @@ def run_for_date_range(start_date, end_date) -> Dict[str, List[int]]:
     summary = run_village_mapper(story_queryset=stories)
 
     # Analyze results
-    analyze_skipped_stories(summary['skipped_no_english_json'])
+    analyze_skipped_stories(summary['skipped_no_location'])
     analyze_failed_stories(summary['failed_village_mapping'])
 
     return summary

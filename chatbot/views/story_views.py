@@ -1,5 +1,6 @@
+import json
 import traceback
-from chatbot.models import Story, StoryMedia, ChatSession, SessionFlowName
+from chatbot.models import Story, StoryMedia, ChatSession, SessionFlowName, StoryTranslation, VoiceType, Voice
 from chatbot.serializer.story_serializer import StoryCreateSerializer, StoryRetrieveSerializer, \
     StoryMediaRetrieveSerializer, StoryFullSerializer
 from chatbot.utils.media_utils import upload_to_cloud
@@ -11,6 +12,11 @@ from rest_framework.response import Response
 from chatbot.models.media_models import ProfileMedia
 from chatbot.serializer.profile_serializer import ProfileMediaSerializer
 from chatbot.utils.recreate_story_utils import re_create_story_object
+from chatbot.utils.story_llama_utils import translate_field
+from chatbot.utils.story_utils.base.story_update_utils import extract_update_data, get_or_create_translation, \
+    update_translation_fields, sync_to_main_story
+from chatbot.utils.story_utils.base.translation_mixins import LanguageDetectionMixin
+from chatbot.utils.story_utils.format_utils import get_formatted_story
 from chatbot.utils.story_utils.story_utils import create_story_object
 
 
@@ -59,40 +65,90 @@ class StoryListCreateView(generics.ListCreateAPIView):
     filterset_fields = ['session', 'author']
 
 
-class StoryRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView):
+class StoryRetrieveUpdateDestroyView(LanguageDetectionMixin, generics.RetrieveUpdateDestroyAPIView):
     queryset = Story.objects.all()
     serializer_class = StoryRetrieveSerializer
 
+
     def partial_update(self, request, *args, **kwargs):
-        """
-        Handle PATCH requests for partial updates.
-        """
         print("Updating (PATCH)")
-        return self.handle_update_logic(request, *args, **kwargs, is_partial=True)
+
+        story = self.get_object()
+        language = self.detect_language(request, story)
+
+        if language != 'en':
+            return self.handle_translation_update(request, language, *args, **kwargs)
+        else:
+            return self.handle_update_logic(request, *args, **kwargs, is_partial=True)
+
+    def handle_translation_update(self, request, language, *args, **kwargs):
+        """Handle updates to story translations AND sync back to main story"""
+        story = self.get_object()
+
+        try:
+            # Step 1: Extract and validate request data
+            update_data = extract_update_data(request)
+            print("update_data: ", update_data)
+            # Step 2: Get or create translation
+            translation = get_or_create_translation(story, language, update_data)
+            print("translation: ", translation)
+
+            # Step 3: Update translation with new data
+            update_translation_fields(translation, update_data, language)
+            print("update_translation_fields done")
+
+            # Step 4: Sync back to main story (English)
+            sync_to_main_story(story, translation, update_data, language)
+            print("sync_to_main_story done")
+
+            # Step 5: Generate response and handle post-update tasks
+            return self._generate_update_response(request, story, update_data)
+
+        except Exception as e:
+            print(f"Error while handle_translation_update {e}")
+            return self._handle_update_error(e)
+
+    def _generate_update_response(self, request, story, update_data):
+        """Generate response and handle post-update tasks"""
+        # Generate serialized response
+        serializer = self.get_serializer(story, context={'request': request})
+        response_data = serializer.data
+
+        # Handle PDF update if needed
+        if all([update_data['session'], update_data['access_token'], update_data['flow']]):
+            update_story_pdf(
+                access_token=update_data['access_token'],
+                session=update_data['session'],
+                flow=update_data['flow'],
+                is_edit_story=True
+            )
+
+        return Response(response_data, status=status.HTTP_200_OK)
+
+    def _handle_update_error(self, error):
+        """Handle update errors consistently"""
+        print(f"Error updating translation: {str(error)}")
+        traceback.print_exc()
+        return Response({
+            'error': f'Failed to update translation: {str(error)}'
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 
     def handle_update_logic(self, request, *args, **kwargs):
-        """
-        Shared PATCH requests.
-        """
+        """Handle English story updates"""
         is_partial = kwargs.pop('is_partial', False)
         session_value = request.data.get('session')
         access_token = request.data.get('access_token')
         flow = request.data.get('flow')
-        print("session_value: ", session_value)
-        print("access_token: ", access_token)
-        print("flow: ", flow)
 
         try:
             if is_partial:
                 response = super().partial_update(request, *args, **kwargs)
                 if response and response.status_code in [status.HTTP_200_OK, status.HTTP_204_NO_CONTENT]:
-                    print("response.data: ", response.data.get('session'))
                     update_story_pdf(
                         access_token=access_token, session=session_value, flow=flow,
-                        is_edit_story=False
+                        is_edit_story=True
                     )
-
                 return response
         except Exception as e:
             print("Error occurred: ", str(e))
