@@ -1,6 +1,6 @@
 import json
 import os
-from chatbot.models import Story, ChatSession, CompanyChat, CompanyBot
+from chatbot.models import Story, ChatSession, CompanyChat, CompanyBot, Theme, ThemeType
 from jinja2 import Template
 import json_repair
 import logging
@@ -36,70 +36,101 @@ AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 # ===================================
 
 
-def get_master_themes_list(filename="master_themes.json"):
-    """Get the master list of themes from a file - single source of truth for themes"""
+def get_master_themes_list_for_bot(company_bot):
+    """Get the master list of themes from Theme model for a specific bot"""
     try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        theme_obj = Theme.objects.filter(bot=company_bot).first()
 
-        if 'themes' in data:
-            master_list = data['themes']
-            logger.info(f"Loaded {len(master_list)} themes from {filename}")
-            return master_list
+        if not theme_obj:
+            logger.info(f"No themes found for bot {company_bot.name}, returning empty list")
+            return []
+
+        # Check if bot uses master theme
+        if theme_obj.theme_type == ThemeType.MASTER and theme_obj.master_theme:
+            # Use themes from the master theme
+            master_theme_obj = theme_obj.master_theme
+            logger.info(f"Bot {company_bot.name} uses master theme from bot {master_theme_obj.bot.name}")
+            return master_theme_obj.themes if master_theme_obj.themes else []
         else:
-            # File exists but no themes key - use default themes
-            logger.error(f"No 'themes' key found in {filename}, creating with defaults")
-            default_themes = []
-            save_themes_to_file(default_themes, filename)
-            return default_themes
-
-    except FileNotFoundError:
-        logger.info(f"Theme file {filename} not found, creating with defaults")
-        # Create file with default themes
-        default_themes = []
-        save_themes_to_file(default_themes, filename)
-        return default_themes
+            # Use bot's own custom themes
+            logger.info(f"Bot {company_bot.name} uses custom themes - loaded {len(theme_obj.themes)} themes")
+            return theme_obj.themes if theme_obj.themes else []
 
     except Exception as e:
-        logger.error(f"Error loading themes from {filename}: {str(e)}")
-        raise
+        logger.error(f"Error loading themes for bot {company_bot.name}: {str(e)}")
+        return []
 
 
-def save_themes_to_file(themes, filename="master_themes.json"):
-    """Save themes to a file"""
+def save_themes_for_bot(themes, company_bot):
+    """Save themes to Theme model for a specific bot"""
     try:
-        data = {
-            "themes": themes,
-            "last_updated": datetime.now().isoformat(),
-            "total_themes": len(themes)
-        }
+        theme_obj, created = Theme.objects.get_or_create(
+            bot=company_bot,
+            defaults={'themes': themes, 'theme_type': ThemeType.CUSTOM}
+        )
 
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        if not created:
+            # Check if bot uses master theme
+            if theme_obj.theme_type == ThemeType.MASTER and theme_obj.master_theme:
+                # Update the master theme instead
+                master_theme_obj = theme_obj.master_theme
+                master_theme_obj.themes = themes
+                master_theme_obj.save()
+                logger.info(f"Updated master theme (bot: {master_theme_obj.bot.name}) with {len(themes)} themes")
+            else:
+                # Update bot's custom themes
+                theme_obj.themes = themes
+                theme_obj.save()
+                logger.info(f"Updated custom themes for bot {company_bot.name} with {len(themes)} themes")
+        else:
+            logger.info(f"Created new theme record for bot {company_bot.name} with {len(themes)} themes")
 
-        logger.info(f"Saved {len(themes)} themes to {filename}")
         return True
 
     except Exception as e:
-        logger.error(f"Error saving themes to {filename}: {str(e)}")
+        logger.error(f"Error saving themes for bot {company_bot.name}: {str(e)}")
         return False
 
 
-def update_master_themes_list(new_themes, filename="master_themes.json"):
-    """Update the master themes list with new themes and save to file"""
-    current_themes = set(get_master_themes_list(filename))
-    new_unique_themes = set(new_themes) - current_themes
+def update_master_themes_list_for_bot(new_themes, company_bot):
+    """Update the master themes list with new themes for a specific bot"""
+    try:
+        theme_obj = Theme.objects.filter(bot=company_bot).first()
 
-    if new_unique_themes:
-        logger.info(f"New themes discovered: {new_unique_themes}")
-        # Update and save the master list
-        updated_themes = sorted(list(current_themes.union(new_unique_themes)))
-        if save_themes_to_file(updated_themes, filename):
-            logger.info(f"Updated master themes file with {len(new_unique_themes)} new themes")
-        else:
-            logger.error("Failed to update master themes file")
+        if not theme_obj:
+            # Create new theme object with these themes
+            logger.info(f"Creating new theme object for bot {company_bot.name}")
+            return save_themes_for_bot(new_themes, company_bot)
 
-    return list(new_unique_themes)
+        # Get current themes (considering master theme)
+        current_themes = set(get_master_themes_list_for_bot(company_bot))
+        new_unique_themes = set(new_themes) - current_themes
+
+        if new_unique_themes:
+            logger.info(f"New themes discovered for bot {company_bot.name}: {new_unique_themes}")
+
+            # Determine which theme object to update
+            if theme_obj.theme_type == ThemeType.MASTER and theme_obj.master_theme:
+                # Update the master theme
+                target_theme_obj = theme_obj.master_theme
+                logger.info(f"Updating master theme (bot: {target_theme_obj.bot.name})")
+            else:
+                # Update bot's custom themes
+                target_theme_obj = theme_obj
+                logger.info(f"Updating custom themes for bot {company_bot.name}")
+
+            # Update and save the themes
+            updated_themes = sorted(list(current_themes.union(new_unique_themes)))
+            target_theme_obj.themes = updated_themes
+            target_theme_obj.save()
+
+            logger.info(f"Added {len(new_unique_themes)} new themes")
+
+        return list(new_unique_themes)
+
+    except Exception as e:
+        logger.error(f"Error updating themes for bot {company_bot.name}: {str(e)}")
+        return []
 
 
 def extract_themes_for_story(story):
@@ -114,36 +145,41 @@ def extract_themes_for_story(story):
         if has_existing_themes:
             logger.info(f"Story ID {story.id} has existing themes: {story.other_params['themes']} - will re-extract")
 
-        # CHANGE 2: Use chaupal-theme-script company bot for all theme extraction
-        company_bot = CompanyBot.objects.get(route='/chaupal-theme-script')
-        logger.info(f"Using CompanyBot with route='/chaupal-theme-script'")
+        # Get the bot from the story's session
+        session = ChatSession.objects.get(session=story.session)
+        if not session.company_bot:
+            logger.error(f"No company_bot found for session {story.session}")
+            return f"❌ No company_bot found for session {story.session}"
 
-        # CHANGE 1: Get master themes list from file (single source of truth)
-        master_themes = get_master_themes_list()
+        # Use the session's company_bot for theme extraction
+        company_bot = session.company_bot
+        theme_bot = CompanyBot.objects.filter(route='/chaupal-theme-script').first()
+        logger.info(f"Using CompanyBot: {company_bot.name} (route: {company_bot.route}) and theme bot {theme_bot.name}")
+
+        # Get master themes list for this specific bot (handles both custom and master themes)
+        master_themes = get_master_themes_list_for_bot(company_bot)
 
         # Get theme extraction prompt from company bot context
-        if company_bot.context:
-            # NEW: Render Jinja2 template with themes variable
-            template = Template(company_bot.context)
+        if theme_bot.context:
+            # Render Jinja2 template with themes variable
+            template = Template(theme_bot.context)
             prompt = template.render(themes=master_themes)
-            logger.info(f"Using prompt from CompanyBot context with Jinja2 template rendering: \n {prompt}")
+            logger.info(f"Using prompt from CompanyBot context with Jinja2 template rendering")
         else:
             # Fallback prompt if company bot has no context
             prompt = get_theme_extraction_prompt(master_themes)
-            logger.info(f"Using fallback prompt as CompanyBot context is empty: \n {prompt}")
+            logger.info(f"Using fallback prompt as CompanyBot context is empty")
 
         # Get chat history
         company_chats = CompanyChat.objects.filter(session=story.session).order_by('created_at')
-
-        # Get introductory message if available
 
         messages = format_message_as_per_bedrock_format(chats=company_chats)
         formatted_prompt = [{"text": prompt}]
 
         # Get tools configuration from company bot or use default
-        if company_bot.tool_context:
+        if theme_bot.tool_context:
             try:
-                tools = json.loads(company_bot.tool_context)
+                tools = json.loads(theme_bot.tool_context)
                 logger.info("Using tools from CompanyBot tool_context")
             except:
                 tools = get_theme_extraction_tools()
@@ -156,10 +192,10 @@ def extract_themes_for_story(story):
         response = handle_bedrock_model(
             system_prompt=formatted_prompt,
             messages=messages,
-            model_name=company_bot.llm_model,
-            temperature=company_bot.bot_temperature,
-            max_token=company_bot.max_token,
-            company_bot=company_bot,
+            model_name=theme_bot.llm_model,
+            temperature=theme_bot.bot_temperature,
+            max_token=theme_bot.max_token,
+            company_bot=theme_bot,
             tools=tools
         )
 
@@ -176,9 +212,9 @@ def extract_themes_for_story(story):
             issue_themes = result.get('issue_themes', [])
 
             if domain_themes or issue_themes:
-                # Update master themes list with any new themes found
+                # Update master themes list with any new themes found for this bot
                 all_themes = domain_themes + issue_themes
-                new_themes = update_master_themes_list(all_themes)
+                new_themes = update_master_themes_list_for_bot(all_themes, company_bot)
                 if new_themes:
                     logger.info(f"Story ID {story.id} introduced new themes: {new_themes}")
 
@@ -186,7 +222,6 @@ def extract_themes_for_story(story):
                 story.other_params['themes'] = {
                     'domain_themes': domain_themes,
                     'issue_themes': issue_themes,
-                    'all_themes': all_themes  # Combined list for backward compatibility
                 }
                 story.save(update_fields=["other_params"])
 
@@ -203,9 +238,9 @@ def extract_themes_for_story(story):
             logger.error(f"Invalid response format for Story ID {story.id}")
             return f"❌ Invalid response format for Story ID {story.id}"
 
-    except CompanyBot.DoesNotExist:
-        logger.error("CompanyBot with route='/chaupal-theme-script' not found")
-        return f"❌ CompanyBot with route='/chaupal-theme-script' not found"
+    except ChatSession.DoesNotExist:
+        logger.error(f"ChatSession not found for story session: {story.session}")
+        return f"❌ ChatSession not found for story session: {story.session}"
     except Exception as e:
         logger.error(f"❌ Error extracting themes for Story ID {story.id}: {str(e)}")
         return f"❌ Error extracting themes for Story ID {story.id}: {str(e)}"
@@ -552,27 +587,109 @@ def view_story_themes(story_id):
         return None
 
 
-def view_master_themes():
-    """View the current master themes list from file"""
+def view_master_themes_by_bot(company_bot=None):
+    """View the current master themes list from Theme model"""
     try:
-        master_themes = get_master_themes_list()
+        if company_bot:
+            # View themes for specific bot
+            theme_obj = Theme.objects.filter(bot=company_bot).first()
 
-        print(f"\n{'=' * 60}")
-        print(f"MASTER THEMES LIST (from file)")
-        print(f"{'=' * 60}")
-        print(f"Total themes: {len(master_themes)}")
-        print(f"\nThemes (alphabetically sorted):")
-        print(f"{'-' * 60}")
+            if not theme_obj:
+                print(f"No themes found for bot: {company_bot.name}")
+                return []
 
-        for i, theme in enumerate(sorted(master_themes), 1):
-            print(f"{i:3}. {theme}")
+            master_themes = get_master_themes_list_for_bot(company_bot)
 
-        print(f"{'=' * 60}\n")
+            print(f"\n{'=' * 60}")
+            print(f"THEMES for bot: {company_bot.name}")
+            print(f"Theme Type: {theme_obj.get_theme_type_display()}")
+            if theme_obj.theme_type == ThemeType.MASTER and theme_obj.master_theme:
+                print(f"Using master theme from: {theme_obj.master_theme.bot.name}")
+            print(f"{'=' * 60}")
+            print(f"Total themes: {len(master_themes)}")
+            print(f"\nThemes (alphabetically sorted):")
+            print(f"{'-' * 60}")
 
-        return master_themes
+            for i, theme in enumerate(sorted(master_themes), 1):
+                print(f"{i:3}. {theme}")
+
+            print(f"{'=' * 60}\n")
+
+            return master_themes
+        else:
+            # View themes for all bots
+            all_theme_objs = Theme.objects.select_related('bot', 'master_theme__bot').all()
+
+            print(f"\n{'=' * 60}")
+            print(f"ALL BOT THEMES")
+            print(f"{'=' * 60}")
+
+            for theme_obj in all_theme_objs:
+                print(f"\nBot: {theme_obj.bot.name} (ID: {theme_obj.bot.id})")
+                print(f"Theme Type: {theme_obj.get_theme_type_display()}")
+
+                if theme_obj.theme_type == ThemeType.MASTER and theme_obj.master_theme:
+                    print(f"Using master theme from: {theme_obj.master_theme.bot.name}")
+                    themes = theme_obj.master_theme.themes
+                else:
+                    themes = theme_obj.themes
+
+                print(f"Total themes: {len(themes)}")
+                print(f"Themes: {', '.join(sorted(themes[:10]))}")
+                if len(themes) > 10:
+                    print(f"... and {len(themes) - 10} more")
+                print(f"{'-' * 40}")
+
+            print(f"{'=' * 60}\n")
+
+            return all_theme_objs
+
     except Exception as e:
         print(f"Error viewing master themes: {str(e)}")
         return []
+
+
+def export_bot_themes_to_file(company_bot, filename=None):
+    """Export a specific bot's themes to a JSON file"""
+    try:
+        if not filename:
+            filename = f"themes_export_{company_bot.id}_{company_bot.name.replace(' ', '_')}.json"
+
+        master_themes = get_master_themes_list_for_bot(company_bot)
+
+        # Get theme statistics for this bot
+        theme_stats = {}
+        stories_with_bot = Story.objects.filter(
+            session__in=ChatSession.objects.filter(company_bot=company_bot).values_list('session', flat=True)
+        )
+
+        for story in stories_with_bot:
+            if story.other_params and 'themes' in story.other_params:
+                themes = story.other_params.get('themes', {})
+                if isinstance(themes, dict):
+                    for theme in themes.get('all_themes', []):
+                        theme_stats[theme] = theme_stats.get(theme, 0) + 1
+
+        export_data = {
+            "bot_id": company_bot.id,
+            "bot_name": company_bot.name,
+            "bot_route": company_bot.route,
+            "themes": master_themes,
+            "theme_count": len(master_themes),
+            "theme_statistics": theme_stats,
+            "export_date": datetime.now().isoformat()
+        }
+
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(export_data, f, indent=2, ensure_ascii=False)
+
+        print(f"✅ Exported {len(master_themes)} themes for bot {company_bot.name} to {filename}")
+        return filename
+
+    except Exception as e:
+        logger.error(f"Error exporting themes: {str(e)}")
+        print(f"❌ Error exporting themes: {str(e)}")
+        return None
 
 
 def view_theme_statistics():
@@ -644,49 +761,6 @@ def view_theme_statistics():
         logger.error(f"Error viewing theme statistics: {str(e)}")
         print(f"Error viewing theme statistics: {str(e)}")
         return []
-
-
-def export_master_themes_to_file(filename="master_themes_export.json"):
-    """Export the current master themes list and statistics to a JSON file"""
-    try:
-        master_themes = get_master_themes_list()
-        theme_stats = dict(view_theme_statistics())
-
-        export_data = {
-            "themes": master_themes,
-            "theme_count": len(master_themes),
-            "theme_statistics": theme_stats,
-            "export_date": datetime.now().isoformat()
-        }
-
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(export_data, f, indent=2, ensure_ascii=False)
-
-        print(f"✅ Exported {len(master_themes)} themes to {filename}")
-        return filename
-
-    except Exception as e:
-        logger.error(f"Error exporting themes: {str(e)}")
-        print(f"❌ Error exporting themes: {str(e)}")
-        return None
-
-
-def add_new_themes_to_master_list(new_themes, filename="master_themes.json"):
-    """Add new themes to the master list file"""
-    try:
-        current_themes = get_master_themes_list(filename)
-        updated_themes = sorted(list(set(current_themes + new_themes)))
-
-        if save_themes_to_file(updated_themes, filename):
-            added_count = len(updated_themes) - len(current_themes)
-            print(f"✅ Added {added_count} new themes to master list")
-            return updated_themes
-        return None
-
-    except Exception as e:
-        logger.error(f"Error adding themes: {str(e)}")
-        print(f"❌ Error adding themes: {str(e)}")
-        return None
 
 
 def retry_if_result_none(result):
@@ -838,9 +912,9 @@ def get_clean_output(response):
 #    from datetime import datetime
 #    from django.utils.timezone import make_aware
 #
-#    start = make_aware(datetime(2025, 1, 1))
-#    end = make_aware(datetime(2025, 1, 31))
-#    story_ids = get_stories_by_date_range(start, end)
+#    start = make_aware(datetime(2025, 7, 25))
+#    end = make_aware(datetime(2025, 8, 31))
+#    story_ids = get_stories_by_date_range(start, end, 'normal')
 #    extract_themes_for_specific_stories(story_ids)
 #
 #    # For specific session type:
