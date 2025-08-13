@@ -46,7 +46,9 @@ class GuidedGuestConsumer(BaseConsumer):
                     company_bot=self.company_bot, step=chat_session.current_step
                 )
 
-                if state_machine and state_machine.name in ['INTRODUCTION', 'ORGANIZATION', 'IMPLEMENTATION_LOCATION']:
+                if state_machine and state_machine.name in [
+                    'INTRODUCTION', 'ROLE_INSTITUTE', 'FEDERATION_DETAILS', 'OCCUPATION', 'IMPLEMENTATION_LOCATION'
+                ]:
                     transliterate_voice_provider = Voice.objects.filter(
                         company_bot=self.company_bot,
                         type=VoiceType.Transliterate,
