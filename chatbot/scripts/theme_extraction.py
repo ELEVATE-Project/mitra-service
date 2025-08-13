@@ -109,10 +109,10 @@ def extract_themes_for_story(story):
         if not story.other_params:
             story.other_params = {}
 
-        # Skip if story already has themes
-        if 'themes' in story.other_params and story.other_params['themes']:
-            logger.info(f"Story ID {story.id} already has themes: {story.other_params['themes']}")
-            # return f"🟡 Story ID {story.id} already has themes"
+        # Check if story already has themes (for logging purposes)
+        has_existing_themes = 'themes' in story.other_params and story.other_params['themes']
+        if has_existing_themes:
+            logger.info(f"Story ID {story.id} has existing themes: {story.other_params['themes']} - will re-extract")
 
         # CHANGE 2: Use chaupal-theme-script company bot for all theme extraction
         company_bot = CompanyBot.objects.get(route='/chaupal-theme-script')
@@ -172,20 +172,30 @@ def extract_themes_for_story(story):
 
         # Extract themes from result
         if result and isinstance(result, dict):
-            themes = result.get('themes', [])
+            domain_themes = result.get('domain_themes', [])
+            issue_themes = result.get('issue_themes', [])
 
-            if themes:
+            if domain_themes or issue_themes:
                 # Update master themes list with any new themes found
-                new_themes = update_master_themes_list(themes)
+                all_themes = domain_themes + issue_themes
+                new_themes = update_master_themes_list(all_themes)
                 if new_themes:
                     logger.info(f"Story ID {story.id} introduced new themes: {new_themes}")
 
-                # Save themes to story
-                story.other_params['themes'] = themes
+                # Save both types of themes to story
+                story.other_params['themes'] = {
+                    'domain_themes': domain_themes,
+                    'issue_themes': issue_themes,
+                    'all_themes': all_themes  # Combined list for backward compatibility
+                }
                 story.save(update_fields=["other_params"])
 
-                logger.info(f"✅ Extracted themes for Story ID {story.id}: {themes}")
-                return f"✅ Extracted themes for Story ID {story.id}: {themes}"
+                if has_existing_themes:
+                    logger.info(f"✅ Re-extracted themes for Story ID {story.id}: Domain: {domain_themes}, Issues: {issue_themes}")
+                    return f"✅ Re-extracted themes for Story ID {story.id}: Domain: {domain_themes}, Issues: {issue_themes}"
+                else:
+                    logger.info(f"✅ Extracted themes for Story ID {story.id}: Domain: {domain_themes}, Issues: {issue_themes}")
+                    return f"✅ Extracted themes for Story ID {story.id}: Domain: {domain_themes}, Issues: {issue_themes}"
             else:
                 logger.error(f"No themes extracted for Story ID {story.id}")
                 return f"⚠️ No themes extracted for Story ID {story.id}"
@@ -199,6 +209,7 @@ def extract_themes_for_story(story):
     except Exception as e:
         logger.error(f"❌ Error extracting themes for Story ID {story.id}: {str(e)}")
         return f"❌ Error extracting themes for Story ID {story.id}: {str(e)}"
+
 
 def get_theme_extraction_prompt(master_themes=None):
     """Get prompt for theme extraction with master themes list"""
@@ -243,25 +254,30 @@ Themes should be in lowercase.
 
 
 def get_theme_extraction_tools():
-    """Get tools configuration for theme extraction"""
+    """Get tools configuration for theme extraction with both domain and issue themes"""
     tools = {
         "toolConfig": {
             "tools": [
                 {
                     "toolSpec": {
                         "name": "extract_themes",
-                        "description": "Extract themes from the discussion",
+                        "description": "Extract domain themes and issue themes from the discussion",
                         "inputSchema": {
                             "json": {
                                 "type": "object",
                                 "properties": {
-                                    "themes": {
+                                    "domain_themes": {
                                         "type": "array",
                                         "items": {"type": "string"},
-                                        "description": "Main themes/topics of the discussion"
+                                        "description": "Broad domain/sector themes (1-3 words each)"
+                                    },
+                                    "issue_themes": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": "Specific issue/challenge themes (2-5 words each)"
                                     }
                                 },
-                                "required": ["themes"]
+                                "required": ["domain_themes", "issue_themes"]
                             }
                         }
                     }
@@ -521,7 +537,14 @@ def view_story_themes(story_id):
 
         print(f"\nStory ID: {story_id}")
         print(f"Title: {story.title}")
-        print(f"Themes: {themes if themes else 'No themes found'}")
+
+        # Handle new format (dict)
+        if isinstance(themes, dict):
+            print(f"Domain Themes: {themes.get('domain_themes', [])}")
+            print(f"Issue Themes: {themes.get('issue_themes', [])}")
+        # Handle old format (list)
+        else:
+            print(f"Themes: {themes if themes else 'No themes found'}")
 
         return themes
     except Story.DoesNotExist:
@@ -556,6 +579,8 @@ def view_theme_statistics():
     """View statistics about themes usage across all stories"""
     try:
         theme_count = {}
+        domain_theme_count = {}
+        issue_theme_count = {}
         total_stories_with_themes = 0
 
         # Get all stories with themes
@@ -569,30 +594,51 @@ def view_theme_statistics():
         for story in stories_with_themes:
             if story.other_params and 'themes' in story.other_params:
                 themes = story.other_params.get('themes', [])
-                if isinstance(themes, list) and themes:
+
+                # Handle new format (dict with domain_themes and issue_themes)
+                if isinstance(themes, dict):
+                    total_stories_with_themes += 1
+
+                    # Count domain themes
+                    for theme in themes.get('domain_themes', []):
+                        domain_theme_count[theme] = domain_theme_count.get(theme, 0) + 1
+                        theme_count[theme] = theme_count.get(theme, 0) + 1
+
+                    # Count issue themes
+                    for theme in themes.get('issue_themes', []):
+                        issue_theme_count[theme] = issue_theme_count.get(theme, 0) + 1
+                        theme_count[theme] = theme_count.get(theme, 0) + 1
+
+                # Handle old format (list)
+                elif isinstance(themes, list) and themes:
                     total_stories_with_themes += 1
                     for theme in themes:
                         theme_count[theme] = theme_count.get(theme, 0) + 1
 
         # Sort themes by count
-        sorted_themes = sorted(theme_count.items(), key=lambda x: x[1], reverse=True)
+        sorted_all_themes = sorted(theme_count.items(), key=lambda x: x[1], reverse=True)
+        sorted_domain_themes = sorted(domain_theme_count.items(), key=lambda x: x[1], reverse=True)
+        sorted_issue_themes = sorted(issue_theme_count.items(), key=lambda x: x[1], reverse=True)
 
         print(f"\n{'=' * 60}")
         print(f"THEME STATISTICS")
         print(f"{'=' * 60}")
         print(f"Total stories with themes: {total_stories_with_themes}")
-        print(f"Total unique themes: {len(theme_count)}")
-        print(f"\nTheme usage (sorted by frequency):")
-        print(f"{'Theme':<30} {'Count':<10} {'Percentage':<10}")
-        print(f"{'-' * 50}")
+        print(f"Total unique themes (all): {len(theme_count)}")
+        print(f"Total unique domain themes: {len(domain_theme_count)}")
+        print(f"Total unique issue themes: {len(issue_theme_count)}")
 
-        for theme, count in sorted_themes:
+        # Show all themes
+        print(f"\nAll themes (sorted by frequency):")
+        print(f"{'Theme':<40} {'Count':<10} {'Percentage':<10}")
+        print(f"{'-' * 60}")
+        for theme, count in sorted_all_themes[:20]:  # Show top 20
             percentage = (count / total_stories_with_themes * 100) if total_stories_with_themes > 0 else 0
-            print(f"{theme:<30} {count:<10} {percentage:.1f}%")
+            print(f"{theme:<40} {count:<10} {percentage:.1f}%")
 
         print(f"{'=' * 60}\n")
 
-        return sorted_themes
+        return sorted_all_themes
 
     except Exception as e:
         logger.error(f"Error viewing theme statistics: {str(e)}")
