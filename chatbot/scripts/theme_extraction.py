@@ -1,6 +1,7 @@
 import json
 import os
 from chatbot.models import Story, ChatSession, CompanyChat, CompanyBot
+from jinja2 import Template
 import json_repair
 import logging
 from django.utils.timezone import make_aware
@@ -47,7 +48,7 @@ def get_master_themes_list(filename="master_themes.json"):
             return master_list
         else:
             # File exists but no themes key - use default themes
-            logger.warning(f"No 'themes' key found in {filename}, creating with defaults")
+            logger.error(f"No 'themes' key found in {filename}, creating with defaults")
             default_themes = []
             save_themes_to_file(default_themes, filename)
             return default_themes
@@ -111,7 +112,7 @@ def extract_themes_for_story(story):
         # Skip if story already has themes
         if 'themes' in story.other_params and story.other_params['themes']:
             logger.info(f"Story ID {story.id} already has themes: {story.other_params['themes']}")
-            return f"🟡 Story ID {story.id} already has themes"
+            # return f"🟡 Story ID {story.id} already has themes"
 
         # CHANGE 2: Use chaupal-theme-script company bot for all theme extraction
         company_bot = CompanyBot.objects.get(route='/chaupal-theme-script')
@@ -122,12 +123,14 @@ def extract_themes_for_story(story):
 
         # Get theme extraction prompt from company bot context
         if company_bot.context:
-            prompt = company_bot.context
-            logger.info("Using prompt from CompanyBot context")
+            # NEW: Render Jinja2 template with themes variable
+            template = Template(company_bot.context)
+            prompt = template.render(themes=master_themes)
+            logger.info(f"Using prompt from CompanyBot context with Jinja2 template rendering: \n {prompt}")
         else:
             # Fallback prompt if company bot has no context
             prompt = get_theme_extraction_prompt(master_themes)
-            logger.info("Using fallback prompt as CompanyBot context is empty")
+            logger.info(f"Using fallback prompt as CompanyBot context is empty: \n {prompt}")
 
         # Get chat history
         company_chats = CompanyChat.objects.filter(session=story.session).order_by('created_at')
@@ -184,7 +187,7 @@ def extract_themes_for_story(story):
                 logger.info(f"✅ Extracted themes for Story ID {story.id}: {themes}")
                 return f"✅ Extracted themes for Story ID {story.id}: {themes}"
             else:
-                logger.warning(f"No themes extracted for Story ID {story.id}")
+                logger.error(f"No themes extracted for Story ID {story.id}")
                 return f"⚠️ No themes extracted for Story ID {story.id}"
         else:
             logger.error(f"Invalid response format for Story ID {story.id}")
@@ -196,7 +199,6 @@ def extract_themes_for_story(story):
     except Exception as e:
         logger.error(f"❌ Error extracting themes for Story ID {story.id}: {str(e)}")
         return f"❌ Error extracting themes for Story ID {story.id}: {str(e)}"
-
 
 def get_theme_extraction_prompt(master_themes=None):
     """Get prompt for theme extraction with master themes list"""
