@@ -26,13 +26,14 @@ class GuidedGuestResponseHandler(BaseResponseHandler):
         language = kwargs['language']
         profile_id = kwargs['profile_id']
         channel_name = kwargs['channel_name']
+        target_stage=kwargs.get('target_stage', False)
         skip_next_stage=kwargs.get('skip_next_stage', False)
 
         if is_func_call:
             return self._handle_function_call(
                 response=response, chat_session=chat_session, company_bot=company_bot,
                 session_id=session_id, channel_name=channel_name, language=language, profile_id=profile_id,
-                chunks=chunks, skip_next_stage=skip_next_stage
+                chunks=chunks, skip_next_stage=skip_next_stage, target_stage=target_stage
             )
         else:
             return self._handle_regular_response(
@@ -42,10 +43,13 @@ class GuidedGuestResponseHandler(BaseResponseHandler):
             )
 
     def _handle_function_call(self, response, chat_session, company_bot,
-                              session_id, channel_name, language, profile_id, chunks, skip_next_stage):
+                              session_id, channel_name, language, profile_id, chunks, skip_next_stage, target_stage):
         """Handle function call for guided guest"""
         if skip_next_stage:
-            chat_session.current_step += 2
+            if target_stage and isinstance(target_stage, int):
+                chat_session.current_step = target_stage
+            else:
+                chat_session.current_step += 2
         else:
             chat_session.current_step += 1
         chat_session.save()
