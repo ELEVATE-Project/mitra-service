@@ -3,8 +3,9 @@ import os
 import base64
 from celery import shared_task
 from django.db import models
-from chatbot.models import Profile, CompanyBot, MediaTypeChoices, MediaTemplateChoices, PDFStrategyChoices
+from chatbot.models import Profile, CompanyBot, MediaTypeChoices, MediaTemplateChoices, PDFStrategyChoices, Tag
 from chatbot.utils.database_util import upsert_single_file, delete_single_file
+from chatbot.utils.knowledge_service.auto_tag_utils import save_auto_tags
 from shikshalokam.models.enums import PriorityChoices
 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
@@ -62,13 +63,18 @@ class Media(models.Model):
                 other_tags[kv.key] = kv.value
         other_tags['s3_link'] = S3_BASE_URL + media.file.name
         metadata['other_tags'] = str(other_tags)
-
+        metadata['tags'] = list(media.tags.values_list('name', flat=True))
         with media.file.open("rb") as file:
             file_content = file.read()
         file_name = media.file.name.split("/")[-1]
 
         status_code, response_text = upsert_single_file(file_name, file_content, metadata, media)
         print(status_code, response_text)
+
+        if status_code == 200:
+            save_auto_tags(media)
+        else:
+            print(f"Vector DB upsert failed for media {media.id}, skipping auto-tag")
 
 
     def save(self, *args, **kwargs):
@@ -83,7 +89,7 @@ class Media(models.Model):
         return status_code
 
     def delete(self, *args, **kwargs):
-        status_code = self.delete_from_vector_db(self.id)
+        status_code = 200 #self.delete_from_vector_db(self.id)
         if status_code == 200:
             super().delete(*args, **kwargs)
         else:
@@ -101,6 +107,7 @@ class Media(models.Model):
     company_bot = models.ForeignKey(CompanyBot, on_delete=models.DO_NOTHING)
     file = models.FileField(upload_to=get_file_upload_path, max_length=1000)
     description = models.TextField(null=True, blank=True)
+    tags = models.ManyToManyField(Tag, related_name="medias")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
