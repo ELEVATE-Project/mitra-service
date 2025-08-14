@@ -1,8 +1,16 @@
+import os
 from chatbot.models import Tag, TagChoices
+from chatbot.scripts.knowledge_service.docs.ai_document_tag_extractor import get_doc_tags_from_ai
+from chatbot.scripts.knowledge_service.docs.document_tag_extractor import get_tag_from_doc
+
+S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 
 
 def auto_tag(media):
-    return ["ifj", "xyr"]
+    file_url = str(media.url) if media.url is not None else S3_BASE_URL + media.file.name
+    # auto_tags = get_tag_from_doc(file_url=file_url)
+    auto_tags = get_doc_tags_from_ai(file_url=file_url, company_bot=media.company_bot)
+    return auto_tags if auto_tags else []
 
 
 def save_auto_tags(media):
