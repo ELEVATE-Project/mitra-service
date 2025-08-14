@@ -78,8 +78,10 @@ class Media(models.Model):
 
 
     def save(self, *args, **kwargs):
+        is_new = self.pk is None
         super().save(*args, **kwargs)
-        self.save_in_vector_db.apply_async(args=(self.id,), countdown=1)
+        if is_new:
+            self.save_in_vector_db.apply_async(args=(self.id,), countdown=1)
 
     @shared_task
     def delete_from_vector_db(media_id):

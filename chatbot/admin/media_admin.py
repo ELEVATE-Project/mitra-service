@@ -20,6 +20,17 @@ class MediaAdmin(ExportActionMixin, admin.ModelAdmin):
     inlines = [KeyValueInline]
     raw_id_fields = ('company_bot', )
 
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+
+        manual_tags = getattr(obj, '_manual_tags_to_set', [])
+        auto_tags = getattr(obj, '_auto_tags_to_preserve', [])
+
+        print("manual_tags to set:", manual_tags)
+        print("auto_tags to preserve:", auto_tags)
+
+        obj.tags.set(manual_tags + auto_tags)
+
     def get_fieldsets(self, request, obj=None):
         # Base fieldsets
         fieldsets = [
