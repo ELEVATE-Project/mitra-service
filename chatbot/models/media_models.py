@@ -46,6 +46,7 @@ class Media(models.Model):
         print('Save in vector for media_id: {}'.format(media_id))
         media = Media.objects.get(id=media_id)
         kvs = KeyValue.objects.filter(media=media)
+        save_auto_tags(media)
         metadata = {
             'source': 'file',
             'url': str(media.url) if media.url is not None else S3_BASE_URL + media.file.name,
@@ -71,11 +72,6 @@ class Media(models.Model):
         status_code, response_text = upsert_single_file(file_name, file_content, metadata, media)
         print(status_code, response_text)
 
-        if status_code == 200:
-            save_auto_tags(media)
-        else:
-            print(f"Vector DB upsert failed for media {media.id}, skipping auto-tag")
-
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
@@ -91,7 +87,7 @@ class Media(models.Model):
         return status_code
 
     def delete(self, *args, **kwargs):
-        status_code = 200 #self.delete_from_vector_db(self.id)
+        status_code = self.delete_from_vector_db(self.id)
         if status_code == 200:
             super().delete(*args, **kwargs)
         else:
