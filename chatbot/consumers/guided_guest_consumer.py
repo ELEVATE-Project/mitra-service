@@ -125,7 +125,13 @@ class GuidedGuestConsumer(BaseConsumer):
                     # chat session create (session, profile)
                     step_number = 1
                     if profile and profile.first_name and profile.first_name != '':
-                        step_number = 4
+                        try:
+                            educational_step = CompanyStateMachine.objects.get(
+                                company_bot=self.company_bot, name="EDUCATIONAL_PROBLEMS"
+                            )
+                            step_number = educational_step.step
+                        except CompanyStateMachine.DoesNotExist:
+                            step_number = 1
                     cs, cs_created = ChatSession.objects.get_or_create(
                         session=self.session_id,
                         defaults={
