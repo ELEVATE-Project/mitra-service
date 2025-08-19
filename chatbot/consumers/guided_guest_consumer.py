@@ -46,15 +46,18 @@ class GuidedGuestConsumer(BaseConsumer):
                     company_bot=self.company_bot, step=chat_session.current_step
                 )
 
-                if state_machine and state_machine.name in ['INTRODUCTION', 'ORGANIZATION']:
+                if state_machine and state_machine.name in [
+                    'INTRODUCTION', 'ROLE_INSTITUTE', 'FEDERATION_DETAILS', 'OCCUPATION', 'IMPLEMENTATION_LOCATION'
+                ]:
                     transliterate_voice_provider = Voice.objects.filter(
                         company_bot=self.company_bot,
                         type=VoiceType.Transliterate,
                         language=self.route
                     ).first()
+                    is_sentence = ' ' in message
                     response = transliterate_text(
                         voice_provider=transliterate_voice_provider, source_language=self.route, target_language='en',
-                        message_body=message, is_sentence=True
+                        message_body=message, is_sentence=is_sentence
                     )
                     print("Trans response: ", response)
                     if response and response.get('content'):
@@ -122,7 +125,13 @@ class GuidedGuestConsumer(BaseConsumer):
                     # chat session create (session, profile)
                     step_number = 1
                     if profile and profile.first_name and profile.first_name != '':
-                        step_number = 4
+                        try:
+                            educational_step = CompanyStateMachine.objects.get(
+                                company_bot=self.company_bot, name="EDUCATIONAL_PROBLEMS"
+                            )
+                            step_number = educational_step.step
+                        except CompanyStateMachine.DoesNotExist:
+                            step_number = 1
                     cs, cs_created = ChatSession.objects.get_or_create(
                         session=self.session_id,
                         defaults={

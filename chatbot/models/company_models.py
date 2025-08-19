@@ -79,6 +79,11 @@ class CompanyStateMachine(models.Model):
         help_text="Define how to use the postprocess output."
     )
 
+    skip_to_step = models.IntegerField(
+        null=True, blank=True,
+        help_text="If set, the flow will skip directly to this step number when skip conditions are met."
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     history = HistoricalRecords()

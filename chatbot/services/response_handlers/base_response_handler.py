@@ -84,6 +84,7 @@ class BaseResponseHandler(ABC):
             # Handle postprocessing results
             if postprocessing_result.get('skip_next_stage', False):
                 kwargs['skip_next_stage'] = True
+                kwargs['target_stage'] = state_machine.skip_to_step
                 logger.info("Postprocessing will skip next stage")
 
         # Process the response

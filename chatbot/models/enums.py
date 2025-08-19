@@ -26,6 +26,12 @@ class LLMProvider(models.TextChoices):
     BEDROCK_CONVERSE = 'bedrock/converse', _('BEDROCK_CONVERSE')
     OPENAI = 'openai', _('OPENAI')
 
+
+class ThemeType(models.TextChoices):
+    CUSTOM = 'custom', _('Custom for Bot')
+    MASTER = 'master', _('Using Master Theme')
+
+
 class LLMModel(models.TextChoices):
     GPT4 = 'gpt-4', _('GPT4')
     GPT4_1 = 'gpt-4.1', _('GPT4_1')
