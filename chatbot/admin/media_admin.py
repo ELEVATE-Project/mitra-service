@@ -6,7 +6,8 @@ from import_export.admin import ExportActionMixin
 from chatbot.form.media.media_form import MediaAdminForm
 from chatbot.models import Tag, Profile
 from chatbot.models.media_models import Media, KeyValue, MediaTemplate
-from chatbot.views.admin.media_upload_views import BatchMediaUploadView, BatchMediaExtractView, BatchMediaSaveView
+from chatbot.views.admin.media_upload_views import BatchMediaUploadView, BatchMediaExtractView, BatchMediaSaveView, \
+    BatchMediaTaskStatusView
 
 
 class KeyValueInline(admin.TabularInline):
@@ -74,6 +75,9 @@ class MediaAdmin(admin.ModelAdmin):
             path('api/batch-save/',
                  self.admin_site.admin_view(BatchMediaSaveView.as_view()),
                  name='chatbot_media_batch_save'),
+            path('api/batch-task-status/',
+                 self.admin_site.admin_view(BatchMediaTaskStatusView.as_view()),
+                 name='chatbot_media_task_status'),
         ]
         return custom_urls + urls
 

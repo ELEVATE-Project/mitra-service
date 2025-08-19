@@ -6,6 +6,9 @@ from django.views import View
 from chatbot.models import Media, Tag, KeyValue, Profile
 from chatbot.models.media_models import PriorityChoices, MediaTypeChoices
 import json
+import tempfile, os
+
+from chatbot.utils.knowledge_service.auto_tag_utils import get_auto_tags
 
 BOT_PROFILE_ID = 1
 
@@ -30,11 +33,22 @@ class BatchMediaExtractView(View):
 
     def post(self, request):
         try:
+            print("request.FILES:", request.FILES)
+            print("request.POST:", request.POST)
             files = request.FILES.getlist('files')
+            company_bot_id = request.POST.get('company_bot_id')
             extracted_data = []
 
+            company_bot = None
+            if company_bot_id:
+                try:
+                    from chatbot.models import CompanyBot
+                    company_bot = CompanyBot.objects.get(id=company_bot_id)
+                except CompanyBot.DoesNotExist:
+                    pass
+
             for file in files:
-                data = self.extract_file_data(file)
+                data = self.extract_file_data(file=file, company_bot=company_bot)
                 extracted_data.append(data)
 
             return JsonResponse({
@@ -47,10 +61,23 @@ class BatchMediaExtractView(View):
                 'error': str(e)
             }, status=400)
 
-    def extract_file_data(self, file):
-        """Extract data from file - implement your extraction logic here"""
-        # This is a placeholder - implement actual extraction
-        # Auto tags should be prefixed with 'auto-' to distinguish them
+    def extract_file_data(self, file, company_bot):
+        """Extract data from file and start async tag extraction"""
+        file_extension = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else None
+
+        # Save file temporarily and start Celery task
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as tmp:
+            for chunk in file.chunks():
+                tmp.write(chunk)
+            tmp_path = tmp.name
+
+        # Start async task
+        task = get_auto_tags.delay(
+            file_path=tmp_path,
+            company_bot_id=company_bot.id if company_bot else None,
+            file_extension=file_extension
+        )
+
         return {
             'filename': file.name,
             'name': file.name.rsplit('.', 1)[0],
@@ -58,7 +85,9 @@ class BatchMediaExtractView(View):
             'description': f'Extracted from {file.name}',
             'extracted_text': 'Sample extracted text...',
             'priority': 'P1',
-            'tags': ['auto-tag1', 'auto-tag2'],  # These will be separated in frontend
+            'tags': [],  # Start with empty tags
+            'auto_tag_task_id': task.id,  # Store task ID for polling
+            'auto_tags_ready': False,  # Flag to track completion
             'key_values': [
                 {'key': 'TITLE OF THE PROJECT', 'value': 'Sample Project'},
                 {'key': 'TARGET STAKEHOLDER', 'value': 'Students'},
@@ -78,6 +107,46 @@ class BatchMediaExtractView(View):
             'xlsx': 'XLS'
         }
         return type_map.get(ext, 'TXT')
+
+
+@method_decorator(staff_member_required, name='dispatch')
+class BatchMediaTaskStatusView(View):
+    """API endpoint for checking Celery task status"""
+
+    def post(self, request):
+        try:
+            from celery.result import AsyncResult
+            data = json.loads(request.body)
+            task_ids = data.get('task_ids', [])
+
+            results = {}
+            for task_id in task_ids:
+                task = AsyncResult(task_id)
+                if task.ready():
+                    if task.successful():
+                        results[task_id] = {
+                            'status': 'SUCCESS',
+                            'result': task.result
+                        }
+                    else:
+                        results[task_id] = {
+                            'status': 'FAILURE',
+                            'error': str(task.info)
+                        }
+                else:
+                    results[task_id] = {
+                        'status': 'PENDING'
+                    }
+
+            return JsonResponse({
+                'success': True,
+                'results': results
+            })
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=400)
 
 
 @method_decorator(staff_member_required, name='dispatch')
@@ -169,3 +238,4 @@ class BatchMediaSaveView(View):
                 'success': False,
                 'error': str(e)
             }, status=400)
+    

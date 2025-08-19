@@ -616,6 +616,93 @@
     .breadcrumbs {
         margin-bottom: 20px;
     }
+
+    /* Add these additional styles to your existing CSS in the template */
+
+/* Auto-tag loading state */
+.tags-input .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #7b1fa2;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    display: inline-block;
+}
+
+/* Auto-tag completion indicator */
+.auto-tags-complete {
+    color: #5cb85c;
+    font-size: 12px;
+    font-style: italic;
+    margin-left: 10px;
+}
+
+.auto-tags-loading {
+    color: #666;
+    font-size: 12px;
+    font-style: italic;
+    margin-left: 10px;
+}
+
+/* Progress indicator for auto-tag generation */
+.auto-tag-progress {
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #f0f9ff;
+    border-radius: 4px;
+    border-left: 4px solid #417690;
+    display: none;
+}
+
+.auto-tag-progress.show {
+    display: block;
+}
+
+.auto-tag-progress .progress-text {
+    font-size: 14px;
+    color: #333;
+    margin-bottom: 5px;
+}
+
+.auto-tag-progress .progress-bar-small {
+    width: 100%;
+    height: 8px;
+    background-color: #e0e0e0;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.auto-tag-progress .progress-fill-small {
+    height: 100%;
+    background-color: #417690;
+    transition: width 0.3s ease;
+}
+
+/* Enhanced status indicators */
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    margin-left: 10px;
+}
+
+.status-indicator.pending {
+    color: #856404;
+}
+
+.status-indicator.processing {
+    color: #0c5460;
+}
+
+.status-indicator.completed {
+    color: #155724;
+}
+
+.status-indicator.failed {
+    color: #721c24;
+}
 </style>
 {% endblock %}
 
@@ -697,7 +784,6 @@
             <div class="progress-bar" style="flex: 1; margin: 0;">
                 <div class="progress-fill" id="progressBar"></div>
             </div>
-            <button class="btn btn-save" style="margin-left: 20px;" onclick="saveAllFiles()">Save All Files</button>
         </div>
 
         <div id="extractedDataContainer" class="data-grid"></div>
@@ -767,663 +853,813 @@
 
 <script>
     // CSRF token for Django
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
+ // CSRF token for Django
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
             }
         }
-        return cookieValue;
     }
-    const csrftoken = getCookie('csrftoken');
+    return cookieValue;
+}
+const csrftoken = getCookie('csrftoken');
 
-    // Global variables
-    let uploadedFiles = [];
-    let extractedData = [];
-    let currentStep = 1;
-    let currentPage = 1;
-    let itemsPerPage = 1;
-    let totalPages = 1;
+// Global variables
+let uploadedFiles = [];
+let extractedData = [];
+let currentStep = 1;
+let currentPage = 1;
+let itemsPerPage = 1;
+let totalPages = 1;
+let pollingInterval = null; // NEW: For Celery task polling
 
-    // Media types and priorities from Django
-    const mediaTypes = {{ media_types|safe }};
-    const priorities = {{ priorities|safe }};
-    const BOT_PROFILE_ID = 1;
+// Media types and priorities from Django
+const mediaTypes = {{ media_types|safe }};
+const priorities = {{ priorities|safe }};
+const BOT_PROFILE_ID = 1;
 
-    // Utility functions
-    function showStatus(message, type = 'info') {
-        const statusEl = document.getElementById('statusMessage');
-        statusEl.textContent = message;
-        statusEl.className = `status-message ${type}`;
-        statusEl.style.display = 'block';
+// Utility functions
+function showStatus(message, type = 'info') {
+    const statusEl = document.getElementById('statusMessage');
+    statusEl.textContent = message;
+    statusEl.className = `status-message ${type}`;
+    statusEl.style.display = 'block';
 
-        if (type !== 'error') {
-            setTimeout(() => {
-                statusEl.style.display = 'none';
-            }, 5000);
-        }
+    if (type !== 'error') {
+        setTimeout(() => {
+            statusEl.style.display = 'none';
+        }, 5000);
     }
+}
 
-    function showLoading(text = 'Processing...') {
-        document.getElementById('loadingText').textContent = text;
-        document.getElementById('loadingOverlay').style.display = 'flex';
-    }
+function showLoading(text = 'Processing...') {
+    document.getElementById('loadingText').textContent = text;
+    document.getElementById('loadingOverlay').style.display = 'flex';
+}
 
-    function hideLoading() {
-        document.getElementById('loadingOverlay').style.display = 'none';
-    }
+function hideLoading() {
+    document.getElementById('loadingOverlay').style.display = 'none';
+}
 
-    function updateStepIndicator(step) {
-        document.querySelectorAll('.step').forEach((el, index) => {
-            if (index + 1 < step) {
-                el.classList.add('completed');
-                el.classList.remove('active');
-            } else if (index + 1 === step) {
-                el.classList.add('active');
-                el.classList.remove('completed');
-            } else {
-                el.classList.remove('active', 'completed');
-            }
-        });
-
-        document.querySelectorAll('.content-section').forEach(el => {
+function updateStepIndicator(step) {
+    document.querySelectorAll('.step').forEach((el, index) => {
+        if (index + 1 < step) {
+            el.classList.add('completed');
             el.classList.remove('active');
-        });
-        document.getElementById(`step${step}`).classList.add('active');
-
-        currentStep = step;
-    }
-
-    // File upload handling
-    const uploadArea = document.getElementById('uploadArea');
-    const fileInput = document.getElementById('fileInput');
-    const fileList = document.getElementById('fileList');
-
-    uploadArea.addEventListener('click', () => fileInput.click());
-
-    uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadArea.classList.add('dragover');
-    });
-
-    uploadArea.addEventListener('dragleave', () => {
-        uploadArea.classList.remove('dragover');
-    });
-
-    uploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadArea.classList.remove('dragover');
-        handleFiles(e.dataTransfer.files);
-    });
-
-    fileInput.addEventListener('change', (e) => {
-        handleFiles(e.target.files);
-    });
-
-    function handleFiles(files) {
-        const validTypes = ['application/pdf', 'application/msword',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            'text/plain', 'text/csv', 'application/vnd.ms-excel',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-
-        Array.from(files).forEach(file => {
-            if (validTypes.includes(file.type) || file.name.match(/\.(pdf|doc|docx|txt|csv|xls|xlsx)$/i)) {
-                if (!uploadedFiles.find(f => f.name === file.name)) {
-                    uploadedFiles.push(file);
-                }
-            } else {
-                showStatus(`Invalid file type: ${file.name}`, 'error');
-            }
-        });
-
-        updateFileList();
-    }
-
-    function updateFileList() {
-        fileList.innerHTML = '';
-        uploadedFiles.forEach((file, index) => {
-            const fileItem = document.createElement('div');
-            fileItem.className = 'file-item';
-            fileItem.innerHTML = `
-                <span>${file.name} (${(file.size / 1024).toFixed(2)} KB)</span>
-                <span class="remove-btn" onclick="removeFile(${index})">×</span>
-            `;
-            fileList.appendChild(fileItem);
-        });
-
-        const companyBotSelected = document.getElementById('companyBotSelect').value;
-        document.getElementById('extractBtn').disabled = uploadedFiles.length === 0 || !companyBotSelected;
-    }
-
-    function removeFile(index) {
-        uploadedFiles.splice(index, 1);
-        updateFileList();
-    }
-
-    // Company bot selection
-    document.getElementById('companyBotSelect').addEventListener('change', updateFileList);
-
-    // Data extraction via API
-    async function extractDataFromFiles(files) {
-        const formData = new FormData();
-        files.forEach(file => {
-            formData.append('files', file);
-        });
-
-        const response = await fetch("{% url 'admin:chatbot_media_batch_extract' %}", {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': csrftoken,
-            },
-            body: formData
-        });
-
-        const result = await response.json();
-        if (result.success) {
-            return result.data.map((data, index) => ({
-                id: `temp_${Date.now()}_${index}`,
-                filename: files[index].name,
-                file: files[index],
-                data: {
-                    ...data,
-                    manual_tags: data.tags ? data.tags.filter(tag => !tag.startsWith('auto-')) : [],
-                    auto_tags: data.tags ? data.tags.filter(tag => tag.startsWith('auto-')) : []
-                }
-            }));
+        } else if (index + 1 === step) {
+            el.classList.add('active');
+            el.classList.remove('completed');
         } else {
-            throw new Error(result.error || 'Failed to extract data');
-        }
-    }
-
-    // Extract button handler
-    document.getElementById('extractBtn').addEventListener('click', async () => {
-        showLoading('Extracting data from files...');
-
-        try {
-            extractedData = await extractDataFromFiles(uploadedFiles);
-            totalPages = Math.ceil(extractedData.length / itemsPerPage);
-            currentPage = 1;
-            renderExtractedData();
-            updateStepIndicator(2);
-            showStatus('Data extracted successfully!', 'success');
-        } catch (error) {
-            showStatus('Error extracting data: ' + error.message, 'error');
-        } finally {
-            hideLoading();
+            el.classList.remove('active', 'completed');
         }
     });
 
-    // Save all files at once
-    function saveAllFiles() {
-        // Save current page first
-        const currentIndex = (currentPage - 1) * itemsPerPage;
-        saveCurrentFile(currentIndex);
+    document.querySelectorAll('.content-section').forEach(el => {
+        el.classList.remove('active');
+    });
+    document.getElementById(`step${step}`).classList.add('active');
 
-        // Mark all items as saved
-        extractedData.forEach((item, index) => {
-            if (item) {
-                item.manuallySaved = true;
-                item.savedAt = new Date().toISOString();
+    currentStep = step;
+}
+
+// File upload handling
+const uploadArea = document.getElementById('uploadArea');
+const fileInput = document.getElementById('fileInput');
+const fileList = document.getElementById('fileList');
+
+uploadArea.addEventListener('click', () => fileInput.click());
+
+uploadArea.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('dragover');
+});
+
+uploadArea.addEventListener('dragleave', () => {
+    uploadArea.classList.remove('dragover');
+});
+
+uploadArea.addEventListener('drop', (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('dragover');
+    handleFiles(e.dataTransfer.files);
+});
+
+fileInput.addEventListener('change', (e) => {
+    handleFiles(e.target.files);
+});
+
+function handleFiles(files) {
+    const validTypes = ['application/pdf', 'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/plain', 'text/csv', 'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+
+    Array.from(files).forEach(file => {
+        if (validTypes.includes(file.type) || file.name.match(/\.(pdf|doc|docx|txt|csv|xls|xlsx)$/i)) {
+            if (!uploadedFiles.find(f => f.name === file.name)) {
+                uploadedFiles.push(file);
             }
-        });
+        } else {
+            showStatus(`Invalid file type: ${file.name}`, 'error');
+        }
+    });
 
-        showStatus('All files have been saved!', 'success');
-        console.log('All files saved:', extractedData);
+    updateFileList();
+}
+
+function updateFileList() {
+    fileList.innerHTML = '';
+    uploadedFiles.forEach((file, index) => {
+        const fileItem = document.createElement('div');
+        fileItem.className = 'file-item';
+        fileItem.innerHTML = `
+            <span>${file.name} (${(file.size / 1024).toFixed(2)} KB)</span>
+            <span class="remove-btn" onclick="removeFile(${index})">×</span>
+        `;
+        fileList.appendChild(fileItem);
+    });
+
+    const companyBotSelected = document.getElementById('companyBotSelect').value;
+    document.getElementById('extractBtn').disabled = uploadedFiles.length === 0 || !companyBotSelected;
+}
+
+function removeFile(index) {
+    uploadedFiles.splice(index, 1);
+    updateFileList();
+}
+
+// Company bot selection
+document.getElementById('companyBotSelect').addEventListener('change', updateFileList);
+
+// Data extraction via API
+async function extractDataFromFiles(files) {
+    const formData = new FormData();
+    files.forEach(file => {
+        formData.append('files', file);
+    });
+
+    const companyBotId = document.getElementById('companyBotSelect').value;
+    formData.append('company_bot_id', companyBotId);
+
+    const response = await fetch("{% url 'admin:chatbot_media_batch_extract' %}", {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrftoken,
+        },
+        body: formData
+    });
+
+    const result = await response.json();
+    if (result.success) {
+        return result.data.map((data, index) => ({
+            id: `temp_${Date.now()}_${index}`,
+            filename: files[index].name,
+            file: files[index],
+            data: {
+                ...data,
+                manual_tags: data.tags ? data.tags.filter(tag => !tag.startsWith('auto-')) : [],
+                auto_tags: data.tags ? data.tags.filter(tag => tag.startsWith('auto-')) : []
+            }
+        }));
+    } else {
+        throw new Error(result.error || 'Failed to extract data');
     }
+}
 
-    // Manual save for current file
-    function saveCurrentFile(index) {
-        const saveBtn = document.getElementById(`saveBtn_${index}`);
-        const originalText = saveBtn.textContent;
+// NEW: Function to start polling for auto-tag completion
+function startAutoTagPolling() {
+    const taskIds = extractedData
+        .filter(item => item.data.auto_tag_task_id)
+        .map(item => item.data.auto_tag_task_id);
 
-        // Collect current form data for this specific item
-        const item = extractedData[index];
-        if (item) {
-            // Save all field values
-            item.data.name = document.getElementById(`name_${index}`).value;
-            item.data.media_type = document.getElementById(`mediaType_${index}`).value;
-            item.data.priority = document.getElementById(`priority_${index}`).value;
-            item.data.description = document.getElementById(`description_${index}`).value;
-            item.data.extracted_text = document.getElementById(`extractedText_${index}`).value;
+    if (taskIds.length === 0) return;
 
-            // Save manual tags
-            item.data.manual_tags = [];
-            const manualTagsContainer = document.getElementById(`manualTagsContainer_${index}`);
-            if (manualTagsContainer) {
-                const manualTags = manualTagsContainer.querySelectorAll('.tag.manual');
-                manualTags.forEach(tag => {
-                    const tagText = tag.textContent.trim().replace('×', '').trim();
-                    if (tagText) item.data.manual_tags.push(tagText);
-                });
-            }
+    pollingInterval = setInterval(async () => {
+        try {
+            const response = await fetch("{% url 'admin:chatbot_media_task_status' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken,
+                },
+                body: JSON.stringify({ task_ids: taskIds })
+            });
 
-            // Save auto tags
-            item.data.auto_tags = [];
-            const autoTagsContainer = document.getElementById(`autoTagsContainer_${index}`);
-            if (autoTagsContainer) {
-                const autoTags = autoTagsContainer.querySelectorAll('.tag.auto');
-                autoTags.forEach(tag => {
-                    const tagText = tag.textContent.trim().replace('×', '').trim();
-                    if (tagText) item.data.auto_tags.push(tagText);
-                });
-            }
+            const result = await response.json();
+            if (result.success) {
+                let allComplete = true;
+                let anyUpdated = false;
 
-            // Save key-value pairs
-            item.data.key_values = [];
-            const kvContainer = document.getElementById(`kvContainer_${index}`);
-            if (kvContainer) {
-                const kvPairs = kvContainer.querySelectorAll('.key-value-pair');
-                kvPairs.forEach((pair, kvIndex) => {
-                    const keyInput = pair.querySelector(`input[id^="key_"]`);
-                    const valueInput = pair.querySelector(`input[id^="value_"]`);
-                    if (keyInput && valueInput) {
-                        const key = keyInput.value;
-                        const value = valueInput.value;
-                        if (key || value) {
-                            item.data.key_values.push({ key, value });
+                extractedData.forEach(item => {
+                    if (item.data.auto_tag_task_id && !item.data.auto_tags_ready) {
+                        const taskResult = result.results[item.data.auto_tag_task_id];
+
+                        if (taskResult && taskResult.status === 'SUCCESS') {
+                            item.data.auto_tags = taskResult.result || [];
+                            item.data.auto_tags_ready = true;
+                            anyUpdated = true;
+                        } else if (taskResult && taskResult.status === 'FAILURE') {
+                            item.data.auto_tags = [];
+                            item.data.auto_tags_ready = true;
+                            anyUpdated = true;
+                            console.error('Auto-tag extraction failed:', taskResult.error);
+                        } else {
+                            allComplete = false;
                         }
                     }
                 });
-            }
 
-            // Mark this item as manually saved
+                if (anyUpdated) {
+                    renderExtractedData(); // Re-render to show new tags
+                }
+
+                if (allComplete) {
+                    clearInterval(pollingInterval);
+                    pollingInterval = null;
+                    showStatus('All auto-tags have been generated!', 'success');
+                }
+            }
+        } catch (error) {
+            console.error('Error polling task status:', error);
+        }
+    }, 2000); // Poll every 2 seconds
+}
+
+async function waitForAllTasksToComplete(taskIds) {
+    return new Promise((resolve, reject) => {
+        let completedTasks = 0;
+        const totalTasks = taskIds.length;
+
+        const checkInterval = setInterval(async () => {
+            try {
+                const response = await fetch("{% url 'admin:chatbot_media_task_status' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken,
+                    },
+                    body: JSON.stringify({ task_ids: taskIds })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    completedTasks = 0;
+
+                    extractedData.forEach(item => {
+                        if (item.data.auto_tag_task_id) {
+                            const taskResult = result.results[item.data.auto_tag_task_id];
+
+                            if (taskResult && taskResult.status === 'SUCCESS') {
+                                item.data.auto_tags = taskResult.result || [];
+                                item.data.auto_tags_ready = true;
+                                completedTasks++;
+                            } else if (taskResult && taskResult.status === 'FAILURE') {
+                                item.data.auto_tags = [];
+                                item.data.auto_tags_ready = true;
+                                completedTasks++;
+                                console.error('Auto-tag extraction failed:', taskResult.error);
+                            }
+                        }
+                    });
+
+                    // Update loading message with progress
+                    showLoading(`Generating auto-tags... ${completedTasks}/${totalTasks} completed`);
+
+                    // Check if all tasks are complete
+                    if (completedTasks >= totalTasks) {
+                        clearInterval(checkInterval);
+                        resolve();
+                    }
+                }
+            } catch (error) {
+                clearInterval(checkInterval);
+                reject(error);
+            }
+        }, 2000); // Check every 2 seconds
+
+        // Timeout after 10 minutes
+        setTimeout(() => {
+            clearInterval(checkInterval);
+            reject(new Error('Auto-tag generation timed out'));
+        }, 600000);
+    });
+}
+
+// Extract button handler - UPDATED
+document.getElementById('extractBtn').addEventListener('click', async () => {
+    showLoading('Extracting data from files...');
+
+    try {
+        extractedData = await extractDataFromFiles(uploadedFiles);
+
+        // Check if there are any Celery tasks to wait for
+        const tasksToWaitFor = extractedData
+            .filter(item => item.data.auto_tag_task_id)
+            .map(item => item.data.auto_tag_task_id);
+
+        if (tasksToWaitFor.length > 0) {
+            // Update loading message
+            showLoading('Generating auto-tags... This may take a few minutes.');
+
+            // Wait for all auto-tag tasks to complete
+            await waitForAllTasksToComplete(tasksToWaitFor);
+        }
+
+        // Now everything is ready - show Step 2
+        totalPages = Math.ceil(extractedData.length / itemsPerPage);
+        currentPage = 1;
+        renderExtractedData();
+        updateStepIndicator(2);
+        showStatus('Data extracted successfully! All auto-tags have been generated.', 'success');
+
+    } catch (error) {
+        showStatus('Error extracting data: ' + error.message, 'error');
+    } finally {
+        hideLoading();
+    }
+});
+
+// Save all files at once
+function saveAllFiles() {
+    // Save current page first
+    const currentIndex = (currentPage - 1) * itemsPerPage;
+    saveCurrentFile(currentIndex);
+
+    // Mark all items as saved
+    extractedData.forEach((item, index) => {
+        if (item) {
             item.manuallySaved = true;
             item.savedAt = new Date().toISOString();
-
-            // Update button to show saved state
-            saveBtn.textContent = '✓ Saved';
-            saveBtn.classList.add('saved');
-
-            // Show auto-save status
-            showAutoSaveStatus('saved');
-
-            // Reset button after 3 seconds
-            setTimeout(() => {
-                saveBtn.textContent = originalText;
-                saveBtn.classList.remove('saved');
-            }, 3000);
-
-            console.log(`Manually saved file ${index}:`, item.data);
         }
+    });
+
+    showStatus('All files have been saved!', 'success');
+    console.log('All files saved:', extractedData);
+}
+
+// Manual save for current file
+function saveCurrentFile(index) {
+    const saveBtn = document.getElementById(`saveBtn_${index}`);
+    const originalText = saveBtn.textContent;
+
+    // Collect current form data for this specific item
+    const item = extractedData[index];
+    if (item) {
+        // Save all field values
+        item.data.name = document.getElementById(`name_${index}`).value;
+        item.data.media_type = document.getElementById(`mediaType_${index}`).value;
+        item.data.priority = document.getElementById(`priority_${index}`).value;
+        item.data.description = document.getElementById(`description_${index}`).value;
+        item.data.extracted_text = document.getElementById(`extractedText_${index}`).value;
+
+        // Save manual tags
+        item.data.manual_tags = [];
+        const manualTagsContainer = document.getElementById(`manualTagsContainer_${index}`);
+        if (manualTagsContainer) {
+            const manualTags = manualTagsContainer.querySelectorAll('.tag.manual');
+            manualTags.forEach(tag => {
+                const tagText = tag.textContent.trim().replace('×', '').trim();
+                if (tagText) item.data.manual_tags.push(tagText);
+            });
+        }
+
+        // Save auto tags
+        item.data.auto_tags = [];
+        const autoTagsContainer = document.getElementById(`autoTagsContainer_${index}`);
+        if (autoTagsContainer) {
+            const autoTags = autoTagsContainer.querySelectorAll('.tag.auto');
+            autoTags.forEach(tag => {
+                const tagText = tag.textContent.trim().replace('×', '').trim();
+                if (tagText) item.data.auto_tags.push(tagText);
+            });
+        }
+
+        // Save key-value pairs
+        item.data.key_values = [];
+        const kvContainer = document.getElementById(`kvContainer_${index}`);
+        if (kvContainer) {
+            const kvPairs = kvContainer.querySelectorAll('.key-value-pair');
+            kvPairs.forEach((pair, kvIndex) => {
+                const keyInput = pair.querySelector(`input[id^="key_"]`);
+                const valueInput = pair.querySelector(`input[id^="value_"]`);
+                if (keyInput && valueInput) {
+                    const key = keyInput.value;
+                    const value = valueInput.value;
+                    if (key || value) {
+                        item.data.key_values.push({ key, value });
+                    }
+                }
+            });
+        }
+
+        // Mark this item as manually saved
+        item.manuallySaved = true;
+        item.savedAt = new Date().toISOString();
+
+        // Update button to show saved state
+        saveBtn.textContent = '✓ Saved';
+        saveBtn.classList.add('saved');
+
+        // Reset button after 3 seconds
+        setTimeout(() => {
+            saveBtn.textContent = originalText;
+            saveBtn.classList.remove('saved');
+        }, 3000);
+
+        console.log(`Manually saved file ${index}:`, item.data);
+    }
+}
+
+// Save individual field data
+function saveFieldData(index, field, value) {
+    if (extractedData[index]) {
+        extractedData[index].data[field] = value;
+        console.log(`Saved ${field} for item ${index}:`, value);
+    }
+}
+
+// Save key-value data
+function saveKeyValueData(index, kvIndex, field, value) {
+    if (extractedData[index] && extractedData[index].data.key_values[kvIndex]) {
+        extractedData[index].data.key_values[kvIndex][field] = value;
+        console.log(`Saved ${field} for item ${index}, kv ${kvIndex}:`, value);
+    }
+}
+
+// Pagination functions
+function updatePaginationControls() {
+    document.getElementById('currentItemIndex').textContent = currentPage;
+    document.getElementById('totalItems').textContent = extractedData.length;
+
+    // Update page numbers
+    const pageNumbersContainer = document.getElementById('pageNumbers');
+    pageNumbersContainer.innerHTML = '';
+
+    // Show max 5 page numbers around current page
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+    if (endPage - startPage < maxVisiblePages - 1) {
+        startPage = Math.max(1, endPage - maxVisiblePages + 1);
     }
 
-    // Save individual field data
-    function saveFieldData(index, field, value) {
-        if (extractedData[index]) {
-            extractedData[index].data[field] = value;
-            console.log(`Saved ${field} for item ${index}:`, value);
-        }
+    for (let i = startPage; i <= endPage; i++) {
+        const pageBtn = document.createElement('button');
+        pageBtn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
+        pageBtn.textContent = i;
+        pageBtn.onclick = () => goToPage(i);
+        pageNumbersContainer.appendChild(pageBtn);
     }
 
-    // Save key-value data
-    function saveKeyValueData(index, kvIndex, field, value) {
-        if (extractedData[index] && extractedData[index].data.key_values[kvIndex]) {
-            extractedData[index].data.key_values[kvIndex][field] = value;
-            console.log(`Saved ${field} for item ${index}, kv ${kvIndex}:`, value);
-        }
-    }
+    // Update button states
+    document.getElementById('firstPageBtn').disabled = currentPage === 1;
+    document.getElementById('prevPageBtn').disabled = currentPage === 1;
+    document.getElementById('nextPageBtn').disabled = currentPage === totalPages;
+    document.getElementById('lastPageBtn').disabled = currentPage === totalPages;
 
-    // Pagination functions
-    function updatePaginationControls() {
-        document.getElementById('currentItemIndex').textContent = currentPage;
-        document.getElementById('totalItems').textContent = extractedData.length;
+    // Update page jump input
+    document.getElementById('pageJumpInput').max = totalPages;
+    document.getElementById('pageJumpInput').value = currentPage;
+}
 
-        // Update page numbers
-        const pageNumbersContainer = document.getElementById('pageNumbers');
-        pageNumbersContainer.innerHTML = '';
-
-        // Show max 5 page numbers around current page
-        const maxVisiblePages = 5;
-        let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-        let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-
-        if (endPage - startPage < maxVisiblePages - 1) {
-            startPage = Math.max(1, endPage - maxVisiblePages + 1);
-        }
-
-        for (let i = startPage; i <= endPage; i++) {
-            const pageBtn = document.createElement('button');
-            pageBtn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
-            pageBtn.textContent = i;
-            pageBtn.onclick = () => goToPage(i);
-            pageNumbersContainer.appendChild(pageBtn);
-        }
-
-        // Update button states
-        document.getElementById('firstPageBtn').disabled = currentPage === 1;
-        document.getElementById('prevPageBtn').disabled = currentPage === 1;
-        document.getElementById('nextPageBtn').disabled = currentPage === totalPages;
-        document.getElementById('lastPageBtn').disabled = currentPage === totalPages;
-
-        // Update page jump input
-        document.getElementById('pageJumpInput').max = totalPages;
-        document.getElementById('pageJumpInput').value = currentPage;
-    }
-
-    function goToPage(page) {
-        if (page >= 1 && page <= totalPages && page !== currentPage) {
-            currentPage = page;
-            renderExtractedData();
-        }
-    }
-
-    function goToPrevPage() {
-        if (currentPage > 1) {
-            goToPage(currentPage - 1);
-        }
-    }
-
-    function goToNextPage() {
-        if (currentPage < totalPages) {
-            goToPage(currentPage + 1);
-        }
-    }
-
-    function jumpToPage() {
-        const pageInput = document.getElementById('pageJumpInput');
-        const page = parseInt(pageInput.value);
-        if (!isNaN(page)) {
-            goToPage(page);
-        }
-    }
-
-    // Render extracted data for review with pagination
-    function renderExtractedData() {
-        const container = document.getElementById('extractedDataContainer');
-        container.innerHTML = '';
-
-        // Hide all items first
-        const startIndex = (currentPage - 1) * itemsPerPage;
-        const endIndex = Math.min(startIndex + itemsPerPage, extractedData.length);
-
-        for (let index = startIndex; index < endIndex; index++) {
-            const item = extractedData[index];
-            const mediaItem = document.createElement('div');
-            mediaItem.className = 'media-item active';
-
-            // Check if this item was manually saved
-            const saveButtonText = item.manuallySaved ? '✓ Saved' : 'Save';
-            const saveButtonClass = item.manuallySaved ? 'btn btn-save saved' : 'btn btn-save';
-
-            mediaItem.innerHTML = `
-                <div class="media-item-header">
-                    <div class="media-item-title">
-                        ${item.filename}
-                        ${item.manuallySaved ? '<span style="color: #5cb85c; font-size: 14px; margin-left: 10px;">(Saved at ' + new Date(item.savedAt).toLocaleTimeString() + ')</span>' : ''}
-                    </div>
-                    <div class="media-item-actions">
-                        <button class="${saveButtonClass}" id="saveBtn_${index}" onclick="saveCurrentFile(${index})">${saveButtonText}</button>
-                        <button class="btn btn-secondary" onclick="removeExtractedItem(${index})">Remove</button>
-                    </div>
-                </div>
-
-                <div class="field-group">
-                    <label>Name</label>
-                    <input type="text" id="name_${index}" value="${item.data.name}" oninput="saveFieldData(${index}, 'name', this.value)">
-                </div>
-
-                <div class="field-group">
-                    <label>Media Type</label>
-                    <select id="mediaType_${index}" onchange="saveFieldData(${index}, 'media_type', this.value)">
-                        {% for value, label in media_types %}
-                        <option value="{{ value }}" ${item.data.media_type === '{{ value }}' ? 'selected' : ''}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="field-group">
-                    <label>Priority</label>
-                    <select id="priority_${index}" onchange="saveFieldData(${index}, 'priority', this.value)">
-                        {% for value, label in priorities %}
-                        <option value="{{ value }}" ${item.data.priority === '{{ value }}' ? 'selected' : ''}>{{ label }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="field-group">
-                    <label>Description</label>
-                    <textarea id="description_${index}" oninput="saveFieldData(${index}, 'description', this.value)">${item.data.description || ''}</textarea>
-                </div>
-
-                <div class="field-group">
-                    <label>Extracted Text</label>
-                    <textarea id="extractedText_${index}" oninput="saveFieldData(${index}, 'extracted_text', this.value)">${item.data.extracted_text || ''}</textarea>
-                </div>
-
-                <div class="field-group">
-                    <label>Tags</label>
-                    <div class="tags-section">
-                        <div class="tags-subsection">
-                            <h4>Manual Tags</h4>
-                            <div class="tags-input" id="manualTagsContainer_${index}">
-                                ${(item.data.manual_tags || []).map(tag => `
-                                    <span class="tag manual">
-                                        ${tag}
-                                        <span class="remove-tag" onclick="removeTag(${index}, '${tag}', 'manual')">×</span>
-                                    </span>
-                                `).join('')}
-                                <input type="text" class="tag-input-field" placeholder="Add manual tag..."
-                                    onkeypress="handleTagInput(event, ${index}, 'manual')">
-                            </div>
-                        </div>
-                        <div class="tags-subsection">
-                            <h4>Auto Tags (AI Generated)</h4>
-                            <div class="tags-input" id="autoTagsContainer_${index}">
-                                ${(item.data.auto_tags || []).map(tag => `
-                                    <span class="tag auto">
-                                        ${tag}
-                                        <span class="remove-tag" onclick="removeTag(${index}, '${tag}', 'auto')">×</span>
-                                    </span>
-                                `).join('')}
-                                <input type="text" class="tag-input-field" placeholder="Add auto tag..."
-                                    onkeypress="handleTagInput(event, ${index}, 'auto')">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="field-group">
-                    <label>Additional Fields</label>
-                    <div class="key-values" id="kvContainer_${index}">
-                        ${(item.data.key_values || []).map((kv, kvIndex) => `
-                            <div class="key-value-pair">
-                                <input type="text" value="${kv.key}" id="key_${index}_${kvIndex}" oninput="saveKeyValueData(${index}, ${kvIndex}, 'key', this.value)">
-                                <input type="text" value="${kv.value}" id="value_${index}_${kvIndex}" oninput="saveKeyValueData(${index}, ${kvIndex}, 'value', this.value)">
-                                <button class="remove-kv-btn" onclick="removeKeyValue(${index}, ${kvIndex})">Remove</button>
-                            </div>
-                        `).join('')}
-                    </div>
-                    <button class="add-kv-btn" onclick="addKeyValue(${index})">Add Field</button>
-                </div>
-            `;
-            container.appendChild(mediaItem);
-        }
-
-        updatePaginationControls();
-        updateProgressBar();
-    }
-
-    function updateProgressBar() {
-        const progress = (extractedData.filter(item => item !== null).length / uploadedFiles.length) * 100;
-        document.getElementById('progressBar').style.width = progress + '%';
-    }
-
-    function removeExtractedItem(index) {
-        extractedData.splice(index, 1);
-        uploadedFiles.splice(index, 1);
-        totalPages = Math.ceil(extractedData.length / itemsPerPage);
-
-        if (currentPage > totalPages && totalPages > 0) {
-            currentPage = totalPages;
-        }
-
+function goToPage(page) {
+    if (page >= 1 && page <= totalPages && page !== currentPage) {
+        currentPage = page;
         renderExtractedData();
+    }
+}
 
-        if (extractedData.length === 0) {
-            updateStepIndicator(1);
-        }
+function goToPrevPage() {
+    if (currentPage > 1) {
+        goToPage(currentPage - 1);
+    }
+}
 
-        triggerAutoSave();
+function goToNextPage() {
+    if (currentPage < totalPages) {
+        goToPage(currentPage + 1);
+    }
+}
+
+function jumpToPage() {
+    const pageInput = document.getElementById('pageJumpInput');
+    const page = parseInt(pageInput.value);
+    if (!isNaN(page)) {
+        goToPage(page);
+    }
+}
+
+// UPDATED: Render extracted data for review with pagination and loading states
+function renderExtractedData() {
+    const container = document.getElementById('extractedDataContainer');
+    container.innerHTML = '';
+
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, extractedData.length);
+
+    for (let index = startIndex; index < endIndex; index++) {
+        const item = extractedData[index];
+        const mediaItem = document.createElement('div');
+        mediaItem.className = 'media-item active';
+
+        // Check if this item was manually saved
+        const saveButtonText = item.manuallySaved ? '✓ Saved' : 'Save';
+        const saveButtonClass = item.manuallySaved ? 'btn btn-save saved' : 'btn btn-save';
+
+        // All auto-tags are ready now - no loading states needed
+        const autoTagsContent = (item.data.auto_tags || []).map(tag => `
+            <span class="tag auto">
+                ${tag}
+                <span class="remove-tag" onclick="removeTag(${index}, '${tag}', 'auto')">×</span>
+            </span>
+        `).join('');
+
+        mediaItem.innerHTML = `
+            <div class="media-item-header">
+                <div class="media-item-title">
+                    ${item.filename}
+                    ${item.manuallySaved ? '<span style="color: #5cb85c; font-size: 14px; margin-left: 10px;">(Saved at ' + new Date(item.savedAt).toLocaleTimeString() + ')</span>' : ''}
+                </div>
+                <div class="media-item-actions">
+                    <button class="${saveButtonClass}" id="saveBtn_${index}" onclick="saveCurrentFile(${index})">${saveButtonText}</button>
+                    <button class="btn btn-secondary" onclick="removeExtractedItem(${index})">Remove</button>
+                </div>
+            </div>
+
+            <div class="field-group">
+                <label>Name</label>
+                <input type="text" id="name_${index}" value="${item.data.name}" oninput="saveFieldData(${index}, 'name', this.value)">
+            </div>
+
+            <div class="field-group">
+                <label>Media Type</label>
+                <select id="mediaType_${index}" onchange="saveFieldData(${index}, 'media_type', this.value)">
+                    {% for value, label in media_types %}
+                    <option value="{{ value }}" ${item.data.media_type === '{{ value }}' ? 'selected' : ''}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="field-group">
+                <label>Priority</label>
+                <select id="priority_${index}" onchange="saveFieldData(${index}, 'priority', this.value)">
+                    {% for value, label in priorities %}
+                    <option value="{{ value }}" ${item.data.priority === '{{ value }}' ? 'selected' : ''}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="field-group">
+                <label>Description</label>
+                <textarea id="description_${index}" oninput="saveFieldData(${index}, 'description', this.value)">${item.data.description || ''}</textarea>
+            </div>
+
+            <div class="field-group">
+                <label>Extracted Text</label>
+                <textarea id="extractedText_${index}" oninput="saveFieldData(${index}, 'extracted_text', this.value)">${item.data.extracted_text || ''}</textarea>
+            </div>
+
+            <div class="field-group">
+                <label>Tags</label>
+                <div class="tags-section">
+                    <div class="tags-subsection">
+                        <h4>Manual Tags</h4>
+                        <div class="tags-input" id="manualTagsContainer_${index}">
+                            ${(item.data.manual_tags || []).map(tag => `
+                                <span class="tag manual">
+                                    ${tag}
+                                    <span class="remove-tag" onclick="removeTag(${index}, '${tag}', 'manual')">×</span>
+                                </span>
+                            `).join('')}
+                            <input type="text" class="tag-input-field" placeholder="Add manual tag..."
+                                onkeypress="handleTagInput(event, ${index}, 'manual')">
+                        </div>
+                    </div>
+                    <div class="tags-subsection">
+                        <h4>Auto Tags (AI Generated)</h4>
+                        <div class="tags-input" id="autoTagsContainer_${index}">
+                            ${autoTagsContent}
+                            <input type="text" class="tag-input-field" placeholder="Add auto tag..."
+                                onkeypress="handleTagInput(event, ${index}, 'auto')">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="field-group">
+                <label>Additional Fields</label>
+                <div class="key-values" id="kvContainer_${index}">
+                    ${(item.data.key_values || []).map((kv, kvIndex) => `
+                        <div class="key-value-pair">
+                            <input type="text" value="${kv.key}" id="key_${index}_${kvIndex}" oninput="saveKeyValueData(${index}, ${kvIndex}, 'key', this.value)">
+                            <input type="text" value="${kv.value}" id="value_${index}_${kvIndex}" oninput="saveKeyValueData(${index}, ${kvIndex}, 'value', this.value)">
+                            <button class="remove-kv-btn" onclick="removeKeyValue(${index}, ${kvIndex})">Remove</button>
+                        </div>
+                    `).join('')}
+                </div>
+                <button class="add-kv-btn" onclick="addKeyValue(${index})">Add Field</button>
+            </div>
+        `;
+        container.appendChild(mediaItem);
     }
 
-    function removeTag(itemIndex, tag, tagType) {
+    updatePaginationControls();
+    updateProgressBar();
+}
+
+function updateProgressBar() {
+    const progress = (extractedData.filter(item => item !== null).length / uploadedFiles.length) * 100;
+    document.getElementById('progressBar').style.width = progress + '%';
+}
+
+function removeExtractedItem(index) {
+    extractedData.splice(index, 1);
+    uploadedFiles.splice(index, 1);
+    totalPages = Math.ceil(extractedData.length / itemsPerPage);
+
+    if (currentPage > totalPages && totalPages > 0) {
+        currentPage = totalPages;
+    }
+
+    renderExtractedData();
+
+    if (extractedData.length === 0) {
+        updateStepIndicator(1);
+    }
+}
+
+function removeTag(itemIndex, tag, tagType) {
+    const tagArray = tagType === 'manual' ? 'manual_tags' : 'auto_tags';
+    const tagIndex = extractedData[itemIndex].data[tagArray].indexOf(tag);
+    if (tagIndex > -1) {
+        extractedData[itemIndex].data[tagArray].splice(tagIndex, 1);
+        // Re-render to update the view
+        renderExtractedData();
+    }
+}
+
+function handleTagInput(event, itemIndex, tagType) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        const input = event.target;
+        const tag = input.value.trim();
         const tagArray = tagType === 'manual' ? 'manual_tags' : 'auto_tags';
-        const tagIndex = extractedData[itemIndex].data[tagArray].indexOf(tag);
-        if (tagIndex > -1) {
-            extractedData[itemIndex].data[tagArray].splice(tagIndex, 1);
+
+        if (tag && !extractedData[itemIndex].data[tagArray].includes(tag)) {
+            extractedData[itemIndex].data[tagArray].push(tag);
+
             // Re-render to update the view
             renderExtractedData();
-            triggerAutoSave();
         }
     }
+}
 
-    function handleTagInput(event, itemIndex, tagType) {
-        if (event.key === 'Enter') {
-            event.preventDefault();
-            const input = event.target;
-            const tag = input.value.trim();
-            const tagArray = tagType === 'manual' ? 'manual_tags' : 'auto_tags';
+function removeKeyValue(itemIndex, kvIndex) {
+    extractedData[itemIndex].data.key_values.splice(kvIndex, 1);
+    // Re-render to update indices
+    renderExtractedData();
+}
 
-            if (tag && !extractedData[itemIndex].data[tagArray].includes(tag)) {
-                extractedData[itemIndex].data[tagArray].push(tag);
-
-                // Re-render to update the view
-                renderExtractedData();
-                triggerAutoSave();
-            }
-        }
+function addKeyValue(itemIndex) {
+    if (!extractedData[itemIndex].data.key_values) {
+        extractedData[itemIndex].data.key_values = [];
     }
+    extractedData[itemIndex].data.key_values.push({ key: '', value: '' });
 
-    function removeKeyValue(itemIndex, kvIndex) {
-        extractedData[itemIndex].data.key_values.splice(kvIndex, 1);
-        // Re-render to update indices
-        renderExtractedData();
-        triggerAutoSave();
-    }
+    // Re-render to ensure proper indices
+    renderExtractedData();
+}
 
-    function addKeyValue(itemIndex) {
-        if (!extractedData[itemIndex].data.key_values) {
-            extractedData[itemIndex].data.key_values = [];
-        }
-        extractedData[itemIndex].data.key_values.push({ key: '', value: '' });
-
-        // Re-render to ensure proper indices
-        renderExtractedData();
-        triggerAutoSave();
-    }
-
-    // Collect form data before saving
-    function collectFormData() {
-        // The data is already saved in extractedData through auto-save
-        // Just ensure tags are combined for the save operation
-        extractedData.forEach((item) => {
-            if (item) {
-                // Combine manual and auto tags for saving
-                item.data.tags = [...(item.data.manual_tags || []), ...(item.data.auto_tags || [])];
-            }
-        });
-    }
-
-    // Save data to database via API
-    async function saveToDatabase(data) {
-        const companyBotId = document.getElementById('companyBotSelect').value;
-        const items = data.map(item => ({
-            ...item.data,
-            filename: item.filename,
-            manual_tags: item.data.manual_tags || [],
-            auto_tags: item.data.auto_tags || []
-        }));
-
-        const response = await fetch("{% url 'admin:chatbot_media_batch_save' %}", {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrftoken,
-            },
-            body: JSON.stringify({
-                company_bot_id: companyBotId,
-                items: items
-            })
-        });
-
-        const result = await response.json();
-        if (result.success) {
-            return result.results;
-        } else {
-            throw new Error(result.error || 'Failed to save data');
-        }
-    }
-
-    // Save button handler
-    document.getElementById('saveBtn').addEventListener('click', async () => {
-        collectFormData();
-        showLoading('Saving to database...');
-
-        try {
-            const results = await saveToDatabase(extractedData);
-            displayResults(results);
-            updateStepIndicator(3);
-        } catch (error) {
-            showStatus('Error saving data: ' + error.message, 'error');
-        } finally {
-            hideLoading();
+// Collect form data before saving
+function collectFormData() {
+    // The data is already saved in extractedData through auto-save
+    // Just ensure tags are combined for the save operation
+    extractedData.forEach((item) => {
+        if (item) {
+            // Combine manual and auto tags for saving
+            item.data.tags = [...(item.data.manual_tags || []), ...(item.data.auto_tags || [])];
         }
     });
+}
 
-    // Display save results
-    function displayResults(results) {
-        const successCount = results.filter(r => r.success).length;
-        const failedCount = results.filter(r => !r.success).length;
+// Save data to database via API
+async function saveToDatabase(data) {
+    const companyBotId = document.getElementById('companyBotSelect').value;
+    const items = data.map(item => ({
+        ...item.data,
+        filename: item.filename,
+        manual_tags: item.data.manual_tags || [],
+        auto_tags: item.data.auto_tags || []
+    }));
 
-        document.getElementById('totalFiles').textContent = results.length;
-        document.getElementById('successCount').textContent = successCount;
-        document.getElementById('failedCount').textContent = failedCount;
+    const response = await fetch("{% url 'admin:chatbot_media_batch_save' %}", {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken,
+        },
+        body: JSON.stringify({
+            company_bot_id: companyBotId,
+            items: items
+        })
+    });
 
-        const resultsList = document.getElementById('resultsList');
-        resultsList.innerHTML = '';
+    const result = await response.json();
+    if (result.success) {
+        return result.results;
+    } else {
+        throw new Error(result.error || 'Failed to save data');
+    }
+}
 
-        results.forEach(result => {
-            const resultItem = document.createElement('div');
-            resultItem.className = `result-item ${result.success ? 'success' : 'error'}`;
-            resultItem.innerHTML = `
-                <div class="result-icon">${result.success ? '✓' : '✗'}</div>
-                <div class="result-details">
-                    <h4>${result.filename}</h4>
-                    <p>${result.message}</p>
-                    ${result.success && result.media_id ? `<p>Media ID: ${result.media_id}</p>` : ''}
-                </div>
-            `;
-            resultsList.appendChild(resultItem);
-        });
+// Save button handler
+document.getElementById('saveBtn').addEventListener('click', async () => {
+    collectFormData();
+    showLoading('Saving to database...');
 
-        if (successCount > 0) {
-            showStatus(`Successfully saved ${successCount} file(s)!`, 'success');
-        }
+    try {
+        const results = await saveToDatabase(extractedData);
+        displayResults(results);
+        updateStepIndicator(3);
+    } catch (error) {
+        showStatus('Error saving data: ' + error.message, 'error');
+    } finally {
+        hideLoading();
+    }
+});
+
+// Display save results
+function displayResults(results) {
+    const successCount = results.filter(r => r.success).length;
+    const failedCount = results.filter(r => !r.success).length;
+
+    document.getElementById('totalFiles').textContent = results.length;
+    document.getElementById('successCount').textContent = successCount;
+    document.getElementById('failedCount').textContent = failedCount;
+
+    const resultsList = document.getElementById('resultsList');
+    resultsList.innerHTML = '';
+
+    results.forEach(result => {
+        const resultItem = document.createElement('div');
+        resultItem.className = `result-item ${result.success ? 'success' : 'error'}`;
+        resultItem.innerHTML = `
+            <div class="result-icon">${result.success ? '✓' : '✗'}</div>
+            <div class="result-details">
+                <h4>${result.filename}</h4>
+                <p>${result.message}</p>
+                ${result.success && result.media_id ? `<p>Media ID: ${result.media_id}</p>` : ''}
+            </div>
+        `;
+        resultsList.appendChild(resultItem);
+    });
+
+    if (successCount > 0) {
+        showStatus(`Successfully saved ${successCount} file(s)!`, 'success');
+    }
+}
+
+// Navigation handlers - UPDATED to clear polling
+document.getElementById('backToUploadBtn').addEventListener('click', () => {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
+    }
+    updateStepIndicator(1);
+});
+
+document.getElementById('newBatchBtn').addEventListener('click', () => {
+    // Clear polling
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+        pollingInterval = null;
     }
 
-    // Navigation handlers
-    document.getElementById('backToUploadBtn').addEventListener('click', () => {
-        updateStepIndicator(1);
-    });
-
-    document.getElementById('newBatchBtn').addEventListener('click', () => {
-        // Reset everything
-        uploadedFiles = [];
-        extractedData = [];
-        currentPage = 1;
-        updateFileList();
-        updateStepIndicator(1);
-        document.getElementById('statusMessage').style.display = 'none';
-        document.getElementById('companyBotSelect').value = '';
-    });
-
-    // Initialize
+    // Reset everything
+    uploadedFiles = [];
+    extractedData = [];
+    currentPage = 1;
     updateFileList();
+    updateStepIndicator(1);
+    document.getElementById('statusMessage').style.display = 'none';
+    document.getElementById('companyBotSelect').value = '';
+});
+
+// Clear polling on page unload
+window.addEventListener('beforeunload', () => {
+    if (pollingInterval) {
+        clearInterval(pollingInterval);
+    }
+});
+
+// Initialize
+updateFileList();
 </script>
 {% endblock %}

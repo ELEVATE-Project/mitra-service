@@ -47,7 +47,7 @@ class Media(models.Model):
         print('Save in vector for media_id: {}'.format(media_id))
         media = Media.objects.get(id=media_id)
         kvs = KeyValue.objects.filter(media=media)
-        save_auto_tags(media)
+        # save_auto_tags(media)
         # metadata = {
         #     'source': 'file',
         #     'url': str(media.url) if media.url is not None else S3_BASE_URL + media.file.name,
@@ -77,8 +77,8 @@ class Media(models.Model):
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         super().save(*args, **kwargs)
-        if is_new:
-            self.save_in_vector_db.apply_async(args=(self.id,), countdown=1)
+        # if is_new:
+            # self.save_in_vector_db.apply_async(args=(self.id,), countdown=1)
 
     @shared_task
     def delete_from_vector_db(media_id):
