@@ -35,7 +35,7 @@ class MediaAdmin(ExportActionMixin, admin.ModelAdmin):
         # Base fieldsets
         fieldsets = [
             (None, {
-                'fields': ('name', 'file', 'url', 'description', 'priority', 'media_type', 'company_bot')
+                'fields': ('name', 'file', 'url', 'description', 'extracted_text', 'priority', 'media_type', 'company_bot')
             }),
             ('Manual Tags', {
                 'fields': ('manual_tags',),

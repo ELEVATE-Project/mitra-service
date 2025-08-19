@@ -3,6 +3,7 @@ from chatbot.views.aws_views import get_presigned_url
 from chatbot.views.gotenberg_view import generate_pdf_view
 from chatbot.views.kafka_views import sync_user_project_view
 from chatbot.views.location_views import get_location_view, get_ip_location_view
+from chatbot.views.media_views import MediaSearchView
 from chatbot.views.profile_views import create_profile_views, read_elevate_profile
 from django.urls import path
 from chatbot.views import api_views
@@ -90,4 +91,7 @@ urlpatterns = [
     path("api/image-converter/", convert_image, name='image-converter'),
     path("api/read-elevate-profile/", read_elevate_profile, name='read-elevate-profile'),
     path('api/questions/save/', save_ptm_chats, name="save_ptm_chats"),
+
+    path("api/search/", MediaSearchView.as_view(), name="media-search"),
+
 ]

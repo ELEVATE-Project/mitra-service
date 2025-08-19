@@ -1,4 +1,3 @@
-import json
 import os
 import base64
 from celery import shared_task
@@ -7,6 +6,8 @@ from chatbot.models import Profile, CompanyBot, MediaTypeChoices, MediaTemplateC
 from chatbot.utils.database_util import upsert_single_file, delete_single_file
 from chatbot.utils.knowledge_service.auto_tag_utils import save_auto_tags
 from shikshalokam.models.enums import PriorityChoices
+from django.contrib.postgres.indexes import GinIndex
+from django.contrib.postgres.search import SearchVector
 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 
@@ -47,30 +48,30 @@ class Media(models.Model):
         media = Media.objects.get(id=media_id)
         kvs = KeyValue.objects.filter(media=media)
         save_auto_tags(media)
-        metadata = {
-            'source': 'file',
-            'url': str(media.url) if media.url is not None else S3_BASE_URL + media.file.name,
-            'company': media.company_bot.company.slug,
-            'created_at': str(media.created_at),
-        }
-        other_tags = dict()
-        for kv in kvs:
-            if kv.key in ['TITLE OF THE PROJECT', 'priority',
-                          'TARGET STAKEHOLDER', 'DURATION', 'DESCRIPTION',
-                          'OBJECTIVE', 'PROJECT LEVEL LEARNING RESOURCE', 'TASK NAME',
-                          'SUB TASK (If any)', 'NAME OF TASK LEVEL LEARNING RESOURCE']:
-                metadata[kv.key] = kv.value
-            else:
-                other_tags[kv.key] = kv.value
-        other_tags['s3_link'] = S3_BASE_URL + media.file.name
-        metadata['other_tags'] = str(other_tags)
-        metadata['tags'] = list(media.tags.values_list('name', flat=True))
-        with media.file.open("rb") as file:
-            file_content = file.read()
-        file_name = media.file.name.split("/")[-1]
+        # metadata = {
+        #     'source': 'file',
+        #     'url': str(media.url) if media.url is not None else S3_BASE_URL + media.file.name,
+        #     'company': media.company_bot.company.slug,
+        #     'created_at': str(media.created_at),
+        # }
+        # other_tags = dict()
+        # for kv in kvs:
+        #     if kv.key in ['TITLE OF THE PROJECT', 'priority',
+        #                   'TARGET STAKEHOLDER', 'DURATION', 'DESCRIPTION',
+        #                   'OBJECTIVE', 'PROJECT LEVEL LEARNING RESOURCE', 'TASK NAME',
+        #                   'SUB TASK (If any)', 'NAME OF TASK LEVEL LEARNING RESOURCE']:
+        #         metadata[kv.key] = kv.value
+        #     else:
+        #         other_tags[kv.key] = kv.value
+        # other_tags['s3_link'] = S3_BASE_URL + media.file.name
+        # metadata['other_tags'] = str(other_tags)
+        # metadata['tags'] = list(media.tags.values_list('name', flat=True))
+        # with media.file.open("rb") as file:
+        #     file_content = file.read()
+        # file_name = media.file.name.split("/")[-1]
 
-        status_code, response_text = upsert_single_file(file_name, file_content, metadata, media)
-        print(status_code, response_text)
+        # status_code, response_text = upsert_single_file(file_name, file_content, metadata, media)
+        # print(status_code, response_text)
 
 
     def save(self, *args, **kwargs):
@@ -87,7 +88,7 @@ class Media(models.Model):
         return status_code
 
     def delete(self, *args, **kwargs):
-        status_code = self.delete_from_vector_db(self.id)
+        status_code = 200 #self.delete_from_vector_db(self.id)
         if status_code == 200:
             super().delete(*args, **kwargs)
         else:
@@ -105,6 +106,7 @@ class Media(models.Model):
     company_bot = models.ForeignKey(CompanyBot, on_delete=models.DO_NOTHING)
     file = models.FileField(upload_to=get_file_upload_path, max_length=1000)
     description = models.TextField(null=True, blank=True)
+    extracted_text = models.TextField(null=True, blank=True)
     tags = models.ManyToManyField(Tag, related_name="medias")
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -113,6 +115,13 @@ class Media(models.Model):
     def __str__(self):
         return self.name
 
+    class Meta:
+        indexes = [
+            GinIndex(
+                SearchVector('extracted_text', config='english'),
+                name='media_extracted_text_gin'
+            )
+        ]
 
 class MediaVector(models.Model):
     media = models.ForeignKey(Media, on_delete=models.CASCADE, related_name='media_vector')
