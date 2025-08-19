@@ -1,8 +1,12 @@
-from import_export.admin import ExportActionMixin
 from django.contrib import admin
+from django.urls import reverse
+from django.utils.html import format_html
+from django.shortcuts import redirect
+from import_export.admin import ExportActionMixin
 from chatbot.form.media.media_form import MediaAdminForm
 from chatbot.models import Tag, Profile
 from chatbot.models.media_models import Media, KeyValue, MediaTemplate
+from chatbot.views.admin.media_upload_views import BatchMediaUploadView, BatchMediaExtractView, BatchMediaSaveView
 
 
 class KeyValueInline(admin.TabularInline):
@@ -11,14 +15,14 @@ class KeyValueInline(admin.TabularInline):
 
 
 @admin.register(Media)
-class MediaAdmin(ExportActionMixin, admin.ModelAdmin):
+class MediaAdmin(admin.ModelAdmin):
     form = MediaAdminForm
     list_display = ('name', 'media_type',)
-    search_fields = ('name', )
+    search_fields = ('name',)
     actions = ['export_selected']
     list_export = ('csv', 'xlsx')
     inlines = [KeyValueInline]
-    raw_id_fields = ('company_bot', )
+    raw_id_fields = ('company_bot',)
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
@@ -35,7 +39,8 @@ class MediaAdmin(ExportActionMixin, admin.ModelAdmin):
         # Base fieldsets
         fieldsets = [
             (None, {
-                'fields': ('name', 'file', 'url', 'description', 'extracted_text', 'priority', 'media_type', 'company_bot')
+                'fields': (
+                'name', 'file', 'url', 'description', 'extracted_text', 'priority', 'media_type', 'company_bot')
             }),
             ('Manual Tags', {
                 'fields': ('manual_tags',),
@@ -55,17 +60,29 @@ class MediaAdmin(ExportActionMixin, admin.ModelAdmin):
 
         return fieldsets
 
-# @admin.register(MediaTemplate)
-# class MediaTemplateAdmin(admin.ModelAdmin):
-#     list_display = ('name', 'template_type', 'created_at')
-#     list_filter = ('created_at', 'name', 'template_type')
+    def get_urls(self):
+        """Add custom URLs for batch upload"""
+        from django.urls import path
+        urls = super().get_urls()
+        custom_urls = [
+            path('batch-upload/',
+                 self.admin_site.admin_view(BatchMediaUploadView.as_view()),
+                 name='chatbot_media_batch_upload'),
+            path('api/batch-extract/',
+                 self.admin_site.admin_view(BatchMediaExtractView.as_view()),
+                 name='chatbot_media_batch_extract'),
+            path('api/batch-save/',
+                 self.admin_site.admin_view(BatchMediaSaveView.as_view()),
+                 name='chatbot_media_batch_save'),
+        ]
+        return custom_urls + urls
 
 
 @admin.register(Tag)
 class MasterTagAdmin(admin.ModelAdmin):
     list_display = ('name', 'status', 'created_by', 'created_at')
     list_filter = ('created_at', 'name', 'created_by')
-    raw_id_fields = ('created_by', )
+    raw_id_fields = ('created_by',)
 
     def save_model(self, request, obj, form, change):
         if not obj.pk:

@@ -1,4 +1,5 @@
 from chatbot.utils.image_converter import convert_image
+from chatbot.views.admin.media_upload_views import BatchMediaUploadView
 from chatbot.views.aws_views import get_presigned_url
 from chatbot.views.gotenberg_view import generate_pdf_view
 from chatbot.views.kafka_views import sync_user_project_view
@@ -93,5 +94,7 @@ urlpatterns = [
     path('api/questions/save/', save_ptm_chats, name="save_ptm_chats"),
 
     path("api/search/", MediaSearchView.as_view(), name="media-search"),
+
+    path('admin/media/batch-upload/', BatchMediaUploadView.as_view(), name='batch_media_upload'),
 
 ]
