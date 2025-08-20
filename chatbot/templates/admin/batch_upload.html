@@ -1155,6 +1155,7 @@ let itemsPerPage = 1;
 let totalPages = 1;
 let pollingInterval = null;
 let isExtracting = false;
+let sessionId = null; // NEW: For file storage and retry
 
 // Media types and priorities from Django
 const mediaTypes = {{ media_types|safe }};
@@ -1455,16 +1456,26 @@ async function retryExtraction(index) {
     updateFileList();
 
     try {
+        const requestData = {
+            file_data: {
+                filename: fileData.name,
+                file_index: index,
+                file_key: fileData.fileKey, // Use stored file key
+                size: fileData.size
+            },
+            company_bot_id: document.getElementById('companyBotSelect').value,
+            session_id: fileData.sessionId || sessionId // Use stored or current session ID
+        };
+
+        console.log('Retry request data:', requestData); // DEBUG
+
         const response = await fetch("{% url 'admin:chatbot_media_retry_extract' %}", {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRFToken': csrftoken,
             },
-            body: JSON.stringify({
-                file_data: fileData,
-                company_bot_id: document.getElementById('companyBotSelect').value
-            })
+            body: JSON.stringify(requestData)
         });
 
         const result = await response.json();
@@ -1523,6 +1534,11 @@ async function extractDataFromFiles(files) {
     const extractedItems = [];
     isExtracting = true;
 
+    // Generate session ID if not exists
+    if (!sessionId) {
+        sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
     // Process files one by one to show progress
     for (let i = 0; i < files.length; i++) {
         const fileData = files[i];
@@ -1549,6 +1565,7 @@ async function extractDataFromFiles(files) {
             const formData = new FormData();
             formData.append('files', fileData.file);
             formData.append('company_bot_id', companyBotId);
+            formData.append('session_id', sessionId); // NEW: Include session ID
 
             const response = await fetch("{% url 'admin:chatbot_media_batch_extract' %}", {
                 method: 'POST',
@@ -1562,10 +1579,17 @@ async function extractDataFromFiles(files) {
             if (result.success && result.data.length > 0) {
                 const extractionResult = result.data[0]; // Single file result
 
+                // Store session_id from response
+                if (result.session_id) {
+                    sessionId = result.session_id;
+                }
+
                 if (extractionResult.status === 'success') {
                     uploadedFiles[i].status = FILE_STATUS.SUCCESS;
                     uploadedFiles[i].error = null;
                     uploadedFiles[i].errorTimestamp = null;
+                    uploadedFiles[i].sessionId = sessionId; // Store session ID
+                    uploadedFiles[i].fileKey = extractionResult.file_key; // Store file key
 
                     extractedItems.push({
                         id: `temp_${Date.now()}_${i}`,
@@ -1579,6 +1603,8 @@ async function extractDataFromFiles(files) {
                     uploadedFiles[i].status = FILE_STATUS.ERROR;
                     uploadedFiles[i].error = extractionResult.error;
                     uploadedFiles[i].errorTimestamp = new Date().toISOString();
+                    uploadedFiles[i].sessionId = sessionId; // Store session ID
+                    uploadedFiles[i].fileKey = extractionResult.file_key; // Store file key
 
                     extractedItems.push({
                         id: `error_${i}`,
@@ -2374,6 +2400,7 @@ document.getElementById('newBatchBtn').addEventListener('click', () => {
     saveResults = [];
     currentPage = 1;
     isExtracting = false;
+    sessionId = null; // NEW: Reset session ID
     updateFileList();
     updateStepIndicator(1);
     document.getElementById('statusMessage').style.display = 'none';

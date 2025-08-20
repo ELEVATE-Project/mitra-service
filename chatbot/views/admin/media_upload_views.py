@@ -84,9 +84,9 @@ class BatchMediaExtractView(View):
     def extract_file_data(self, file, company_bot, file_index):
         """Extract data from file and start async tag extraction"""
         file_extension = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else None
-        if "fail" in file.name.lower():
-            print(f"Forced extraction failure for {file.name}")
-            raise ValueError(f"Forced extraction failure for {file.name}")
+        # if "fail" in file.name.lower():
+            # print(f"Forced extraction failure for {file.name}")
+            # raise ValueError(f"Forced extraction failure for {file.name}")
         # Save file temporarily and start Celery task
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as tmp:
             for chunk in file.chunks():
@@ -271,9 +271,9 @@ class BatchMediaSaveView(View):
     def save_single_item(self, item_data, company_bot_id, user_profile):
         """Save a single media item"""
         # Create media instance
-        if "fail" in item_data.get("filename", "").lower():
-            print(f"Forced save failure for {item_data.get('filename')}")
-            raise ValueError(f"Forced save failure for {item_data.get('filename')}")
+        # if "fail" in item_data.get("filename", "").lower():
+        #     print(f"Forced save failure for {item_data.get('filename')}")
+        #     raise ValueError(f"Forced save failure for {item_data.get('filename')}")
 
         media = Media(
             name=item_data['name'],
