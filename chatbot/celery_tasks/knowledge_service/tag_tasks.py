@@ -1,10 +1,10 @@
 from celery import shared_task
-from chatbot.scripts.knowledge_service.docs.ai_document_tag_extractor import get_doc_tags_from_ai
+from chatbot.scripts.knowledge_service.extraction.ai_extraction import get_doc_tags_from_ai
 import os
 
 
 @shared_task
-def get_auto_tags(file_path, company_bot_id=None, file_extension=None):
+def get_auto_extracted_data(file_path, company_bot_id=None, file_extension=None):
     from chatbot.models import CompanyBot
 
     company_bot = None
@@ -14,9 +14,9 @@ def get_auto_tags(file_path, company_bot_id=None, file_extension=None):
         except CompanyBot.DoesNotExist:
             pass
 
-    auto_tags = []
+    extracted_data=None
     try:
-        auto_tags = get_doc_tags_from_ai(
+        extracted_data = get_doc_tags_from_ai(
             file=file_path,
             company_bot=company_bot,
             file_extension=file_extension
@@ -32,4 +32,4 @@ def get_auto_tags(file_path, company_bot_id=None, file_extension=None):
             except Exception as cleanup_err:
                 print(f"[AutoTags] Failed to remove temp file {file_path}: {cleanup_err}")
 
-    return auto_tags if auto_tags else []
+    return extracted_data

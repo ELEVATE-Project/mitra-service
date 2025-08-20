@@ -92,6 +92,16 @@ class MediaTypeChoices(models.TextChoices):
     HEIC = 'image/heic', _('HEIC')
 
 
+class FileTypeChoices(models.TextChoices):
+    PDF = 'application/pdf', _('PDF')
+    DOC = 'application/msword', _('DOC')
+    DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', _('DOCX')
+    TXT = 'text/plain', _('TXT')
+    CSV = 'text/csv', _('CSV')
+    XLS = 'application/vnd.ms-excel', _('XLS')
+    XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', _('XLSX')
+
+
 class VoiceProviderChoices(models.TextChoices):
     AWS = 'aws', _('AWS')
     GCP = 'gcp', _('GCP')

@@ -1,5 +1,6 @@
 import os
-from chatbot.celery_tasks.knowledge_service.tag_tasks import get_auto_tags
+
+from chatbot.celery_tasks.knowledge_service.tag_tasks import get_auto_extracted_data
 from chatbot.models import Tag, TagChoices
 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
@@ -9,7 +10,7 @@ def save_auto_tags(media):
     """
     Generate and save auto tags for the given media.
     """
-    auto_tag_names = get_auto_tags(media)  # currently returns []
+    auto_tag_names = get_auto_extracted_data(media)  # currently returns []
     tag_objs = []
     company = getattr(media.company_bot, 'company', None)
 

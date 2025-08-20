@@ -944,6 +944,11 @@
         pointer-events: none;
         opacity: 0.5;
     }
+
+    /* Hide specific fields */
+    .field-group.hidden {
+        display: none;
+    }
 </style>
 {% endblock %}
 
@@ -986,7 +991,7 @@
 
     <!-- Step 1: Upload & Extract -->
     <div id="step1" class="content-section active">
-        <h2>Step 1: Upload Files & Extract Data</h2>
+        <h2>Upload Files & Extract Data</h2>
 
         <!-- Company Bot Selection -->
         <div class="company-bot-selection">
@@ -1013,7 +1018,13 @@
         <!-- Extraction Progress -->
         <div id="extractionProgress" class="extraction-progress">
             <div class="progress-header">
-                <div class="progress-title">Extraction Progress</div>
+                <div class="progress-title">
+                    Extraction Progress
+                    <span id="aiStatus" style="margin-left: 15px; font-size: 14px; color: #666; display: none;">
+                        <span class="spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 5px;"></span>
+                        AI enhancement in progress...
+                    </span>
+                </div>
                 <div class="progress-stats">
                     <div class="progress-stat success">
                         <span>✓</span>
@@ -1054,12 +1065,7 @@
 
     <!-- Step 2: Review -->
     <div id="step2" class="content-section">
-        <h2>Step 2: Review & Edit Extracted Data</h2>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <div class="progress-bar" style="flex: 1; margin: 0;">
-                <div class="progress-fill" id="progressBar"></div>
-            </div>
-        </div>
+        <h2>Review Extracted Data</h2>
 
         <div id="extractedDataContainer" class="data-grid"></div>
 
@@ -1090,7 +1096,7 @@
 
     <!-- Step 3: Save Results -->
     <div id="step3" class="content-section">
-        <h2>Step 3: Save Results</h2>
+        <h2>Save Results</h2>
 
         <div class="summary-grid">
             <div class="summary-card">
@@ -1155,7 +1161,8 @@ let itemsPerPage = 1;
 let totalPages = 1;
 let pollingInterval = null;
 let isExtracting = false;
-let sessionId = null; // NEW: For file storage and retry
+let sessionId = null;
+let isWaitingForAI = false;
 
 // Media types and priorities from Django
 const mediaTypes = {{ media_types|safe }};
@@ -1354,14 +1361,14 @@ function updateButtonStates() {
     const hasReadyFiles = uploadedFiles.some(f => f.status === FILE_STATUS.SUCCESS);
     const isProcessing = uploadedFiles.some(f => f.status === FILE_STATUS.PROCESSING);
 
-    document.getElementById('extractBtn').disabled = !hasValidFiles || !companyBotSelected || isExtracting;
-    document.getElementById('proceedBtn').disabled = !hasReadyFiles || isProcessing;
+    document.getElementById('extractBtn').disabled = !hasValidFiles || !companyBotSelected || isExtracting || isWaitingForAI;
+    document.getElementById('proceedBtn').disabled = !hasReadyFiles || isProcessing || isWaitingForAI;
 
     // Show/hide proceed button based on extraction state
     const proceedBtn = document.getElementById('proceedBtn');
     const extractBtn = document.getElementById('extractBtn');
 
-    if (hasProcessedFiles && !isProcessing) {
+    if (hasProcessedFiles && !isProcessing && !isWaitingForAI) {
         proceedBtn.style.display = 'inline-block';
         extractBtn.textContent = 'Extract All Again';
     } else {
@@ -1460,14 +1467,14 @@ async function retryExtraction(index) {
             file_data: {
                 filename: fileData.name,
                 file_index: index,
-                file_key: fileData.fileKey, // Use stored file key
+                file_key: fileData.fileKey,
                 size: fileData.size
             },
             company_bot_id: document.getElementById('companyBotSelect').value,
-            session_id: fileData.sessionId || sessionId // Use stored or current session ID
+            session_id: fileData.sessionId || sessionId
         };
 
-        console.log('Retry request data:', requestData); // DEBUG
+        console.log('Retry request data:', requestData);
 
         const response = await fetch("{% url 'admin:chatbot_media_retry_extract' %}", {
             method: 'POST',
@@ -1528,7 +1535,7 @@ async function retryExtraction(index) {
 // Company bot selection
 document.getElementById('companyBotSelect').addEventListener('change', updateFileList);
 
-// Data extraction via API - MODIFIED to process one by one
+// Data extraction via API
 async function extractDataFromFiles(files) {
     const companyBotId = document.getElementById('companyBotSelect').value;
     const extractedItems = [];
@@ -1565,7 +1572,7 @@ async function extractDataFromFiles(files) {
             const formData = new FormData();
             formData.append('files', fileData.file);
             formData.append('company_bot_id', companyBotId);
-            formData.append('session_id', sessionId); // NEW: Include session ID
+            formData.append('session_id', sessionId);
 
             const response = await fetch("{% url 'admin:chatbot_media_batch_extract' %}", {
                 method: 'POST',
@@ -1588,8 +1595,8 @@ async function extractDataFromFiles(files) {
                     uploadedFiles[i].status = FILE_STATUS.SUCCESS;
                     uploadedFiles[i].error = null;
                     uploadedFiles[i].errorTimestamp = null;
-                    uploadedFiles[i].sessionId = sessionId; // Store session ID
-                    uploadedFiles[i].fileKey = extractionResult.file_key; // Store file key
+                    uploadedFiles[i].sessionId = sessionId;
+                    uploadedFiles[i].fileKey = extractionResult.file_key;
 
                     extractedItems.push({
                         id: `temp_${Date.now()}_${i}`,
@@ -1603,8 +1610,8 @@ async function extractDataFromFiles(files) {
                     uploadedFiles[i].status = FILE_STATUS.ERROR;
                     uploadedFiles[i].error = extractionResult.error;
                     uploadedFiles[i].errorTimestamp = new Date().toISOString();
-                    uploadedFiles[i].sessionId = sessionId; // Store session ID
-                    uploadedFiles[i].fileKey = extractionResult.file_key; // Store file key
+                    uploadedFiles[i].sessionId = sessionId;
+                    uploadedFiles[i].fileKey = extractionResult.file_key;
 
                     extractedItems.push({
                         id: `error_${i}`,
@@ -1638,14 +1645,14 @@ async function extractDataFromFiles(files) {
         updateFileList();
 
         // Small delay to show progress
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 200));
     }
 
     isExtracting = false;
     return extractedItems;
 }
 
-// Auto-tag polling functions
+// Wait for all AI tasks to complete
 async function waitForAllTasksToComplete(taskIds) {
     return new Promise((resolve, reject) => {
         let completedTasks = 0;
@@ -1667,24 +1674,49 @@ async function waitForAllTasksToComplete(taskIds) {
                     completedTasks = 0;
 
                     extractedData.forEach(item => {
-                        if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id) {
+                        if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id && !item.data.auto_tags_ready) {
                             const taskResult = result.results[item.data.auto_tag_task_id];
 
                             if (taskResult && taskResult.status === 'SUCCESS') {
-                                item.data.auto_tags = taskResult.result || [];
+                                // Process the enhanced AI data
+                                const aiResult = taskResult.result;
+
+                                // Update auto tags
+                                item.data.auto_tags = aiResult.auto_tags || [];
                                 item.data.auto_tags_ready = true;
+
+                                // Update enhanced data if available
+                                if (aiResult.enhanced_data) {
+                                    const enhanced = aiResult.enhanced_data;
+
+                                    // Don't update name - keep filename
+                                    if (enhanced.description) item.data.description = enhanced.description;
+                                    if (enhanced.extracted_text) item.data.extracted_text = enhanced.extracted_text;
+                                    if (enhanced.media_type) item.data.media_type = enhanced.media_type;
+
+                                    // Merge enhanced key-values with existing ones
+                                    if (enhanced.enhanced_key_values && enhanced.enhanced_key_values.length > 0) {
+                                        // Keep basic file info and add AI-extracted info
+                                        const basicKVs = item.data.key_values.filter(kv =>
+                                            kv.key === 'FILE TYPE' || kv.key === 'FILE SIZE'
+                                        );
+                                        item.data.key_values = [...basicKVs, ...enhanced.enhanced_key_values];
+                                    }
+                                }
+
                                 completedTasks++;
+                                console.log(`AI extraction completed for ${item.filename}:`, aiResult);
                             } else if (taskResult && taskResult.status === 'FAILURE') {
                                 item.data.auto_tags = [];
                                 item.data.auto_tags_ready = true;
                                 completedTasks++;
-                                console.error('Auto-tag extraction failed:', taskResult.error);
+                                console.error('AI extraction failed:', taskResult.error);
                             }
                         }
                     });
 
                     // Update loading message with progress
-                    showLoading(`Generating auto-tags... ${completedTasks}/${totalTasks} completed`);
+                    showLoading(`AI extraction in progress... ${completedTasks}/${totalTasks} completed`);
 
                     // Check if all tasks are complete
                     if (completedTasks >= totalTasks) {
@@ -1696,34 +1728,39 @@ async function waitForAllTasksToComplete(taskIds) {
                 clearInterval(checkInterval);
                 reject(error);
             }
-        }, 2000); // Check every 2 seconds
+        }, 3000); // Check every 3 seconds
 
         // Timeout after 10 minutes
         setTimeout(() => {
             clearInterval(checkInterval);
-            reject(new Error('Auto-tag generation timed out'));
+            reject(new Error('AI extraction timed out'));
         }, 600000);
     });
 }
 
-// Extract button handler - MODIFIED to stay on step 1
+// Extract button handler - Modified to wait for AI completion
 document.getElementById('extractBtn').addEventListener('click', async () => {
+    isWaitingForAI = true;
     showLoading('Extracting data from files...');
 
     try {
         extractedData = await extractDataFromFiles(uploadedFiles);
 
-        // Check if there are any Celery tasks to wait for
+        // Check if there are any AI extraction tasks to wait for
         const tasksToWaitFor = extractedData
             .filter(item => item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id)
             .map(item => item.data.auto_tag_task_id);
 
         if (tasksToWaitFor.length > 0) {
-            // Update loading message
-            showLoading('Generating auto-tags... This may take a few minutes.');
+            showLoading('Initial extraction complete. Waiting for AI enhancement...');
 
-            // Wait for all auto-tag tasks to complete
-            await waitForAllTasksToComplete(tasksToWaitFor);
+            try {
+                await waitForAllTasksToComplete(tasksToWaitFor);
+                showStatus('All data extraction and AI enhancement completed successfully!', 'success');
+            } catch (error) {
+                console.error('AI enhancement error:', error);
+                showStatus('Data extracted but AI enhancement failed. You can still proceed.', 'warning');
+            }
         }
 
         // Show summary message
@@ -1741,12 +1778,13 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
     } catch (error) {
         showStatus('Error extracting data: ' + error.message, 'error');
     } finally {
+        isWaitingForAI = false;
         hideLoading();
-        updateFileList(); // Update the file list to show final statuses
+        updateFileList();
     }
 });
 
-// Proceed button handler - NEW
+// Proceed button handler
 document.getElementById('proceedBtn').addEventListener('click', () => {
     // Filter out skipped files for pagination
     const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
@@ -1794,12 +1832,10 @@ function saveCurrentFile(index) {
     const item = validItems[actualIndex];
 
     if (item) {
-        // Save all field values
-        item.data.name = document.getElementById(`name_${index}`).value;
+        // Save all field values (excluding hidden fields)
         item.data.media_type = document.getElementById(`mediaType_${index}`).value;
         item.data.priority = document.getElementById(`priority_${index}`).value;
         item.data.description = document.getElementById(`description_${index}`).value;
-        item.data.extracted_text = document.getElementById(`extractedText_${index}`).value;
 
         // Save manual tags
         item.data.manual_tags = [];
@@ -1987,7 +2023,7 @@ function renderExtractedData() {
 
     for (let pageIndex = startIndex; pageIndex < endIndex; pageIndex++) {
         const item = validItems[pageIndex];
-        const displayIndex = pageIndex; // Use page index for display
+        const displayIndex = pageIndex;
         const mediaItem = document.createElement('div');
         mediaItem.className = 'media-item active';
 
@@ -2016,11 +2052,6 @@ function renderExtractedData() {
             </div>
 
             <div class="field-group">
-                <label>Name</label>
-                <input type="text" id="name_${displayIndex}" value="${item.data.name || ''}" oninput="saveFieldData(${displayIndex}, 'name', this.value)">
-            </div>
-
-            <div class="field-group">
                 <label>Media Type</label>
                 <select id="mediaType_${displayIndex}" onchange="saveFieldData(${displayIndex}, 'media_type', this.value)">
                     {% for value, label in media_types %}
@@ -2039,13 +2070,8 @@ function renderExtractedData() {
             </div>
 
             <div class="field-group">
-                <label>Description</label>
+                <label>Summary</label>
                 <textarea id="description_${displayIndex}" oninput="saveFieldData(${displayIndex}, 'description', this.value)">${item.data.description || ''}</textarea>
-            </div>
-
-            <div class="field-group">
-                <label>Extracted Text</label>
-                <textarea id="extractedText_${displayIndex}" oninput="saveFieldData(${displayIndex}, 'extracted_text', this.value)">${item.data.extracted_text || ''}</textarea>
             </div>
 
             <div class="field-group">
@@ -2093,14 +2119,6 @@ function renderExtractedData() {
     }
 
     updatePaginationControls();
-    updateProgressBar();
-}
-
-function updateProgressBar() {
-    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
-    const totalValidFiles = uploadedFiles.filter(f => f.status !== FILE_STATUS.SKIPPED).length;
-    const progress = totalValidFiles > 0 ? (validItems.length / totalValidFiles) * 100 : 0;
-    document.getElementById('progressBar').style.width = progress + '%';
 }
 
 function removeExtractedItem(validIndex) {
@@ -2307,7 +2325,7 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
 
     try {
         const results = await saveToDatabase(extractedData);
-        saveResults = results; // Store for retry functionality
+        saveResults = results;
         displayResults(results);
         updateStepIndicator(3);
     } catch (error) {
@@ -2383,6 +2401,7 @@ document.getElementById('backToUploadBtn').addEventListener('click', () => {
     if (pollingInterval) {
         clearInterval(pollingInterval);
         pollingInterval = null;
+        document.getElementById('aiStatus').style.display = 'none';
     }
     updateStepIndicator(1);
 });
@@ -2392,6 +2411,7 @@ document.getElementById('newBatchBtn').addEventListener('click', () => {
     if (pollingInterval) {
         clearInterval(pollingInterval);
         pollingInterval = null;
+        document.getElementById('aiStatus').style.display = 'none';
     }
 
     // Reset everything
@@ -2400,7 +2420,8 @@ document.getElementById('newBatchBtn').addEventListener('click', () => {
     saveResults = [];
     currentPage = 1;
     isExtracting = false;
-    sessionId = null; // NEW: Reset session ID
+    isWaitingForAI = false;
+    sessionId = null;
     updateFileList();
     updateStepIndicator(1);
     document.getElementById('statusMessage').style.display = 'none';

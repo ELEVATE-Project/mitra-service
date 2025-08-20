@@ -2,7 +2,8 @@ import os
 import base64
 from celery import shared_task
 from django.db import models
-from chatbot.models import Profile, CompanyBot, MediaTypeChoices, MediaTemplateChoices, PDFStrategyChoices, Tag
+from chatbot.models import Profile, CompanyBot, MediaTypeChoices, MediaTemplateChoices, PDFStrategyChoices, Tag, \
+    FileTypeChoices
 from chatbot.utils.database_util import upsert_single_file, delete_single_file
 from chatbot.utils.knowledge_service.auto_tag_utils import save_auto_tags
 from shikshalokam.models.enums import PriorityChoices
@@ -102,7 +103,7 @@ class Media(models.Model):
     name = models.CharField(max_length=1000)
     url = models.URLField(max_length=1000, null=True, blank=True)
     priority = models.CharField(max_length=50, default=PriorityChoices.P1, choices=PriorityChoices.choices)
-    media_type = models.CharField(max_length=100, choices=MediaTypeChoices.choices, default=MediaTypeChoices.TXT)
+    media_type = models.CharField(max_length=100, choices=FileTypeChoices.choices, default=FileTypeChoices.TXT)
     company_bot = models.ForeignKey(CompanyBot, on_delete=models.DO_NOTHING)
     file = models.FileField(upload_to=get_file_upload_path, max_length=1000)
     description = models.TextField(null=True, blank=True)
