@@ -101,6 +101,42 @@ class FileTypeChoices(models.TextChoices):
     XLS = 'application/vnd.ms-excel', _('XLS')
     XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', _('XLSX')
 
+    @classmethod
+    def get_extension_mapping(cls):
+        """Returns a dict mapping MIME types to file extensions"""
+        return {
+            cls.PDF: '.pdf',
+            cls.DOC: '.doc',
+            cls.DOCX: '.docx',
+            cls.TXT: '.txt',
+            cls.CSV: '.csv',
+            cls.XLS: '.xls',
+            cls.XLSX: '.xlsx',
+        }
+
+    @classmethod
+    def get_mime_from_extension(cls, extension):
+        """Get MIME type from file extension"""
+        ext = extension.lower().lstrip('.')
+        ext_to_mime = {
+            'pdf': cls.PDF,
+            'doc': cls.DOC,
+            'docx': cls.DOCX,
+            'txt': cls.TXT,
+            'csv': cls.CSV,
+            'xls': cls.XLS,
+            'xlsx': cls.XLSX,
+        }
+        return ext_to_mime.get(ext)
+
+    @classmethod
+    def get_label_from_extension(cls, extension):
+        """Get label (PDF, DOC, etc.) from file extension"""
+        mime_type = cls.get_mime_from_extension(extension)
+        if mime_type:
+            return cls(mime_type).label
+        return cls.TXT.label
+
 
 class VoiceProviderChoices(models.TextChoices):
     AWS = 'aws', _('AWS')

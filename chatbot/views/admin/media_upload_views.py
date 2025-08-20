@@ -1,10 +1,12 @@
+import traceback
+
 from django.views.generic import TemplateView
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils.decorators import method_decorator
 from django.http import JsonResponse
 from django.views import View
 from chatbot.models import Media, Tag, KeyValue, Profile, FileTypeChoices
-from chatbot.models.media_models import PriorityChoices, MediaTypeChoices
+from chatbot.models.media_models import PriorityChoices
 import json
 import tempfile, os
 import uuid
@@ -22,8 +24,20 @@ class BatchMediaUploadView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['media_types'] = MediaTypeChoices.choices
+        context['media_types'] = FileTypeChoices.choices
         context['priorities'] = PriorityChoices.choices
+
+        # Add file types with complete information
+        extension_mapping = FileTypeChoices.get_extension_mapping()
+        context['file_types'] = [
+            {
+                'mime_type': choice[0],
+                'label': choice[1],
+                'extension': extension_mapping.get(choice[0], '')
+            }
+            for choice in FileTypeChoices.choices
+        ]
+
         # Add company bots for selection
         from chatbot.models import CompanyBot
         context['company_bots'] = CompanyBot.objects.all()
@@ -109,14 +123,14 @@ class BatchMediaExtractView(View):
                 file_content += chunk
 
             file_key = f"batch_upload_{session_id}_{file_index}_{file.name}"
-
+            print("in store_file_for_retry file_content: ", file_content)
             # Store file data in cache for 1 hour
             cache.set(file_key, {
                 'content': file_content,
                 'name': file.name,
                 'size': file.size
             }, timeout=3600)
-
+            print("store_file_for_retry cache set successfully")
             return file_key
         except Exception as e:
             print(f"Error storing file for retry: {e}")
@@ -131,9 +145,9 @@ class BatchMediaExtractView(View):
         #     raise ValueError(f"Forced extraction failure for {file.name}")
 
         # Save file temporarily
-        if "fail" in file.name.lower():
-            print(f"Forced extraction failure for {file.name}")
-            raise ValueError(f"Forced extraction failure for {file.name}")
+        # if "fail" in file.name.lower():
+        #     print(f"Forced extraction failure for {file.name}")
+        #     raise ValueError(f"Forced extraction failure for {file.name}")
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as tmp:
             for chunk in file.chunks():
                 tmp.write(chunk)
@@ -164,18 +178,10 @@ class BatchMediaExtractView(View):
         }
 
     def get_media_type(self, filename):
-        """Map file extension to media type"""
-        ext = filename.rsplit('.', 1)[-1].lower()
-        ext_map = {
-            'pdf': FileTypeChoices.PDF.label,
-            'doc': FileTypeChoices.DOC.label,
-            'docx': FileTypeChoices.DOCX.label,
-            'txt': FileTypeChoices.TXT.label,
-            'csv': FileTypeChoices.CSV.label,
-            'xls': FileTypeChoices.XLS.label,
-            'xlsx': FileTypeChoices.XLSX.label,
-        }
-        return ext_map.get(ext, FileTypeChoices.TXT.label)
+        """Map file extension to media type using FileTypeChoices"""
+        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else None
+        # Use get_mime_from_extension instead of get_label_from_extension
+        return FileTypeChoices.get_mime_from_extension(ext) if ext else FileTypeChoices.TXT.value
 
 
 @method_decorator(staff_member_required, name='dispatch')
@@ -298,7 +304,7 @@ class BatchMediaTaskStatusView(View):
                     results[task_id] = {
                         'status': 'PENDING'
                     }
-
+            print("Task results: ", results)
             return JsonResponse({
                 'success': True,
                 'results': results
@@ -347,7 +353,7 @@ class BatchMediaTaskStatusView(View):
                 # Don't override name field - keep the filename
                 'description': summary,
                 'extracted_text': extracted_text,
-                'media_type': self.get_media_type_from_ai_data(document_type),
+                # 'media_type': self.get_media_type_from_ai_data(document_type),
                 'enhanced_key_values': enhanced_key_values
             }
         }
@@ -378,11 +384,23 @@ class BatchMediaTaskStatusView(View):
 class BatchMediaSaveView(View):
     """API endpoint for saving batch media data"""
 
+    def preserve_failed_files(self, failed_items, additional_timeout=7200):  # 2 more hours
+        """Extend cache timeout for files that failed to save"""
+        for item in failed_items:
+            file_key = item.get('file_key')
+            if file_key:
+                cached_file = cache.get(file_key)
+                if cached_file:
+                    cache.set(file_key, cached_file, timeout=additional_timeout)
+                    print(f"Extended cache timeout for failed file: {file_key}")
+
     def post(self, request):
         try:
             data = json.loads(request.body)
             company_bot_id = data.get('company_bot_id')
             media_items = data.get('items', [])
+            session_id = data.get('session_id')
+            print("session_id: ", session_id)
             results = []
 
             # Get current user's profile
@@ -393,85 +411,123 @@ class BatchMediaSaveView(View):
 
             for item_data in media_items:
                 try:
-                    result = self.save_single_item(item_data, company_bot_id, user_profile)
+                    result = self.save_single_item(item_data, company_bot_id, user_profile, session_id)
                     results.append(result)
                 except Exception as e:
                     results.append({
                         'success': False,
                         'filename': item_data.get('filename', 'Unknown'),
                         'message': str(e),
-                        'file_index': item_data.get('file_index')
+                        'file_index': item_data.get('file_index'),
+                        'file_key': item_data.get('file_key'),
+                        'session_id': item_data.get('session_id', session_id)
                     })
 
             return JsonResponse({
                 'success': True,
                 'results': results
             })
+        except json.JSONDecodeError as e:
+            return JsonResponse({
+                'success': False,
+                'error': 'Invalid JSON data'
+            }, status=400)
 
         except Exception as e:
+            traceback.print_exc()
             return JsonResponse({
                 'success': False,
                 'error': str(e)
-            }, status=400)
+            }, status=500)
 
-    def save_single_item(self, item_data, company_bot_id, user_profile):
+    def save_single_item(self, item_data, company_bot_id, user_profile, session_id):
         """Save a single media item"""
-        # Test failure condition (commented out as requested)
-        # if "fail" in item_data.get("filename", "").lower():
-        #     raise ValueError(f"Forced save failure for {item_data.get('filename')}")
+        file_key = item_data.get('file_key')
+        try:
+            # Test failure condition (commented out as requested)
+            # if "fail" in item_data.get("filename", "").lower():
+            #     raise ValueError(f"Forced save failure for {item_data.get('filename')}")
 
-        # Create media instance
-        media = Media(
-            name=item_data['name'],
-            media_type=item_data['media_type'],
-            priority=item_data['priority'],
-            description=item_data['description'],
-            extracted_text=item_data['extracted_text'],
-            company_bot_id=company_bot_id,
-        )
-        media.save()
+            # Create media instance
+            file_content = None
+            file_name = None
 
-        # Process tags - separate manual and auto tags
-        all_tags = []
+            print(f"Attempting to retrieve file with key: {file_key}, session: {session_id}")
 
-        # Handle manual tags (created by current user)
-        manual_tag_names = item_data.get('manual_tags', [])
-        for tag_name in manual_tag_names:
-            tag, created = Tag.objects.get_or_create(
-                name=tag_name,
-                defaults={'created_by': user_profile}
+            if file_key:
+                cached_file = cache.get(file_key)
+                if cached_file:
+                    file_content = cached_file.get('content')
+                    file_name = cached_file.get('name')
+                else:
+                    print(f"File not found in cache for key: {file_key}")
+            else:
+                print("No file_key provided")
+
+            media = Media(
+                name=item_data['name'],
+                media_type=item_data['media_type'],
+                priority=item_data['priority'],
+                description=item_data['description'],
+                extracted_text=item_data['extracted_text'],
+                company_bot_id=company_bot_id,
             )
-            all_tags.append(tag)
+            print("file_name: ", file_name)
+            print("file_content: ", file_content)
+            if file_content and file_name:
+                from django.core.files.base import ContentFile
+                media.file.save(file_name, ContentFile(file_content), save=False)
 
-        # Handle auto tags (created by bot)
-        auto_tag_names = item_data.get('auto_tags', [])
-        for tag_name in auto_tag_names:
-            # Remove 'auto-' prefix if present
-            clean_tag_name = tag_name.replace('auto-', '') if tag_name.startswith('auto-') else tag_name
-            tag, created = Tag.objects.get_or_create(
-                name=clean_tag_name,
-                defaults={'created_by_id': BOT_PROFILE_ID}
-            )
-            all_tags.append(tag)
+            media.save()
 
-        # Set all tags
-        media.tags.set(all_tags)
+            # Process tags - separate manual and auto tags
+            all_tags = []
 
-        # Add key-value pairs
-        for kv in item_data.get('key_values', []):
-            KeyValue.objects.create(
-                media=media,
-                key=kv['key'],
-                value=kv['value']
-            )
+            # Handle manual tags (created by current user)
+            manual_tag_names = item_data.get('manual_tags', [])
+            for tag_name in manual_tag_names:
+                tag, created = Tag.objects.get_or_create(
+                    name=tag_name,
+                    defaults={'created_by': user_profile}
+                )
+                all_tags.append(tag)
 
-        return {
-            'success': True,
-            'filename': item_data.get('filename', media.name),
-            'media_id': media.id,
-            'message': 'Successfully saved',
-            'file_index': item_data.get('file_index')
-        }
+            # Handle auto tags (created by bot)
+            auto_tag_names = item_data.get('auto_tags', [])
+            for tag_name in auto_tag_names:
+                # Remove 'auto-' prefix if present
+                clean_tag_name = tag_name.replace('auto-', '') if tag_name.startswith('auto-') else tag_name
+                tag, created = Tag.objects.get_or_create(
+                    name=clean_tag_name,
+                    defaults={'created_by_id': BOT_PROFILE_ID}
+                )
+                all_tags.append(tag)
+
+            # Set all tags
+            media.tags.set(all_tags)
+
+            # Add key-value pairs
+            for kv in item_data.get('key_values', []):
+                KeyValue.objects.create(
+                    media=media,
+                    key=kv['key'],
+                    value=kv['value']
+                )
+
+            if file_key and cache.get(file_key):
+                cache.delete(file_key)
+                print(f"Cleaned up cache for {file_key}")
+
+            return {
+                'success': True,
+                'filename': item_data.get('filename', media.name),
+                'media_id': media.id,
+                'message': 'Successfully saved',
+                'file_index': item_data.get('file_index')
+            }
+        except Exception as e:
+            print(f"Save failed, preserving cache for {file_key}")
+            raise  # Re-raise the exception to be caught by the outer handler
 
 
 @method_decorator(staff_member_required, name='dispatch')
@@ -480,9 +536,11 @@ class BatchMediaRetrySaveView(View):
 
     def post(self, request):
         try:
+            print("BatchMediaRetrySaveView called")
             data = json.loads(request.body)
             item_data = data.get('item_data')
             company_bot_id = data.get('company_bot_id')
+            session_id = data.get('session_id')
 
             # Get current user's profile
             try:
@@ -491,7 +549,7 @@ class BatchMediaRetrySaveView(View):
                 user_profile = None
 
             save_view = BatchMediaSaveView()
-            result = save_view.save_single_item(item_data, company_bot_id, user_profile)
+            result = save_view.save_single_item(item_data, company_bot_id, user_profile, session_id)
 
             return JsonResponse({
                 'success': True,
@@ -499,6 +557,8 @@ class BatchMediaRetrySaveView(View):
             })
 
         except Exception as e:
+            print(f"Unexpected error: {e}")
+            traceback.print_exc()
             return JsonResponse({
                 'success': False,
                 'error': str(e)

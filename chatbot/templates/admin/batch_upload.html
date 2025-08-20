@@ -949,6 +949,18 @@
     .field-group.hidden {
         display: none;
     }
+
+    #retryAllBtn {
+        background-color: #ff9800;
+        color: white;
+        padding: 12px 30px;
+        font-size: 16px;
+        font-weight: 600;
+    }
+
+    #retryAllBtn:hover {
+        background-color: #f57c00;
+    }
 </style>
 {% endblock %}
 
@@ -1011,8 +1023,12 @@
                 <line x1="12" y1="3" x2="12" y2="15"></line>
             </svg>
             <p style="margin-top: 20px; font-size: 18px;">Drag and drop files here or click to browse</p>
-            <p style="margin-top: 10px; color: #666;">Supported formats: PDF, DOC, DOCX, TXT, CSV, XLS, XLSX</p>
-            <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.txt,.csv,.xls,.xlsx">
+            <p style="margin-top: 10px; color: #666;">
+                Supported formats:
+                {% for file_type in file_types %}{{ file_type.label }}{% if not forloop.last %}, {% endif %}{% endfor %}
+            </p>
+            <input type="file" id="fileInput" multiple
+                   accept="{% for file_type in file_types %}{{ file_type.extension }}{% if not forloop.last %},{% endif %}{% endfor %}">
         </div>
 
         <!-- Extraction Progress -->
@@ -1117,6 +1133,13 @@
             </div>
         </div>
 
+        <!-- Add retry all button here -->
+        <div style="text-align: center; margin: 20px 0;">
+            <button class="btn btn-primary" id="retryAllBtn" style="display: none;" onclick="retryAllFailed()">
+                Retry All Failed Saves
+            </button>
+        </div>
+
         <div class="results-list" id="resultsList"></div>
 
         <div class="button-group">
@@ -1133,6 +1156,9 @@
         </div>
     </div>
 </div>
+
+<!-- Pass file types data to JavaScript -->
+{{ file_types|json_script:"file-types-data" }}
 
 <script>
 // CSRF token for Django
@@ -1151,6 +1177,17 @@ function getCookie(name) {
     return cookieValue;
 }
 const csrftoken = getCookie('csrftoken');
+
+// Dynamic file types from Django
+const fileTypesData = JSON.parse(document.getElementById('file-types-data').textContent);
+
+// Create valid MIME types array and extension regex
+const validTypes = fileTypesData.map(ft => ft.mime_type);
+const validExtensions = fileTypesData
+    .map(ft => ft.extension.replace('.', ''))
+    .filter(ext => ext)
+    .join('|');
+const extensionRegex = new RegExp(`\\.(${validExtensions})$`, 'i');
 
 // Global variables
 let uploadedFiles = [];
@@ -1249,13 +1286,9 @@ fileInput.addEventListener('change', (e) => {
 });
 
 function handleFiles(files) {
-    const validTypes = ['application/pdf', 'application/msword',
-        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'text/plain', 'text/csv', 'application/vnd.ms-excel',
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-
     Array.from(files).forEach(file => {
-        if (validTypes.includes(file.type) || file.name.match(/\.(pdf|doc|docx|txt|csv|xls|xlsx)$/i)) {
+        // Check both MIME type and file extension
+        if (validTypes.includes(file.type) || (file.name && file.name.match(extensionRegex))) {
             if (!uploadedFiles.find(f => f.name === file.name)) {
                 uploadedFiles.push({
                     file: file,
@@ -1268,7 +1301,8 @@ function handleFiles(files) {
                 });
             }
         } else {
-            showStatus(`Invalid file type: ${file.name}`, 'error');
+            const supportedTypes = fileTypesData.map(ft => ft.label).join(', ');
+            showStatus(`Invalid file type: ${file.name}. Supported types: ${supportedTypes}`, 'error');
         }
     });
 
@@ -1450,6 +1484,100 @@ function unSkipFile(index) {
     uploadedFiles[index].error = null;
     uploadedFiles[index].errorTimestamp = null;
     updateFileList();
+}
+
+// Retry all failed saves
+async function retryAllFailed() {
+    const failedResults = saveResults
+        .map((result, index) => ({ result, index }))
+        .filter(item => !item.result.success);
+
+    if (failedResults.length === 0) {
+        showStatus('No failed saves to retry', 'info');
+        return;
+    }
+
+    showLoading(`Retrying ${failedResults.length} failed saves...`);
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const { result, index } of failedResults) {
+        try {
+            let itemData;
+
+            // First try to use originalData if available
+            if (result.originalData) {
+                itemData = result.originalData;
+            } else {
+                // Fallback: Find the original item data
+                const originalItem = extractedData.find(item =>
+                    item.filename === result.filename && item.status === FILE_STATUS.SUCCESS
+                );
+
+                if (!originalItem) {
+                    failCount++;
+                    continue;
+                }
+
+                itemData = {
+                    ...originalItem.data,
+                    filename: originalItem.filename,
+                    file_index: originalItem.file_index,
+                    manual_tags: originalItem.data.manual_tags || [],
+                    auto_tags: originalItem.data.auto_tags || [],
+                    file_key: originalItem.data.file_key,
+                    session_id: originalItem.data.session_id || sessionId
+                };
+            }
+
+            const response = await fetch("{% url 'admin:chatbot_media_retry_save' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrftoken,
+                },
+                body: JSON.stringify({
+                    item_data: itemData,
+                    company_bot_id: document.getElementById('companyBotSelect').value,
+                    session_id: sessionId
+                })
+            });
+
+            const retryResult = await response.json();
+            if (retryResult.success) {
+                // Update the result
+                saveResults[index] = {
+                    ...retryResult.result,
+                    originalData: itemData
+                };
+                successCount++;
+            } else {
+                failCount++;
+            }
+
+            // Update loading message with progress
+            showLoading(`Retrying saves... ${successCount + failCount}/${failedResults.length} processed`);
+
+        } catch (error) {
+            failCount++;
+            console.error(`Retry failed for ${result.filename}:`, error);
+        }
+    }
+
+    hideLoading();
+
+    // Refresh the display
+    displayResults(saveResults);
+
+    // Show final status
+    if (successCount > 0 && failCount === 0) {
+        showStatus(`Successfully retried all ${successCount} failed saves!`, 'success');
+    } else if (successCount > 0 && failCount > 0) {
+        showStatus(`Retried ${successCount} saves successfully, ${failCount} still failed.`, 'warning');
+    } else {
+        showStatus(`All ${failCount} retry attempts failed.`, 'error');
+    }
 }
 
 // Retry extraction for single file
@@ -1655,7 +1783,6 @@ async function extractDataFromFiles(files) {
 // Wait for all AI tasks to complete
 async function waitForAllTasksToComplete(taskIds) {
     return new Promise((resolve, reject) => {
-        let completedTasks = 0;
         const totalTasks = taskIds.length;
 
         const checkInterval = setInterval(async () => {
@@ -1671,13 +1798,13 @@ async function waitForAllTasksToComplete(taskIds) {
 
                 const result = await response.json();
                 if (result.success) {
-                    completedTasks = 0;
+                    let completedTasks = 0;  // Count all completed tasks, not just newly completed
 
                     extractedData.forEach(item => {
-                        if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id && !item.data.auto_tags_ready) {
+                        if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id) {
                             const taskResult = result.results[item.data.auto_tag_task_id];
 
-                            if (taskResult && taskResult.status === 'SUCCESS') {
+                            if (taskResult && taskResult.status === 'SUCCESS' && !item.data.auto_tags_ready) {
                                 // Process the enhanced AI data
                                 const aiResult = taskResult.result;
 
@@ -1692,7 +1819,6 @@ async function waitForAllTasksToComplete(taskIds) {
                                     // Don't update name - keep filename
                                     if (enhanced.description) item.data.description = enhanced.description;
                                     if (enhanced.extracted_text) item.data.extracted_text = enhanced.extracted_text;
-                                    if (enhanced.media_type) item.data.media_type = enhanced.media_type;
 
                                     // Merge enhanced key-values with existing ones
                                     if (enhanced.enhanced_key_values && enhanced.enhanced_key_values.length > 0) {
@@ -1704,13 +1830,16 @@ async function waitForAllTasksToComplete(taskIds) {
                                     }
                                 }
 
-                                completedTasks++;
                                 console.log(`AI extraction completed for ${item.filename}:`, aiResult);
-                            } else if (taskResult && taskResult.status === 'FAILURE') {
+                            } else if (taskResult && taskResult.status === 'FAILURE' && !item.data.auto_tags_ready) {
                                 item.data.auto_tags = [];
                                 item.data.auto_tags_ready = true;
-                                completedTasks++;
                                 console.error('AI extraction failed:', taskResult.error);
+                            }
+
+                            // Count this task as completed if it's ready (regardless of when it completed)
+                            if (item.data.auto_tags_ready) {
+                                completedTasks++;
                             }
                         }
                     });
@@ -1745,6 +1874,9 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
 
     try {
         extractedData = await extractDataFromFiles(uploadedFiles);
+
+        document.getElementById('uploadArea').style.display = 'none';
+        document.querySelector('.company-bot-selection').style.display = 'none';
 
         // Check if there are any AI extraction tasks to wait for
         const tasksToWaitFor = extractedData
@@ -2243,7 +2375,9 @@ async function saveToDatabase(data) {
         filename: item.filename,
         file_index: item.file_index,
         manual_tags: item.data.manual_tags || [],
-        auto_tags: item.data.auto_tags || []
+        auto_tags: item.data.auto_tags || [],
+        file_key: item.data.file_key,
+        session_id: item.data.session_id || sessionId
     }));
 
     const response = await fetch("{% url 'admin:chatbot_media_batch_save' %}", {
@@ -2254,13 +2388,25 @@ async function saveToDatabase(data) {
         },
         body: JSON.stringify({
             company_bot_id: companyBotId,
-            items: items
+            items: items,
+            session_id: sessionId
         })
     });
 
     const result = await response.json();
     if (result.success) {
-        return result.results;
+        return result.results.map((res, index) => {
+            // If save failed, ensure file_key is preserved
+            if (!res.success && items[index]) {
+                res.file_key = res.file_key || items[index].file_key;
+                res.session_id = res.session_id || items[index].session_id;
+            }
+            return {
+                ...res,
+                originalData: items[index]
+            };
+        });
+
     } else {
         throw new Error(result.error || 'Failed to save data');
     }
@@ -2272,14 +2418,33 @@ async function retrySave(resultIndex) {
     showLoading(`Retrying save for ${result.filename}...`);
 
     try {
-        // Find the original item data
-        const originalItem = extractedData.find(item =>
-            item.filename === result.filename && item.status === FILE_STATUS.SUCCESS
-        );
+        let itemData;
 
-        if (!originalItem) {
-            throw new Error('Original item data not found');
+        // First try to use originalData if available
+        if (result.originalData) {
+            itemData = result.originalData;
+        } else {
+            // Fallback: Find the original item data
+            const originalItem = extractedData.find(item =>
+                item.filename === result.filename && item.status === FILE_STATUS.SUCCESS
+            );
+
+            if (!originalItem) {
+                throw new Error('Original item data not found');
+            }
+
+            itemData = {
+                ...originalItem.data,
+                filename: originalItem.filename,
+                file_index: originalItem.file_index,
+                manual_tags: originalItem.data.manual_tags || [],
+                auto_tags: originalItem.data.auto_tags || [],
+                file_key: originalItem.data.file_key,
+                session_id: originalItem.data.session_id || sessionId
+            };
         }
+
+        console.log('Retrying with data:', itemData); // Debug log
 
         const response = await fetch("{% url 'admin:chatbot_media_retry_save' %}", {
             method: 'POST',
@@ -2288,21 +2453,19 @@ async function retrySave(resultIndex) {
                 'X-CSRFToken': csrftoken,
             },
             body: JSON.stringify({
-                item_data: {
-                    ...originalItem.data,
-                    filename: originalItem.filename,
-                    file_index: originalItem.file_index,
-                    manual_tags: originalItem.data.manual_tags || [],
-                    auto_tags: originalItem.data.auto_tags || []
-                },
-                company_bot_id: document.getElementById('companyBotSelect').value
+                item_data: itemData,
+                company_bot_id: document.getElementById('companyBotSelect').value,
+                session_id: sessionId
             })
         });
 
         const retryResult = await response.json();
         if (retryResult.success) {
             // Update the result
-            saveResults[resultIndex] = retryResult.result;
+            saveResults[resultIndex] = {
+                ...retryResult.result,
+                originalData: itemData  // Preserve for potential future retries
+            };
             displayResults(saveResults);
             showStatus(`Successfully retried save for ${result.filename}`, 'success');
         } else {
@@ -2345,6 +2508,15 @@ function displayResults(results) {
     document.getElementById('finalSuccessCount').textContent = successCount;
     document.getElementById('failedCount').textContent = failedCount;
     document.getElementById('finalSkippedCount').textContent = skippedCount;
+
+    // Show/hide retry all button based on failed count
+    const retryAllBtn = document.getElementById('retryAllBtn');
+    if (failedCount > 0) {
+        retryAllBtn.style.display = 'inline-block';
+        retryAllBtn.textContent = `Retry All Failed Saves (${failedCount})`;
+    } else {
+        retryAllBtn.style.display = 'none';
+    }
 
     const resultsList = document.getElementById('resultsList');
     resultsList.innerHTML = '';
@@ -2403,6 +2575,9 @@ document.getElementById('backToUploadBtn').addEventListener('click', () => {
         pollingInterval = null;
         document.getElementById('aiStatus').style.display = 'none';
     }
+    document.getElementById('uploadArea').style.display = 'block';
+    document.querySelector('.company-bot-selection').style.display = 'block';
+
     updateStepIndicator(1);
 });
 
@@ -2422,6 +2597,10 @@ document.getElementById('newBatchBtn').addEventListener('click', () => {
     isExtracting = false;
     isWaitingForAI = false;
     sessionId = null;
+
+    document.getElementById('uploadArea').style.display = 'block';
+    document.querySelector('.company-bot-selection').style.display = 'block';
+
     updateFileList();
     updateStepIndicator(1);
     document.getElementById('statusMessage').style.display = 'none';
