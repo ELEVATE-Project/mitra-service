@@ -271,6 +271,10 @@ class BatchMediaSaveView(View):
     def save_single_item(self, item_data, company_bot_id, user_profile):
         """Save a single media item"""
         # Create media instance
+        if "fail" in item_data.get("filename", "").lower():
+            print(f"Forced save failure for {item_data.get('filename')}")
+            raise ValueError(f"Forced save failure for {item_data.get('filename')}")
+
         media = Media(
             name=item_data['name'],
             media_type=item_data['media_type'],
