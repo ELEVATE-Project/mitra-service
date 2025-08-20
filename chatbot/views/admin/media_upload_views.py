@@ -33,8 +33,6 @@ class BatchMediaExtractView(View):
 
     def post(self, request):
         try:
-            print("request.FILES:", request.FILES)
-            print("request.POST:", request.POST)
             files = request.FILES.getlist('files')
             company_bot_id = request.POST.get('company_bot_id')
             extracted_data = []
@@ -47,8 +45,30 @@ class BatchMediaExtractView(View):
                 except CompanyBot.DoesNotExist:
                     pass
 
-            for file in files:
-                data = self.extract_file_data(file=file, company_bot=company_bot)
+            for i, file in enumerate(files):
+                try:
+                    data = self.extract_file_data(file=file, company_bot=company_bot, file_index=i)
+                    data['status'] = 'success'
+                    data['error'] = None
+                except Exception as e:
+                    data = {
+                        'filename': file.name,
+                        'status': 'error',
+                        'error': str(e),
+                        'file_index': i,
+                        'name': file.name.rsplit('.', 1)[0] if '.' in file.name else file.name,
+                        'media_type': self.get_media_type(file.name),
+                        'description': f'Extracted from {file.name}',
+                        'extracted_text': '',
+                        'priority': 'P1',
+                        'tags': [],
+                        'manual_tags': [],
+                        'auto_tags': [],
+                        'auto_tag_task_id': None,
+                        'auto_tags_ready': False,
+                        'key_values': []
+                    }
+
                 extracted_data.append(data)
 
             return JsonResponse({
@@ -61,10 +81,12 @@ class BatchMediaExtractView(View):
                 'error': str(e)
             }, status=400)
 
-    def extract_file_data(self, file, company_bot):
+    def extract_file_data(self, file, company_bot, file_index):
         """Extract data from file and start async tag extraction"""
         file_extension = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else None
-
+        if "fail" in file.name.lower():
+            print(f"Forced extraction failure for {file.name}")
+            raise ValueError(f"Forced extraction failure for {file.name}")
         # Save file temporarily and start Celery task
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as tmp:
             for chunk in file.chunks():
@@ -80,14 +102,17 @@ class BatchMediaExtractView(View):
 
         return {
             'filename': file.name,
+            'file_index': file_index,
             'name': file.name.rsplit('.', 1)[0],
             'media_type': self.get_media_type(file.name),
             'description': f'Extracted from {file.name}',
             'extracted_text': 'Sample extracted text...',
             'priority': 'P1',
-            'tags': [],  # Start with empty tags
-            'auto_tag_task_id': task.id,  # Store task ID for polling
-            'auto_tags_ready': False,  # Flag to track completion
+            'tags': [],
+            'manual_tags': [],
+            'auto_tags': [],
+            'auto_tag_task_id': task.id,
+            'auto_tags_ready': False,
             'key_values': [
                 {'key': 'TITLE OF THE PROJECT', 'value': 'Sample Project'},
                 {'key': 'TARGET STAKEHOLDER', 'value': 'Students'},
@@ -96,7 +121,6 @@ class BatchMediaExtractView(View):
 
     def get_media_type(self, filename):
         ext = filename.rsplit('.', 1)[-1].lower()
-        print("Extracted media type: ", ext)
         type_map = {
             'pdf': 'PDF',
             'doc': 'DOC',
@@ -107,6 +131,61 @@ class BatchMediaExtractView(View):
             'xlsx': 'XLS'
         }
         return type_map.get(ext, 'TXT')
+
+
+@method_decorator(staff_member_required, name='dispatch')
+class BatchMediaRetryExtractView(View):
+    """API endpoint for retrying extraction of a single file"""
+
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            file_data = data.get('file_data')
+            company_bot_id = data.get('company_bot_id')
+
+            company_bot = None
+            if company_bot_id:
+                try:
+                    from chatbot.models import CompanyBot
+                    company_bot = CompanyBot.objects.get(id=company_bot_id)
+                except CompanyBot.DoesNotExist:
+                    pass
+
+            # Simulate file object from stored data
+            class MockFile:
+                def __init__(self, filename):
+                    self.name = filename
+
+                def chunks(self):
+                    return [b'mock content']  # In real implementation, you'd retrieve the actual file
+
+            mock_file = MockFile(file_data['filename'])
+
+            try:
+                extract_view = BatchMediaExtractView()
+                extracted_data = extract_view.extract_file_data(
+                    file=mock_file,
+                    company_bot=company_bot,
+                    file_index=file_data.get('file_index', 0)
+                )
+                extracted_data['status'] = 'success'
+                extracted_data['error'] = None
+
+                return JsonResponse({
+                    'success': True,
+                    'data': extracted_data
+                })
+            except Exception as e:
+                return JsonResponse({
+                    'success': False,
+                    'error': str(e)
+                })
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=400)
 
 
 @method_decorator(staff_member_required, name='dispatch')
@@ -168,64 +247,14 @@ class BatchMediaSaveView(View):
 
             for item_data in media_items:
                 try:
-                    # Create media instance
-                    media = Media(
-                        name=item_data['name'],
-                        media_type=item_data['media_type'],
-                        priority=item_data['priority'],
-                        description=item_data['description'],
-                        extracted_text=item_data['extracted_text'],
-                        company_bot_id=company_bot_id,
-                        # Handle file upload separately
-                    )
-                    media.save()
-
-                    # Process tags - separate manual and auto tags
-                    all_tags = []
-
-                    # Handle manual tags (created by current user)
-                    manual_tag_names = item_data.get('manual_tags', [])
-                    for tag_name in manual_tag_names:
-                        tag, created = Tag.objects.get_or_create(
-                            name=tag_name,
-                            defaults={'created_by': user_profile}
-                        )
-                        all_tags.append(tag)
-
-                    # Handle auto tags (created by bot)
-                    auto_tag_names = item_data.get('auto_tags', [])
-                    for tag_name in auto_tag_names:
-                        # Remove 'auto-' prefix if present
-                        clean_tag_name = tag_name.replace('auto-', '') if tag_name.startswith('auto-') else tag_name
-                        tag, created = Tag.objects.get_or_create(
-                            name=clean_tag_name,
-                            defaults={'created_by_id': BOT_PROFILE_ID}
-                        )
-                        all_tags.append(tag)
-
-                    # Set all tags
-                    media.tags.set(all_tags)
-
-                    # Add key-value pairs
-                    for kv in item_data.get('key_values', []):
-                        KeyValue.objects.create(
-                            media=media,
-                            key=kv['key'],
-                            value=kv['value']
-                        )
-
-                    results.append({
-                        'success': True,
-                        'filename': item_data.get('filename', media.name),
-                        'media_id': media.id,
-                        'message': 'Successfully saved'
-                    })
-
+                    result = self.save_single_item(item_data, company_bot_id, user_profile)
+                    results.append(result)
                 except Exception as e:
                     results.append({
                         'success': False,
                         'filename': item_data.get('filename', 'Unknown'),
-                        'message': str(e)
+                        'message': str(e),
+                        'file_index': item_data.get('file_index')
                     })
 
             return JsonResponse({
@@ -238,4 +267,89 @@ class BatchMediaSaveView(View):
                 'success': False,
                 'error': str(e)
             }, status=400)
-    
+
+    def save_single_item(self, item_data, company_bot_id, user_profile):
+        """Save a single media item"""
+        # Create media instance
+        media = Media(
+            name=item_data['name'],
+            media_type=item_data['media_type'],
+            priority=item_data['priority'],
+            description=item_data['description'],
+            extracted_text=item_data['extracted_text'],
+            company_bot_id=company_bot_id,
+        )
+        media.save()
+
+        # Process tags - separate manual and auto tags
+        all_tags = []
+
+        # Handle manual tags (created by current user)
+        manual_tag_names = item_data.get('manual_tags', [])
+        for tag_name in manual_tag_names:
+            tag, created = Tag.objects.get_or_create(
+                name=tag_name,
+                defaults={'created_by': user_profile}
+            )
+            all_tags.append(tag)
+
+        # Handle auto tags (created by bot)
+        auto_tag_names = item_data.get('auto_tags', [])
+        for tag_name in auto_tag_names:
+            # Remove 'auto-' prefix if present
+            clean_tag_name = tag_name.replace('auto-', '') if tag_name.startswith('auto-') else tag_name
+            tag, created = Tag.objects.get_or_create(
+                name=clean_tag_name,
+                defaults={'created_by_id': BOT_PROFILE_ID}
+            )
+            all_tags.append(tag)
+
+        # Set all tags
+        media.tags.set(all_tags)
+
+        # Add key-value pairs
+        for kv in item_data.get('key_values', []):
+            KeyValue.objects.create(
+                media=media,
+                key=kv['key'],
+                value=kv['value']
+            )
+
+        return {
+            'success': True,
+            'filename': item_data.get('filename', media.name),
+            'media_id': media.id,
+            'message': 'Successfully saved',
+            'file_index': item_data.get('file_index')
+        }
+
+
+@method_decorator(staff_member_required, name='dispatch')
+class BatchMediaRetrySaveView(View):
+    """API endpoint for retrying save of a single media item"""
+
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            item_data = data.get('item_data')
+            company_bot_id = data.get('company_bot_id')
+
+            # Get current user's profile
+            try:
+                user_profile = Profile.objects.get(email=request.user.email)
+            except Profile.DoesNotExist:
+                user_profile = None
+
+            save_view = BatchMediaSaveView()
+            result = save_view.save_single_item(item_data, company_bot_id, user_profile)
+
+            return JsonResponse({
+                'success': True,
+                'result': result
+            })
+
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=400)

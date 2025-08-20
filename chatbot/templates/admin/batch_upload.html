@@ -100,24 +100,201 @@
 
     .file-list {
         margin-top: 20px;
-        max-height: 200px;
+        max-height: 400px;
         overflow-y: auto;
     }
 
     .file-item {
+        background-color: #f5f5f5;
+        margin-bottom: 8px;
+        border-radius: 6px;
+        border-left: 4px solid #ddd;
+        overflow: hidden;
+    }
+
+    .file-item.success {
+        border-left-color: #5cb85c;
+        background-color: #f0f9f0;
+    }
+
+    .file-item.error {
+        border-left-color: #f44336;
+        background-color: #fff5f5;
+    }
+
+    .file-item.skipped {
+        border-left-color: #ff9800;
+        background-color: #fff8e1;
+        opacity: 0.7;
+    }
+
+    .file-item.processing {
+        border-left-color: #2196f3;
+        background-color: #e3f2fd;
+    }
+
+    .file-item-main {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 10px;
-        background-color: #f5f5f5;
-        margin-bottom: 5px;
-        border-radius: 4px;
+        padding: 15px;
+    }
+
+    .file-item-content {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+        flex: 1;
+    }
+
+    .file-status-icon {
+        font-size: 20px;
+        width: 24px;
+        text-align: center;
+    }
+
+    .file-info {
+        flex: 1;
+    }
+
+    .file-name {
+        font-weight: 500;
+        color: #333;
+    }
+
+    .file-size {
+        color: #666;
+        font-size: 14px;
+    }
+
+    .file-status-text {
+        color: #666;
+        font-size: 12px;
+        margin-top: 4px;
+    }
+
+    .file-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
     }
 
     .file-item .remove-btn {
         color: #f44336;
         cursor: pointer;
         font-weight: bold;
+        padding: 4px 8px;
+        border-radius: 4px;
+        background: transparent;
+        border: 1px solid #f44336;
+        font-size: 12px;
+    }
+
+    .file-item .remove-btn:hover {
+        background-color: #f44336;
+        color: white;
+    }
+
+    .retry-btn {
+        background-color: #ff9800;
+        color: white;
+        border: none;
+        padding: 4px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .retry-btn:hover {
+        background-color: #f57c00;
+    }
+
+    .skip-btn {
+        background-color: #9e9e9e;
+        color: white;
+        border: none;
+        padding: 4px 12px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+    }
+
+    .skip-btn:hover {
+        background-color: #757575;
+    }
+
+    .error-toggle {
+        background-color: #f44336;
+        color: white;
+        border: none;
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        font-weight: 500;
+    }
+
+    .error-toggle:hover {
+        background-color: #d32f2f;
+    }
+
+    /* Error Details Section */
+    .file-error-details {
+        display: none;
+        padding: 15px;
+        background-color: #fff;
+        border-top: 1px solid #ffcdd2;
+        margin: 0;
+    }
+
+    .file-error-details.show {
+        display: block;
+        animation: slideDown 0.3s ease-out;
+    }
+
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            max-height: 0;
+            padding-top: 0;
+            padding-bottom: 0;
+        }
+        to {
+            opacity: 1;
+            max-height: 200px;
+            padding-top: 15px;
+            padding-bottom: 15px;
+        }
+    }
+
+    .error-details-content {
+        background-color: #fff5f5;
+        padding: 12px;
+        border-radius: 4px;
+        border: 1px solid #ffcdd2;
+    }
+
+    .error-title {
+        font-weight: 600;
+        color: #c62828;
+        margin-bottom: 8px;
+        font-size: 14px;
+    }
+
+    .error-message {
+        color: #f44336;
+        font-size: 13px;
+        line-height: 1.4;
+        word-break: break-word;
+    }
+
+    .error-timestamp {
+        color: #999;
+        font-size: 11px;
+        margin-top: 8px;
+        font-style: italic;
     }
 
     /* Company Bot Selection */
@@ -141,6 +318,85 @@
         border-radius: 4px;
     }
 
+    /* Extraction Progress Section */
+    .extraction-progress {
+        margin: 20px 0;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        display: none;
+    }
+
+    .extraction-progress.show {
+        display: block;
+    }
+
+    .progress-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .progress-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .progress-stats {
+        display: flex;
+        gap: 20px;
+        font-size: 14px;
+    }
+
+    .progress-stat {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .progress-stat.success {
+        color: #5cb85c;
+    }
+
+    .progress-stat.error {
+        color: #f44336;
+    }
+
+    .progress-stat.processing {
+        color: #2196f3;
+    }
+
+    .progress-stat.skipped {
+        color: #ff9800;
+    }
+
+    .progress-bar-container {
+        margin: 15px 0;
+    }
+
+    .progress-bar {
+        width: 100%;
+        height: 8px;
+        background-color: #e0e0e0;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: linear-gradient(to right, #5cb85c, #81c784);
+        transition: width 0.3s ease;
+        border-radius: 4px;
+    }
+
+    .progress-text {
+        font-size: 12px;
+        color: #666;
+        margin-top: 5px;
+    }
+
     /* Review Section */
     .data-grid {
         margin-top: 20px;
@@ -160,6 +416,17 @@
         display: block;
     }
 
+    .media-item.error {
+        border-color: #f44336;
+        background-color: #fff5f5;
+    }
+
+    .media-item.skipped {
+        border-color: #ff9800;
+        background-color: #fff8e1;
+        opacity: 0.7;
+    }
+
     .media-item-header {
         display: flex;
         justify-content: space-between;
@@ -171,6 +438,35 @@
         font-size: 18px;
         font-weight: 600;
         color: #333;
+    }
+
+    .media-item-status {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .status-badge {
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 12px;
+        font-weight: 500;
+        text-transform: uppercase;
+    }
+
+    .status-badge.success {
+        background-color: #d4edda;
+        color: #155724;
+    }
+
+    .status-badge.error {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+
+    .status-badge.skipped {
+        background-color: #fff3cd;
+        color: #856404;
     }
 
     .media-item-actions {
@@ -431,22 +727,7 @@
         cursor: not-allowed;
     }
 
-    /* Progress and Status */
-    .progress-bar {
-        width: 100%;
-        height: 20px;
-        background-color: #f0f0f0;
-        border-radius: 10px;
-        overflow: hidden;
-        margin: 20px 0;
-    }
-
-    .progress-fill {
-        height: 100%;
-        background-color: #5cb85c;
-        transition: width 0.3s ease;
-    }
-
+    /* Status Messages */
     .status-message {
         padding: 12px;
         border-radius: 6px;
@@ -470,6 +751,12 @@
         background-color: #d1ecf1;
         color: #0c5460;
         border: 1px solid #bee5eb;
+    }
+
+    .status-message.warning {
+        background-color: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeeba;
     }
 
     /* Loading Spinner */
@@ -617,92 +904,46 @@
         margin-bottom: 20px;
     }
 
-    /* Add these additional styles to your existing CSS in the template */
+    /* Save results in step 3 */
+    .save-result-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 15px;
+        margin-bottom: 10px;
+        border-radius: 6px;
+        border-left: 4px solid #ddd;
+    }
 
-/* Auto-tag loading state */
-.tags-input .spinner {
-    width: 16px;
-    height: 16px;
-    border: 2px solid #f3f3f3;
-    border-top: 2px solid #7b1fa2;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    display: inline-block;
-}
+    .save-result-item.success {
+        border-left-color: #5cb85c;
+        background-color: #f0f9f0;
+    }
 
-/* Auto-tag completion indicator */
-.auto-tags-complete {
-    color: #5cb85c;
-    font-size: 12px;
-    font-style: italic;
-    margin-left: 10px;
-}
+    .save-result-item.error {
+        border-left-color: #f44336;
+        background-color: #fff5f5;
+    }
 
-.auto-tags-loading {
-    color: #666;
-    font-size: 12px;
-    font-style: italic;
-    margin-left: 10px;
-}
+    .save-result-content {
+        flex: 1;
+    }
 
-/* Progress indicator for auto-tag generation */
-.auto-tag-progress {
-    margin-top: 10px;
-    padding: 10px;
-    background-color: #f0f9ff;
-    border-radius: 4px;
-    border-left: 4px solid #417690;
-    display: none;
-}
+    .save-result-actions {
+        display: flex;
+        gap: 8px;
+    }
 
-.auto-tag-progress.show {
-    display: block;
-}
+    /* Disabled state for items */
+    .media-item.disabled {
+        pointer-events: none;
+        opacity: 0.5;
+    }
 
-.auto-tag-progress .progress-text {
-    font-size: 14px;
-    color: #333;
-    margin-bottom: 5px;
-}
-
-.auto-tag-progress .progress-bar-small {
-    width: 100%;
-    height: 8px;
-    background-color: #e0e0e0;
-    border-radius: 4px;
-    overflow: hidden;
-}
-
-.auto-tag-progress .progress-fill-small {
-    height: 100%;
-    background-color: #417690;
-    transition: width 0.3s ease;
-}
-
-/* Enhanced status indicators */
-.status-indicator {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 12px;
-    margin-left: 10px;
-}
-
-.status-indicator.pending {
-    color: #856404;
-}
-
-.status-indicator.processing {
-    color: #0c5460;
-}
-
-.status-indicator.completed {
-    color: #155724;
-}
-
-.status-indicator.failed {
-    color: #721c24;
-}
+    .file-item.disabled {
+        pointer-events: none;
+        opacity: 0.5;
+    }
 </style>
 {% endblock %}
 
@@ -723,7 +964,7 @@
     <div class="step-indicator">
         <div class="step active" data-step="1">
             <div class="step-number">1</div>
-            <span class="step-label">Upload Files</span>
+            <span class="step-label">Upload & Extract</span>
         </div>
         <div class="step" data-step="2">
             <div class="step-number">2</div>
@@ -743,9 +984,9 @@
     <!-- Status Message -->
     <div id="statusMessage" class="status-message"></div>
 
-    <!-- Step 1: Upload -->
+    <!-- Step 1: Upload & Extract -->
     <div id="step1" class="content-section active">
-        <h2>Step 1: Upload Files</h2>
+        <h2>Step 1: Upload Files & Extract Data</h2>
 
         <!-- Company Bot Selection -->
         <div class="company-bot-selection">
@@ -769,11 +1010,45 @@
             <input type="file" id="fileInput" multiple accept=".pdf,.doc,.docx,.txt,.csv,.xls,.xlsx">
         </div>
 
+        <!-- Extraction Progress -->
+        <div id="extractionProgress" class="extraction-progress">
+            <div class="progress-header">
+                <div class="progress-title">Extraction Progress</div>
+                <div class="progress-stats">
+                    <div class="progress-stat success">
+                        <span>✓</span>
+                        <span id="successCount">0</span>
+                    </div>
+                    <div class="progress-stat error">
+                        <span>✗</span>
+                        <span id="errorCount">0</span>
+                    </div>
+                    <div class="progress-stat processing">
+                        <span class="spinner" style="width: 14px; height: 14px; border-width: 2px;"></span>
+                        <span id="processingCount">0</span>
+                    </div>
+                    <div class="progress-stat skipped">
+                        <span>⊘</span>
+                        <span id="skippedCount">0</span>
+                    </div>
+                </div>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="extractionProgressBar"></div>
+                </div>
+                <div class="progress-text" id="progressText">Starting extraction...</div>
+            </div>
+        </div>
+
         <div id="fileList" class="file-list"></div>
 
         <div class="button-group">
             <a href="{% url 'admin:chatbot_media_changelist' %}" class="btn btn-secondary">Back to Media List</a>
-            <button class="btn btn-primary" id="extractBtn" disabled>Extract Data</button>
+            <div>
+                <button class="btn btn-primary" id="extractBtn" disabled>Extract Data</button>
+                <button class="btn btn-primary" id="proceedBtn" style="display: none;" disabled>Proceed to Review</button>
+            </div>
         </div>
     </div>
 
@@ -807,8 +1082,6 @@
             </div>
         </div>
 
-
-
         <div class="button-group">
             <button class="btn btn-secondary" id="backToUploadBtn">Previous Step</button>
             <button class="btn btn-primary" id="saveBtn">Save All</button>
@@ -826,11 +1099,15 @@
             </div>
             <div class="summary-card">
                 <h3>Successful</h3>
-                <div class="value" id="successCount">0</div>
+                <div class="value" id="finalSuccessCount">0</div>
             </div>
             <div class="summary-card">
                 <h3>Failed</h3>
                 <div class="value" id="failedCount">0</div>
+            </div>
+            <div class="summary-card">
+                <h3>Skipped</h3>
+                <div class="value" id="finalSkippedCount">0</div>
             </div>
         </div>
 
@@ -852,8 +1129,7 @@
 </div>
 
 <script>
-    // CSRF token for Django
- // CSRF token for Django
+// CSRF token for Django
 function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
@@ -877,12 +1153,22 @@ let currentStep = 1;
 let currentPage = 1;
 let itemsPerPage = 1;
 let totalPages = 1;
-let pollingInterval = null; // NEW: For Celery task polling
+let pollingInterval = null;
+let isExtracting = false;
 
 // Media types and priorities from Django
 const mediaTypes = {{ media_types|safe }};
 const priorities = {{ priorities|safe }};
 const BOT_PROFILE_ID = 1;
+
+// File status constants
+const FILE_STATUS = {
+    PENDING: 'pending',
+    PROCESSING: 'processing',
+    SUCCESS: 'success',
+    ERROR: 'error',
+    SKIPPED: 'skipped'
+};
 
 // Utility functions
 function showStatus(message, type = 'info') {
@@ -963,7 +1249,15 @@ function handleFiles(files) {
     Array.from(files).forEach(file => {
         if (validTypes.includes(file.type) || file.name.match(/\.(pdf|doc|docx|txt|csv|xls|xlsx)$/i)) {
             if (!uploadedFiles.find(f => f.name === file.name)) {
-                uploadedFiles.push(file);
+                uploadedFiles.push({
+                    file: file,
+                    name: file.name,
+                    size: file.size,
+                    status: FILE_STATUS.PENDING,
+                    error: null,
+                    errorTimestamp: null,
+                    index: uploadedFiles.length
+                });
             }
         } else {
             showStatus(`Invalid file type: ${file.name}`, 'error');
@@ -975,122 +1269,357 @@ function handleFiles(files) {
 
 function updateFileList() {
     fileList.innerHTML = '';
-    uploadedFiles.forEach((file, index) => {
+
+    uploadedFiles.forEach((fileData, index) => {
         const fileItem = document.createElement('div');
-        fileItem.className = 'file-item';
+        fileItem.className = `file-item ${fileData.status}`;
+        fileItem.id = `file-item-${index}`;
+
+        let statusIcon = '';
+        let statusText = '';
+        let statusActions = '';
+
+        switch (fileData.status) {
+            case FILE_STATUS.SUCCESS:
+                statusIcon = '✓';
+                statusText = 'Extracted successfully';
+                break;
+            case FILE_STATUS.ERROR:
+                statusIcon = '✗';
+                statusText = 'Extraction failed';
+                statusActions = `
+                    <button class="retry-btn" onclick="retryExtraction(${index})">Retry</button>
+                    <button class="skip-btn" onclick="skipFile(${index})">Skip</button>
+                    <button class="error-toggle" onclick="toggleErrorDetails(${index})">Details</button>
+                `;
+                break;
+            case FILE_STATUS.SKIPPED:
+                statusIcon = '⊘';
+                statusText = 'Skipped';
+                statusActions = `<button class="retry-btn" onclick="unSkipFile(${index})">Un-skip</button>`;
+                break;
+            case FILE_STATUS.PROCESSING:
+                statusIcon = '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></span>';
+                statusText = 'Processing...';
+                break;
+            default:
+                statusIcon = '⏳';
+                statusText = 'Waiting...';
+        }
+
         fileItem.innerHTML = `
-            <span>${file.name} (${(file.size / 1024).toFixed(2)} KB)</span>
-            <span class="remove-btn" onclick="removeFile(${index})">×</span>
+            <div class="file-item-main">
+                <div class="file-item-content">
+                    <div class="file-status-icon">${statusIcon}</div>
+                    <div class="file-info">
+                        <div class="file-name">${fileData.name}</div>
+                        <div class="file-size">${(fileData.size / 1024).toFixed(2)} KB</div>
+                        <div class="file-status-text">${statusText}</div>
+                    </div>
+                </div>
+                <div class="file-actions">
+                    ${statusActions}
+                    <button class="remove-btn" onclick="removeFile(${index})">Remove</button>
+                </div>
+            </div>
+            ${fileData.status === FILE_STATUS.ERROR ? `
+                <div class="file-error-details" id="error-details-${index}">
+                    <div class="error-details-content">
+                        <div class="error-title">Extraction Error</div>
+                        <div class="error-message">${fileData.error || 'Unknown error occurred'}</div>
+                        <div class="error-timestamp">Failed at: ${fileData.errorTimestamp ? new Date(fileData.errorTimestamp).toLocaleString() : 'Unknown time'}</div>
+                    </div>
+                </div>
+            ` : ''}
         `;
         fileList.appendChild(fileItem);
     });
 
+    updateButtonStates();
+    updateExtractionProgress();
+}
+
+function toggleErrorDetails(index) {
+    const errorDetails = document.getElementById(`error-details-${index}`);
+    if (errorDetails) {
+        errorDetails.classList.toggle('show');
+    }
+}
+
+function updateButtonStates() {
     const companyBotSelected = document.getElementById('companyBotSelect').value;
-    document.getElementById('extractBtn').disabled = uploadedFiles.length === 0 || !companyBotSelected;
+    const hasValidFiles = uploadedFiles.some(f => f.status !== FILE_STATUS.SKIPPED);
+    const hasProcessedFiles = uploadedFiles.some(f => f.status === FILE_STATUS.SUCCESS || f.status === FILE_STATUS.ERROR);
+    const hasReadyFiles = uploadedFiles.some(f => f.status === FILE_STATUS.SUCCESS);
+    const isProcessing = uploadedFiles.some(f => f.status === FILE_STATUS.PROCESSING);
+
+    document.getElementById('extractBtn').disabled = !hasValidFiles || !companyBotSelected || isExtracting;
+    document.getElementById('proceedBtn').disabled = !hasReadyFiles || isProcessing;
+
+    // Show/hide proceed button based on extraction state
+    const proceedBtn = document.getElementById('proceedBtn');
+    const extractBtn = document.getElementById('extractBtn');
+
+    if (hasProcessedFiles && !isProcessing) {
+        proceedBtn.style.display = 'inline-block';
+        extractBtn.textContent = 'Extract All Again';
+    } else {
+        proceedBtn.style.display = 'none';
+        extractBtn.textContent = 'Extract Data';
+    }
+}
+
+function updateExtractionProgress() {
+    const stats = uploadedFiles.reduce((acc, file) => {
+        acc.total++;
+        switch (file.status) {
+            case FILE_STATUS.SUCCESS:
+                acc.success++;
+                break;
+            case FILE_STATUS.ERROR:
+                acc.error++;
+                break;
+            case FILE_STATUS.PROCESSING:
+                acc.processing++;
+                break;
+            case FILE_STATUS.SKIPPED:
+                acc.skipped++;
+                break;
+        }
+        return acc;
+    }, { total: 0, success: 0, error: 0, processing: 0, skipped: 0 });
+
+    // Update progress stats
+    document.getElementById('successCount').textContent = stats.success;
+    document.getElementById('errorCount').textContent = stats.error;
+    document.getElementById('processingCount').textContent = stats.processing;
+    document.getElementById('skippedCount').textContent = stats.skipped;
+
+    // Update progress bar
+    const completed = stats.success + stats.error + stats.skipped;
+    const progress = stats.total > 0 ? (completed / stats.total) * 100 : 0;
+    document.getElementById('extractionProgressBar').style.width = progress + '%';
+
+    // Update progress text
+    const progressText = document.getElementById('progressText');
+    if (stats.processing > 0) {
+        progressText.textContent = `Processing ${stats.processing} file(s)...`;
+    } else if (completed === stats.total && stats.total > 0) {
+        progressText.textContent = `Extraction complete! ${stats.success} successful, ${stats.error} failed, ${stats.skipped} skipped.`;
+    } else if (stats.total > 0) {
+        progressText.textContent = `${completed}/${stats.total} files processed`;
+    } else {
+        progressText.textContent = 'No files to process';
+    }
+
+    // Show/hide progress section
+    const progressSection = document.getElementById('extractionProgress');
+    if (uploadedFiles.length > 0 && (completed > 0 || stats.processing > 0)) {
+        progressSection.classList.add('show');
+    } else {
+        progressSection.classList.remove('show');
+    }
 }
 
 function removeFile(index) {
     uploadedFiles.splice(index, 1);
+    // Reindex remaining files
+    uploadedFiles.forEach((file, newIndex) => {
+        file.index = newIndex;
+    });
     updateFileList();
+}
+
+function skipFile(index) {
+    uploadedFiles[index].status = FILE_STATUS.SKIPPED;
+    uploadedFiles[index].error = null;
+    uploadedFiles[index].errorTimestamp = null;
+    updateFileList();
+}
+
+function unSkipFile(index) {
+    uploadedFiles[index].status = FILE_STATUS.PENDING;
+    uploadedFiles[index].error = null;
+    uploadedFiles[index].errorTimestamp = null;
+    updateFileList();
+}
+
+// Retry extraction for single file
+async function retryExtraction(index) {
+    const fileData = uploadedFiles[index];
+
+    // Set status to processing
+    uploadedFiles[index].status = FILE_STATUS.PROCESSING;
+    uploadedFiles[index].error = null;
+    uploadedFiles[index].errorTimestamp = null;
+    updateFileList();
+
+    try {
+        const response = await fetch("{% url 'admin:chatbot_media_retry_extract' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken,
+            },
+            body: JSON.stringify({
+                file_data: fileData,
+                company_bot_id: document.getElementById('companyBotSelect').value
+            })
+        });
+
+        const result = await response.json();
+        if (result.success) {
+            // Update the file status
+            uploadedFiles[index].status = FILE_STATUS.SUCCESS;
+            uploadedFiles[index].error = null;
+            uploadedFiles[index].errorTimestamp = null;
+
+            // Update or add to extracted data
+            const existingIndex = extractedData.findIndex(item => item && item.file_index === index);
+            if (existingIndex >= 0) {
+                extractedData[existingIndex] = {
+                    id: `temp_${Date.now()}_${index}`,
+                    filename: fileData.name,
+                    file: fileData.file,
+                    file_index: index,
+                    status: FILE_STATUS.SUCCESS,
+                    data: result.data
+                };
+            } else {
+                extractedData.push({
+                    id: `temp_${Date.now()}_${index}`,
+                    filename: fileData.name,
+                    file: fileData.file,
+                    file_index: index,
+                    status: FILE_STATUS.SUCCESS,
+                    data: result.data
+                });
+            }
+
+            updateFileList();
+            showStatus(`Successfully retried extraction for ${fileData.name}`, 'success');
+        } else {
+            uploadedFiles[index].status = FILE_STATUS.ERROR;
+            uploadedFiles[index].error = result.error;
+            uploadedFiles[index].errorTimestamp = new Date().toISOString();
+            showStatus(`Retry failed for ${fileData.name}: ${result.error}`, 'error');
+            updateFileList();
+        }
+    } catch (error) {
+        uploadedFiles[index].status = FILE_STATUS.ERROR;
+        uploadedFiles[index].error = error.message;
+        uploadedFiles[index].errorTimestamp = new Date().toISOString();
+        showStatus(`Retry failed for ${fileData.name}: ${error.message}`, 'error');
+        updateFileList();
+    }
 }
 
 // Company bot selection
 document.getElementById('companyBotSelect').addEventListener('change', updateFileList);
 
-// Data extraction via API
+// Data extraction via API - MODIFIED to process one by one
 async function extractDataFromFiles(files) {
-    const formData = new FormData();
-    files.forEach(file => {
-        formData.append('files', file);
-    });
-
     const companyBotId = document.getElementById('companyBotSelect').value;
-    formData.append('company_bot_id', companyBotId);
+    const extractedItems = [];
+    isExtracting = true;
 
-    const response = await fetch("{% url 'admin:chatbot_media_batch_extract' %}", {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': csrftoken,
-        },
-        body: formData
-    });
+    // Process files one by one to show progress
+    for (let i = 0; i < files.length; i++) {
+        const fileData = files[i];
 
-    const result = await response.json();
-    if (result.success) {
-        return result.data.map((data, index) => ({
-            id: `temp_${Date.now()}_${index}`,
-            filename: files[index].name,
-            file: files[index],
-            data: {
-                ...data,
-                manual_tags: data.tags ? data.tags.filter(tag => !tag.startsWith('auto-')) : [],
-                auto_tags: data.tags ? data.tags.filter(tag => tag.startsWith('auto-')) : []
-            }
-        }));
-    } else {
-        throw new Error(result.error || 'Failed to extract data');
-    }
-}
+        if (fileData.status === FILE_STATUS.SKIPPED) {
+            // Add placeholder for skipped files
+            extractedItems.push({
+                id: `skipped_${i}`,
+                filename: fileData.name,
+                file: fileData.file,
+                file_index: i,
+                status: FILE_STATUS.SKIPPED,
+                data: null
+            });
+            continue;
+        }
 
-// NEW: Function to start polling for auto-tag completion
-function startAutoTagPolling() {
-    const taskIds = extractedData
-        .filter(item => item.data.auto_tag_task_id)
-        .map(item => item.data.auto_tag_task_id);
+        // Set status to processing
+        uploadedFiles[i].status = FILE_STATUS.PROCESSING;
+        updateFileList();
 
-    if (taskIds.length === 0) return;
-
-    pollingInterval = setInterval(async () => {
         try {
-            const response = await fetch("{% url 'admin:chatbot_media_task_status' %}", {
+            // Create FormData for single file
+            const formData = new FormData();
+            formData.append('files', fileData.file);
+            formData.append('company_bot_id', companyBotId);
+
+            const response = await fetch("{% url 'admin:chatbot_media_batch_extract' %}", {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
                     'X-CSRFToken': csrftoken,
                 },
-                body: JSON.stringify({ task_ids: taskIds })
+                body: formData
             });
 
             const result = await response.json();
-            if (result.success) {
-                let allComplete = true;
-                let anyUpdated = false;
+            if (result.success && result.data.length > 0) {
+                const extractionResult = result.data[0]; // Single file result
 
-                extractedData.forEach(item => {
-                    if (item.data.auto_tag_task_id && !item.data.auto_tags_ready) {
-                        const taskResult = result.results[item.data.auto_tag_task_id];
+                if (extractionResult.status === 'success') {
+                    uploadedFiles[i].status = FILE_STATUS.SUCCESS;
+                    uploadedFiles[i].error = null;
+                    uploadedFiles[i].errorTimestamp = null;
 
-                        if (taskResult && taskResult.status === 'SUCCESS') {
-                            item.data.auto_tags = taskResult.result || [];
-                            item.data.auto_tags_ready = true;
-                            anyUpdated = true;
-                        } else if (taskResult && taskResult.status === 'FAILURE') {
-                            item.data.auto_tags = [];
-                            item.data.auto_tags_ready = true;
-                            anyUpdated = true;
-                            console.error('Auto-tag extraction failed:', taskResult.error);
-                        } else {
-                            allComplete = false;
-                        }
-                    }
-                });
+                    extractedItems.push({
+                        id: `temp_${Date.now()}_${i}`,
+                        filename: fileData.name,
+                        file: fileData.file,
+                        file_index: i,
+                        status: FILE_STATUS.SUCCESS,
+                        data: extractionResult
+                    });
+                } else {
+                    uploadedFiles[i].status = FILE_STATUS.ERROR;
+                    uploadedFiles[i].error = extractionResult.error;
+                    uploadedFiles[i].errorTimestamp = new Date().toISOString();
 
-                if (anyUpdated) {
-                    renderExtractedData(); // Re-render to show new tags
+                    extractedItems.push({
+                        id: `error_${i}`,
+                        filename: fileData.name,
+                        file: fileData.file,
+                        file_index: i,
+                        status: FILE_STATUS.ERROR,
+                        data: extractionResult,
+                        error: extractionResult.error
+                    });
                 }
-
-                if (allComplete) {
-                    clearInterval(pollingInterval);
-                    pollingInterval = null;
-                    showStatus('All auto-tags have been generated!', 'success');
-                }
+            } else {
+                throw new Error(result.error || 'Failed to extract data');
             }
         } catch (error) {
-            console.error('Error polling task status:', error);
+            uploadedFiles[i].status = FILE_STATUS.ERROR;
+            uploadedFiles[i].error = error.message;
+            uploadedFiles[i].errorTimestamp = new Date().toISOString();
+
+            extractedItems.push({
+                id: `error_${i}`,
+                filename: fileData.name,
+                file: fileData.file,
+                file_index: i,
+                status: FILE_STATUS.ERROR,
+                data: null,
+                error: error.message
+            });
         }
-    }, 2000); // Poll every 2 seconds
+
+        updateFileList();
+
+        // Small delay to show progress
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    isExtracting = false;
+    return extractedItems;
 }
 
+// Auto-tag polling functions
 async function waitForAllTasksToComplete(taskIds) {
     return new Promise((resolve, reject) => {
         let completedTasks = 0;
@@ -1112,7 +1641,7 @@ async function waitForAllTasksToComplete(taskIds) {
                     completedTasks = 0;
 
                     extractedData.forEach(item => {
-                        if (item.data.auto_tag_task_id) {
+                        if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id) {
                             const taskResult = result.results[item.data.auto_tag_task_id];
 
                             if (taskResult && taskResult.status === 'SUCCESS') {
@@ -1151,7 +1680,7 @@ async function waitForAllTasksToComplete(taskIds) {
     });
 }
 
-// Extract button handler - UPDATED
+// Extract button handler - MODIFIED to stay on step 1
 document.getElementById('extractBtn').addEventListener('click', async () => {
     showLoading('Extracting data from files...');
 
@@ -1160,7 +1689,7 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
 
         // Check if there are any Celery tasks to wait for
         const tasksToWaitFor = extractedData
-            .filter(item => item.data.auto_tag_task_id)
+            .filter(item => item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id)
             .map(item => item.data.auto_tag_task_id);
 
         if (tasksToWaitFor.length > 0) {
@@ -1171,18 +1700,41 @@ document.getElementById('extractBtn').addEventListener('click', async () => {
             await waitForAllTasksToComplete(tasksToWaitFor);
         }
 
-        // Now everything is ready - show Step 2
-        totalPages = Math.ceil(extractedData.length / itemsPerPage);
-        currentPage = 1;
-        renderExtractedData();
-        updateStepIndicator(2);
-        showStatus('Data extracted successfully! All auto-tags have been generated.', 'success');
+        // Show summary message
+        const successCount = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS).length;
+        const errorCount = extractedData.filter(item => item.status === FILE_STATUS.ERROR).length;
+        const skippedCount = extractedData.filter(item => item.status === FILE_STATUS.SKIPPED).length;
+
+        let message = `Extraction completed! `;
+        if (successCount > 0) message += `${successCount} files ready for review. `;
+        if (errorCount > 0) message += `${errorCount} files had errors. `;
+        if (skippedCount > 0) message += `${skippedCount} files were skipped.`;
+
+        showStatus(message, errorCount > 0 ? 'warning' : 'success');
 
     } catch (error) {
         showStatus('Error extracting data: ' + error.message, 'error');
     } finally {
         hideLoading();
+        updateFileList(); // Update the file list to show final statuses
     }
+});
+
+// Proceed button handler - NEW
+document.getElementById('proceedBtn').addEventListener('click', () => {
+    // Filter out skipped files for pagination
+    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+
+    if (validItems.length === 0) {
+        showStatus('No files available for review. Please extract data from files first.', 'warning');
+        return;
+    }
+
+    totalPages = Math.ceil(validItems.length / itemsPerPage);
+    currentPage = 1;
+
+    renderExtractedData();
+    updateStepIndicator(2);
 });
 
 // Save all files at once
@@ -1191,25 +1743,30 @@ function saveAllFiles() {
     const currentIndex = (currentPage - 1) * itemsPerPage;
     saveCurrentFile(currentIndex);
 
-    // Mark all items as saved
+    // Mark all valid items as saved
     extractedData.forEach((item, index) => {
-        if (item) {
+        if (item && item.status === FILE_STATUS.SUCCESS) {
             item.manuallySaved = true;
             item.savedAt = new Date().toISOString();
         }
     });
 
-    showStatus('All files have been saved!', 'success');
+    showStatus('All valid files have been saved!', 'success');
     console.log('All files saved:', extractedData);
 }
 
 // Manual save for current file
 function saveCurrentFile(index) {
     const saveBtn = document.getElementById(`saveBtn_${index}`);
+    if (!saveBtn) return;
+
     const originalText = saveBtn.textContent;
 
-    // Collect current form data for this specific item
-    const item = extractedData[index];
+    // Find the actual item in extractedData
+    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+    const actualIndex = (currentPage - 1) * itemsPerPage;
+    const item = validItems[actualIndex];
+
     if (item) {
         // Save all field values
         item.data.name = document.getElementById(`name_${index}`).value;
@@ -1276,30 +1833,52 @@ function saveCurrentFile(index) {
     }
 }
 
-// Save individual field data
+// Save field data
 function saveFieldData(index, field, value) {
-    if (extractedData[index]) {
-        extractedData[index].data[field] = value;
+    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+    const actualIndex = (currentPage - 1) * itemsPerPage;
+    const item = validItems[actualIndex];
+
+    if (item && item.data) {
+        item.data[field] = value;
         console.log(`Saved ${field} for item ${index}:`, value);
     }
 }
 
 // Save key-value data
 function saveKeyValueData(index, kvIndex, field, value) {
-    if (extractedData[index] && extractedData[index].data.key_values[kvIndex]) {
-        extractedData[index].data.key_values[kvIndex][field] = value;
+    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+    const actualIndex = (currentPage - 1) * itemsPerPage;
+    const item = validItems[actualIndex];
+
+    if (item && item.data && item.data.key_values && item.data.key_values[kvIndex]) {
+        item.data.key_values[kvIndex][field] = value;
         console.log(`Saved ${field} for item ${index}, kv ${kvIndex}:`, value);
     }
 }
 
 // Pagination functions
 function updatePaginationControls() {
-    document.getElementById('currentItemIndex').textContent = currentPage;
-    document.getElementById('totalItems').textContent = extractedData.length;
+    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+    const totalValidItems = validItems.length;
+
+    document.getElementById('currentItemIndex').textContent = totalValidItems > 0 ? currentPage : 0;
+    document.getElementById('totalItems').textContent = totalValidItems;
 
     // Update page numbers
     const pageNumbersContainer = document.getElementById('pageNumbers');
     pageNumbersContainer.innerHTML = '';
+
+    if (totalValidItems === 0) {
+        // Update button states for no items
+        document.getElementById('firstPageBtn').disabled = true;
+        document.getElementById('prevPageBtn').disabled = true;
+        document.getElementById('nextPageBtn').disabled = true;
+        document.getElementById('lastPageBtn').disabled = true;
+        document.getElementById('pageJumpInput').max = 0;
+        document.getElementById('pageJumpInput').value = 0;
+        return;
+    }
 
     // Show max 5 page numbers around current page
     const maxVisiblePages = 5;
@@ -1356,16 +1935,33 @@ function jumpToPage() {
     }
 }
 
-// UPDATED: Render extracted data for review with pagination and loading states
+// Render extracted data for review
 function renderExtractedData() {
     const container = document.getElementById('extractedDataContainer');
     container.innerHTML = '';
 
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    const endIndex = Math.min(startIndex + itemsPerPage, extractedData.length);
+    // Only show successful extractions
+    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+    totalPages = Math.ceil(validItems.length / itemsPerPage);
 
-    for (let index = startIndex; index < endIndex; index++) {
-        const item = extractedData[index];
+    if (validItems.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #666;">
+                No files available for review. All files either failed extraction or were skipped.
+                <br><br>
+                <button class="btn btn-secondary" onclick="updateStepIndicator(1)">Go Back to Upload</button>
+            </div>
+        `;
+        updatePaginationControls();
+        return;
+    }
+
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, validItems.length);
+
+    for (let pageIndex = startIndex; pageIndex < endIndex; pageIndex++) {
+        const item = validItems[pageIndex];
+        const displayIndex = pageIndex; // Use page index for display
         const mediaItem = document.createElement('div');
         mediaItem.className = 'media-item active';
 
@@ -1373,11 +1969,11 @@ function renderExtractedData() {
         const saveButtonText = item.manuallySaved ? '✓ Saved' : 'Save';
         const saveButtonClass = item.manuallySaved ? 'btn btn-save saved' : 'btn btn-save';
 
-        // All auto-tags are ready now - no loading states needed
+        // Auto-tags content
         const autoTagsContent = (item.data.auto_tags || []).map(tag => `
             <span class="tag auto">
                 ${tag}
-                <span class="remove-tag" onclick="removeTag(${index}, '${tag}', 'auto')">×</span>
+                <span class="remove-tag" onclick="removeTag(${displayIndex}, '${tag}', 'auto')">×</span>
             </span>
         `).join('');
 
@@ -1388,19 +1984,19 @@ function renderExtractedData() {
                     ${item.manuallySaved ? '<span style="color: #5cb85c; font-size: 14px; margin-left: 10px;">(Saved at ' + new Date(item.savedAt).toLocaleTimeString() + ')</span>' : ''}
                 </div>
                 <div class="media-item-actions">
-                    <button class="${saveButtonClass}" id="saveBtn_${index}" onclick="saveCurrentFile(${index})">${saveButtonText}</button>
-                    <button class="btn btn-secondary" onclick="removeExtractedItem(${index})">Remove</button>
+                    <button class="${saveButtonClass}" id="saveBtn_${displayIndex}" onclick="saveCurrentFile(${displayIndex})">${saveButtonText}</button>
+                    <button class="btn btn-secondary" onclick="removeExtractedItem(${pageIndex})">Remove</button>
                 </div>
             </div>
 
             <div class="field-group">
                 <label>Name</label>
-                <input type="text" id="name_${index}" value="${item.data.name}" oninput="saveFieldData(${index}, 'name', this.value)">
+                <input type="text" id="name_${displayIndex}" value="${item.data.name || ''}" oninput="saveFieldData(${displayIndex}, 'name', this.value)">
             </div>
 
             <div class="field-group">
                 <label>Media Type</label>
-                <select id="mediaType_${index}" onchange="saveFieldData(${index}, 'media_type', this.value)">
+                <select id="mediaType_${displayIndex}" onchange="saveFieldData(${displayIndex}, 'media_type', this.value)">
                     {% for value, label in media_types %}
                     <option value="{{ value }}" ${item.data.media_type === '{{ value }}' ? 'selected' : ''}>{{ label }}</option>
                     {% endfor %}
@@ -1409,7 +2005,7 @@ function renderExtractedData() {
 
             <div class="field-group">
                 <label>Priority</label>
-                <select id="priority_${index}" onchange="saveFieldData(${index}, 'priority', this.value)">
+                <select id="priority_${displayIndex}" onchange="saveFieldData(${displayIndex}, 'priority', this.value)">
                     {% for value, label in priorities %}
                     <option value="{{ value }}" ${item.data.priority === '{{ value }}' ? 'selected' : ''}>{{ label }}</option>
                     {% endfor %}
@@ -1418,12 +2014,12 @@ function renderExtractedData() {
 
             <div class="field-group">
                 <label>Description</label>
-                <textarea id="description_${index}" oninput="saveFieldData(${index}, 'description', this.value)">${item.data.description || ''}</textarea>
+                <textarea id="description_${displayIndex}" oninput="saveFieldData(${displayIndex}, 'description', this.value)">${item.data.description || ''}</textarea>
             </div>
 
             <div class="field-group">
                 <label>Extracted Text</label>
-                <textarea id="extractedText_${index}" oninput="saveFieldData(${index}, 'extracted_text', this.value)">${item.data.extracted_text || ''}</textarea>
+                <textarea id="extractedText_${displayIndex}" oninput="saveFieldData(${displayIndex}, 'extracted_text', this.value)">${item.data.extracted_text || ''}</textarea>
             </div>
 
             <div class="field-group">
@@ -1431,23 +2027,23 @@ function renderExtractedData() {
                 <div class="tags-section">
                     <div class="tags-subsection">
                         <h4>Manual Tags</h4>
-                        <div class="tags-input" id="manualTagsContainer_${index}">
+                        <div class="tags-input" id="manualTagsContainer_${displayIndex}">
                             ${(item.data.manual_tags || []).map(tag => `
                                 <span class="tag manual">
                                     ${tag}
-                                    <span class="remove-tag" onclick="removeTag(${index}, '${tag}', 'manual')">×</span>
+                                    <span class="remove-tag" onclick="removeTag(${displayIndex}, '${tag}', 'manual')">×</span>
                                 </span>
                             `).join('')}
                             <input type="text" class="tag-input-field" placeholder="Add manual tag..."
-                                onkeypress="handleTagInput(event, ${index}, 'manual')">
+                                onkeypress="handleTagInput(event, ${displayIndex}, 'manual')">
                         </div>
                     </div>
                     <div class="tags-subsection">
                         <h4>Auto Tags (AI Generated)</h4>
-                        <div class="tags-input" id="autoTagsContainer_${index}">
+                        <div class="tags-input" id="autoTagsContainer_${displayIndex}">
                             ${autoTagsContent}
                             <input type="text" class="tag-input-field" placeholder="Add auto tag..."
-                                onkeypress="handleTagInput(event, ${index}, 'auto')">
+                                onkeypress="handleTagInput(event, ${displayIndex}, 'auto')">
                         </div>
                     </div>
                 </div>
@@ -1455,16 +2051,16 @@ function renderExtractedData() {
 
             <div class="field-group">
                 <label>Additional Fields</label>
-                <div class="key-values" id="kvContainer_${index}">
+                <div class="key-values" id="kvContainer_${displayIndex}">
                     ${(item.data.key_values || []).map((kv, kvIndex) => `
                         <div class="key-value-pair">
-                            <input type="text" value="${kv.key}" id="key_${index}_${kvIndex}" oninput="saveKeyValueData(${index}, ${kvIndex}, 'key', this.value)">
-                            <input type="text" value="${kv.value}" id="value_${index}_${kvIndex}" oninput="saveKeyValueData(${index}, ${kvIndex}, 'value', this.value)">
-                            <button class="remove-kv-btn" onclick="removeKeyValue(${index}, ${kvIndex})">Remove</button>
+                            <input type="text" value="${kv.key || ''}" id="key_${displayIndex}_${kvIndex}" oninput="saveKeyValueData(${displayIndex}, ${kvIndex}, 'key', this.value)">
+                            <input type="text" value="${kv.value || ''}" id="value_${displayIndex}_${kvIndex}" oninput="saveKeyValueData(${displayIndex}, ${kvIndex}, 'value', this.value)">
+                            <button class="remove-kv-btn" onclick="removeKeyValue(${displayIndex}, ${kvIndex})">Remove</button>
                         </div>
                     `).join('')}
                 </div>
-                <button class="add-kv-btn" onclick="addKeyValue(${index})">Add Field</button>
+                <button class="add-kv-btn" onclick="addKeyValue(${displayIndex})">Add Field</button>
             </div>
         `;
         container.appendChild(mediaItem);
@@ -1475,14 +2071,33 @@ function renderExtractedData() {
 }
 
 function updateProgressBar() {
-    const progress = (extractedData.filter(item => item !== null).length / uploadedFiles.length) * 100;
+    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+    const totalValidFiles = uploadedFiles.filter(f => f.status !== FILE_STATUS.SKIPPED).length;
+    const progress = totalValidFiles > 0 ? (validItems.length / totalValidFiles) * 100 : 0;
     document.getElementById('progressBar').style.width = progress + '%';
 }
 
-function removeExtractedItem(index) {
-    extractedData.splice(index, 1);
-    uploadedFiles.splice(index, 1);
-    totalPages = Math.ceil(extractedData.length / itemsPerPage);
+function removeExtractedItem(validIndex) {
+    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+    const itemToRemove = validItems[validIndex];
+
+    if (itemToRemove) {
+        // Find and remove from extractedData
+        const actualIndex = extractedData.findIndex(item => item.id === itemToRemove.id);
+        if (actualIndex >= 0) {
+            extractedData.splice(actualIndex, 1);
+        }
+
+        // Find and remove from uploadedFiles
+        const fileIndex = uploadedFiles.findIndex(f => f.name === itemToRemove.filename);
+        if (fileIndex >= 0) {
+            uploadedFiles.splice(fileIndex, 1);
+        }
+    }
+
+    // Recalculate pagination
+    const remainingValidItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+    totalPages = Math.ceil(remainingValidItems.length / itemsPerPage);
 
     if (currentPage > totalPages && totalPages > 0) {
         currentPage = totalPages;
@@ -1490,18 +2105,25 @@ function removeExtractedItem(index) {
 
     renderExtractedData();
 
-    if (extractedData.length === 0) {
+    if (remainingValidItems.length === 0) {
         updateStepIndicator(1);
     }
 }
 
 function removeTag(itemIndex, tag, tagType) {
-    const tagArray = tagType === 'manual' ? 'manual_tags' : 'auto_tags';
-    const tagIndex = extractedData[itemIndex].data[tagArray].indexOf(tag);
-    if (tagIndex > -1) {
-        extractedData[itemIndex].data[tagArray].splice(tagIndex, 1);
-        // Re-render to update the view
-        renderExtractedData();
+    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+    const actualIndex = (currentPage - 1) * itemsPerPage;
+    const item = validItems[actualIndex];
+
+    if (item && item.data) {
+        const tagArray = tagType === 'manual' ? 'manual_tags' : 'auto_tags';
+        if (item.data[tagArray]) {
+            const tagIndex = item.data[tagArray].indexOf(tag);
+            if (tagIndex > -1) {
+                item.data[tagArray].splice(tagIndex, 1);
+                renderExtractedData();
+            }
+        }
     }
 }
 
@@ -1510,31 +2132,48 @@ function handleTagInput(event, itemIndex, tagType) {
         event.preventDefault();
         const input = event.target;
         const tag = input.value.trim();
-        const tagArray = tagType === 'manual' ? 'manual_tags' : 'auto_tags';
 
-        if (tag && !extractedData[itemIndex].data[tagArray].includes(tag)) {
-            extractedData[itemIndex].data[tagArray].push(tag);
+        const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+        const actualIndex = (currentPage - 1) * itemsPerPage;
+        const item = validItems[actualIndex];
 
-            // Re-render to update the view
-            renderExtractedData();
+        if (item && item.data && tag) {
+            const tagArray = tagType === 'manual' ? 'manual_tags' : 'auto_tags';
+            if (!item.data[tagArray]) {
+                item.data[tagArray] = [];
+            }
+
+            if (!item.data[tagArray].includes(tag)) {
+                item.data[tagArray].push(tag);
+                renderExtractedData();
+            }
         }
     }
 }
 
 function removeKeyValue(itemIndex, kvIndex) {
-    extractedData[itemIndex].data.key_values.splice(kvIndex, 1);
-    // Re-render to update indices
-    renderExtractedData();
+    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+    const actualIndex = (currentPage - 1) * itemsPerPage;
+    const item = validItems[actualIndex];
+
+    if (item && item.data && item.data.key_values) {
+        item.data.key_values.splice(kvIndex, 1);
+        renderExtractedData();
+    }
 }
 
 function addKeyValue(itemIndex) {
-    if (!extractedData[itemIndex].data.key_values) {
-        extractedData[itemIndex].data.key_values = [];
-    }
-    extractedData[itemIndex].data.key_values.push({ key: '', value: '' });
+    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+    const actualIndex = (currentPage - 1) * itemsPerPage;
+    const item = validItems[actualIndex];
 
-    // Re-render to ensure proper indices
-    renderExtractedData();
+    if (item && item.data) {
+        if (!item.data.key_values) {
+            item.data.key_values = [];
+        }
+        item.data.key_values.push({ key: '', value: '' });
+        renderExtractedData();
+    }
 }
 
 // Collect form data before saving
@@ -1542,7 +2181,7 @@ function collectFormData() {
     // The data is already saved in extractedData through auto-save
     // Just ensure tags are combined for the save operation
     extractedData.forEach((item) => {
-        if (item) {
+        if (item && item.status === FILE_STATUS.SUCCESS && item.data) {
             // Combine manual and auto tags for saving
             item.data.tags = [...(item.data.manual_tags || []), ...(item.data.auto_tags || [])];
         }
@@ -1552,9 +2191,13 @@ function collectFormData() {
 // Save data to database via API
 async function saveToDatabase(data) {
     const companyBotId = document.getElementById('companyBotSelect').value;
-    const items = data.map(item => ({
+    // Only save successful items
+    const validItems = data.filter(item => item.status === FILE_STATUS.SUCCESS);
+
+    const items = validItems.map(item => ({
         ...item.data,
         filename: item.filename,
+        file_index: item.file_index,
         manual_tags: item.data.manual_tags || [],
         auto_tags: item.data.auto_tags || []
     }));
@@ -1579,6 +2222,58 @@ async function saveToDatabase(data) {
     }
 }
 
+// Retry save for individual item
+async function retrySave(resultIndex) {
+    const result = saveResults[resultIndex];
+    showLoading(`Retrying save for ${result.filename}...`);
+
+    try {
+        // Find the original item data
+        const originalItem = extractedData.find(item =>
+            item.filename === result.filename && item.status === FILE_STATUS.SUCCESS
+        );
+
+        if (!originalItem) {
+            throw new Error('Original item data not found');
+        }
+
+        const response = await fetch("{% url 'admin:chatbot_media_retry_save' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken,
+            },
+            body: JSON.stringify({
+                item_data: {
+                    ...originalItem.data,
+                    filename: originalItem.filename,
+                    file_index: originalItem.file_index,
+                    manual_tags: originalItem.data.manual_tags || [],
+                    auto_tags: originalItem.data.auto_tags || []
+                },
+                company_bot_id: document.getElementById('companyBotSelect').value
+            })
+        });
+
+        const retryResult = await response.json();
+        if (retryResult.success) {
+            // Update the result
+            saveResults[resultIndex] = retryResult.result;
+            displayResults(saveResults);
+            showStatus(`Successfully retried save for ${result.filename}`, 'success');
+        } else {
+            showStatus(`Retry failed for ${result.filename}: ${retryResult.error}`, 'error');
+        }
+    } catch (error) {
+        showStatus(`Retry failed for ${result.filename}: ${error.message}`, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+// Global variable to store save results for retry functionality
+let saveResults = [];
+
 // Save button handler
 document.getElementById('saveBtn').addEventListener('click', async () => {
     collectFormData();
@@ -1586,6 +2281,7 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
 
     try {
         const results = await saveToDatabase(extractedData);
+        saveResults = results; // Store for retry functionality
         displayResults(results);
         updateStepIndicator(3);
     } catch (error) {
@@ -1599,23 +2295,50 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
 function displayResults(results) {
     const successCount = results.filter(r => r.success).length;
     const failedCount = results.filter(r => !r.success).length;
+    const skippedCount = extractedData.filter(item => item.status === FILE_STATUS.SKIPPED).length;
 
-    document.getElementById('totalFiles').textContent = results.length;
-    document.getElementById('successCount').textContent = successCount;
+    document.getElementById('totalFiles').textContent = uploadedFiles.length;
+    document.getElementById('finalSuccessCount').textContent = successCount;
     document.getElementById('failedCount').textContent = failedCount;
+    document.getElementById('finalSkippedCount').textContent = skippedCount;
 
     const resultsList = document.getElementById('resultsList');
     resultsList.innerHTML = '';
 
-    results.forEach(result => {
+    results.forEach((result, index) => {
         const resultItem = document.createElement('div');
-        resultItem.className = `result-item ${result.success ? 'success' : 'error'}`;
+        resultItem.className = `save-result-item ${result.success ? 'success' : 'error'}`;
+
+        const retryButton = !result.success ?
+            `<button class="retry-btn" onclick="retrySave(${index})">Retry Save</button>` : '';
+
         resultItem.innerHTML = `
             <div class="result-icon">${result.success ? '✓' : '✗'}</div>
-            <div class="result-details">
+            <div class="save-result-content">
                 <h4>${result.filename}</h4>
                 <p>${result.message}</p>
                 ${result.success && result.media_id ? `<p>Media ID: ${result.media_id}</p>` : ''}
+            </div>
+            <div class="save-result-actions">
+                ${retryButton}
+            </div>
+        `;
+        resultsList.appendChild(resultItem);
+    });
+
+    // Add skipped files to results
+    const skippedItems = extractedData.filter(item => item.status === FILE_STATUS.SKIPPED);
+    skippedItems.forEach(item => {
+        const resultItem = document.createElement('div');
+        resultItem.className = 'save-result-item';
+        resultItem.style.borderLeftColor = '#ff9800';
+        resultItem.style.backgroundColor = '#fff8e1';
+
+        resultItem.innerHTML = `
+            <div class="result-icon">⊘</div>
+            <div class="save-result-content">
+                <h4>${item.filename}</h4>
+                <p>File was skipped during extraction</p>
             </div>
         `;
         resultsList.appendChild(resultItem);
@@ -1624,9 +2347,12 @@ function displayResults(results) {
     if (successCount > 0) {
         showStatus(`Successfully saved ${successCount} file(s)!`, 'success');
     }
+    if (failedCount > 0) {
+        showStatus(`${failedCount} file(s) failed to save. You can retry individual files.`, 'warning');
+    }
 }
 
-// Navigation handlers - UPDATED to clear polling
+// Navigation handlers
 document.getElementById('backToUploadBtn').addEventListener('click', () => {
     if (pollingInterval) {
         clearInterval(pollingInterval);
@@ -1645,7 +2371,9 @@ document.getElementById('newBatchBtn').addEventListener('click', () => {
     // Reset everything
     uploadedFiles = [];
     extractedData = [];
+    saveResults = [];
     currentPage = 1;
+    isExtracting = false;
     updateFileList();
     updateStepIndicator(1);
     document.getElementById('statusMessage').style.display = 'none';
