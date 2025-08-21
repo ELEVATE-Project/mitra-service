@@ -1,19 +1,17 @@
 import traceback
-
 from django.views.generic import TemplateView
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils.decorators import method_decorator
 from django.http import JsonResponse
 from django.views import View
-from chatbot.models import Media, Tag, KeyValue, Profile, FileTypeChoices
+from chatbot.models import Media, Tag, KeyValue, Profile, FileTypeChoices, CompanyBot
 from chatbot.models.media_models import PriorityChoices
 import json
 import tempfile, os
 import uuid
 from django.core.cache import cache
-from celery.result import AsyncResult
-
 from chatbot.celery_tasks.knowledge_service.tag_tasks import get_auto_extracted_data
+from chatbot.utils.knowledge_service.duplicate_detector import DuplicateDetector
 
 BOT_PROFILE_ID = 1
 
@@ -123,7 +121,6 @@ class BatchMediaExtractView(View):
                 file_content += chunk
 
             file_key = f"batch_upload_{session_id}_{file_index}_{file.name}"
-            print("in store_file_for_retry file_content: ", file_content)
             # Store file data in cache for 1 hour
             cache.set(file_key, {
                 'content': file_content,
@@ -448,6 +445,18 @@ class BatchMediaSaveView(View):
             # if "fail" in item_data.get("filename", "").lower():
             #     raise ValueError(f"Forced save failure for {item_data.get('filename')}")
 
+            company_bot = CompanyBot.objects.get(id=company_bot_id)
+            company_slug = company_bot.company.slug
+
+            extracted_text = item_data.get('extracted_text', '')
+
+            DuplicateDetector.check_for_duplicates(
+                extracted_text=extracted_text, company_bot_id=company_bot_id, company_slug=company_slug,
+                trigram_threshold=0, semantic_threshold=0.85, trigram_exact_threshold=0.80,
+                semantic_exact_threshold=0.9
+            )
+
+
             # Create media instance
             file_content = None
             file_name = None
@@ -473,7 +482,6 @@ class BatchMediaSaveView(View):
                 company_bot_id=company_bot_id,
             )
             print("file_name: ", file_name)
-            print("file_content: ", file_content)
             if file_content and file_name:
                 from django.core.files.base import ContentFile
                 media.file.save(file_name, ContentFile(file_content), save=False)

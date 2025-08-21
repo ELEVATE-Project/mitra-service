@@ -1307,6 +1307,7 @@ function handleFiles(files) {
     });
 
     updateFileList();
+    fileInput.value = '';
 }
 
 function updateFileList() {
@@ -2605,6 +2606,7 @@ document.getElementById('newBatchBtn').addEventListener('click', () => {
     updateStepIndicator(1);
     document.getElementById('statusMessage').style.display = 'none';
     document.getElementById('companyBotSelect').value = '';
+    document.getElementById('fileInput').value = '';
 });
 
 // Clear polling on page unload

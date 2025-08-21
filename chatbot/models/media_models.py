@@ -8,7 +8,7 @@ from chatbot.utils.database_util import upsert_single_file, delete_single_file
 from chatbot.utils.knowledge_service.auto_tag_utils import save_auto_tags
 from shikshalokam.models.enums import PriorityChoices
 from django.contrib.postgres.indexes import GinIndex
-from django.contrib.postgres.search import SearchVector
+from django.contrib.postgres.search import SearchVector, TrigramSimilarity
 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 
@@ -48,38 +48,28 @@ class Media(models.Model):
         print('Save in vector for media_id: {}'.format(media_id))
         media = Media.objects.get(id=media_id)
         kvs = KeyValue.objects.filter(media=media)
-        # save_auto_tags(media)
-        # metadata = {
-        #     'source': 'file',
-        #     'url': str(media.url) if media.url is not None else S3_BASE_URL + media.file.name,
-        #     'company': media.company_bot.company.slug,
-        #     'created_at': str(media.created_at),
-        # }
-        # other_tags = dict()
-        # for kv in kvs:
-        #     if kv.key in ['TITLE OF THE PROJECT', 'priority',
-        #                   'TARGET STAKEHOLDER', 'DURATION', 'DESCRIPTION',
-        #                   'OBJECTIVE', 'PROJECT LEVEL LEARNING RESOURCE', 'TASK NAME',
-        #                   'SUB TASK (If any)', 'NAME OF TASK LEVEL LEARNING RESOURCE']:
-        #         metadata[kv.key] = kv.value
-        #     else:
-        #         other_tags[kv.key] = kv.value
-        # other_tags['s3_link'] = S3_BASE_URL + media.file.name
-        # metadata['other_tags'] = str(other_tags)
-        # metadata['tags'] = list(media.tags.values_list('name', flat=True))
-        # with media.file.open("rb") as file:
-        #     file_content = file.read()
-        # file_name = media.file.name.split("/")[-1]
+        metadata = {
+            'source': 'file',
+            'url': str(media.url) if media.url is not None else S3_BASE_URL + media.file.name,
+            'company': media.company_bot.company.slug,
+            'created_at': str(media.created_at),
+        }
+        for kv in kvs:
+            metadata[kv.key] = kv.value
+        metadata['tags'] = list(media.tags.values_list('name', flat=True))
+        with media.file.open("rb") as file:
+            file_content = file.read()
+        file_name = media.file.name.split("/")[-1]
 
-        # status_code, response_text = upsert_single_file(file_name, file_content, metadata, media)
-        # print(status_code, response_text)
+        status_code, response_text = upsert_single_file(file_name, file_content, metadata, media)
+        print(status_code, response_text)
 
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         super().save(*args, **kwargs)
-        # if is_new:
-            # self.save_in_vector_db.apply_async(args=(self.id,), countdown=1)
+        if is_new:
+            self.save_in_vector_db.apply_async(args=(self.id,), countdown=1)
 
     @shared_task
     def delete_from_vector_db(media_id):
@@ -89,13 +79,39 @@ class Media(models.Model):
         return status_code
 
     def delete(self, *args, **kwargs):
-        status_code = 200 #self.delete_from_vector_db(self.id)
+        status_code = self.delete_from_vector_db(self.id)
         if status_code == 200:
             super().delete(*args, **kwargs)
         else:
             raise Exception(
                 f"Failed to delete from vector DB for media_id: {self.id}. Status: {status_code}"
             )
+
+    @classmethod
+    def find_trigram_similar(cls, extracted_text, company_bot_id, similarity_threshold=0.85, exclude_id=None):
+        """
+        Find media with similar text using trigram similarity (local check)
+        """
+        if not extracted_text or len(extracted_text.strip()) < 50:
+            return []
+
+        text_sample = extracted_text[:1500].strip()
+
+        queryset = cls.objects.filter(company_bot_id=company_bot_id)
+        if exclude_id:
+            queryset = queryset.exclude(id=exclude_id)
+
+        similar_media = (
+            queryset
+            .annotate(
+                similarity=TrigramSimilarity('extracted_text', text_sample)
+            )
+            .filter(similarity__gte=similarity_threshold)
+            .order_by('-similarity')
+            .values('id', 'name', 'similarity', 'created_at', 'file')[:5]
+        )
+
+        return list(similar_media)
 
     def get_s3_url(self):
         return f"{S3_BASE_URL}{self.file.name}"
@@ -121,6 +137,10 @@ class Media(models.Model):
             GinIndex(
                 SearchVector('extracted_text', config='english'),
                 name='media_extracted_text_gin'
+            ),
+            GinIndex(
+                fields=['extracted_text'], name='media_extracted_text_trgm',
+                opclasses=['gin_trgm_ops'],
             )
         ]
 

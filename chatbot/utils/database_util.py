@@ -11,8 +11,13 @@ base_url = os.getenv('VECTOR_DB_BASE_URL')
 def upsert_single_file(filename, file, metadata, media):
     url = f"https://{base_url}/api/upload"
 
+    if isinstance(metadata, dict):
+        metadata_json = json.dumps(metadata)
+    else:
+        metadata_json = metadata
+
     payload = {
-        'metadata': json.dumps(metadata),
+        'metadata': metadata_json,
         'source_id': str(media.id),
         'priority': media.priority
     }
