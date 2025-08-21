@@ -1201,6 +1201,7 @@ function getCookie(name) {
     return cookieValue;
 }
 const csrftoken = getCookie('csrftoken');
+const DEFAULT_BOT_ID = {{ default_bot_id|default:"null" }};
 
 // Dynamic file types from Django
 const fileTypesData = JSON.parse(document.getElementById('file-types-data').textContent);
@@ -1238,6 +1239,17 @@ const FILE_STATUS = {
     ERROR: 'error',
     SKIPPED: 'skipped'
 };
+
+function resetToDefaultBot() {
+    const selectElement = document.getElementById('companyBotSelect');
+    if (selectElement) {
+        if (DEFAULT_BOT_ID) {
+            selectElement.value = DEFAULT_BOT_ID;
+        } else {
+            selectElement.value = '';
+        }
+    }
+}
 
 // Utility functions
 function showStatus(message, type = 'info') {
@@ -2629,7 +2641,8 @@ document.getElementById('newBatchBtn').addEventListener('click', () => {
     updateFileList();
     updateStepIndicator(1);
     document.getElementById('statusMessage').style.display = 'none';
-    document.getElementById('companyBotSelect').value = '';
+    // Set back to default bot instead of clearing
+    resetToDefaultBot()
     document.getElementById('fileInput').value = '';
 });
 

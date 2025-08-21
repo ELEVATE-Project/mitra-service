@@ -74,7 +74,9 @@ class Media(models.Model):
     @shared_task
     def delete_from_vector_db(media_id):
         print('Deleting from vector for media_id: {}'.format(media_id))
-        status_code, response_text = delete_single_file(media_id)
+        media = Media.objects.get(id=media_id)
+        company_slug = media.company_bot.company.slug if media.company_bot and media.company_bot.company else None
+        status_code, response_text = delete_single_file(media_id, company_slug)
         print(status_code, response_text)
         return status_code
 

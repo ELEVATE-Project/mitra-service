@@ -33,17 +33,19 @@ def upsert_single_file(filename, file, metadata, media):
     return response.status_code, response.text
 
 
-def delete_single_file(media_id):
+def delete_single_file(media_id, company_slug=None):
     url = f"https://{base_url}/api/documents"
 
-    payload = json.dumps({
+    payload = {
         'source_id': str(media_id)
-    })
+    }
+    if company_slug:
+        payload['company_id'] = company_slug
 
     headers = {
         'accept': 'application/json',
     }
     print("payload: ", payload)
-    response = requests.request("DELETE", url, headers=headers, data=payload)
+    response = requests.request("DELETE", url, headers=headers, data=json.dumps(payload))
     print("deleted: ", response.json())
     return response.status_code, response.text
