@@ -6,12 +6,36 @@
 {% block extrahead %}
 {{ block.super }}
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Urbanist:ital,wght@0,100..900;1,100..900&display=swap');
+
+    :root {
+        --primary-font-family: "Manrope", sans-serif;
+        --secondary-font-family: "Urbanist", sans-serif;
+    }
+
+    body {
+        font-family: var(--primary-font-family);
+    }
+
+    .h1 {
+        font-size: 2rem !important;
+    }
+
+    .h2 {
+        font-size: 1.5rem !important;
+    }
+
+    .p {
+        font-size: 1.2rem !important;
+    }
+
     * {
         box-sizing: border-box;
     }
 
     .batch-upload-container {
-        max-width: 1200px;
+        max-width: 100%;
+        width: 100%;
         margin: 0 auto;
         background-color: white;
         padding: 30px;
@@ -1011,7 +1035,7 @@
             <select id="companyBotSelect" required>
                 <option value="">-- Select Company Bot --</option>
                 {% for bot in company_bots %}
-                <option value="{{ bot.id }}">{{ bot.name }} ({{ bot.company.name }})</option>
+                    <option value="{{ bot.id }}" {% if bot.id == default_bot_id %}selected{% endif %}>{{ bot.name }} ({{ bot.company.name }})</option>
                 {% endfor %}
             </select>
         </div>

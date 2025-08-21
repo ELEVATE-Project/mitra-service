@@ -39,6 +39,10 @@ class BatchMediaUploadView(TemplateView):
         # Add company bots for selection
         from chatbot.models import CompanyBot
         context['company_bots'] = CompanyBot.objects.all()
+        default_bot = CompanyBot.objects.filter(route='/tag_extractor')
+        if default_bot:
+            default_bot = default_bot.first()
+            context['default_bot_id'] = default_bot.id
         return context
 
 
