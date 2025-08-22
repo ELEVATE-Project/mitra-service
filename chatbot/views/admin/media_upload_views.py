@@ -4,7 +4,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.utils.decorators import method_decorator
 from django.http import JsonResponse
 from django.views import View
-from chatbot.models import Media, Tag, KeyValue, Profile, FileTypeChoices, CompanyBot
+from chatbot.models import Media, Tag, KeyValue, Profile, FileTypeChoices, CompanyBot, TagSourceChoices, TagChoices
 from chatbot.models.media_models import PriorityChoices
 import json
 import tempfile, os
@@ -328,10 +328,18 @@ class BatchMediaTaskStatusView(View):
         title = ai_data.get('title', '')
         summary = ai_data.get('summary', '')
         extracted_text = ai_data.get('exact_content', '') or summary
-        auto_tags = ai_data.get('tags', [])
         organization = ai_data.get('organization', '')
         document_type = ai_data.get('document_type', '')
         key_entities = ai_data.get('key_entities', [])
+
+        tags_data = ai_data.get('tags', [])
+        auto_tags = []
+        for tag in tags_data:
+            if isinstance(tag, dict):
+                auto_tags.append(tag)
+            else:
+                # Backward compatibility - assume string tags are extracted
+                auto_tags.append({'text': tag, 'source': 'extracted'})
 
         # Build enhanced key-value pairs
         enhanced_key_values = []
@@ -458,7 +466,11 @@ class BatchMediaSaveView(View):
 
         try:
             company_bot = CompanyBot.objects.get(id=company_bot_id)
-            company_slug = company_bot.company.slug
+            company = user_profile.company if user_profile else None
+            if company:
+                company_slug = company.slug
+            else:
+                company_slug = company_bot.company.slug
             extracted_text = item_data.get('extracted_text', '')
 
             # Step 1: Similarity check
@@ -466,7 +478,6 @@ class BatchMediaSaveView(View):
                 if not bypass_similarity:
                     DuplicateDetector.check_for_duplicates(
                         extracted_text=extracted_text,
-                        company_bot_id=company_bot_id,
                         company_slug=company_slug,
                         trigram_threshold=0,
                         semantic_threshold=0.85,
@@ -522,7 +533,7 @@ class BatchMediaSaveView(View):
                     media.file.save(file_name, ContentFile(file_content), save=False)
 
                 # Save and get the vector DB task ID
-                vector_task_id = media.save()
+                vector_task_id = media.save(company_slug=company_slug)
 
             except Exception as media_save_error:
                 return {
@@ -542,24 +553,58 @@ class BatchMediaSaveView(View):
 
                 # Manual tags
                 manual_tag_names = item_data.get('manual_tags', [])
+                company = user_profile.company if user_profile else None
                 for tag_name in manual_tag_names:
                     tag, created = Tag.objects.get_or_create(
                         name=tag_name,
-                        defaults={'created_by': user_profile}
+                        defaults={
+                            'created_by': user_profile,
+                            'company': company,
+                            'status': TagChoices.APPROVED,
+                            'source_type': TagSourceChoices.MANUAL
+                        }
                     )
+                    if not created and tag.source_type == TagSourceChoices.MANUAL:
+                        tag.status = TagChoices.APPROVED
+                        tag.save()
                     all_tags.append(tag)
 
                 # Auto tags
-                auto_tag_names = item_data.get('auto_tags', [])
-                for tag_name in auto_tag_names:
-                    clean_tag_name = tag_name.replace('auto-', '') if tag_name.startswith('auto-') else tag_name
+                auto_tags_data = item_data.get('auto_tags', [])
+                for tag_data in auto_tags_data:
+                    if isinstance(tag_data, dict):
+                        tag_name = tag_data.get('text', '')
+                        tag_source = tag_data.get('source', 'extracted')
+                    else:
+                        # Backward compatibility
+                        tag_name = tag_data
+                        tag_source = 'extracted'
+                    if tag_name.startswith('auto-'):
+                        clean_tag_name = tag_name.replace('auto-', '')
+                    else:
+                        clean_tag_name = tag_name
+
+                    # Determine source type and status
+                    if tag_source == 'extracted':
+                        source_type = TagSourceChoices.AI_EXTRACTED
+                    else:
+                        source_type = TagSourceChoices.AI_GENERATED
+
+                    status = TagChoices.APPROVED if tag_source == 'extracted' else TagChoices.PENDING
+
                     tag, created = Tag.objects.get_or_create(
                         name=clean_tag_name,
-                        defaults={'created_by_id': BOT_PROFILE_ID}
+                        defaults={
+                            'created_by_id': BOT_PROFILE_ID,
+                            'company': company,
+                            'status': status,
+                            'source_type': source_type
+                        }
                     )
                     all_tags.append(tag)
 
-                media.tags.set(all_tags)
+                if all_tags:
+                    media.tags.set(all_tags)
 
                 # Key-value pairs
                 for kv in item_data.get('key_values', []):

@@ -102,9 +102,10 @@ class MediaAdmin(admin.ModelAdmin):
 
 @admin.register(Tag)
 class MasterTagAdmin(admin.ModelAdmin):
-    list_display = ('name', 'status', 'created_by', 'created_at')
-    list_filter = ('created_at', 'name', 'created_by')
+    list_display = ('name', 'status', 'source_type', 'created_by', 'created_at')
+    list_filter = ('created_at', 'name', 'created_by', 'source_type')
     raw_id_fields = ('created_by',)
+    readonly_fields = ('source_type', 'company', 'created_by')
 
     def save_model(self, request, obj, form, change):
         if not obj.pk:

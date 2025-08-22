@@ -162,6 +162,12 @@ class TagChoices(models.TextChoices):
     PENDING = 'Pending', _('Pending')
 
 
+class TagSourceChoices(models.TextChoices):
+    MANUAL = 'MANUAL', _('Manual')
+    AI_EXTRACTED = 'AI_EXTRACTED', _('AI Extracted')
+    AI_GENERATED = 'AI_GENERATED', _('AI Generated')
+
+
 class StoryLanguageChoices(models.TextChoices):
     ENGLISH = 'en', _('English')
     HINDI = 'hi', _('Hindi')

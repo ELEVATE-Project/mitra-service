@@ -1,14 +1,13 @@
 import os
 import base64
-from celery import shared_task
 from django.db import models
-from chatbot.models import Profile, CompanyBot, MediaTypeChoices, MediaTemplateChoices, PDFStrategyChoices, Tag, \
-    FileTypeChoices
-from chatbot.utils.database_util import upsert_single_file, delete_single_file, update_single_file
-from chatbot.utils.knowledge_service.auto_tag_utils import save_auto_tags
+from chatbot.models import Profile, CompanyBot, MediaTemplateChoices, PDFStrategyChoices, Tag, \
+    FileTypeChoices, Company
 from shikshalokam.models.enums import PriorityChoices
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVector, TrigramSimilarity
+from chatbot.celery_tasks.knowledge_service.media_tasks import save_in_vector_db, update_in_vector_db, \
+    delete_from_vector_db
 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 
@@ -43,77 +42,31 @@ class Media(models.Model):
         upload_path = f"{folder_name}/{filename}"
         return upload_path
 
-    @staticmethod
-    def _prepare_vector_db_data(media_id, include_updated_at=False):
-        """Helper method to prepare data for vector DB operations"""
-        media = Media.objects.get(id=media_id)
-        kvs = KeyValue.objects.filter(media=media)
-        metadata = {
-            'source': 'file',
-            'url': str(media.url) if media.url is not None else S3_BASE_URL + media.file.name,
-            'company': media.company_bot.company.slug,
-            'created_at': str(media.created_at),
-        }
 
-        if include_updated_at:
-            metadata['updated_at'] = str(media.updated_at)
-
-        for kv in kvs:
-            metadata[kv.key] = kv.value
-        metadata['tags'] = list(media.tags.values_list('name', flat=True))
-
-        with media.file.open("rb") as file:
-            file_content = file.read()
-        file_name = media.file.name.split("/")[-1]
-
-        return media, file_name, file_content, metadata
-
-    @shared_task
-    def save_in_vector_db(media_id):
-        print('Save in vector for media_id: {}'.format(media_id))
-        media, file_name, file_content, metadata = Media._prepare_vector_db_data(media_id)
-        status_code, response_text = upsert_single_file(file_name, file_content, metadata, media)
-        print(status_code, response_text)
-        return status_code
-
-    @shared_task
-    def update_in_vector_db(media_id):
-        print('Update in vector for media_id: {}'.format(media_id))
-        media, file_name, file_content, metadata = Media._prepare_vector_db_data(media_id, include_updated_at=True)
-        status_code, response_text = update_single_file(media_id, file_name, file_content, metadata, media)
-        print("Updated in vector DB:", status_code, response_text)
-        return status_code
-
-    @shared_task
-    def delete_from_vector_db(media_id):
-        print('Deleting from vector for media_id: {}'.format(media_id))
-        media = Media.objects.get(id=media_id)
-        company_slug = media.company_bot.company.slug if media.company_bot and media.company_bot.company else None
-        status_code, response_text = delete_single_file(media_id, company_slug)
-        print(status_code, response_text)
-        return status_code
-
-    def save(self, *args, **kwargs):
+    def save(self, *args, company_slug=None, **kwargs):
         is_new = self.pk is None
         super().save(*args, **kwargs)
         if is_new:
-            task = self.save_in_vector_db.apply_async(args=(self.id,), countdown=1)
+            task = save_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
             return task.id
         else:
-            task = self.update_in_vector_db.apply_async(args=(self.id,), countdown=1)
+            task = update_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
             return task.id
 
     def delete(self, *args, **kwargs):
-        status_code = self.delete_from_vector_db(self.id)
+        status_code = delete_from_vector_db(self.id)
         if status_code == 200:
             super().delete(*args, **kwargs)
         else:
-            raise Exception(
-                f"Failed to delete from vector DB for media_id: {self.id}. Status: {status_code}"
-            )
+            super().delete(*args, **kwargs)
+            # raise Exception(
+            #     f"Failed to delete from vector DB for media_id: {self.id}. Status: {status_code}"
+            # )
 
     @classmethod
-    def find_trigram_similar(cls, extracted_text, company_bot_id, similarity_threshold=0.85, exclude_id=None):
+    def find_trigram_similar(
+            cls, extracted_text, company_slug, similarity_threshold=0.85, exclude_id=None
+    ):
         """
         Find media with similar text using trigram similarity (local check)
         """
@@ -122,7 +75,9 @@ class Media(models.Model):
 
         text_sample = extracted_text[:1500].strip()
 
-        queryset = cls.objects.filter(company_bot_id=company_bot_id)
+        company = Company.objects.get(slug=company_slug)
+        queryset = cls.objects.filter(company_bot__company=company)
+
         if exclude_id:
             queryset = queryset.exclude(id=exclude_id)
 

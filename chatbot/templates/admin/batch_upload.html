@@ -1852,7 +1852,12 @@ async function waitForAllTasksToComplete(taskIds) {
                                 const aiResult = taskResult.result;
 
                                 // Update auto tags
-                                item.data.auto_tags = aiResult.auto_tags || [];
+                                const autoTags = aiResult.auto_tags || [];
+                                item.data.auto_tags = autoTags.map(tag => {
+                                    return typeof tag === 'object' ? tag.text : tag;
+                                });
+                                item.data.auto_tags_full = autoTags;
+
                                 item.data.auto_tags_ready = true;
 
                                 // Update enhanced data if available
@@ -2266,11 +2271,9 @@ function renderExtractedData() {
                         </div>
                     </div>
                     <div class="tags-subsection">
-                        <h4>Auto Tags (AI Generated)</h4>
+                        <h4>Auto Tags</h4>
                         <div class="tags-input" id="autoTagsContainer_${displayIndex}">
                             ${autoTagsContent}
-                            <input type="text" class="tag-input-field" placeholder="Add auto tag..."
-                                onkeypress="handleTagInput(event, ${displayIndex}, 'auto')">
                         </div>
                     </div>
                 </div>
@@ -2402,6 +2405,9 @@ function collectFormData() {
     extractedData.forEach((item) => {
         if (item && item.status === FILE_STATUS.SUCCESS && item.data) {
             // Combine manual and auto tags for saving
+            if (item.data.auto_tags_full) {
+                item.data.auto_tags = item.data.auto_tags_full;
+            }
             item.data.tags = [...(item.data.manual_tags || []), ...(item.data.auto_tags || [])];
         }
     });

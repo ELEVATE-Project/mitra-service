@@ -1,6 +1,6 @@
 import requests
 import os
-from chatbot.models import Media
+from chatbot.models import Media, CompanyBot
 
 
 class DuplicateDetector:
@@ -9,7 +9,6 @@ class DuplicateDetector:
     @staticmethod
     def check_for_duplicates(
             extracted_text,
-            company_bot_id,
             company_slug,
             exclude_media_id=None,
             trigram_threshold=0.85,
@@ -26,7 +25,7 @@ class DuplicateDetector:
         # 1. First check trigram similarity (fast, local)
         trigram_similar = Media.find_trigram_similar(
             extracted_text=extracted_text,
-            company_bot_id=company_bot_id,
+            company_slug=company_slug,
             similarity_threshold=trigram_threshold,
             exclude_id=exclude_media_id
         )
