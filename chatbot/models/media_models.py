@@ -4,7 +4,7 @@ from celery import shared_task
 from django.db import models
 from chatbot.models import Profile, CompanyBot, MediaTypeChoices, MediaTemplateChoices, PDFStrategyChoices, Tag, \
     FileTypeChoices
-from chatbot.utils.database_util import upsert_single_file, delete_single_file
+from chatbot.utils.database_util import upsert_single_file, delete_single_file, update_single_file
 from chatbot.utils.knowledge_service.auto_tag_utils import save_auto_tags
 from shikshalokam.models.enums import PriorityChoices
 from django.contrib.postgres.indexes import GinIndex
@@ -43,9 +43,9 @@ class Media(models.Model):
         upload_path = f"{folder_name}/{filename}"
         return upload_path
 
-    @shared_task
-    def save_in_vector_db(media_id):
-        print('Save in vector for media_id: {}'.format(media_id))
+    @staticmethod
+    def _prepare_vector_db_data(media_id, include_updated_at=False):
+        """Helper method to prepare data for vector DB operations"""
         media = Media.objects.get(id=media_id)
         kvs = KeyValue.objects.filter(media=media)
         metadata = {
@@ -54,22 +54,35 @@ class Media(models.Model):
             'company': media.company_bot.company.slug,
             'created_at': str(media.created_at),
         }
+
+        if include_updated_at:
+            metadata['updated_at'] = str(media.updated_at)
+
         for kv in kvs:
             metadata[kv.key] = kv.value
         metadata['tags'] = list(media.tags.values_list('name', flat=True))
+
         with media.file.open("rb") as file:
             file_content = file.read()
         file_name = media.file.name.split("/")[-1]
 
+        return media, file_name, file_content, metadata
+
+    @shared_task
+    def save_in_vector_db(media_id):
+        print('Save in vector for media_id: {}'.format(media_id))
+        media, file_name, file_content, metadata = Media._prepare_vector_db_data(media_id)
         status_code, response_text = upsert_single_file(file_name, file_content, metadata, media)
         print(status_code, response_text)
+        return status_code
 
-
-    def save(self, *args, **kwargs):
-        is_new = self.pk is None
-        super().save(*args, **kwargs)
-        if is_new:
-            self.save_in_vector_db.apply_async(args=(self.id,), countdown=1)
+    @shared_task
+    def update_in_vector_db(media_id):
+        print('Update in vector for media_id: {}'.format(media_id))
+        media, file_name, file_content, metadata = Media._prepare_vector_db_data(media_id, include_updated_at=True)
+        status_code, response_text = update_single_file(media_id, file_name, file_content, metadata, media)
+        print("Updated in vector DB:", status_code, response_text)
+        return status_code
 
     @shared_task
     def delete_from_vector_db(media_id):
@@ -79,6 +92,16 @@ class Media(models.Model):
         status_code, response_text = delete_single_file(media_id, company_slug)
         print(status_code, response_text)
         return status_code
+
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+        if is_new:
+            task = self.save_in_vector_db.apply_async(args=(self.id,), countdown=1)
+            return task.id
+        else:
+            task = self.update_in_vector_db.apply_async(args=(self.id,), countdown=1)
+            return task.id
 
     def delete(self, *args, **kwargs):
         status_code = self.delete_from_vector_db(self.id)

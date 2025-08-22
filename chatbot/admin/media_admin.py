@@ -1,8 +1,4 @@
 from django.contrib import admin
-from django.urls import reverse
-from django.utils.html import format_html
-from django.shortcuts import redirect
-from import_export.admin import ExportActionMixin
 from chatbot.form.media.media_form import MediaAdminForm
 from chatbot.models import Tag, Profile
 from chatbot.models.media_models import Media, KeyValue, MediaTemplate

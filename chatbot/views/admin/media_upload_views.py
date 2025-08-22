@@ -395,6 +395,133 @@ class BatchMediaSaveView(View):
                     cache.set(file_key, cached_file, timeout=additional_timeout)
                     print(f"Extended cache timeout for failed file: {file_key}")
 
+    def wait_for_vector_db_save(self, task_id, timeout=30):
+        import time
+        from celery.result import AsyncResult
+
+        intervals = [0.1, 0.2, 0.5, 1.0, 2.0, 3.0]
+        start_time = time.time()
+        attempt = 0
+
+        while time.time() - start_time < timeout:
+            task = AsyncResult(task_id)
+            if task.ready():
+                return {
+                    'completed': True,
+                    'successful': task.successful(),
+                    'result': task.result
+                }
+
+            sleep_time = intervals[min(attempt, len(intervals) - 1)]
+            time.sleep(sleep_time)
+            attempt += 1
+
+        return {'completed': False, 'successful': False, 'result': 'Timeout'}
+
+    def save_single_item_with_vector_db_wait(self, item_data, company_bot_id, user_profile, session_id,
+                                             bypass_similarity=False):
+        """Save a single media item and wait for vector DB to be updated"""
+        file_key = item_data.get('file_key')
+        vector_task_id = None
+
+        try:
+            company_bot = CompanyBot.objects.get(id=company_bot_id)
+            company_slug = company_bot.company.slug
+
+            extracted_text = item_data.get('extracted_text', '')
+
+            if not bypass_similarity:
+                DuplicateDetector.check_for_duplicates(
+                    extracted_text=extracted_text, company_bot_id=company_bot_id, company_slug=company_slug,
+                    trigram_threshold=0, semantic_threshold=0.85, trigram_exact_threshold=0.90,
+                    semantic_exact_threshold=0.9
+                )
+
+            # Create media instance
+            file_content = None
+            file_name = None
+
+            print(f"Attempting to retrieve file with key: {file_key}, session: {session_id}")
+
+            if file_key:
+                cached_file = cache.get(file_key)
+                if cached_file:
+                    file_content = cached_file.get('content')
+                    file_name = cached_file.get('name')
+                else:
+                    print(f"File not found in cache for key: {file_key}")
+            else:
+                print("No file_key provided")
+
+            media = Media(
+                name=item_data['name'],
+                media_type=item_data['media_type'],
+                priority=item_data['priority'],
+                description=item_data['description'],
+                extracted_text=item_data['extracted_text'],
+                company_bot_id=company_bot_id,
+            )
+
+            if file_content and file_name:
+                from django.core.files.base import ContentFile
+                media.file.save(file_name, ContentFile(file_content), save=False)
+
+            # Save and get the vector DB task ID
+            vector_task_id = media.save()
+
+            # Process tags and key-values (same as before)
+            all_tags = []
+            manual_tag_names = item_data.get('manual_tags', [])
+            for tag_name in manual_tag_names:
+                tag, created = Tag.objects.get_or_create(
+                    name=tag_name,
+                    defaults={'created_by': user_profile}
+                )
+                all_tags.append(tag)
+
+            auto_tag_names = item_data.get('auto_tags', [])
+            for tag_name in auto_tag_names:
+                clean_tag_name = tag_name.replace('auto-', '') if tag_name.startswith('auto-') else tag_name
+                tag, created = Tag.objects.get_or_create(
+                    name=clean_tag_name,
+                    defaults={'created_by_id': BOT_PROFILE_ID}
+                )
+                all_tags.append(tag)
+
+            media.tags.set(all_tags)
+
+            for kv in item_data.get('key_values', []):
+                KeyValue.objects.create(
+                    media=media,
+                    key=kv['key'],
+                    value=kv['value']
+                )
+
+            # Wait for vector DB save to complete
+            vector_result = {'successful': True}  # Default value
+            if vector_task_id:
+                vector_result = self.wait_for_vector_db_save(vector_task_id)
+                if not vector_result['successful']:
+                    print(f"Warning: Vector DB save failed for media {media.id}: {vector_result['result']}")
+
+            # Clean up cache
+            if file_key and cache.get(file_key):
+                cache.delete(file_key)
+                print(f"Cleaned up cache for {file_key}")
+
+            return {
+                'success': True,
+                'filename': item_data.get('filename', media.name),
+                'media_id': media.id,
+                'message': 'Successfully saved',
+                'file_index': item_data.get('file_index'),
+                'vector_db_saved': vector_result['successful'] if vector_task_id else True
+            }
+
+        except Exception as e:
+            print(f"Save failed, preserving cache for {file_key}")
+            raise
+
     def post(self, request):
         try:
             data = json.loads(request.body)
@@ -412,7 +539,11 @@ class BatchMediaSaveView(View):
 
             for item_data in media_items:
                 try:
-                    result = self.save_single_item(item_data, company_bot_id, user_profile, session_id)
+                    bypass_similarity = item_data.get('bypass_similarity', False)
+                    result = self.save_single_item_with_vector_db_wait(
+                        item_data=item_data, company_bot_id=company_bot_id, user_profile=user_profile,
+                        session_id=session_id, bypass_similarity=bypass_similarity
+                    )
                     results.append(result)
                 except Exception as e:
                     results.append({
@@ -441,7 +572,7 @@ class BatchMediaSaveView(View):
                 'error': str(e)
             }, status=500)
 
-    def save_single_item(self, item_data, company_bot_id, user_profile, session_id):
+    def save_single_item(self, item_data, company_bot_id, user_profile, session_id, bypass_similarity=False):
         """Save a single media item"""
         file_key = item_data.get('file_key')
         try:
@@ -454,11 +585,12 @@ class BatchMediaSaveView(View):
 
             extracted_text = item_data.get('extracted_text', '')
 
-            DuplicateDetector.check_for_duplicates(
-                extracted_text=extracted_text, company_bot_id=company_bot_id, company_slug=company_slug,
-                trigram_threshold=0, semantic_threshold=0.85, trigram_exact_threshold=0.80,
-                semantic_exact_threshold=0.9
-            )
+            if not bypass_similarity:
+                DuplicateDetector.check_for_duplicates(
+                    extracted_text=extracted_text, company_bot_id=company_bot_id, company_slug=company_slug,
+                    trigram_threshold=0, semantic_threshold=0.85, trigram_exact_threshold=0.90,
+                    semantic_exact_threshold=0.9
+                )
 
 
             # Create media instance
@@ -553,6 +685,7 @@ class BatchMediaRetrySaveView(View):
             item_data = data.get('item_data')
             company_bot_id = data.get('company_bot_id')
             session_id = data.get('session_id')
+            bypass_similarity = data.get('bypass_similarity', False)
 
             # Get current user's profile
             try:
@@ -561,7 +694,10 @@ class BatchMediaRetrySaveView(View):
                 user_profile = None
 
             save_view = BatchMediaSaveView()
-            result = save_view.save_single_item(item_data, company_bot_id, user_profile, session_id)
+            result = save_view.save_single_item_with_vector_db_wait(
+                item_data=item_data, company_bot_id=company_bot_id, user_profile=user_profile,
+                session_id=session_id, bypass_similarity=bypass_similarity
+            )
 
             return JsonResponse({
                 'success': True,
@@ -575,3 +711,30 @@ class BatchMediaRetrySaveView(View):
                 'success': False,
                 'error': str(e)
             }, status=400)
+
+
+@method_decorator(staff_member_required, name='dispatch')
+class VectorDBTaskStatusView(View):
+    """Check status of vector DB save task"""
+
+    def post(self, request):
+        try:
+            from celery.result import AsyncResult
+            data = json.loads(request.body)
+            task_id = data.get('task_id')
+
+            if not task_id:
+                return JsonResponse({'success': False, 'error': 'No task_id provided'})
+
+            task = AsyncResult(task_id)
+
+            return JsonResponse({
+                'success': True,
+                'status': task.status,
+                'ready': task.ready(),
+                'successful': task.successful() if task.ready() else None,
+                'result': task.result if task.ready() else None
+            })
+
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)}, status=400)

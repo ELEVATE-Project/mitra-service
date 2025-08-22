@@ -2515,6 +2515,49 @@ async function retrySave(resultIndex) {
     }
 }
 
+async function saveAnywayResult(resultIndex) {
+    const result = saveResults[resultIndex];
+    showLoading(`Saving ${result.filename} (bypassing similarity)...`);
+
+    try {
+        const itemData = result.originalData || {
+            ...result,
+            bypass_similarity: true
+        };
+        itemData.bypass_similarity = true;
+
+        const response = await fetch("{% url 'admin:chatbot_media_retry_save' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken,
+            },
+            body: JSON.stringify({
+                item_data: itemData,
+                company_bot_id: document.getElementById('companyBotSelect').value,
+                session_id: sessionId,
+                bypass_similarity: true
+            })
+        });
+
+        const retryResult = await response.json();
+        if (retryResult.success) {
+            saveResults[resultIndex] = {
+                ...retryResult.result,
+                originalData: itemData
+            };
+            displayResults(saveResults);
+            showStatus(`Successfully saved ${result.filename} (similarity check bypassed)`, 'success');
+        } else {
+            showStatus(`Save failed for ${result.filename}: ${retryResult.error}`, 'error');
+        }
+    } catch (error) {
+        showStatus(`Save failed for ${result.filename}: ${error.message}`, 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
 // Global variable to store save results for retry functionality
 let saveResults = [];
 
@@ -2563,7 +2606,8 @@ function displayResults(results) {
         resultItem.className = `save-result-item ${result.success ? 'success' : 'error'}`;
 
         const retryButton = !result.success ?
-            `<button class="retry-btn" onclick="retrySave(${index})">Retry Save</button>` : '';
+            `<button class="btn retry-btn" onclick="retrySave(${index})">Retry Save</button>
+             <button class="btn retry-btn" onclick="saveAnywayResult(${index})">Save Anyway</button>` : '';
 
         resultItem.innerHTML = `
             <div class="result-icon">${result.success ? '✓' : '✗'}</div>

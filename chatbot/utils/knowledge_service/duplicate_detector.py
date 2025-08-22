@@ -76,7 +76,7 @@ class DuplicateDetector:
         """Check semantic similarity via vector service API"""
         try:
             base_url = os.getenv('VECTOR_DB_BASE_URL')
-            url = f"https://{base_url}/api/check-similarity/"
+            url = f"https://{base_url}/api/documents/check-similarity"
 
             payload = {
                 "text": text,
