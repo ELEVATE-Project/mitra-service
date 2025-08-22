@@ -383,7 +383,7 @@ class BatchMediaTaskStatusView(View):
 
 @method_decorator(staff_member_required, name='dispatch')
 class BatchMediaSaveView(View):
-    """API endpoint for saving batch media data"""
+    """API endpoint for saving batch media data with fault tolerance"""
 
     def preserve_failed_files(self, failed_items, additional_timeout=7200):  # 2 more hours
         """Extend cache timeout for files that failed to save"""
@@ -395,53 +395,99 @@ class BatchMediaSaveView(View):
                     cache.set(file_key, cached_file, timeout=additional_timeout)
                     print(f"Extended cache timeout for failed file: {file_key}")
 
-    def wait_for_vector_db_save(self, task_id, timeout=30):
+    def wait_for_vector_db_save_safe(self, task_id, timeout=30):
+        """Enhanced waiting with better error handling"""
         import time
         from celery.result import AsyncResult
 
-        intervals = [0.1, 0.2, 0.5, 1.0, 2.0, 3.0]
-        start_time = time.time()
-        attempt = 0
+        try:
+            intervals = [0.1, 0.2, 0.5, 1.0, 2.0, 3.0]
+            start_time = time.time()
+            attempt = 0
 
-        while time.time() - start_time < timeout:
-            task = AsyncResult(task_id)
-            if task.ready():
-                return {
-                    'completed': True,
-                    'successful': task.successful(),
-                    'result': task.result
-                }
+            while time.time() - start_time < timeout:
+                try:
+                    task = AsyncResult(task_id)
+                    if task.ready():
+                        if task.successful():
+                            return {
+                                'completed': True,
+                                'successful': True,
+                                'result': task.result,
+                                'wait_time': time.time() - start_time
+                            }
+                        else:
+                            return {
+                                'completed': True,
+                                'successful': False,
+                                'result': f'Vector DB task failed: {task.info}',
+                                'wait_time': time.time() - start_time,
+                                'error_type': 'VECTOR_DB_TASK_FAILED'
+                            }
+                except Exception as poll_error:
+                    # If polling fails, log but continue trying
+                    print(f"Polling error for task {task_id}: {poll_error}")
 
-            sleep_time = intervals[min(attempt, len(intervals) - 1)]
-            time.sleep(sleep_time)
-            attempt += 1
+                sleep_time = intervals[min(attempt, len(intervals) - 1)]
+                time.sleep(sleep_time)
+                attempt += 1
 
-        return {'completed': False, 'successful': False, 'result': 'Timeout'}
+            # Timeout reached
+            return {
+                'completed': False,
+                'successful': False,
+                'result': f'Vector DB save timeout after {timeout}s',
+                'wait_time': timeout,
+                'error_type': 'VECTOR_DB_TIMEOUT'
+            }
 
-    def save_single_item_with_vector_db_wait(self, item_data, company_bot_id, user_profile, session_id,
-                                             bypass_similarity=False):
-        """Save a single media item and wait for vector DB to be updated"""
+        except Exception as wait_error:
+            return {
+                'completed': False,
+                'successful': False,
+                'result': f'Wait error: {str(wait_error)}',
+                'error_type': 'WAIT_ERROR'
+            }
+
+    def save_single_item_with_vector_db_wait_safe(self, item_data, company_bot_id, user_profile, session_id,
+                                                  bypass_similarity=False):
+        """Save a single media item with comprehensive error handling"""
         file_key = item_data.get('file_key')
-        vector_task_id = None
+        filename = item_data.get('filename', 'Unknown')
+        file_index = item_data.get('file_index')
 
         try:
             company_bot = CompanyBot.objects.get(id=company_bot_id)
             company_slug = company_bot.company.slug
-
             extracted_text = item_data.get('extracted_text', '')
 
-            if not bypass_similarity:
-                DuplicateDetector.check_for_duplicates(
-                    extracted_text=extracted_text, company_bot_id=company_bot_id, company_slug=company_slug,
-                    trigram_threshold=0, semantic_threshold=0.85, trigram_exact_threshold=0.90,
-                    semantic_exact_threshold=0.9
-                )
+            # Step 1: Similarity check
+            try:
+                if not bypass_similarity:
+                    DuplicateDetector.check_for_duplicates(
+                        extracted_text=extracted_text,
+                        company_bot_id=company_bot_id,
+                        company_slug=company_slug,
+                        trigram_threshold=0,
+                        semantic_threshold=0.85,
+                        trigram_exact_threshold=0.90,
+                        semantic_exact_threshold=0.9
+                    )
+            except Exception as similarity_error:
+                return {
+                    'success': False,
+                    'filename': filename,
+                    'message': f'Similarity check failed: {str(similarity_error)}',
+                    'error_type': 'SIMILARITY_CHECK_FAILED',
+                    'file_index': file_index,
+                    'file_key': file_key,
+                    'session_id': session_id,
+                    'vector_db_saved': False
+                }
 
-            # Create media instance
+            # Step 2: Retrieve file from cache
             file_content = None
             file_name = None
-
-            print(f"Attempting to retrieve file with key: {file_key}, session: {session_id}")
 
             if file_key:
                 cached_file = cache.get(file_key)
@@ -449,78 +495,136 @@ class BatchMediaSaveView(View):
                     file_content = cached_file.get('content')
                     file_name = cached_file.get('name')
                 else:
-                    print(f"File not found in cache for key: {file_key}")
-            else:
-                print("No file_key provided")
+                    return {
+                        'success': False,
+                        'filename': filename,
+                        'message': 'File not found in cache for saving',
+                        'error_type': 'FILE_NOT_FOUND_IN_CACHE',
+                        'file_index': file_index,
+                        'file_key': file_key,
+                        'session_id': session_id,
+                        'vector_db_saved': False
+                    }
 
-            media = Media(
-                name=item_data['name'],
-                media_type=item_data['media_type'],
-                priority=item_data['priority'],
-                description=item_data['description'],
-                extracted_text=item_data['extracted_text'],
-                company_bot_id=company_bot_id,
-            )
-
-            if file_content and file_name:
-                from django.core.files.base import ContentFile
-                media.file.save(file_name, ContentFile(file_content), save=False)
-
-            # Save and get the vector DB task ID
-            vector_task_id = media.save()
-
-            # Process tags and key-values (same as before)
-            all_tags = []
-            manual_tag_names = item_data.get('manual_tags', [])
-            for tag_name in manual_tag_names:
-                tag, created = Tag.objects.get_or_create(
-                    name=tag_name,
-                    defaults={'created_by': user_profile}
-                )
-                all_tags.append(tag)
-
-            auto_tag_names = item_data.get('auto_tags', [])
-            for tag_name in auto_tag_names:
-                clean_tag_name = tag_name.replace('auto-', '') if tag_name.startswith('auto-') else tag_name
-                tag, created = Tag.objects.get_or_create(
-                    name=clean_tag_name,
-                    defaults={'created_by_id': BOT_PROFILE_ID}
-                )
-                all_tags.append(tag)
-
-            media.tags.set(all_tags)
-
-            for kv in item_data.get('key_values', []):
-                KeyValue.objects.create(
-                    media=media,
-                    key=kv['key'],
-                    value=kv['value']
+            # Step 3: Create and save media
+            try:
+                media = Media(
+                    name=item_data['name'],
+                    media_type=item_data['media_type'],
+                    priority=item_data['priority'],
+                    description=item_data['description'],
+                    extracted_text=item_data['extracted_text'],
+                    company_bot_id=company_bot_id,
                 )
 
-            # Wait for vector DB save to complete
-            vector_result = {'successful': True}  # Default value
+                if file_content and file_name:
+                    from django.core.files.base import ContentFile
+                    media.file.save(file_name, ContentFile(file_content), save=False)
+
+                # Save and get the vector DB task ID
+                vector_task_id = media.save()
+
+            except Exception as media_save_error:
+                return {
+                    'success': False,
+                    'filename': filename,
+                    'message': f'Media save failed: {str(media_save_error)}',
+                    'error_type': 'MEDIA_SAVE_FAILED',
+                    'file_index': file_index,
+                    'file_key': file_key,
+                    'session_id': session_id,
+                    'vector_db_saved': False
+                }
+
+            # Step 4: Process tags and key-values
+            try:
+                all_tags = []
+
+                # Manual tags
+                manual_tag_names = item_data.get('manual_tags', [])
+                for tag_name in manual_tag_names:
+                    tag, created = Tag.objects.get_or_create(
+                        name=tag_name,
+                        defaults={'created_by': user_profile}
+                    )
+                    all_tags.append(tag)
+
+                # Auto tags
+                auto_tag_names = item_data.get('auto_tags', [])
+                for tag_name in auto_tag_names:
+                    clean_tag_name = tag_name.replace('auto-', '') if tag_name.startswith('auto-') else tag_name
+                    tag, created = Tag.objects.get_or_create(
+                        name=clean_tag_name,
+                        defaults={'created_by_id': BOT_PROFILE_ID}
+                    )
+                    all_tags.append(tag)
+
+                media.tags.set(all_tags)
+
+                # Key-value pairs
+                for kv in item_data.get('key_values', []):
+                    KeyValue.objects.create(
+                        media=media,
+                        key=kv['key'],
+                        value=kv['value']
+                    )
+
+            except Exception as tag_kv_error:
+                print(f"Warning: Tag/KV processing failed for {filename}: {tag_kv_error}")
+                # Continue - media is saved, just tags/kvs failed
+
+            # Step 5: Wait for vector DB save
+            vector_result = {'successful': True, 'result': 'No vector task'}
             if vector_task_id:
-                vector_result = self.wait_for_vector_db_save(vector_task_id)
-                if not vector_result['successful']:
-                    print(f"Warning: Vector DB save failed for media {media.id}: {vector_result['result']}")
+                vector_result = self.wait_for_vector_db_save_safe(vector_task_id)
 
-            # Clean up cache
+                if not vector_result['successful']:
+                    # Vector DB failed but media is saved - partial success
+                    print(f"Vector DB save failed for media {media.id}: {vector_result['result']}")
+
+                    # Don't clean cache yet - might want to retry
+                    return {
+                        'success': False,  # Mark as failed so it can be retried
+                        'filename': filename,
+                        'media_id': media.id,
+                        'message': f"Saved to database but vector DB failed: {vector_result['result']}",
+                        'error_type': vector_result.get('error_type', 'VECTOR_DB_FAILED'),
+                        'file_index': file_index,
+                        'file_key': file_key,
+                        'session_id': session_id,
+                        'vector_db_saved': False,
+                        'partial_success': True  # Indicates media was saved to main DB
+                    }
+
+            # Step 6: Success - clean up cache
             if file_key and cache.get(file_key):
                 cache.delete(file_key)
                 print(f"Cleaned up cache for {file_key}")
 
             return {
                 'success': True,
-                'filename': item_data.get('filename', media.name),
+                'filename': filename,
                 'media_id': media.id,
                 'message': 'Successfully saved',
-                'file_index': item_data.get('file_index'),
-                'vector_db_saved': vector_result['successful'] if vector_task_id else True
+                'file_index': file_index,
+                'vector_db_saved': vector_result['successful'],
+                'vector_wait_time': vector_result.get('wait_time', 0)
             }
 
-        except Exception as e:
-            print(f"Save failed, preserving cache for {file_key}")
-            raise
+        except Exception as unexpected_error:
+            # Catch any other unexpected errors
+            print(f"Unexpected error processing {filename}: {unexpected_error}")
+            traceback.print_exc()
+            return {
+                'success': False,
+                'filename': filename,
+                'message': f'Unexpected error: {str(unexpected_error)}',
+                'error_type': 'UNEXPECTED_ERROR',
+                'file_index': file_index,
+                'file_key': file_key,
+                'session_id': session_id,
+                'vector_db_saved': False
+            }
 
     def post(self, request):
         try:
@@ -528,8 +632,16 @@ class BatchMediaSaveView(View):
             company_bot_id = data.get('company_bot_id')
             media_items = data.get('items', [])
             session_id = data.get('session_id')
-            print("session_id: ", session_id)
+
             results = []
+            stats = {
+                'total': len(media_items),
+                'successful': 0,
+                'failed': 0,
+                'partial_success': 0,
+                'timeouts': 0,
+                'similarity_failures': 0
+            }
 
             # Get current user's profile
             try:
@@ -537,141 +649,107 @@ class BatchMediaSaveView(View):
             except Profile.DoesNotExist:
                 user_profile = None
 
-            for item_data in media_items:
+            print(f"Starting batch save for {len(media_items)} files")
+
+            # Process each file with fault tolerance
+            for i, item_data in enumerate(media_items):
+                filename = item_data.get('filename', f'File_{i}')
+                print(f"Processing file {i + 1}/{len(media_items)}: {filename}")
+
                 try:
                     bypass_similarity = item_data.get('bypass_similarity', False)
-                    result = self.save_single_item_with_vector_db_wait(
-                        item_data=item_data, company_bot_id=company_bot_id, user_profile=user_profile,
-                        session_id=session_id, bypass_similarity=bypass_similarity
+                    result = self.save_single_item_with_vector_db_wait_safe(
+                        item_data=item_data,
+                        company_bot_id=company_bot_id,
+                        user_profile=user_profile,
+                        session_id=session_id,
+                        bypass_similarity=bypass_similarity
                     )
+
+                    # Track statistics
+                    if result['success']:
+                        stats['successful'] += 1
+                    else:
+                        stats['failed'] += 1
+                        if result.get('partial_success'):
+                            stats['partial_success'] += 1
+                        if result.get('error_type') in ['VECTOR_DB_TIMEOUT', 'WAIT_ERROR']:
+                            stats['timeouts'] += 1
+                        if result.get('error_type') == 'SIMILARITY_CHECK_FAILED':
+                            stats['similarity_failures'] += 1
+
                     results.append(result)
-                except Exception as e:
+                    print(
+                        f"File {i + 1} result: {'✓' if result['success'] else '✗'} - {result.get('message', 'No message')}")
+
+                except Exception as item_error:
+                    # This should rarely happen due to the safe method above
+                    print(f"Critical error processing {filename}: {item_error}")
+                    stats['failed'] += 1
                     results.append({
                         'success': False,
-                        'filename': item_data.get('filename', 'Unknown'),
-                        'message': str(e),
-                        'file_index': item_data.get('file_index'),
+                        'filename': filename,
+                        'message': f'Critical processing error: {str(item_error)}',
+                        'error_type': 'CRITICAL_ERROR',
+                        'file_index': item_data.get('file_index', i),
                         'file_key': item_data.get('file_key'),
-                        'session_id': item_data.get('session_id', session_id)
+                        'session_id': session_id,
+                        'vector_db_saved': False
                     })
 
+            # Preserve cache for failed files
+            failed_items = [r for r in results if not r['success'] and r.get('file_key')]
+            if failed_items:
+                self.preserve_failed_files(failed_items)
+
+            # Generate summary message
+            summary_message = self.generate_batch_summary(stats)
+
+            print(f"Batch complete: {summary_message}")
+
             return JsonResponse({
-                'success': True,
-                'results': results
+                'success': True,  # Batch completed (even with individual failures)
+                'results': results,
+                'stats': stats,
+                'summary_message': summary_message,
+                'session_id': session_id
             })
-        except json.JSONDecodeError as e:
+
+        except json.JSONDecodeError:
             return JsonResponse({
                 'success': False,
                 'error': 'Invalid JSON data'
             }, status=400)
-
-        except Exception as e:
+        except Exception as batch_error:
+            print(f"Batch processing error: {batch_error}")
             traceback.print_exc()
             return JsonResponse({
                 'success': False,
-                'error': str(e)
+                'error': f'Batch processing failed: {str(batch_error)}'
             }, status=500)
 
-    def save_single_item(self, item_data, company_bot_id, user_profile, session_id, bypass_similarity=False):
-        """Save a single media item"""
-        file_key = item_data.get('file_key')
-        try:
-            # Test failure condition (commented out as requested)
-            # if "fail" in item_data.get("filename", "").lower():
-            #     raise ValueError(f"Forced save failure for {item_data.get('filename')}")
+    def generate_batch_summary(self, stats):
+        """Generate human-readable batch summary"""
+        total = stats['total']
+        successful = stats['successful']
+        failed = stats['failed']
 
-            company_bot = CompanyBot.objects.get(id=company_bot_id)
-            company_slug = company_bot.company.slug
+        if successful == total:
+            return f"All {total} files processed successfully!"
+        elif successful == 0:
+            return f"All {total} files failed to process."
+        else:
+            message_parts = [f"{successful}/{total} files successful"]
+            if failed > 0:
+                message_parts.append(f"{failed} failed")
+            if stats['timeouts'] > 0:
+                message_parts.append(f"{stats['timeouts']} timed out")
+            if stats['similarity_failures'] > 0:
+                message_parts.append(f"{stats['similarity_failures']} similarity check failures")
+            if stats['partial_success'] > 0:
+                message_parts.append(f"{stats['partial_success']} partial successes")
 
-            extracted_text = item_data.get('extracted_text', '')
-
-            if not bypass_similarity:
-                DuplicateDetector.check_for_duplicates(
-                    extracted_text=extracted_text, company_bot_id=company_bot_id, company_slug=company_slug,
-                    trigram_threshold=0, semantic_threshold=0.85, trigram_exact_threshold=0.90,
-                    semantic_exact_threshold=0.9
-                )
-
-
-            # Create media instance
-            file_content = None
-            file_name = None
-
-            print(f"Attempting to retrieve file with key: {file_key}, session: {session_id}")
-
-            if file_key:
-                cached_file = cache.get(file_key)
-                if cached_file:
-                    file_content = cached_file.get('content')
-                    file_name = cached_file.get('name')
-                else:
-                    print(f"File not found in cache for key: {file_key}")
-            else:
-                print("No file_key provided")
-
-            media = Media(
-                name=item_data['name'],
-                media_type=item_data['media_type'],
-                priority=item_data['priority'],
-                description=item_data['description'],
-                extracted_text=item_data['extracted_text'],
-                company_bot_id=company_bot_id,
-            )
-            print("file_name: ", file_name)
-            if file_content and file_name:
-                from django.core.files.base import ContentFile
-                media.file.save(file_name, ContentFile(file_content), save=False)
-
-            media.save()
-
-            # Process tags - separate manual and auto tags
-            all_tags = []
-
-            # Handle manual tags (created by current user)
-            manual_tag_names = item_data.get('manual_tags', [])
-            for tag_name in manual_tag_names:
-                tag, created = Tag.objects.get_or_create(
-                    name=tag_name,
-                    defaults={'created_by': user_profile}
-                )
-                all_tags.append(tag)
-
-            # Handle auto tags (created by bot)
-            auto_tag_names = item_data.get('auto_tags', [])
-            for tag_name in auto_tag_names:
-                # Remove 'auto-' prefix if present
-                clean_tag_name = tag_name.replace('auto-', '') if tag_name.startswith('auto-') else tag_name
-                tag, created = Tag.objects.get_or_create(
-                    name=clean_tag_name,
-                    defaults={'created_by_id': BOT_PROFILE_ID}
-                )
-                all_tags.append(tag)
-
-            # Set all tags
-            media.tags.set(all_tags)
-
-            # Add key-value pairs
-            for kv in item_data.get('key_values', []):
-                KeyValue.objects.create(
-                    media=media,
-                    key=kv['key'],
-                    value=kv['value']
-                )
-
-            if file_key and cache.get(file_key):
-                cache.delete(file_key)
-                print(f"Cleaned up cache for {file_key}")
-
-            return {
-                'success': True,
-                'filename': item_data.get('filename', media.name),
-                'media_id': media.id,
-                'message': 'Successfully saved',
-                'file_index': item_data.get('file_index')
-            }
-        except Exception as e:
-            print(f"Save failed, preserving cache for {file_key}")
-            raise  # Re-raise the exception to be caught by the outer handler
+            return ", ".join(message_parts) + "."
 
 
 @method_decorator(staff_member_required, name='dispatch')
