@@ -59,6 +59,7 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
     actions = ['duplicate_bot']
 
     enable_batch_upload = True
+    batch_load_foreign_keys = True
     batch_upload_fields = ['name', 'company', 'provider', 'llm_model', 'context', 'max_token', 'route']
 
     def get_queryset(self, request):

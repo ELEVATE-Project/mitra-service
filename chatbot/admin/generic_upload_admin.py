@@ -1,6 +1,7 @@
 import json
 from django.urls import path, reverse
 from django.template.response import TemplateResponse
+from django.http import JsonResponse
 
 
 class BatchUploadMixin:
@@ -129,10 +130,17 @@ class SmartBatchUploadMixin(BatchUploadMixin):
     - Auto-detect foreign key relationships
     - Handle file uploads
     - Custom field processors
+    - Performance optimizations
     """
 
     # Define custom field processors
     field_processors = {}
+
+    # Enable batch loading for better performance
+    batch_load_foreign_keys = True
+
+    # Cache size limit (to prevent memory issues)
+    max_cache_size = 1000
 
     def process_field_value(self, field_name, value, row_data):
         """
@@ -174,3 +182,131 @@ class SmartBatchUploadMixin(BatchUploadMixin):
                     send_import_notification(request.user, successful)
         """
         pass
+
+    def batch_import_view(self, request):
+        """Enhanced batch import with hooks for customization"""
+        from chatbot.views.admin.generic_upload_views import GenericBatchImportView
+        import json
+
+        if request.method == 'POST':
+            try:
+                # Parse request data
+                data = json.loads(request.body)
+                rows = data.get('data', [])
+
+                # Call pre-import hook
+                self.pre_batch_import(request, rows)
+
+                # Create view instance
+                view = GenericBatchImportView()
+
+                # Enable optimizations if set
+                if hasattr(self, 'batch_load_foreign_keys'):
+                    view.batch_load_foreign_keys = self.batch_load_foreign_keys
+
+                # Process the import
+                response = view.post(
+                    request,
+                    self.model._meta.app_label,
+                    self.model._meta.model_name
+                )
+
+                # If successful, call post-import hook
+                if response.status_code == 200:
+                    response_data = json.loads(response.content)
+                    if response_data.get('success'):
+                        self.post_batch_import(request, response_data.get('results', []))
+
+                return response
+
+            except PermissionError as e:
+                return JsonResponse({'error': str(e)}, status=403)
+            except Exception as e:
+                return JsonResponse({'error': str(e)}, status=400)
+
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+
+class AdvancedBatchUploadMixin(SmartBatchUploadMixin):
+    """
+    Advanced features for complex use cases:
+    - Custom validators
+    - Duplicate handling
+    - Update existing records
+    """
+
+    # Enable updating existing records
+    allow_update_existing = False
+
+    # Fields to use for matching existing records
+    update_lookup_fields = []
+
+    # How to handle duplicates: 'skip', 'update', 'error'
+    duplicate_handling = 'error'
+
+    def find_existing_record(self, model, row_data):
+        """
+        Find existing record based on lookup fields
+
+        Example:
+            update_lookup_fields = ['email']  # Will match by email
+            update_lookup_fields = ['name', 'company']  # Will match by both
+        """
+        if not self.update_lookup_fields:
+            return None
+
+        lookup_kwargs = {}
+        for field in self.update_lookup_fields:
+            if field in row_data and row_data[field]:
+                lookup_kwargs[field] = row_data[field]
+
+        if not lookup_kwargs:
+            return None
+
+        try:
+            return model.objects.get(**lookup_kwargs)
+        except model.DoesNotExist:
+            return None
+        except model.MultipleObjectsReturned:
+            # If multiple records match, treat as not found
+            return None
+
+    def validate_row(self, row_data, row_index):
+        """
+        Custom validation for each row
+
+        Override this to add custom validation logic
+        Return tuple: (is_valid, error_message)
+        """
+        return True, None
+
+    def handle_duplicate(self, existing_record, new_data):
+        """
+        Handle duplicate records based on duplicate_handling setting
+
+        Override this for custom duplicate handling
+        """
+        if self.duplicate_handling == 'skip':
+            return {
+                'success': True,
+                'message': 'Skipped - record already exists',
+                'action': 'skipped'
+            }
+        elif self.duplicate_handling == 'update':
+            # Update existing record
+            for field, value in new_data.items():
+                if not field.startswith('_'):  # Skip internal fields
+                    setattr(existing_record, field, value)
+            existing_record.save()
+            return {
+                'success': True,
+                'message': 'Updated existing record',
+                'action': 'updated',
+                'object_id': existing_record.pk
+            }
+        else:  # 'error'
+            return {
+                'success': False,
+                'message': 'Duplicate record found',
+                'action': 'error'
+            }

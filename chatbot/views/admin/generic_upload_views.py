@@ -171,7 +171,12 @@ class GenericBatchTemplateView(View):
 
 @method_decorator(staff_member_required, name='dispatch')
 class GenericBatchImportView(View):
-    """Process batch import of data"""
+    """Process batch import of data with optimizations"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fk_cache = {}  # Cache for foreign key lookups
+        self.m2m_cache = {}  # Cache for many-to-many lookups
 
     def post(self, request, app_label, model_name):
         try:
@@ -185,7 +190,15 @@ class GenericBatchImportView(View):
             # Get model
             model = apps.get_model(app_label, model_name)
 
+            # Clear caches for this batch
+            self.fk_cache = {}
+            self.m2m_cache = {}
+
+            # Pre-load foreign keys for optimization
+            self.preload_foreign_keys(model, rows)
+
             results = []
+            total_rows = len(rows)
 
             # Process each row
             with transaction.atomic():
@@ -193,12 +206,14 @@ class GenericBatchImportView(View):
                     try:
                         # Process the row
                         result = self.process_row(model, row_data, request.user)
+                        result['progress'] = f"{index + 1}/{total_rows}"
                         results.append(result)
                     except Exception as e:
                         results.append({
                             'success': False,
                             'message': str(e),
-                            'row_index': index
+                            'row_index': index,
+                            'progress': f"{index + 1}/{total_rows}"
                         })
 
             # Calculate summary
@@ -218,8 +233,53 @@ class GenericBatchImportView(View):
         except Exception as e:
             return JsonResponse({'error': str(e)}, status=400)
 
+    def preload_foreign_keys(self, model, rows):
+        """Pre-load foreign keys to reduce queries"""
+        fk_fields = {}
+
+        # Identify FK fields and collect values
+        for field in model._meta.fields:
+            if field.many_to_one or field.one_to_one:
+                fk_fields[field.name] = {
+                    'field': field,
+                    'values': set()
+                }
+
+        # Collect all FK values from rows
+        for row in rows:
+            for field_name, field_info in fk_fields.items():
+                if field_name in row and row[field_name]:
+                    field_info['values'].add(str(row[field_name]))
+
+        # Batch load FKs
+        for field_name, field_info in fk_fields.items():
+            if field_info['values']:
+                related_model = field_info['field'].related_model
+
+                # Try loading by PK first
+                pk_values = []
+                for val in field_info['values']:
+                    try:
+                        pk_values.append(int(val))
+                    except (ValueError, TypeError):
+                        pass
+
+                if pk_values:
+                    for obj in related_model.objects.filter(pk__in=pk_values):
+                        cache_key = f"{related_model._meta.label}:{obj.pk}"
+                        self.fk_cache[cache_key] = obj
+
+                # Try loading by name for remaining values
+                if hasattr(related_model, 'name'):
+                    name_values = [v for v in field_info['values']
+                                   if f"{related_model._meta.label}:{v}" not in self.fk_cache]
+                    if name_values:
+                        for obj in related_model.objects.filter(name__in=name_values):
+                            cache_key = f"{related_model._meta.label}:{obj.name}"
+                            self.fk_cache[cache_key] = obj
+
     def process_row(self, model, row_data, user):
-        """Process a single row of data"""
+        """Process a single row of data with caching"""
         try:
             # Clean empty strings
             cleaned_data = {}
@@ -239,24 +299,35 @@ class GenericBatchImportView(View):
                 else:
                     cleaned_data[field_name] = self.convert_field_value(model, field_name, value)
 
-            # Handle foreign keys
+            # Handle foreign keys with caching
             for field_name, value in list(cleaned_data.items()):
                 try:
                     field = model._meta.get_field(field_name)
 
                     if field.many_to_one or field.one_to_one:
-                        # Try to get related object
                         if value:
-                            # Assume value is the PK of related object
                             related_model = field.related_model
-                            try:
-                                cleaned_data[field_name] = related_model.objects.get(pk=value)
-                            except related_model.DoesNotExist:
-                                # Try by name field if exists
-                                if hasattr(related_model, 'name'):
-                                    cleaned_data[field_name] = related_model.objects.get(name=value)
-                                else:
-                                    raise ValidationError(f"{field_name}: Related object not found")
+                            cache_key = f"{related_model._meta.label}:{value}"
+
+                            # Check cache first
+                            if cache_key in self.fk_cache:
+                                cleaned_data[field_name] = self.fk_cache[cache_key]
+                            else:
+                                # If not in cache, try to fetch (shouldn't happen with preloading)
+                                try:
+                                    obj = related_model.objects.get(pk=value)
+                                    self.fk_cache[cache_key] = obj
+                                    cleaned_data[field_name] = obj
+                                except related_model.DoesNotExist:
+                                    if hasattr(related_model, 'name'):
+                                        try:
+                                            obj = related_model.objects.get(name=value)
+                                            self.fk_cache[cache_key] = obj
+                                            cleaned_data[field_name] = obj
+                                        except related_model.DoesNotExist:
+                                            raise ValidationError(f"{field_name}: Related object not found")
+                                    else:
+                                        raise ValidationError(f"{field_name}: Related object not found")
 
                     elif field.many_to_many:
                         # Handle many-to-many separately after object creation
@@ -320,7 +391,7 @@ class GenericBatchImportView(View):
             # Save
             obj.save()
 
-            # Handle many-to-many fields
+            # Handle many-to-many fields with batch loading
             for key, value in cleaned_data.items():
                 if key.startswith('_m2m_'):
                     field_name = key[5:]  # Remove '_m2m_' prefix
@@ -330,15 +401,28 @@ class GenericBatchImportView(View):
                         field = model._meta.get_field(field_name)
                         related_model = field.related_model
 
-                        related_objects = []
+                        # Collect PK and name values
+                        pk_values = []
+                        name_values = []
+
                         for val in values:
                             try:
-                                # Try as ID first
-                                related_objects.append(related_model.objects.get(pk=val))
-                            except:
-                                # Try by name
-                                if hasattr(related_model, 'name'):
-                                    related_objects.append(related_model.objects.get(name=val))
+                                pk_values.append(int(val))
+                            except (ValueError, TypeError):
+                                name_values.append(val)
+
+                        # Batch load related objects
+                        related_objects = []
+
+                        if pk_values:
+                            related_objects.extend(
+                                related_model.objects.filter(pk__in=pk_values)
+                            )
+
+                        if name_values and hasattr(related_model, 'name'):
+                            related_objects.extend(
+                                related_model.objects.filter(name__in=name_values)
+                            )
 
                         getattr(obj, field_name).set(related_objects)
 
