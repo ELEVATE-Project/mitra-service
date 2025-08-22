@@ -8,7 +8,7 @@ from chatbot.views.admin.media_upload_views import (
     BatchMediaSaveView,
     BatchMediaTaskStatusView,
     BatchMediaRetryExtractView,
-    BatchMediaRetrySaveView
+    BatchMediaRetrySaveView, VectorDBTaskStatusView
 )
 
 
@@ -63,6 +63,13 @@ class MediaAdmin(admin.ModelAdmin):
 
         return fieldsets
 
+    def get_actions(self, request):
+        """Remove the delete selected action"""
+        actions = super().get_actions(request)
+        if 'delete_selected' in actions:
+            del actions['delete_selected']
+        return actions
+
     def get_urls(self):
         """Add custom URLs for batch upload"""
         from django.urls import path
@@ -86,6 +93,9 @@ class MediaAdmin(admin.ModelAdmin):
             path('api/retry-save/',
                  self.admin_site.admin_view(BatchMediaRetrySaveView.as_view()),
                  name='chatbot_media_retry_save'),
+            path('api/vector-db-task-status/',
+                 self.admin_site.admin_view(VectorDBTaskStatusView.as_view()),
+                 name='chatbot_media_vector_db_task_status'),
         ]
         return custom_urls + urls
 

@@ -593,7 +593,8 @@ class BatchMediaSaveView(View):
                         'file_key': file_key,
                         'session_id': session_id,
                         'vector_db_saved': False,
-                        'partial_success': True  # Indicates media was saved to main DB
+                        'partial_success': True, # Indicates media was saved to main DB
+                        'vector_task_id': vector_task_id
                     }
 
             # Step 6: Success - clean up cache
@@ -608,7 +609,8 @@ class BatchMediaSaveView(View):
                 'message': 'Successfully saved',
                 'file_index': file_index,
                 'vector_db_saved': vector_result['successful'],
-                'vector_wait_time': vector_result.get('wait_time', 0)
+                'vector_wait_time': vector_result.get('wait_time', 0),
+                'vector_task_id': vector_task_id
             }
 
         except Exception as unexpected_error:
@@ -772,7 +774,7 @@ class BatchMediaRetrySaveView(View):
                 user_profile = None
 
             save_view = BatchMediaSaveView()
-            result = save_view.save_single_item_with_vector_db_wait(
+            result = save_view.save_single_item_with_vector_db_wait_safe(
                 item_data=item_data, company_bot_id=company_bot_id, user_profile=user_profile,
                 session_id=session_id, bypass_similarity=bypass_similarity
             )
