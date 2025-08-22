@@ -3,9 +3,19 @@
 
 {% block object-tools-items %}
     {{ block.super }}
-    {% if has_add_permission and opts.model_name == 'media' and opts.app_label == 'chatbot' %}
-        <a href="{% url 'admin:chatbot_media_batch_upload' %}" class="btn btn-success">
-            <i class="fas fa-upload"></i> {% trans 'Batch Upload' %}
-        </a>
+    {% if has_add_permission %}
+        {% if has_batch_upload %}
+            <li style="list-style-type: none;">
+                <a href="{{ batch_upload_url }}" class="btn btn-success">
+                    <i class="fas fa-upload"></i> {% trans 'Batch Upload' %}
+                </a>
+            </li>
+        {% elif opts.model_name == 'media' %}
+            <li style="list-style-type: none;">
+                <a href="{% url 'admin:chatbot_media_batch_upload' %}" class="btn btn-success">
+                    <i class="fas fa-upload"></i> {% trans 'Batch Upload' %}
+                </a>
+            </li>
+        {% endif %}
     {% endif %}
 {% endblock %}

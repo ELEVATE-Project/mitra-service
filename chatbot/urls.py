@@ -1,4 +1,6 @@
 from chatbot.utils.image_converter import convert_image
+from chatbot.views.admin.generic_upload_views import GenericBatchUploadView, GenericBatchTemplateView, \
+    GenericBatchImportView
 from chatbot.views.admin.media_upload_views import BatchMediaUploadView, BatchMediaExtractView, BatchMediaSaveView, \
     BatchMediaTaskStatusView, BatchMediaRetryExtractView, BatchMediaRetrySaveView, VectorDBTaskStatusView
 from chatbot.views.aws_views import get_presigned_url
@@ -100,12 +102,20 @@ urlpatterns = [
     path('admin/media/batch-upload/', BatchMediaUploadView.as_view(), name='chatbot_media_batch_upload'),
     path('admin/media/batch-extract/', BatchMediaExtractView.as_view(), name='chatbot_media_batch_extract'),
     path('admin/media/batch-save/', BatchMediaSaveView.as_view(), name='chatbot_media_batch_save'),
-    path('admin/media/batch-task-status/', BatchMediaTaskStatusView.as_view(), name='chatbot_media_task_status'),  # NEW
+    path('admin/media/batch-task-status/', BatchMediaTaskStatusView.as_view(), name='chatbot_media_task_status'),
 
-    # NEW: Retry endpoints
+    # Retry endpoints
     path('admin/media/retry-extract/', BatchMediaRetryExtractView.as_view(), name='chatbot_media_retry_extract'),
     path('admin/media/retry-save/', BatchMediaRetrySaveView.as_view(), name='chatbot_media_retry_save'),
 
     path('admin/media/vector-db-task-status/', VectorDBTaskStatusView.as_view(), name='chatbot_media_vector_db_task_status'),
+
+    # generic batch upload URLs
+    path('admin/<str:app_label>/<str:model_name>/batch-upload/', GenericBatchUploadView.as_view(),
+         name='generic_batch_upload'),
+    path('admin/<str:app_label>/<str:model_name>/batch-template/', GenericBatchTemplateView.as_view(),
+         name='generic_batch_template'),
+    path('admin/<str:app_label>/<str:model_name>/batch-import/', GenericBatchImportView.as_view(),
+         name='generic_batch_import'),
 
 ]

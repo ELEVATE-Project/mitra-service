@@ -1,7 +1,8 @@
 from django.contrib import admin
+from .generic_upload_admin import BatchUploadMixin
 from chatbot.form.media.media_form import MediaAdminForm
 from chatbot.models import Tag, Profile
-from chatbot.models.media_models import Media, KeyValue, MediaTemplate
+from chatbot.models.media_models import Media, KeyValue
 from chatbot.views.admin.media_upload_views import (
     BatchMediaUploadView,
     BatchMediaExtractView,
@@ -101,11 +102,14 @@ class MediaAdmin(admin.ModelAdmin):
 
 
 @admin.register(Tag)
-class MasterTagAdmin(admin.ModelAdmin):
+class MasterTagAdmin(BatchUploadMixin, admin.ModelAdmin):
     list_display = ('name', 'status', 'source_type', 'created_by', 'created_at')
     list_filter = ('created_at', 'name', 'created_by', 'source_type')
     raw_id_fields = ('created_by',)
     readonly_fields = ('source_type', 'company', 'created_by')
+
+    enable_batch_upload = True
+    batch_upload_fields = ['name', 'status', 'created_by']
 
     def save_model(self, request, obj, form, change):
         if not obj.pk:
