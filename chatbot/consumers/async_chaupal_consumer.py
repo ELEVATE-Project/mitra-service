@@ -143,11 +143,20 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
 
     @database_sync_to_async
     def create_chat_session(self, session_id, profile, company_bot):
+        step_number = 1
+        if profile and profile.first_name and profile.first_name != '':
+            try:
+                challenges_step = CompanyStateMachine.objects.get(
+                    company_bot=self.company_bot, name="CHALLENGES"
+                )
+                step_number = challenges_step.step
+            except CompanyStateMachine.DoesNotExist:
+                step_number = 1
         cs, cs_created = ChatSession.objects.get_or_create(
             session=session_id,
             defaults={
                 'profile': profile,
-                'current_step': 1,
+                'current_step': step_number,
                 'language': self.route,
                 'company_bot': company_bot,
                 'session_status': ChatStatus.IN_PROGRESS,

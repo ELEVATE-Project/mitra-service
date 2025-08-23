@@ -446,6 +446,13 @@ def update_project_status_view(request):
     flow = body.get('flow')
     status = body.get("status", "completed")
     try:
+
+        if not project_id:
+            return JsonResponse(
+                {"message": "Project ID not provided. Skipping this API call."},
+                status=200
+            )
+
         session=None
         project = Project.objects.filter(project_id=project_id).first()
         if project:
@@ -473,7 +480,7 @@ def update_project_status_view(request):
             update_story_pdf(is_edit_story=True, session=session, access_token=access_token, flow=flow)
         print("Update started with status: ", status)
         response = update_project_status_utils(
-            project_id=project_id, access_token=access_token, flow=flow, status=status
+            project_id=project_id, access_token=access_token, status=status
         )
         return JsonResponse(response.get("message"), status=response.get("status"), safe=False)
     except Exception as e:
