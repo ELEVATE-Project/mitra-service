@@ -11,10 +11,8 @@ from shikshalokam.models import Task, Project
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
 
-def update_project_status_utils(project_id, access_token, flow, status):
+def update_project_status_utils(project_id, access_token, status):
     try:
-        print(f"flow: {flow}")
-
         url = f"https://{base_url}/userProjects/update/{project_id}"
         print("using url: ", url)
         headers = {
