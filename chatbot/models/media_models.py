@@ -2,7 +2,7 @@ import os
 import base64
 from django.db import models
 from chatbot.models import Profile, CompanyBot, MediaTemplateChoices, PDFStrategyChoices, Tag, \
-    FileTypeChoices, Company
+    FileTypeChoices, Company, MediaTypeChoices
 from shikshalokam.models.enums import PriorityChoices
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVector, TrigramSimilarity
@@ -123,6 +123,35 @@ class Media(models.Model):
                 opclasses=['gin_trgm_ops'],
             )
         ]
+
+
+class MediaImage(models.Model):
+    """Store images associated with Media documents"""
+
+    def get_file_upload_path(self, filename):
+        folder_name = f'shikshalokam/media/{self.media.company_bot.id}/images'
+        upload_path = f"{folder_name}/{filename}"
+        return upload_path
+
+    name = models.CharField(max_length=1000)
+    file = models.FileField(upload_to=get_file_upload_path, max_length=1000, null=True, blank=True)
+    media = models.ForeignKey(Media, on_delete=models.CASCADE, related_name='images')
+    page = models.IntegerField(null=True, blank=True)
+    index = models.IntegerField(default=0)
+    width = models.IntegerField(null=True, blank=True)
+    height = models.IntegerField(null=True, blank=True)
+    media_type = models.CharField(max_length=100, choices=MediaTypeChoices.choices, null=True, blank=True)
+    base64_str = models.TextField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['page', 'index']
+
+    def __str__(self):
+        return f"Image {self.index} for {self.media.name}"
+
 
 class MediaVector(models.Model):
     media = models.ForeignKey(Media, on_delete=models.CASCADE, related_name='media_vector')

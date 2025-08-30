@@ -5,13 +5,16 @@ from django.utils.decorators import method_decorator
 from django.http import JsonResponse
 from django.views import View
 from chatbot.models import Media, Tag, KeyValue, Profile, FileTypeChoices, CompanyBot, TagSourceChoices, TagChoices
-from chatbot.models.media_models import PriorityChoices
+from chatbot.models.media_models import PriorityChoices, MediaImage, MediaTypeChoices
 import json
 import tempfile, os
 import uuid
 from django.core.cache import cache
 from chatbot.celery_tasks.knowledge_service.tag_tasks import get_auto_extracted_data
 from chatbot.utils.knowledge_service.duplicate_detector import DuplicateDetector
+from django.core.files.base import ContentFile
+import base64
+from django.utils.text import slugify
 
 BOT_PROFILE_ID = 1
 
@@ -64,7 +67,6 @@ class BatchMediaExtractView(View):
             company_bot = None
             if company_bot_id:
                 try:
-                    from chatbot.models import CompanyBot
                     company_bot = CompanyBot.objects.get(id=company_bot_id)
                 except CompanyBot.DoesNotExist:
                     pass
@@ -77,7 +79,8 @@ class BatchMediaExtractView(View):
                     data = self.extract_file_data(
                         file=file,
                         company_bot=company_bot,
-                        file_index=i
+                        file_index=i,
+                        request=request
                     )
                     data['status'] = 'success'
                     data['error'] = None
@@ -101,7 +104,9 @@ class BatchMediaExtractView(View):
                         'auto_tags': [],
                         'auto_tag_task_id': None,
                         'auto_tags_ready': True,  # No task for failed extractions
-                        'key_values': []  # Start with empty key-values for failed extractions
+                        'key_values': [],  # Start with empty key-values for failed extractions
+                        'subdocument': [],  # Empty subdocuments
+                        'images': []  # Empty images
                     }
 
                 extracted_data.append(data)
@@ -137,7 +142,7 @@ class BatchMediaExtractView(View):
             print(f"Error storing file for retry: {e}")
             return None
 
-    def extract_file_data(self, file, company_bot, file_index):
+    def extract_file_data(self, file, company_bot, file_index, request=None):
         """Extract data from file and start async AI extraction"""
         file_extension = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else None
 
@@ -146,26 +151,45 @@ class BatchMediaExtractView(View):
         #     raise ValueError(f"Forced extraction failure for {file.name}")
 
         # Save file temporarily
-        # if "fail" in file.name.lower():
-        #     print(f"Forced extraction failure for {file.name}")
-        #     raise ValueError(f"Forced extraction failure for {file.name}")
+        if "fail" in file.name.lower():
+            print(f"Forced extraction failure for {file.name}")
+            raise ValueError(f"Forced extraction failure for {file.name}")
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as tmp:
             for chunk in file.chunks():
                 tmp.write(chunk)
             tmp_path = tmp.name
+
+        user_profile = None
+        company = None
+        if request and request.user.is_authenticated:
+            print("User is authenticated")
+            try:
+                user_profile = Profile.objects.get(email=request.user.email)
+                print("user_profile: ", user_profile)
+                company = user_profile.company
+                print("company found: ", company)
+            except Profile.DoesNotExist:
+                pass
+
+        master_tags = get_master_tags(company=company)
+        other_data = {
+            "master_tag": master_tags
+        }
 
         # Start async task (non-blocking)
         print(f"Starting async extraction task for {file.name}")
         task = get_auto_extracted_data.delay(
             file_path=tmp_path,
             company_bot_id=company_bot.id if company_bot else None,
-            file_extension=file_extension
+            file_extension=file_extension,
+            other_data=other_data
         )
+        base_name = file.name.rsplit('.', 1)[0] if '.' in file.name else file.name
 
         return {
             'filename': file.name,
             'file_index': file_index,
-            'name': file.name,
+            'name': base_name,
             'media_type': self.get_media_type(file.name),
             'description': f'Extracted from {file.name}',
             'extracted_text': 'AI extraction in progress...',
@@ -175,7 +199,9 @@ class BatchMediaExtractView(View):
             'auto_tags': [],
             'auto_tag_task_id': task.id,
             'auto_tags_ready': False,
-            'key_values': []
+            'key_values': [],
+            'subdocument': [],
+            'images': []
         }
 
     def get_media_type(self, filename):
@@ -205,7 +231,6 @@ class BatchMediaRetryExtractView(View):
             company_bot = None
             if company_bot_id:
                 try:
-                    from chatbot.models import CompanyBot
                     company_bot = CompanyBot.objects.get(id=company_bot_id)
                 except CompanyBot.DoesNotExist:
                     pass
@@ -273,6 +298,99 @@ class BatchMediaRetryExtractView(View):
             }, status=400)
 
 
+# Shared helper functions
+def get_media_type_from_ai_data(document_type):
+    """Map AI-detected document type to our media type choices"""
+    if not document_type:
+        return FileTypeChoices.TXT.value
+
+    document_type = document_type.lower()
+    type_mapping = {
+        'report': FileTypeChoices.PDF,
+        'presentation': FileTypeChoices.PPTX,
+        'spreadsheet': FileTypeChoices.XLSX,
+        'document': FileTypeChoices.DOCX,
+        'text': FileTypeChoices.TXT,
+        'csv': FileTypeChoices.CSV,
+        'excel': FileTypeChoices.XLSX,
+        'word': FileTypeChoices.DOCX,
+        'powerpoint': FileTypeChoices.PPTX,
+        'pdf': FileTypeChoices.PDF
+    }
+
+    for key, value in type_mapping.items():
+        if key in document_type:
+            return value.value
+    return FileTypeChoices.TXT.value
+
+
+def process_tags(tags_data):
+    """Process tags into consistent format"""
+    processed_tags = []
+    for tag in tags_data:
+        if isinstance(tag, dict):
+            processed_tags.append(tag)
+        else:
+            # Backward compatibility - assume string tags are extracted
+            processed_tags.append({'text': tag, 'source': 'extracted'})
+    return processed_tags
+
+
+def get_master_tags(company=None):
+    try:
+        query = Tag.objects.filter(
+            source_type__in=[TagSourceChoices.MANUAL, TagSourceChoices.AI_EXTRACTED],
+            status=TagChoices.APPROVED
+        )
+
+        if company:
+            query = query.filter(company=company)
+
+        tag_names = list(query.values_list('name', flat=True).distinct())
+
+        return tag_names
+
+    except Exception as e:
+        print(f"Error getting master tags: {e}")
+        return []
+
+
+def extract_tag_texts(tags_data):
+    """Extract just the text from tags for subdocuments"""
+    texts = []
+    for tag in tags_data:
+        if isinstance(tag, dict) and 'text' in tag:
+            texts.append(tag['text'])
+        elif isinstance(tag, str):
+            texts.append(tag)
+    return texts
+
+
+def build_key_values(data_dict):
+    """Build key-value pairs from document data"""
+    key_values = []
+
+    if data_dict.get('title'):
+        key_values.append({'key': 'TITLE', 'value': data_dict['title']})
+    if data_dict.get('organization'):
+        key_values.append({'key': 'ORGANIZATION', 'value': data_dict['organization']})
+    if data_dict.get('document_type'):
+        key_values.append({'key': 'DOCUMENT TYPE', 'value': data_dict['document_type']})
+    if data_dict.get('key_entities') and len(data_dict['key_entities']) > 0:
+        key_values.append({'key': 'KEY ENTITIES', 'value': ', '.join(data_dict['key_entities'])})
+    print("structured_content: ", data_dict.get('structured_content'))
+    print("Type: ", type(data_dict.get('structured_content')))
+    if data_dict.get('structured_content') and isinstance(data_dict['structured_content'], dict):
+        for heading, content in data_dict['structured_content'].items():
+            if(heading.upper()) in [
+            'basic information', 'general information', 'tags', 'keywords', 'categories', 'classification',
+            'tags for classification']:
+                continue
+            key_values.append({'key': heading.upper(), 'value': content})
+
+    return key_values
+
+
 @method_decorator(staff_member_required, name='dispatch')
 class BatchMediaTaskStatusView(View):
     """API endpoint for checking Celery task status and updating data when complete"""
@@ -305,7 +423,6 @@ class BatchMediaTaskStatusView(View):
                     results[task_id] = {
                         'status': 'PENDING'
                     }
-            print("Task results: ", results)
             return JsonResponse({
                 'success': True,
                 'results': results
@@ -324,69 +441,145 @@ class BatchMediaTaskStatusView(View):
                 'enhanced_data': None
             }
 
-        # Extract and process the AI data
-        title = ai_data.get('title', '')
-        summary = ai_data.get('summary', '')
-        extracted_text = ai_data.get('exact_content', '') or summary
-        organization = ai_data.get('organization', '')
-        document_type = ai_data.get('document_type', '')
-        key_entities = ai_data.get('key_entities', [])
+        def process_subdocument(subdoc_data):
+            """Recursively process subdocument data"""
+            if not isinstance(subdoc_data, dict):
+                return None
 
-        tags_data = ai_data.get('tags', [])
-        auto_tags = []
-        for tag in tags_data:
-            if isinstance(tag, dict):
-                auto_tags.append(tag)
-            else:
-                # Backward compatibility - assume string tags are extracted
-                auto_tags.append({'text': tag, 'source': 'extracted'})
+            # Extract base fields
+            processed = {
+                'title': subdoc_data.get('title', ''),
+                'summary': subdoc_data.get('summary', ''),
+                'description': subdoc_data.get('summary', ''),  # Use summary as description
+                'exact_content': subdoc_data.get('exact_content', ''),
+                'extracted_text': subdoc_data.get('exact_content', ''),
+                'organization': subdoc_data.get('organization', ''),
+                'document_type': subdoc_data.get('document_type', ''),
+                'key_entities': subdoc_data.get('key_entities', []),
+                'url': subdoc_data.get('url', []),
+                'auto_tags': extract_tag_texts(subdoc_data.get('tags', [])),
+                'manual_tags': [],
+                'key_values': build_key_values(subdoc_data),
+                'images': subdoc_data.get('images', []),
+                'media_type': subdoc_data.get(
+                    'media_type', get_media_type_from_ai_data(subdoc_data.get('document_type', ''))
+                ),
+            }
 
-        # Build enhanced key-value pairs
-        enhanced_key_values = []
+            # Recursively process nested subdocuments
+            if subdoc_data.get('subdocument') and isinstance(subdoc_data['subdocument'], list):
+                processed['subdocument'] = []
+                for nested_subdoc in subdoc_data['subdocument']:
+                    nested_processed = process_subdocument(nested_subdoc)
+                    if nested_processed:
+                        processed['subdocument'].append(nested_processed)
 
-        # Add title as key-value pair instead of name
-        if title:
-            enhanced_key_values.append({'key': 'TITLE', 'value': title})
+            return processed
 
-        if organization:
-            enhanced_key_values.append({'key': 'ORGANIZATION', 'value': organization})
-        if document_type:
-            enhanced_key_values.append({'key': 'DOCUMENT TYPE', 'value': document_type})
-        if key_entities:
-            enhanced_key_values.append({'key': 'KEY ENTITIES', 'value': ', '.join(key_entities[:5])})
+        # Extract main document data
+        main_data = {
+            'title': ai_data.get('title', ''),
+            'summary': ai_data.get('summary', ''),
+            'extracted_text': ai_data.get('exact_content', '') or ai_data.get('summary', ''),
+            'organization': ai_data.get('organization', ''),
+            'document_type': ai_data.get('document_type', ''),
+            'key_entities': ai_data.get('key_entities', []),
+            'structured_content': ai_data.get('structured_content', {})
+        }
 
+        # Process main tags
+        auto_tags = process_tags(ai_data.get('tags', []))
+
+        # Build enhanced key-values for main document
+        enhanced_key_values = build_key_values(main_data)
+
+        # Process subdocuments recursively
+        subdocuments = []
+        if ai_data.get('subdocument') and isinstance(ai_data['subdocument'], list):
+            for subdoc in ai_data['subdocument']:
+                processed_subdoc = process_subdocument(subdoc)
+                if processed_subdoc:
+                    subdocuments.append(processed_subdoc)
+
+        # Process images
+        images = ai_data.get('images', []) if isinstance(ai_data.get('images'), list) else []
+        print("\n\nai_data: ", ai_data)
         # Return processed data for frontend
         return {
             'auto_tags': auto_tags,
             'enhanced_data': {
-                # Don't override name field - keep the filename
-                'description': summary,
-                'extracted_text': extracted_text,
-                # 'media_type': self.get_media_type_from_ai_data(document_type),
-                'enhanced_key_values': enhanced_key_values
+                'description': main_data['summary'],
+                'extracted_text': main_data['extracted_text'],
+                'enhanced_key_values': enhanced_key_values,
+                'subdocument': subdocuments,
+                'images': images,
+                'structured_content': ai_data.get('structured_content', {})
             }
         }
 
-    def get_media_type_from_ai_data(self, document_type):
-        """Map AI-detected document type to our media type choices"""
-        if not document_type:
-            return None
 
-        document_type = document_type.lower()
-        type_mapping = {
-            'report': 'PDF',
-            'presentation': 'PDF',
-            'spreadsheet': 'XLS',
-            'document': 'DOC',
-            'text': 'TXT',
-            'csv': 'CSV',
-            'excel': 'XLS'
-        }
+# Helper class for shared tag processing logic
+class TagProcessor:
+    @staticmethod
+    def process_tags_for_media(tag_names, tag_source, user_profile, company, is_manual=True):
+        """Process tags and create/update tag objects"""
+        tags = []
 
-        for key, value in type_mapping.items():
-            if key in document_type:
-                return value
-        return None
+        for tag_name in tag_names:
+            if isinstance(tag_name, dict):
+                tag_text = tag_name.get('text', '')
+                source = tag_name.get('source', tag_source)
+                description = tag_name.get('description', '')
+            else:
+                tag_text = tag_name
+                source = tag_source
+                description = ''
+
+            # Clean tag name
+            if tag_text.startswith('auto-'):
+                clean_tag_name = tag_text.replace('auto-', '')
+            else:
+                clean_tag_name = tag_text
+
+            if is_manual:
+                tag, created = Tag.objects.get_or_create(
+                    name=clean_tag_name,
+                    defaults={
+                        'created_by': user_profile,
+                        'company': company,
+                        'status': TagChoices.APPROVED,
+                        'source_type': TagSourceChoices.MANUAL,
+                        'description': ''
+                    }
+                )
+                if not created and tag.source_type == TagSourceChoices.MANUAL:
+                    tag.status = TagChoices.APPROVED
+                    tag.save()
+            else:
+                # Auto tags
+                if source == 'extracted':
+                    source_type = TagSourceChoices.AI_EXTRACTED
+                    status = TagChoices.APPROVED
+                    desc_to_save = ''
+                else:
+                    source_type = TagSourceChoices.AI_GENERATED
+                    status = TagChoices.PENDING
+                    desc_to_save = description
+
+                tag, created = Tag.objects.get_or_create(
+                    name=clean_tag_name,
+                    defaults={
+                        'created_by_id': BOT_PROFILE_ID,
+                        'company': company,
+                        'status': status,
+                        'source_type': source_type,
+                        'description': desc_to_save
+                    }
+                )
+
+            tags.append(tag)
+
+        return tags
 
 
 @method_decorator(staff_member_required, name='dispatch')
@@ -551,57 +744,25 @@ class BatchMediaSaveView(View):
             try:
                 all_tags = []
 
-                # Manual tags
-                manual_tag_names = item_data.get('manual_tags', [])
-                company = user_profile.company if user_profile else None
-                for tag_name in manual_tag_names:
-                    tag, created = Tag.objects.get_or_create(
-                        name=tag_name,
-                        defaults={
-                            'created_by': user_profile,
-                            'company': company,
-                            'status': TagChoices.APPROVED,
-                            'source_type': TagSourceChoices.MANUAL
-                        }
-                    )
-                    if not created and tag.source_type == TagSourceChoices.MANUAL:
-                        tag.status = TagChoices.APPROVED
-                        tag.save()
-                    all_tags.append(tag)
+                # Process manual tags
+                manual_tags = TagProcessor.process_tags_for_media(
+                    item_data.get('manual_tags', []),
+                    'manual',
+                    user_profile,
+                    company,
+                    is_manual=True
+                )
+                all_tags.extend(manual_tags)
 
-                # Auto tags
-                auto_tags_data = item_data.get('auto_tags', [])
-                for tag_data in auto_tags_data:
-                    if isinstance(tag_data, dict):
-                        tag_name = tag_data.get('text', '')
-                        tag_source = tag_data.get('source', 'extracted')
-                    else:
-                        # Backward compatibility
-                        tag_name = tag_data
-                        tag_source = 'extracted'
-                    if tag_name.startswith('auto-'):
-                        clean_tag_name = tag_name.replace('auto-', '')
-                    else:
-                        clean_tag_name = tag_name
-
-                    # Determine source type and status
-                    if tag_source == 'extracted':
-                        source_type = TagSourceChoices.AI_EXTRACTED
-                    else:
-                        source_type = TagSourceChoices.AI_GENERATED
-
-                    status = TagChoices.APPROVED if tag_source == 'extracted' else TagChoices.PENDING
-
-                    tag, created = Tag.objects.get_or_create(
-                        name=clean_tag_name,
-                        defaults={
-                            'created_by_id': BOT_PROFILE_ID,
-                            'company': company,
-                            'status': status,
-                            'source_type': source_type
-                        }
-                    )
-                    all_tags.append(tag)
+                # Process auto tags
+                auto_tags = TagProcessor.process_tags_for_media(
+                    item_data.get('auto_tags', []),
+                    'extracted',
+                    user_profile,
+                    company,
+                    is_manual=False
+                )
+                all_tags.extend(auto_tags)
 
                 if all_tags:
                     media.tags.set(all_tags)
@@ -618,7 +779,33 @@ class BatchMediaSaveView(View):
                 print(f"Warning: Tag/KV processing failed for {filename}: {tag_kv_error}")
                 # Continue - media is saved, just tags/kvs failed
 
-            # Step 5: Wait for vector DB save
+            # Step 5: Process subdocuments recursively
+            subdocument_results = []
+            if item_data.get('subdocument'):
+                subdoc_results = self.process_subdocuments_recursive(
+                    item_data['subdocument'],
+                    media,
+                    company_bot_id,
+                    user_profile,
+                    company_slug
+                )
+                subdocument_results.extend(subdoc_results)
+
+            # Step 6: Process images
+            image_results = []
+            if item_data.get('images'):
+                for index, img_data in enumerate(item_data['images']):
+                    try:
+                        img_result = self.save_media_image(img_data, media, index)
+                        image_results.append(img_result)
+                    except Exception as img_error:
+                        print(f"Warning: Image save failed: {img_error}")
+                        image_results.append({
+                            'success': False,
+                            'error': str(img_error)
+                        })
+
+            # Step 7: Wait for vector DB save
             vector_result = {'successful': True, 'result': 'No vector task'}
             if vector_task_id:
                 vector_result = self.wait_for_vector_db_save_safe(vector_task_id)
@@ -638,11 +825,13 @@ class BatchMediaSaveView(View):
                         'file_key': file_key,
                         'session_id': session_id,
                         'vector_db_saved': False,
-                        'partial_success': True, # Indicates media was saved to main DB
-                        'vector_task_id': vector_task_id
+                        'partial_success': True,  # Indicates media was saved to main DB
+                        'vector_task_id': vector_task_id,
+                        'subdocument_results': subdocument_results,
+                        'image_results': image_results
                     }
 
-            # Step 6: Success - clean up cache
+            # Step 8: Success - clean up cache
             if file_key and cache.get(file_key):
                 cache.delete(file_key)
                 print(f"Cleaned up cache for {file_key}")
@@ -655,7 +844,9 @@ class BatchMediaSaveView(View):
                 'file_index': file_index,
                 'vector_db_saved': vector_result['successful'],
                 'vector_wait_time': vector_result.get('wait_time', 0),
-                'vector_task_id': vector_task_id
+                'vector_task_id': vector_task_id,
+                'subdocument_results': subdocument_results,
+                'image_results': image_results
             }
 
         except Exception as unexpected_error:
@@ -671,6 +862,195 @@ class BatchMediaSaveView(View):
                 'file_key': file_key,
                 'session_id': session_id,
                 'vector_db_saved': False
+            }
+
+    def process_subdocuments_recursive(self, subdocuments, parent_media, company_bot_id, user_profile, company_slug):
+        """Recursively process subdocuments at any depth"""
+        results = []
+
+        for subdoc_data in subdocuments:
+            try:
+                subdoc_result = self.save_subdocument(
+                    subdoc_data, parent_media, company_bot_id, user_profile, company_slug
+                )
+
+                # If this subdocument has nested subdocuments, process them recursively
+                if subdoc_data.get('subdocument') and subdoc_result['success']:
+                    subdoc_media_id = subdoc_result['subdoc_media_id']
+                    # Get the subdocument media object for recursive processing
+                    subdoc_media = Media.objects.get(id=subdoc_media_id)
+
+                    nested_results = self.process_subdocuments_recursive(
+                        subdoc_data['subdocument'],
+                        subdoc_media,  # The subdocument becomes the parent
+                        company_bot_id,
+                        user_profile,
+                        company_slug
+                    )
+                    subdoc_result['nested_subdocument_results'] = nested_results
+
+                results.append(subdoc_result)
+
+            except Exception as subdoc_error:
+                print(f"Warning: Subdocument save failed: {subdoc_error}")
+                results.append({
+                    'success': False,
+                    'error': str(subdoc_error)
+                })
+
+        return results
+
+    def save_subdocument(self, subdoc_data, parent_media, company_bot_id, user_profile, company_slug):
+        """Save a subdocument as a separate Media object linked to parent"""
+        try:
+            # Create subdocument media
+            subdoc_media = Media(
+                name=subdoc_data.get('title', f'Subdocument of {parent_media.name}'),
+                media_type=subdoc_data.get('media_type', FileTypeChoices.TXT.value),
+                priority=parent_media.priority,
+                description=subdoc_data.get('description', subdoc_data.get('summary', '')),
+                extracted_text=subdoc_data.get('exact_content', subdoc_data.get('extracted_text', '')),
+                company_bot_id=company_bot_id,
+            )
+
+            # Save without vector DB for subdocuments
+            subdoc_media.save()
+
+            # Process tags using shared logic
+            company = user_profile.company if user_profile else None
+            all_tags = []
+
+            # Process manual tags
+            manual_tags = TagProcessor.process_tags_for_media(
+                subdoc_data.get('manual_tags', []),
+                'manual',
+                user_profile,
+                company,
+                is_manual=True
+            )
+            all_tags.extend(manual_tags)
+
+            # Process auto tags
+            auto_tags = TagProcessor.process_tags_for_media(
+                subdoc_data.get('auto_tags', []),
+                'extracted',
+                user_profile,
+                company,
+                is_manual=False
+            )
+            all_tags.extend(auto_tags)
+
+            if all_tags:
+                subdoc_media.tags.set(all_tags)
+
+            # Key-value pairs
+            for kv in subdoc_data.get('key_values', []):
+                KeyValue.objects.create(
+                    media=subdoc_media,
+                    key=kv['key'],
+                    value=kv['value']
+                )
+
+            # Link parent and subdoc via key-value
+            KeyValue.objects.create(
+                media=parent_media,
+                key='SUBDOCUMENT_ID',
+                value=str(subdoc_media.id)
+            )
+            KeyValue.objects.create(
+                media=subdoc_media,
+                key='PARENT_ID',
+                value=str(parent_media.id)
+            )
+
+            # Process subdocument images
+            if subdoc_data.get('images'):
+                for index, img_data in enumerate(subdoc_data['images']):
+                    self.save_media_image(img_data, subdoc_media, index)
+
+            return {
+                'success': True,
+                'subdoc_media_id': subdoc_media.id,
+                'title': subdoc_media.name
+            }
+
+        except Exception as e:
+            print(f"Error saving subdocument: {e}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def save_media_image(self, img_data, media, index):
+        """Save image associated with media"""
+        try:
+            # If base64 is provided, also save as file
+            if img_data.get('base64'):
+                try:
+                    # Extract image format from base64 string
+                    base64_str = img_data['base64']
+                    if base64_str.startswith('data:'):
+                        # Extract MIME type
+                        mime_start = base64_str.find('image/') + 6
+                        mime_end = base64_str.find(';', mime_start)
+                        image_format = base64_str[mime_start:mime_end]
+
+                        # Extract actual base64 data
+                        base64_data = base64_str.split(',')[1]
+                    else:
+                        # Default to PNG if no format specified
+                        image_format = img_data.get('format', 'png')
+                        base64_data = base64_str
+
+                    # Decode base64 to bytes
+                    image_bytes = base64.b64decode(base64_data)
+                    base_name, _ = os.path.splitext(media.name)
+                    safe_base = slugify(base_name, allow_unicode=True)
+                    file_name = f"img_{safe_base}_{index}.{image_format}"
+
+                    media_image = MediaImage(
+                        name=file_name,
+                        media=media,
+                        page=img_data.get('page'),
+                        index=img_data.get('index', index),
+                        width=img_data.get('width'),
+                        height=img_data.get('height'),
+                        base64_str=img_data.get('base64', '')
+                    )
+
+                    # Create file
+                    media_image.file.save(file_name, ContentFile(image_bytes), save=False)
+
+                    # Set media type
+                    if image_format.lower() in ['jpg', 'jpeg']:
+                        media_image.media_type = MediaTypeChoices.JPEG
+                    elif image_format.lower() == 'png':
+                        media_image.media_type = MediaTypeChoices.PNG
+                    elif image_format.lower() == 'svg':
+                        media_image.media_type = MediaTypeChoices.SVG
+                    elif image_format.lower() == 'webp':
+                        media_image.media_type = MediaTypeChoices.WEBP
+
+                    media_image.save()
+
+                    return {
+                        'success': True,
+                        'image_id': media_image.id,
+                        'page': media_image.page
+                    }
+
+                except Exception as e:
+                    print(f"Error processing image base64: {e}")
+                    return {
+                        'success': False,
+                        'error': str(e)
+                    }
+
+        except Exception as e:
+            print(f"Error saving media image: {e}")
+            return {
+                'success': False,
+                'error': str(e)
             }
 
     def post(self, request):

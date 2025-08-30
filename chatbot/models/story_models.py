@@ -157,6 +157,8 @@ class Tag(models.Model):
         max_length=50, choices=TagSourceChoices.choices, null=True, blank=True
     )
 
+    description = models.TextField(null=True, blank=True)
+
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

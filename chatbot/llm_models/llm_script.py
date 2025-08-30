@@ -200,11 +200,11 @@ def handle_bedrock_model(
         if tools:
             request_payload['toolConfig'] = tools.get('toolConfig')
 
-        logger.info('Bedrock request payload: %s', request_payload)
-        print('Conversation Bedrock request payload: ', request_payload)
+        # logger.info('Bedrock request payload: %s', request_payload)
+        # print('Conversation Bedrock request payload: ', request_payload)
         response = bedrock_runtime.converse(**request_payload)
-        logger.info('Bedrock response: %s', response)
-        print('Bedrock response: ', response)
+        # logger.info('Bedrock response: %s', response)
+        # print('Bedrock response: ', response)
 
         content_arr = response['output']['message']['content']
         content = content_arr[0]
@@ -224,9 +224,9 @@ def handle_bedrock_model(
                     json_str = json_str[:-1].strip()
                 try:
                     final_output = json_repair.repair_json(json_str, return_objects=True)
-                    logger.info('Loads final_output: %s', final_output)
+                    # logger.info('Loads final_output: %s', final_output)
                 except json.JSONDecodeError as e:
-                    logger.error('Error decoding JSON: %s', e, exc_info=True)
+                    # logger.error('Error decoding JSON: %s', e, exc_info=True)
                     return None
             elif is_json_response:
                 return None
@@ -240,7 +240,7 @@ def handle_bedrock_model(
             print("Error Code:", error_response["Error"]["Code"])
             print("Error Message:", error_response["Error"]["Message"])
             print("Request ID:", error_response.get("ResponseMetadata", {}).get("RequestId"))
-            return None
+            # return None
     except Exception as e:
         logger.error('Error processing request: %s', e, exc_info=True)
         return None

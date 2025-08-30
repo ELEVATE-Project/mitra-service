@@ -4,7 +4,7 @@ import os
 
 
 @shared_task
-def get_auto_extracted_data(file_path, company_bot_id=None, file_extension=None):
+def get_auto_extracted_data(file_path, company_bot_id=None, file_extension=None, other_data=None):
     from chatbot.models import CompanyBot
 
     company_bot = None
@@ -19,7 +19,8 @@ def get_auto_extracted_data(file_path, company_bot_id=None, file_extension=None)
         extracted_data = get_doc_tags_from_ai(
             file=file_path,
             company_bot=company_bot,
-            file_extension=file_extension
+            file_extension=file_extension,
+            other_data=other_data
         )
     except Exception as e:
         # log the error if needed

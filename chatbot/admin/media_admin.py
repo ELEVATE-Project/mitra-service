@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .generic_upload_admin import BatchUploadMixin
 from chatbot.form.media.media_form import MediaAdminForm
-from chatbot.models import Tag, Profile
+from chatbot.models import Tag, Profile, TagChoices, TagSourceChoices
 from chatbot.models.media_models import Media, KeyValue
 from chatbot.views.admin.media_upload_views import (
     BatchMediaUploadView,
@@ -112,10 +112,17 @@ class MasterTagAdmin(BatchUploadMixin, admin.ModelAdmin):
     batch_upload_fields = ['name', 'status', 'created_by']
 
     def save_model(self, request, obj, form, change):
+        print("In save")
         if not obj.pk:
+            print("obj.pk= ", obj.pk)
             try:
+                print("request.user.email: ", request.user.email)
                 profile = Profile.objects.get(email=request.user.email)
+                print("profile found: ", profile)
             except Profile.DoesNotExist:
+                print("Exception profile doesnot exist")
                 profile = None
             obj.created_by = profile
+            obj.status = TagChoices.APPROVED
+            obj.source_type = TagSourceChoices.MANUAL
         super().save_model(request, obj, form, change)

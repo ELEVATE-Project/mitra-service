@@ -100,6 +100,9 @@ class FileTypeChoices(models.TextChoices):
     CSV = 'text/csv', _('CSV')
     XLS = 'application/vnd.ms-excel', _('XLS')
     XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', _('XLSX')
+    PPTX = 'application/vnd.openxmlformats-officedocument.presentationml.presentation', _('PPTX')
+    PPT = 'application/vnd.ms-powerpoint', _('PPT')
+
 
     @classmethod
     def get_extension_mapping(cls):
@@ -112,6 +115,8 @@ class FileTypeChoices(models.TextChoices):
             cls.CSV: '.csv',
             cls.XLS: '.xls',
             cls.XLSX: '.xlsx',
+            cls.PPT: '.ppt',
+            cls.PPTX: '.pptx',
         }
 
     @classmethod

@@ -1,7 +1,7 @@
 {% extends "admin/base_site.html" %}
 {% load static i18n admin_urls %}
 
-{% block title %}Batch Media Upload{% endblock %}
+{% block title %}Batch Upload{% endblock %}
 
 {% block extrahead %}
 {{ block.super }}
@@ -126,6 +126,66 @@
         margin-top: 20px;
         max-height: 400px;
         overflow-y: auto;
+    }
+
+    .file-sections {
+        margin-top: 20px;
+    }
+
+    .file-section {
+        margin-bottom: 30px;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+        padding: 20px;
+    }
+
+    .file-section.successful-section {
+        background-color: #f9f9f9;
+    }
+
+    .file-section.failed-section {
+        background-color: #fff5f5;
+        border-color: #ffcdd2;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #e0e0e0;
+    }
+
+    .section-title {
+        font-size: 18px;
+        font-weight: 600;
+        color: #333;
+    }
+
+    .failed-section .section-title {
+        color: #d32f2f;
+    }
+
+    .section-count {
+        font-size: 14px;
+        color: #666;
+        font-weight: normal;
+    }
+
+    .retry-all-btn {
+        background-color: #ff9800;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    .retry-all-btn:hover {
+        background-color: #f57c00;
     }
 
     .file-item {
@@ -321,28 +381,12 @@
         font-style: italic;
     }
 
-    /* Company Bot Selection */
+    /* Company Bot Selection - Hidden */
     .company-bot-selection {
-        margin: 20px 0;
-        padding: 20px;
-        background-color: #f5f5f5;
-        border-radius: 8px;
+        display: none;
     }
 
-    .company-bot-selection label {
-        display: block;
-        font-weight: bold;
-        margin-bottom: 8px;
-    }
-
-    .company-bot-selection select {
-        width: 100%;
-        padding: 8px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-    }
-
-    /* Extraction Progress Section */
+    /* Upload Progress Section */
     .extraction-progress {
         margin: 20px 0;
         padding: 20px;
@@ -607,10 +651,88 @@
 
     .key-value-pair {
         display: grid;
-        grid-template-columns: 1fr 2fr auto;
+        grid-template-columns: 200px 1fr auto;
         gap: 10px;
         margin-bottom: 10px;
-        align-items: center;
+        align-items: start;
+    }
+
+    .key-value-pair input[type="text"] {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        font-family: inherit;
+    }
+
+    .key-value-pair input:first-child {
+        font-weight: 600;
+        background-color: #f8f9fa;
+    }
+
+    .key-value-textarea {
+        width: 100%;
+        min-height: 40px;
+        max-height: 200px;
+        padding: 10px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        font-family: inherit;
+        resize: vertical;
+        overflow-y: auto;
+    }
+
+    .kv-key-input {
+        font-weight: 600;
+        background-color: #f8f9fa;
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+
+    .structured-content-kv {
+        display: grid;
+        grid-template-columns: 250px 1fr auto;
+        gap: 15px;
+        margin-bottom: 20px;
+        align-items: start;
+    }
+
+    .structured-content-kv .key-value-textarea {
+        width: 100%;
+        min-height: 60px;
+        max-height: 300px;
+        padding: 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        font-family: inherit;
+        resize: vertical;
+        overflow-y: auto;
+        line-height: 1.6;
+        white-space: pre-wrap;
+    }
+
+    .structured-content-kv .kv-key {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 8px;
+        font-size: 15px;
+    }
+
+    .structured-content-kv .kv-value {
+        background-color: white;
+        padding: 12px;
+        border-radius: 4px;
+        border: 1px solid #ddd;
+        white-space: pre-wrap;  /* Preserve formatting */
+        line-height: 1.6;
+        max-height: 300px;
+        overflow-y: auto;
     }
 
     .add-kv-btn {
@@ -631,6 +753,219 @@
         border-radius: 4px;
         cursor: pointer;
         font-size: 14px;
+    }
+
+    /* Subdocuments Section */
+    .subdocuments-section {
+        margin-top: 20px;
+        border-top: 2px solid #e0e0e0;
+        padding-top: 20px;
+    }
+
+    .subdocuments-header {
+        font-size: 16px;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .subdocument-count {
+        font-size: 14px;
+        color: #666;
+        font-weight: normal;
+    }
+
+    .subdocument-item {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        margin-bottom: 12px;
+        background-color: #fff;
+        transition: all 0.3s ease;
+    }
+
+    .subdocument-item:hover {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .subdocument-header {
+        padding: 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        background-color: #f8f9fa;
+        border-radius: 6px 6px 0 0;
+        transition: background-color 0.3s ease;
+    }
+
+    .subdocument-header:hover {
+        background-color: #e9ecef;
+    }
+
+    .subdocument-header.expanded {
+        background-color: #e3f2fd;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .subdocument-title {
+        font-weight: 500;
+        color: #333;
+        flex: 1;
+    }
+
+    .subdocument-controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    .expand-icon {
+        width: 20px;
+        height: 20px;
+        transition: transform 0.3s ease;
+        color: #666;
+    }
+
+    .subdocument-header.expanded .expand-icon {
+        transform: rotate(180deg);
+    }
+
+    .subdocument-content {
+        display: none;
+        padding: 20px;
+        background-color: #fafafa;
+        border-radius: 0 0 6px 6px;
+    }
+
+    .subdocument-content.show {
+        display: block;
+        animation: slideDown 0.3s ease-out;
+    }
+
+    .remove-subdoc-btn {
+        background-color: #f44336;
+        color: white;
+        border: none;
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 12px;
+    }
+
+    .remove-subdoc-btn:hover {
+        background-color: #d32f2f;
+    }
+
+    /* Images Section */
+    .images-section {
+        margin-top: 20px;
+        border-top: 2px solid #e0e0e0;
+        padding-top: 20px;
+    }
+
+    .images-header {
+        font-size: 16px;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 15px;
+    }
+
+    .images-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 15px;
+    }
+
+    .image-item {
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        padding: 10px;
+        background-color: #fff;
+        text-align: center;
+    }
+
+    .image-preview {
+        max-width: 100%;
+        max-height: 200px;
+        object-fit: contain;
+        border-radius: 4px;
+        margin-bottom: 8px;
+        cursor: pointer;
+        transition: transform 0.2s ease;
+    }
+
+    .image-preview:hover {
+        transform: scale(1.05);
+    }
+
+    .image-info {
+        font-size: 12px;
+        color: #666;
+        margin-top: 5px;
+    }
+
+    .image-page {
+        font-weight: 500;
+        color: #333;
+    }
+
+    .remove-image-btn {
+        background-color: #f44336;
+        color: white;
+        border: none;
+        padding: 4px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        margin-top: 8px;
+    }
+
+    .remove-image-btn:hover {
+        background-color: #d32f2f;
+    }
+
+    /* Image Modal */
+    .image-modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0, 0, 0, 0.9);
+    }
+
+    .image-modal-content {
+        margin: auto;
+        display: block;
+        max-width: 90%;
+        max-height: 90%;
+        position: relative;
+        top: 50%;
+        transform: translateY(-50%);
+    }
+
+    .close-modal {
+        position: absolute;
+        top: 15px;
+        right: 35px;
+        color: #f1f1f1;
+        font-size: 40px;
+        font-weight: bold;
+        transition: 0.3s;
+        cursor: pointer;
+    }
+
+    .close-modal:hover,
+    .close-modal:focus {
+        color: #bbb;
+        text-decoration: none;
+        cursor: pointer;
     }
 
     /* Pagination Controls */
@@ -985,6 +1320,13 @@
     #retryAllBtn:hover {
         background-color: #f57c00;
     }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px;
+        color: #999;
+        font-size: 14px;
+    }
 </style>
 {% endblock %}
 
@@ -999,13 +1341,13 @@
 
 {% block content %}
 <div class="batch-upload-container">
-    <h1>Batch Media Upload</h1>
+    <h1>Batch Upload</h1>
 
     <!-- Step Indicator -->
     <div class="step-indicator">
         <div class="step active" data-step="1">
             <div class="step-number">1</div>
-            <span class="step-label">Upload & Extract</span>
+            <span class="step-label">Upload</span>
         </div>
         <div class="step" data-step="2">
             <div class="step-number">2</div>
@@ -1025,11 +1367,11 @@
     <!-- Status Message -->
     <div id="statusMessage" class="status-message"></div>
 
-    <!-- Step 1: Upload & Extract -->
+    <!-- Step 1: Upload -->
     <div id="step1" class="content-section active">
-        <h2>Upload Files & Extract Data</h2>
+        <h2>Upload Files</h2>
 
-        <!-- Company Bot Selection -->
+        <!-- Hidden Company Bot Selection -->
         <div class="company-bot-selection">
             <label for="companyBotSelect">Select Company Bot *</label>
             <select id="companyBotSelect" required>
@@ -1055,11 +1397,11 @@
                    accept="{% for file_type in file_types %}{{ file_type.extension }}{% if not forloop.last %},{% endif %}{% endfor %}">
         </div>
 
-        <!-- Extraction Progress -->
+        <!-- Upload Progress -->
         <div id="extractionProgress" class="extraction-progress">
             <div class="progress-header">
                 <div class="progress-title">
-                    Extraction Progress
+                    Upload Progress
                     <span id="aiStatus" style="margin-left: 15px; font-size: 14px; color: #666; display: none;">
                         <span class="spinner" style="width: 14px; height: 14px; border-width: 2px; margin-right: 5px;"></span>
                         AI enhancement in progress...
@@ -1088,16 +1430,41 @@
                 <div class="progress-bar">
                     <div class="progress-fill" id="extractionProgressBar"></div>
                 </div>
-                <div class="progress-text" id="progressText">Starting extraction...</div>
+                <div class="progress-text" id="progressText">Starting upload...</div>
             </div>
         </div>
 
-        <div id="fileList" class="file-list"></div>
+        <!-- File Sections Container -->
+        <div id="fileSections" class="file-sections">
+            <!-- Successful Files Section -->
+            <div id="successfulSection" class="file-section successful-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <span class="section-title">Uploaded Files</span>
+                        <span class="section-count" id="successfulCount">(0)</span>
+                    </div>
+                </div>
+                <div id="successfulFilesList" class="file-list"></div>
+            </div>
+
+            <!-- Failed Files Section -->
+            <div id="failedSection" class="file-section failed-section" style="display: none;">
+                <div class="section-header">
+                    <div>
+                        <span class="section-title">Failed Uploads</span>
+                        <span class="section-count" id="failedCount">(0)</span>
+                    </div>
+                    <button class="retry-all-btn" id="retryAllFailedBtn" onclick="retryAllFailedUploads()">
+                        Upload All Failed Again
+                    </button>
+                </div>
+                <div id="failedFilesList" class="file-list"></div>
+            </div>
+        </div>
 
         <div class="button-group">
             <a href="{% url 'admin:chatbot_media_changelist' %}" class="btn btn-secondary">Back to Media List</a>
             <div>
-                <button class="btn btn-primary" id="extractBtn" disabled>Extract Data</button>
                 <button class="btn btn-primary" id="proceedBtn" style="display: none;" disabled>Proceed to Review</button>
             </div>
         </div>
@@ -1105,21 +1472,19 @@
 
     <!-- Step 2: Review -->
     <div id="step2" class="content-section">
-        <h2>Review Extracted Data</h2>
+        <h2>Review Data</h2>
 
-        <div id="extractedDataContainer" class="data-grid"></div>
-
-        <!-- Pagination Controls -->
+        <!-- Pagination Controls Top -->
         <div class="pagination-controls">
             <div class="pagination-info">
                 Showing <span id="currentItemIndex">1</span> of <span id="totalItems">0</span> files
             </div>
             <div class="pagination-nav">
-                <button class="page-btn" id="firstPageBtn" onclick="goToPage(1)">First</button>
-                <button class="page-btn" id="prevPageBtn" onclick="goToPrevPage()">Previous</button>
+                <button class="page-btn" id="firstPageBtn" onclick="goToPage(1)">&lt;&lt;</button>
+                <button class="page-btn" id="prevPageBtn" onclick="goToPrevPage()">&lt;</button>
                 <span id="pageNumbers"></span>
-                <button class="page-btn" id="nextPageBtn" onclick="goToNextPage()">Next</button>
-                <button class="page-btn" id="lastPageBtn" onclick="goToPage(totalPages)">Last</button>
+                <button class="page-btn" id="nextPageBtn" onclick="goToNextPage()">&gt;</button>
+                <button class="page-btn" id="lastPageBtn" onclick="goToPage(totalPages)">&gt;&gt;</button>
             </div>
             <div class="page-jump">
                 <span>Go to page:</span>
@@ -1128,8 +1493,35 @@
             </div>
         </div>
 
+        <div id="extractedDataContainer" class="data-grid"></div>
+
+        <!-- Image Modal -->
+        <div id="imageModal" class="image-modal">
+            <span class="close-modal" onclick="closeImageModal()">&times;</span>
+            <img class="image-modal-content" id="modalImage">
+        </div>
+
+        <!-- Pagination Controls Bottom -->
+        <div class="pagination-controls">
+            <div class="pagination-info">
+                Showing <span id="currentItemIndexBottom">1</span> of <span id="totalItemsBottom">0</span> files
+            </div>
+            <div class="pagination-nav">
+                <button class="page-btn" id="firstPageBtnBottom" onclick="goToPage(1)">&lt;&lt;</button>
+                <button class="page-btn" id="prevPageBtnBottom" onclick="goToPrevPage()">&lt;</button>
+                <span id="pageNumbersBottom"></span>
+                <button class="page-btn" id="nextPageBtnBottom" onclick="goToNextPage()">&gt;</button>
+                <button class="page-btn" id="lastPageBtnBottom" onclick="goToPage(totalPages)">&gt;&gt;</button>
+            </div>
+            <div class="page-jump">
+                <span>Go to page:</span>
+                <input type="number" id="pageJumpInputBottom" min="1" value="1">
+                <button onclick="jumpToPageBottom()">Go</button>
+            </div>
+        </div>
+
         <div class="button-group">
-            <button class="btn btn-secondary" id="backToUploadBtn">Previous Step</button>
+            <div></div>
             <button class="btn btn-primary" id="saveBtn">Save All</button>
         </div>
     </div>
@@ -1151,10 +1543,6 @@
                 <h3>Failed</h3>
                 <div class="value" id="failedCount">0</div>
             </div>
-            <div class="summary-card">
-                <h3>Skipped</h3>
-                <div class="value" id="finalSkippedCount">0</div>
-            </div>
         </div>
 
         <!-- Add retry all button here -->
@@ -1167,8 +1555,8 @@
         <div class="results-list" id="resultsList"></div>
 
         <div class="button-group">
-            <button class="btn btn-secondary" id="newBatchBtn">Upload New Batch</button>
-            <a href="{% url 'admin:chatbot_media_changelist' %}" class="btn btn-primary">View in Media Library</a>
+            <div></div>
+            <a href="{% url 'admin:chatbot_media_changelist' %}" class="btn btn-primary">Submit</a>
         </div>
     </div>
 
@@ -1201,10 +1589,16 @@ function getCookie(name) {
     return cookieValue;
 }
 const csrftoken = getCookie('csrftoken');
+let expandedSubdocumentPaths = new Set();
 const DEFAULT_BOT_ID = {{ default_bot_id|default:"null" }};
 
 // Dynamic file types from Django
 const fileTypesData = JSON.parse(document.getElementById('file-types-data').textContent);
+const mediaTypesJS = [
+    {% for value, label in media_types %}
+    { value: "{{ value }}", label: "{{ label }}" },
+    {% endfor %}
+];
 
 // Create valid MIME types array and extension regex
 const validTypes = fileTypesData.map(ft => ft.mime_type);
@@ -1225,6 +1619,8 @@ let pollingInterval = null;
 let isExtracting = false;
 let sessionId = null;
 let isWaitingForAI = false;
+let lastSaveTimer = null;
+let expandedSubdocument = null; // Track which subdocument is expanded
 
 // Media types and priorities from Django
 const mediaTypes = {{ media_types|safe }};
@@ -1240,13 +1636,22 @@ const FILE_STATUS = {
     SKIPPED: 'skipped'
 };
 
+// Initialize with default bot selected
+window.addEventListener('DOMContentLoaded', function() {
+    resetToDefaultBot();
+});
+
 function resetToDefaultBot() {
     const selectElement = document.getElementById('companyBotSelect');
     if (selectElement) {
         if (DEFAULT_BOT_ID) {
             selectElement.value = DEFAULT_BOT_ID;
         } else {
-            selectElement.value = '';
+            // If no default, select the first bot
+            const firstOption = selectElement.querySelector('option[value]:not([value=""])');
+            if (firstOption) {
+                selectElement.value = firstOption.value;
+            }
         }
     }
 }
@@ -1304,7 +1709,6 @@ function updateStepIndicator(step) {
 // File upload handling
 const uploadArea = document.getElementById('uploadArea');
 const fileInput = document.getElementById('fileInput');
-const fileList = document.getElementById('fileList');
 
 uploadArea.addEventListener('click', () => fileInput.click());
 
@@ -1327,12 +1731,26 @@ fileInput.addEventListener('change', (e) => {
     handleFiles(e.target.files);
 });
 
-function handleFiles(files) {
+async function handleFiles(files) {
+    // Check if bot is selected
+    const companyBotId = document.getElementById('companyBotSelect').value;
+    if (!companyBotId) {
+        showStatus('Please select a company bot before uploading files', 'error');
+        return;
+    }
+
+    // Generate session ID if not exists
+    if (!sessionId) {
+        sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    }
+
+    const filesToUpload = [];
+
     Array.from(files).forEach(file => {
         // Check both MIME type and file extension
         if (validTypes.includes(file.type) || (file.name && file.name.match(extensionRegex))) {
             if (!uploadedFiles.find(f => f.name === file.name)) {
-                uploadedFiles.push({
+                const fileData = {
                     file: file,
                     name: file.name,
                     size: file.size,
@@ -1340,7 +1758,9 @@ function handleFiles(files) {
                     error: null,
                     errorTimestamp: null,
                     index: uploadedFiles.length
-                });
+                };
+                uploadedFiles.push(fileData);
+                filesToUpload.push(fileData);
             }
         } else {
             const supportedTypes = fileTypesData.map(ft => ft.label).join(', ');
@@ -1348,80 +1768,173 @@ function handleFiles(files) {
         }
     });
 
+    // Update the file list display first to show pending files
     updateFileList();
+
+    // If there are files to upload, process them immediately
+    if (filesToUpload.length > 0) {
+        showLoading(`Uploading ${filesToUpload.length} file(s)...`);
+        await processFiles(filesToUpload);
+    }
+
     fileInput.value = '';
 }
 
-function updateFileList() {
-    fileList.innerHTML = '';
+// New function to process files immediately after selection
+async function processFiles(files) {
+    isExtracting = true;
+    updateExtractionProgress();
+    document.getElementById('extractionProgress').classList.add('show');
 
-    uploadedFiles.forEach((fileData, index) => {
-        const fileItem = document.createElement('div');
-        fileItem.className = `file-item ${fileData.status}`;
-        fileItem.id = `file-item-${index}`;
+    const results = await extractDataFromFiles(files);
 
-        let statusIcon = '';
-        let statusText = '';
-        let statusActions = '';
-
-        switch (fileData.status) {
-            case FILE_STATUS.SUCCESS:
-                statusIcon = '✓';
-                statusText = 'Extracted successfully';
-                break;
-            case FILE_STATUS.ERROR:
-                statusIcon = '✗';
-                statusText = 'Extraction failed';
-                statusActions = `
-                    <button class="retry-btn" onclick="retryExtraction(${index})">Retry</button>
-                    <button class="skip-btn" onclick="skipFile(${index})">Skip</button>
-                    <button class="error-toggle" onclick="toggleErrorDetails(${index})">Details</button>
-                `;
-                break;
-            case FILE_STATUS.SKIPPED:
-                statusIcon = '⊘';
-                statusText = 'Skipped';
-                statusActions = `<button class="retry-btn" onclick="unSkipFile(${index})">Un-skip</button>`;
-                break;
-            case FILE_STATUS.PROCESSING:
-                statusIcon = '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></span>';
-                statusText = 'Processing...';
-                break;
-            default:
-                statusIcon = '⏳';
-                statusText = 'Waiting...';
+    // Add results to extractedData
+    results.forEach(result => {
+        const existingIndex = extractedData.findIndex(item => item.file_index === result.file_index);
+        if (existingIndex >= 0) {
+            extractedData[existingIndex] = result;
+        } else {
+            extractedData.push(result);
         }
-
-        fileItem.innerHTML = `
-            <div class="file-item-main">
-                <div class="file-item-content">
-                    <div class="file-status-icon">${statusIcon}</div>
-                    <div class="file-info">
-                        <div class="file-name">${fileData.name}</div>
-                        <div class="file-size">${(fileData.size / 1024).toFixed(2)} KB</div>
-                        <div class="file-status-text">${statusText}</div>
-                    </div>
-                </div>
-                <div class="file-actions">
-                    ${statusActions}
-                    <button class="remove-btn" onclick="removeFile(${index})">Remove</button>
-                </div>
-            </div>
-            ${fileData.status === FILE_STATUS.ERROR ? `
-                <div class="file-error-details" id="error-details-${index}">
-                    <div class="error-details-content">
-                        <div class="error-title">Extraction Error</div>
-                        <div class="error-message">${fileData.error || 'Unknown error occurred'}</div>
-                        <div class="error-timestamp">Failed at: ${fileData.errorTimestamp ? new Date(fileData.errorTimestamp).toLocaleString() : 'Unknown time'}</div>
-                    </div>
-                </div>
-            ` : ''}
-        `;
-        fileList.appendChild(fileItem);
     });
+
+    // Check if there are any AI extraction tasks to wait for
+    const tasksToWaitFor = extractedData
+        .filter(item => item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id && !item.data.auto_tags_ready)
+        .map(item => item.data.auto_tag_task_id);
+
+    if (tasksToWaitFor.length > 0) {
+        isWaitingForAI = true;
+        document.getElementById('aiStatus').style.display = 'inline';
+
+        try {
+            await waitForAllTasksToComplete(tasksToWaitFor);
+        } catch (error) {
+            console.error('AI enhancement error:', error);
+        } finally {
+            isWaitingForAI = false;
+            document.getElementById('aiStatus').style.display = 'none';
+        }
+    }
+
+    isExtracting = false;
+    updateFileList();
+    updateButtonStates();
+
+    // Ensure loading overlay is hidden (this may be redundant now but good as safety)
+    hideLoading();
+}
+
+// Modified function to show files in separate sections
+function updateFileList() {
+    const successfulFiles = uploadedFiles.filter(f => f.status === FILE_STATUS.SUCCESS || f.status === FILE_STATUS.PENDING || f.status === FILE_STATUS.PROCESSING);
+    const failedFiles = uploadedFiles.filter(f => f.status === FILE_STATUS.ERROR);
+    const skippedFiles = uploadedFiles.filter(f => f.status === FILE_STATUS.SKIPPED);
+
+    // Update successful files section
+    const successfulSection = document.getElementById('successfulSection');
+    const successfulList = document.getElementById('successfulFilesList');
+    const successfulCount = document.getElementById('successfulCount');
+
+    if (successfulFiles.length > 0 || skippedFiles.length > 0) {
+        successfulSection.style.display = 'block';
+        successfulCount.textContent = `(${successfulFiles.length})`;
+
+        successfulList.innerHTML = '';
+        [...successfulFiles, ...skippedFiles].forEach(fileData => {
+            const fileItem = createFileItem(fileData);
+            successfulList.appendChild(fileItem);
+        });
+    } else {
+        successfulSection.style.display = 'none';
+    }
+
+    // Update failed files section
+    const failedSection = document.getElementById('failedSection');
+    const failedList = document.getElementById('failedFilesList');
+    const failedCount = document.getElementById('failedCount');
+
+    if (failedFiles.length > 0) {
+        failedSection.style.display = 'block';
+        failedCount.textContent = `(${failedFiles.length})`;
+
+        failedList.innerHTML = '';
+        failedFiles.forEach(fileData => {
+            const fileItem = createFileItem(fileData);
+            failedList.appendChild(fileItem);
+        });
+    } else {
+        failedSection.style.display = 'none';
+    }
 
     updateButtonStates();
     updateExtractionProgress();
+}
+
+// New function to create individual file items
+function createFileItem(fileData) {
+    const fileItem = document.createElement('div');
+    fileItem.className = `file-item ${fileData.status}`;
+    fileItem.id = `file-item-${fileData.index}`;
+
+    let statusIcon = '';
+    let statusText = '';
+    let statusActions = '';
+
+    switch (fileData.status) {
+        case FILE_STATUS.SUCCESS:
+            statusIcon = '✓';
+            statusText = 'Upload successful';
+            break;
+        case FILE_STATUS.ERROR:
+            statusIcon = '✗';
+            statusText = 'Upload failed';
+            statusActions = `
+                <button class="retry-btn" onclick="retryExtraction(${fileData.index})">Upload Again</button>
+                <button class="error-toggle" onclick="toggleErrorDetails(${fileData.index})">Details</button>
+            `;
+            break;
+        case FILE_STATUS.SKIPPED:
+            statusIcon = '⊘';
+            statusText = 'Skipped';
+            statusActions = `<button class="retry-btn" onclick="unSkipFile(${fileData.index})">Un-skip</button>`;
+            break;
+        case FILE_STATUS.PROCESSING:
+            statusIcon = '<span class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></span>';
+            statusText = 'Uploading...';
+            break;
+        default:
+            statusIcon = '⏳';
+            statusText = 'Waiting...';
+    }
+
+    fileItem.innerHTML = `
+        <div class="file-item-main">
+            <div class="file-item-content">
+                <div class="file-status-icon">${statusIcon}</div>
+                <div class="file-info">
+                    <div class="file-name">${fileData.name}</div>
+                    <div class="file-size">${(fileData.size / 1024).toFixed(2)} KB</div>
+                    <div class="file-status-text">${statusText}</div>
+                </div>
+            </div>
+            <div class="file-actions">
+                ${statusActions}
+                <button class="remove-btn" onclick="removeFile(${fileData.index})">Remove</button>
+            </div>
+        </div>
+        ${fileData.status === FILE_STATUS.ERROR ? `
+            <div class="file-error-details" id="error-details-${fileData.index}">
+                <div class="error-details-content">
+                    <div class="error-title">Upload Error</div>
+                    <div class="error-message">${fileData.error || 'Unknown error occurred'}</div>
+                    <div class="error-timestamp">Failed at: ${fileData.errorTimestamp ? new Date(fileData.errorTimestamp).toLocaleString() : 'Unknown time'}</div>
+                </div>
+            </div>
+        ` : ''}
+    `;
+
+    return fileItem;
 }
 
 function toggleErrorDetails(index) {
@@ -1432,25 +1945,19 @@ function toggleErrorDetails(index) {
 }
 
 function updateButtonStates() {
-    const companyBotSelected = document.getElementById('companyBotSelect').value;
-    const hasValidFiles = uploadedFiles.some(f => f.status !== FILE_STATUS.SKIPPED);
-    const hasProcessedFiles = uploadedFiles.some(f => f.status === FILE_STATUS.SUCCESS || f.status === FILE_STATUS.ERROR);
     const hasReadyFiles = uploadedFiles.some(f => f.status === FILE_STATUS.SUCCESS);
     const isProcessing = uploadedFiles.some(f => f.status === FILE_STATUS.PROCESSING);
+    const hasFiles = uploadedFiles.length > 0;
 
-    document.getElementById('extractBtn').disabled = !hasValidFiles || !companyBotSelected || isExtracting || isWaitingForAI;
     document.getElementById('proceedBtn').disabled = !hasReadyFiles || isProcessing || isWaitingForAI;
 
-    // Show/hide proceed button based on extraction state
+    // Show/hide proceed button based on upload state
     const proceedBtn = document.getElementById('proceedBtn');
-    const extractBtn = document.getElementById('extractBtn');
 
-    if (hasProcessedFiles && !isProcessing && !isWaitingForAI) {
+    if (hasReadyFiles && !isProcessing && !isWaitingForAI) {
         proceedBtn.style.display = 'inline-block';
-        extractBtn.textContent = 'Extract All Again';
     } else {
         proceedBtn.style.display = 'none';
-        extractBtn.textContent = 'Extract Data';
     }
 }
 
@@ -1490,7 +1997,7 @@ function updateExtractionProgress() {
     if (stats.processing > 0) {
         progressText.textContent = `Processing ${stats.processing} file(s)...`;
     } else if (completed === stats.total && stats.total > 0) {
-        progressText.textContent = `Extraction complete! ${stats.success} successful, ${stats.error} failed, ${stats.skipped} skipped.`;
+        progressText.textContent = `Upload complete! ${stats.success} successful, ${stats.error} failed, ${stats.skipped} skipped.`;
     } else if (stats.total > 0) {
         progressText.textContent = `${completed}/${stats.total} files processed`;
     } else {
@@ -1507,10 +2014,20 @@ function updateExtractionProgress() {
 }
 
 function removeFile(index) {
-    uploadedFiles.splice(index, 1);
+    if (!confirm('Are you sure you want to remove this file from the upload list?')) {
+        return;
+    }
+    uploadedFiles = uploadedFiles.filter(f => f.index !== index);
+    // Also remove from extractedData
+    extractedData = extractedData.filter(item => item.file_index !== index);
     // Reindex remaining files
     uploadedFiles.forEach((file, newIndex) => {
         file.index = newIndex;
+        // Update corresponding extracted data index
+        const extractedItem = extractedData.find(item => item.filename === file.name);
+        if (extractedItem) {
+            extractedItem.file_index = newIndex;
+        }
     });
     updateFileList();
 }
@@ -1523,10 +2040,27 @@ function skipFile(index) {
 }
 
 function unSkipFile(index) {
-    uploadedFiles[index].status = FILE_STATUS.PENDING;
-    uploadedFiles[index].error = null;
+    uploadedFiles[index].status = FILE_STATUS.ERROR;
+    uploadedFiles[index].error = 'Previously skipped - click Upload Again to retry';
     uploadedFiles[index].errorTimestamp = null;
     updateFileList();
+}
+
+// Retry all failed uploads
+async function retryAllFailedUploads() {
+    const failedFiles = uploadedFiles.filter(f => f.status === FILE_STATUS.ERROR);
+
+    if (failedFiles.length === 0) {
+        showStatus('No failed uploads to retry', 'info');
+        return;
+    }
+
+    showLoading(`Uploading ${failedFiles.length} failed files...`);
+
+    // Process all failed files
+    await processFiles(failedFiles);
+
+    // hideLoading is now called inside processFiles
 }
 
 // Retry all failed saves
@@ -1563,6 +2097,7 @@ async function retryAllFailed() {
                     continue;
                 }
 
+                // Include subdocuments and images
                 itemData = {
                     ...originalItem.data,
                     filename: originalItem.filename,
@@ -1570,7 +2105,9 @@ async function retryAllFailed() {
                     manual_tags: originalItem.data.manual_tags || [],
                     auto_tags: originalItem.data.auto_tags || [],
                     file_key: originalItem.data.file_key,
-                    session_id: originalItem.data.session_id || sessionId
+                    session_id: originalItem.data.session_id || sessionId,
+                    subdocument: originalItem.data.subdocument || [],
+                    images: originalItem.data.images || []
                 };
             }
 
@@ -1623,7 +2160,7 @@ async function retryAllFailed() {
     }
 }
 
-// Retry extraction for single file
+// Retry upload for single file
 async function retryExtraction(index) {
     const fileData = uploadedFiles[index];
 
@@ -1685,20 +2222,35 @@ async function retryExtraction(index) {
                 });
             }
 
+            // Check if AI task needs to be waited for
+            if (result.data && result.data.auto_tag_task_id && !result.data.auto_tags_ready) {
+                isWaitingForAI = true;
+                document.getElementById('aiStatus').style.display = 'inline';
+
+                try {
+                    await waitForAllTasksToComplete([result.data.auto_tag_task_id]);
+                } catch (error) {
+                    console.error('AI enhancement error:', error);
+                } finally {
+                    isWaitingForAI = false;
+                    document.getElementById('aiStatus').style.display = 'none';
+                }
+            }
+
             updateFileList();
-            showStatus(`Successfully retried extraction for ${fileData.name}`, 'success');
+            showStatus(`Successfully uploaded ${fileData.name}`, 'success');
         } else {
             uploadedFiles[index].status = FILE_STATUS.ERROR;
             uploadedFiles[index].error = result.error;
             uploadedFiles[index].errorTimestamp = new Date().toISOString();
-            showStatus(`Retry failed for ${fileData.name}: ${result.error}`, 'error');
+            showStatus(`Upload failed for ${fileData.name}: ${result.error}`, 'error');
             updateFileList();
         }
     } catch (error) {
         uploadedFiles[index].status = FILE_STATUS.ERROR;
         uploadedFiles[index].error = error.message;
         uploadedFiles[index].errorTimestamp = new Date().toISOString();
-        showStatus(`Retry failed for ${fileData.name}: ${error.message}`, 'error');
+        showStatus(`Upload failed for ${fileData.name}: ${error.message}`, 'error');
         updateFileList();
     }
 }
@@ -1706,11 +2258,10 @@ async function retryExtraction(index) {
 // Company bot selection
 document.getElementById('companyBotSelect').addEventListener('change', updateFileList);
 
-// Data extraction via API
+// Data upload via API
 async function extractDataFromFiles(files) {
     const companyBotId = document.getElementById('companyBotSelect').value;
     const extractedItems = [];
-    isExtracting = true;
 
     // Generate session ID if not exists
     if (!sessionId) {
@@ -1720,14 +2271,15 @@ async function extractDataFromFiles(files) {
     // Process files one by one to show progress
     for (let i = 0; i < files.length; i++) {
         const fileData = files[i];
+        const fileIndex = fileData.index;
 
         if (fileData.status === FILE_STATUS.SKIPPED) {
             // Add placeholder for skipped files
             extractedItems.push({
-                id: `skipped_${i}`,
+                id: `skipped_${fileIndex}`,
                 filename: fileData.name,
                 file: fileData.file,
-                file_index: i,
+                file_index: fileIndex,
                 status: FILE_STATUS.SKIPPED,
                 data: null
             });
@@ -1735,7 +2287,7 @@ async function extractDataFromFiles(files) {
         }
 
         // Set status to processing
-        uploadedFiles[i].status = FILE_STATUS.PROCESSING;
+        uploadedFiles[fileIndex].status = FILE_STATUS.PROCESSING;
         updateFileList();
 
         try {
@@ -1755,58 +2307,58 @@ async function extractDataFromFiles(files) {
 
             const result = await response.json();
             if (result.success && result.data.length > 0) {
-                const extractionResult = result.data[0]; // Single file result
+                const uploadResult = result.data[0]; // Single file result
 
                 // Store session_id from response
                 if (result.session_id) {
                     sessionId = result.session_id;
                 }
 
-                if (extractionResult.status === 'success') {
-                    uploadedFiles[i].status = FILE_STATUS.SUCCESS;
-                    uploadedFiles[i].error = null;
-                    uploadedFiles[i].errorTimestamp = null;
-                    uploadedFiles[i].sessionId = sessionId;
-                    uploadedFiles[i].fileKey = extractionResult.file_key;
+                if (uploadResult.status === 'success') {
+                    uploadedFiles[fileIndex].status = FILE_STATUS.SUCCESS;
+                    uploadedFiles[fileIndex].error = null;
+                    uploadedFiles[fileIndex].errorTimestamp = null;
+                    uploadedFiles[fileIndex].sessionId = sessionId;
+                    uploadedFiles[fileIndex].fileKey = uploadResult.file_key;
 
                     extractedItems.push({
-                        id: `temp_${Date.now()}_${i}`,
+                        id: `temp_${Date.now()}_${fileIndex}`,
                         filename: fileData.name,
                         file: fileData.file,
-                        file_index: i,
+                        file_index: fileIndex,
                         status: FILE_STATUS.SUCCESS,
-                        data: extractionResult
+                        data: uploadResult
                     });
                 } else {
-                    uploadedFiles[i].status = FILE_STATUS.ERROR;
-                    uploadedFiles[i].error = extractionResult.error;
-                    uploadedFiles[i].errorTimestamp = new Date().toISOString();
-                    uploadedFiles[i].sessionId = sessionId;
-                    uploadedFiles[i].fileKey = extractionResult.file_key;
+                    uploadedFiles[fileIndex].status = FILE_STATUS.ERROR;
+                    uploadedFiles[fileIndex].error = uploadResult.error;
+                    uploadedFiles[fileIndex].errorTimestamp = new Date().toISOString();
+                    uploadedFiles[fileIndex].sessionId = sessionId;
+                    uploadedFiles[fileIndex].fileKey = uploadResult.file_key;
 
                     extractedItems.push({
-                        id: `error_${i}`,
+                        id: `error_${fileIndex}`,
                         filename: fileData.name,
                         file: fileData.file,
-                        file_index: i,
+                        file_index: fileIndex,
                         status: FILE_STATUS.ERROR,
-                        data: extractionResult,
-                        error: extractionResult.error
+                        data: uploadResult,
+                        error: uploadResult.error
                     });
                 }
             } else {
                 throw new Error(result.error || 'Failed to extract data');
             }
         } catch (error) {
-            uploadedFiles[i].status = FILE_STATUS.ERROR;
-            uploadedFiles[i].error = error.message;
-            uploadedFiles[i].errorTimestamp = new Date().toISOString();
+            uploadedFiles[fileIndex].status = FILE_STATUS.ERROR;
+            uploadedFiles[fileIndex].error = error.message;
+            uploadedFiles[fileIndex].errorTimestamp = new Date().toISOString();
 
             extractedItems.push({
-                id: `error_${i}`,
+                id: `error_${fileIndex}`,
                 filename: fileData.name,
                 file: fileData.file,
-                file_index: i,
+                file_index: fileIndex,
                 status: FILE_STATUS.ERROR,
                 data: null,
                 error: error.message
@@ -1819,7 +2371,6 @@ async function extractDataFromFiles(files) {
         await new Promise(resolve => setTimeout(resolve, 200));
     }
 
-    isExtracting = false;
     return extractedItems;
 }
 
@@ -1827,8 +2378,12 @@ async function extractDataFromFiles(files) {
 async function waitForAllTasksToComplete(taskIds) {
     return new Promise((resolve, reject) => {
         const totalTasks = taskIds.length;
+        let checkAttempts = 0;
+        const maxAttempts = 200; // Maximum attempts (10 minutes with 3-second intervals)
 
         const checkInterval = setInterval(async () => {
+            checkAttempts++;
+
             try {
                 const response = await fetch("{% url 'admin:chatbot_media_task_status' %}", {
                     method: 'POST',
@@ -1876,6 +2431,16 @@ async function waitForAllTasksToComplete(taskIds) {
                                         );
                                         item.data.key_values = [...basicKVs, ...enhanced.enhanced_key_values];
                                     }
+
+                                    // Update subdocuments if available
+                                    if (enhanced.subdocument && Array.isArray(enhanced.subdocument)) {
+                                        item.data.subdocument = enhanced.subdocument;
+                                    }
+
+                                    // Update images if available
+                                    if (enhanced.images && Array.isArray(enhanced.images)) {
+                                        item.data.images = enhanced.images;
+                                    }
                                 }
 
                                 console.log(`AI extraction completed for ${item.filename}:`, aiResult);
@@ -1896,73 +2461,40 @@ async function waitForAllTasksToComplete(taskIds) {
                     showLoading(`AI extraction in progress... ${completedTasks}/${totalTasks} completed`);
 
                     // Check if all tasks are complete
-                    if (completedTasks >= totalTasks) {
+                    if (completedTasks >= totalTasks || checkAttempts >= maxAttempts) {
                         clearInterval(checkInterval);
-                        resolve();
+                        console.log(`AI extraction finished. Completed: ${completedTasks}/${totalTasks}`);
+
+                        // Important: Hide the loading overlay before resolving
+                        hideLoading();
+
+                        // Small delay to ensure UI updates
+                        setTimeout(() => {
+                            resolve();
+                        }, 100);
+
+                        return;  // Exit early to prevent further execution
                     }
                 }
             } catch (error) {
-                clearInterval(checkInterval);
-                reject(error);
+                console.error('Error checking task status:', error);
+                if (checkAttempts >= maxAttempts) {
+                    clearInterval(checkInterval);
+                    hideLoading();  // Also hide on error
+                    resolve();
+                }
             }
         }, 3000); // Check every 3 seconds
 
         // Timeout after 10 minutes
         setTimeout(() => {
             clearInterval(checkInterval);
-            reject(new Error('AI extraction timed out'));
+            console.warn('AI extraction timed out after 10 minutes');
+            hideLoading();  // Hide on timeout
+            resolve();
         }, 600000);
     });
 }
-
-// Extract button handler - Modified to wait for AI completion
-document.getElementById('extractBtn').addEventListener('click', async () => {
-    isWaitingForAI = true;
-    showLoading('Extracting data from files...');
-
-    try {
-        extractedData = await extractDataFromFiles(uploadedFiles);
-
-        document.getElementById('uploadArea').style.display = 'none';
-        document.querySelector('.company-bot-selection').style.display = 'none';
-
-        // Check if there are any AI extraction tasks to wait for
-        const tasksToWaitFor = extractedData
-            .filter(item => item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id)
-            .map(item => item.data.auto_tag_task_id);
-
-        if (tasksToWaitFor.length > 0) {
-            showLoading('Initial extraction complete. Waiting for AI enhancement...');
-
-            try {
-                await waitForAllTasksToComplete(tasksToWaitFor);
-                showStatus('All data extraction and AI enhancement completed successfully!', 'success');
-            } catch (error) {
-                console.error('AI enhancement error:', error);
-                showStatus('Data extracted but AI enhancement failed. You can still proceed.', 'warning');
-            }
-        }
-
-        // Show summary message
-        const successCount = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS).length;
-        const errorCount = extractedData.filter(item => item.status === FILE_STATUS.ERROR).length;
-        const skippedCount = extractedData.filter(item => item.status === FILE_STATUS.SKIPPED).length;
-
-        let message = `Extraction completed! `;
-        if (successCount > 0) message += `${successCount} files ready for review. `;
-        if (errorCount > 0) message += `${errorCount} files had errors. `;
-        if (skippedCount > 0) message += `${skippedCount} files were skipped.`;
-
-        showStatus(message, errorCount > 0 ? 'warning' : 'success');
-
-    } catch (error) {
-        showStatus('Error extracting data: ' + error.message, 'error');
-    } finally {
-        isWaitingForAI = false;
-        hideLoading();
-        updateFileList();
-    }
-});
 
 // Proceed button handler
 document.getElementById('proceedBtn').addEventListener('click', () => {
@@ -1970,7 +2502,7 @@ document.getElementById('proceedBtn').addEventListener('click', () => {
     const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
 
     if (validItems.length === 0) {
-        showStatus('No files available for review. Please extract data from files first.', 'warning');
+        showStatus('No files available for review. Please upload files first.', 'warning');
         return;
     }
 
@@ -1980,6 +2512,606 @@ document.getElementById('proceedBtn').addEventListener('click', () => {
     renderExtractedData();
     updateStepIndicator(2);
 });
+
+
+// Add this function to support recursive subdocument rendering
+function renderNestedSubdocuments(subdocs, parentPath, baseParentIndex) {
+    if (!subdocs || !Array.isArray(subdocs) || subdocs.length === 0) {
+        return '';
+    }
+
+    return subdocs.map((subdoc, index) => {
+        const currentPath = `${parentPath}_${index}`;
+        return renderSubdocumentItemRecursive(subdoc, currentPath, baseParentIndex);
+    }).join('');
+}
+
+// New recursive subdocument rendering function
+function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
+    const subdocId = `subdoc_${path}`;
+
+    // Initialize subdoc data structures if missing
+    if (!subdoc.media_type) subdoc.media_type = 'text/plain';
+    if (!subdoc.description) subdoc.description = subdoc.summary || '';
+    if (!subdoc.manual_tags) subdoc.manual_tags = [];
+    if (!subdoc.auto_tags) {
+        if (subdoc.tags && Array.isArray(subdoc.tags)) {
+            subdoc.auto_tags = subdoc.tags.map(tag => {
+                if (typeof tag === 'object' && tag.text) {
+                    return tag.text;
+                } else if (typeof tag === 'string') {
+                    return tag;
+                }
+                return '';
+            }).filter(tag => tag);
+        } else {
+            subdoc.auto_tags = [];
+        }
+    }
+    if (!subdoc.key_values) subdoc.key_values = [];
+
+    // Check if subdocument was manually saved
+    const saveButtonText = (subdoc.manuallySaved && !subdoc.hasUnsavedChanges) ? '✓ Saved' : 'Save changes';
+    const saveButtonClass = (subdoc.manuallySaved && !subdoc.hasUnsavedChanges) ? 'btn btn-save saved' : 'btn btn-save';
+
+    console.log(`Subdocument media_type: ${subdoc.media_type}`);
+    console.log('Available media types:', mediaTypesJS);
+
+    // Generate tags HTML with proper text extraction
+    const manualTagsHtml = subdoc.manual_tags.map(tag => {
+        let tagText = typeof tag === 'object' && tag.text ? tag.text : tag;
+        const escapedTagText = tagText.replace(/'/g, "\\'");
+        return `
+            <span class="tag manual">
+                ${tagText}
+                <span class="remove-tag" onclick="removeTagByPath('${path}', '${escapedTagText}', 'manual')">×</span>
+            </span>
+        `;
+    }).join('');
+
+    const autoTagsHtml = subdoc.auto_tags.map(tag => {
+        let tagText = '';
+        if (typeof tag === 'object' && tag.text) {
+            tagText = tag.text;
+        } else if (typeof tag === 'string') {
+            tagText = tag;
+        }
+        const escapedTagText = tagText.replace(/'/g, "\\'");
+        return `
+            <span class="tag auto">
+                ${tagText}
+                <span class="remove-tag" onclick="removeTagByPath('${path}', '${escapedTagText}', 'auto')">×</span>
+            </span>
+        `;
+    }).join('');
+
+    // Generate key-values HTML
+    const kvHtml = subdoc.key_values.map((kv, kvIndex) => `
+        <div class="key-value-pair structured-content-kv">
+            <input type="text"
+                   class="kv-key-input"
+                   value="${kv.key || ''}"
+                   id="key_${path}_${kvIndex}"
+                   placeholder="Key"
+                   onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'key', this.value)">
+            <textarea class="key-value-textarea"
+                      id="value_${path}_${kvIndex}"
+                      placeholder="Value"
+                      onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'value', this.value)"
+                      oninput="autoResizeTextarea(this)">${kv.value || ''}</textarea>
+            <button class="remove-kv-btn" onclick="removeKeyValueByPath('${path}', ${kvIndex})">Remove</button>
+        </div>
+    `).join('');
+
+    // Generate images HTML with fixed base64 display
+    let imagesHtml = '';
+    if (subdoc.images && subdoc.images.length > 0) {
+        const imagesGridHtml = subdoc.images.map((img, imgIndex) => {
+            // Ensure base64 has proper data URI prefix
+            let imgSrc = img.base64;
+
+            // Check if it's already a data URI
+            if (imgSrc && !imgSrc.startsWith('data:')) {
+                // Check if it's raw base64
+                if (imgSrc.match(/^[A-Za-z0-9+/]+=*$/)) {
+                    imgSrc = `data:image/${img.format || 'png'};base64,${imgSrc}`;
+                }
+            }
+
+            return `
+                <div class="image-item">
+                    <img src="${imgSrc}" alt="Image ${imgIndex + 1}" class="image-preview"
+                         onclick="event.stopPropagation(); openImageModal('${imgSrc}')"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='block';">
+                    <div style="display:none; padding: 20px; background: #f5f5f5; text-align: center;">
+                        Image failed to load
+                    </div>
+                    <div class="image-info">
+                        ${img.page ? `<div class="image-page">Page ${img.page}</div>` : ''}
+                        ${img.width && img.height ? `<div>${img.width}x${img.height}</div>` : ''}
+                    </div>
+                    <button class="remove-image-btn" onclick="removeImageByPath('${path}', ${imgIndex})">Remove</button>
+                </div>
+            `;
+        }).join('');
+
+        imagesHtml = `
+            <div class="images-section">
+                <div class="images-header">Images (${subdoc.images.length})</div>
+                <div class="images-grid">
+                    ${imagesGridHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    // Recursively render nested subdocuments
+    let nestedSubdocsHtml = '';
+    if (subdoc.subdocument && Array.isArray(subdoc.subdocument) && subdoc.subdocument.length > 0) {
+        nestedSubdocsHtml = `
+            <div class="subdocuments-section" style="margin-left: 20px;">
+                <div class="subdocuments-header">
+                    Nested Subdocuments
+                    <span class="subdocument-count">(${subdoc.subdocument.length})</span>
+                </div>
+                ${renderNestedSubdocuments(subdoc.subdocument, path, baseParentIndex)}
+            </div>
+        `;
+    }
+
+    const depth = path.split('_').length - 1;
+    const title = subdoc.title || `Subdocument Level ${depth}`;
+
+    return `
+        <div class="subdocument-item" id="${subdocId}" style="margin-left: ${(depth - 1) * 20}px;">
+            <div class="subdocument-header" onclick="toggleSubdocumentByPath('${path}')">
+                <div class="subdocument-title">
+                    ${title}
+                </div>
+                <div class="subdocument-controls">
+                    <button class="remove-subdoc-btn" onclick="event.stopPropagation(); removeSubdocumentByPath('${path}')">Remove</button>
+                    <svg class="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
+            </div>
+            <div class="subdocument-content">
+                <div class="field-group">
+                    <label>Resource Type</label>
+                    <select id="mediaType_${path}" onchange="saveFieldByPath('${path}', 'media_type', this.value)">
+                        ${mediaTypesJS.map(mt =>
+                            `<option value="${mt.value}" ${subdoc.media_type === mt.value ? 'selected' : ''}>${mt.label}</option>`
+                        ).join('')}
+                    </select>
+                </div>
+
+                <div class="field-group">
+                    <label>Summary</label>
+                    <textarea id="description_${path}"
+                              onchange="saveFieldByPath('${path}', 'description', this.value)">${subdoc.description || ''}</textarea>
+                </div>
+
+                <div class="field-group">
+                    <label>Tags</label>
+                    <div class="tags-section">
+                        <div class="tags-subsection">
+                            <h4>Manual Tags</h4>
+                            <div class="tags-input" id="manualTagsContainer_${path}">
+                                ${manualTagsHtml}
+                                <input type="text" class="tag-input-field" placeholder="Add manual tag..."
+                                    onkeypress="handleTagInputByPath(event, '${path}', 'manual')">
+                            </div>
+                        </div>
+                        <div class="tags-subsection">
+                            <h4>Auto Tags</h4>
+                            <div class="tags-input" id="autoTagsContainer_${path}">
+                                ${autoTagsHtml}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label>Sections</label>
+                    <div class="key-values" id="kvContainer_${path}">
+                        ${kvHtml}
+                    </div>
+                    <button class="add-kv-btn" onclick="addKeyValueByPath('${path}')">Add Field</button>
+                </div>
+
+                ${imagesHtml}
+                ${nestedSubdocsHtml}
+
+                <div style="margin-top: 20px; text-align: right;">
+                    <button class="${saveButtonClass}" id="saveBtn_${path}"
+                            onclick="saveByPath('${path}', ${baseParentIndex})">${saveButtonText}</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// Add these helper functions to handle path-based operations
+function toggleSubdocumentByPath(path) {
+    const subdocId = `subdoc_${path}`;
+    const header = document.querySelector(`#${subdocId} .subdocument-header`);
+    const content = document.querySelector(`#${subdocId} .subdocument-content`);
+
+    if (!header || !content) return;
+
+    if (header.classList.contains('expanded')) {
+        header.classList.remove('expanded');
+        content.classList.remove('show');
+        expandedSubdocumentPaths.delete(path); // Remove from tracking
+    } else {
+        // Close any previously expanded subdocument at the same level
+        const currentLevel = path.split('_').length;
+        document.querySelectorAll('.subdocument-header.expanded').forEach(h => {
+            const otherId = h.parentElement.id;
+            const otherPath = otherId.replace('subdoc_', '');
+            const otherLevel = otherPath.split('_').length;
+            if (otherLevel === currentLevel) {
+                h.classList.remove('expanded');
+                h.nextElementSibling.classList.remove('show');
+                expandedSubdocumentPaths.delete(otherPath); // Remove from tracking
+            }
+        });
+
+        header.classList.add('expanded');
+        content.classList.add('show');
+        expandedSubdocumentPaths.add(path); // Add to tracking
+    }
+}
+
+function restoreExpandedStates() {
+    expandedSubdocumentPaths.forEach(path => {
+        const subdocId = `subdoc_${path}`;
+        const header = document.querySelector(`#${subdocId} .subdocument-header`);
+        const content = document.querySelector(`#${subdocId} .subdocument-content`);
+
+        if (header && content) {
+            header.classList.add('expanded');
+            content.classList.add('show');
+        }
+    });
+}
+
+// Helper function to get subdocument by path
+function getSubdocByPath(path) {
+    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+    const actualIndex = (currentPage - 1) * itemsPerPage;
+    const item = validItems[actualIndex];
+
+    if (!item) return null;
+
+    const pathParts = path.split('_');
+    let current = item.data;
+
+    for (let i = 1; i < pathParts.length; i++) {
+        const index = parseInt(pathParts[i]);
+        if (current.subdocument && current.subdocument[index]) {
+            current = current.subdocument[index];
+        } else {
+            return null;
+        }
+    }
+
+    return current;
+}
+
+// Path-based save field function
+function saveFieldByPath(path, field, value) {
+    const subdoc = getSubdocByPath(path);
+    if (subdoc) {
+        subdoc[field] = value;
+        subdoc.hasUnsavedChanges = true;
+
+        // Reset save button state
+        const saveBtn = document.getElementById(`saveBtn_${path}`);
+        if (saveBtn && saveBtn.classList.contains('saved')) {
+            saveBtn.textContent = 'Save changes';
+            saveBtn.classList.remove('saved');
+        }
+    }
+}
+
+// Path-based save key-value function
+function saveKeyValueByPath(path, kvIndex, field, value) {
+    const subdoc = getSubdocByPath(path);
+    if (subdoc && subdoc.key_values && subdoc.key_values[kvIndex]) {
+        subdoc.key_values[kvIndex][field] = value;
+        subdoc.hasUnsavedChanges = true;
+
+        const saveBtn = document.getElementById(`saveBtn_${path}`);
+        if (saveBtn && saveBtn.classList.contains('saved')) {
+            saveBtn.textContent = 'Save changes';
+            saveBtn.classList.remove('saved');
+        }
+    }
+}
+
+// Path-based remove tag function
+function removeTagByPath(path, tag, tagType) {
+    const subdoc = getSubdocByPath(path);
+    if (subdoc) {
+        const tagArray = tagType === 'manual' ? 'manual_tags' : 'auto_tags';
+        if (subdoc[tagArray]) {
+            const tagIndex = subdoc[tagArray].indexOf(tag);
+            if (tagIndex > -1) {
+                subdoc[tagArray].splice(tagIndex, 1);
+                subdoc.hasUnsavedChanges = true;
+
+                // Instead of re-rendering, just remove the tag element
+                const container = document.getElementById(`${tagType}TagsContainer_${path}`);
+                if (container) {
+                    const tags = container.querySelectorAll('.tag');
+                    tags.forEach(tagEl => {
+                        const tagText = tagEl.textContent.trim().replace('×', '').trim();
+                        if (tagText === tag) {
+                            tagEl.remove();
+                        }
+                    });
+                }
+
+                // Reset save button state
+                const saveBtn = document.getElementById(`saveBtn_${path}`);
+                if (saveBtn && saveBtn.classList.contains('saved')) {
+                    saveBtn.textContent = 'Save changes';
+                    saveBtn.classList.remove('saved');
+                }
+            }
+        }
+    }
+}
+
+// Path-based handle tag input
+function handleTagInputByPath(event, path, tagType) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        const input = event.target;
+        const tag = input.value.trim();
+
+        const subdoc = getSubdocByPath(path);
+        if (subdoc && tag) {
+            const tagArray = tagType === 'manual' ? 'manual_tags' : 'auto_tags';
+            if (!subdoc[tagArray]) {
+                subdoc[tagArray] = [];
+            }
+
+            if (!subdoc[tagArray].includes(tag)) {
+                subdoc[tagArray].push(tag);
+                subdoc.hasUnsavedChanges = true;
+
+                // Add the tag element directly instead of re-rendering
+                const container = document.getElementById(`${tagType}TagsContainer_${path}`);
+                if (container) {
+                    const newTag = document.createElement('span');
+                    newTag.className = `tag ${tagType}`;
+                    newTag.innerHTML = `
+                        ${tag}
+                        <span class="remove-tag" onclick="removeTagByPath('${path}', '${tag.replace(/'/g, "\\'")}', '${tagType}')">×</span>
+                    `;
+                    container.insertBefore(newTag, input);
+                    input.value = '';
+                }
+
+                // Reset save button state
+                const saveBtn = document.getElementById(`saveBtn_${path}`);
+                if (saveBtn && saveBtn.classList.contains('saved')) {
+                    saveBtn.textContent = 'Save changes';
+                    saveBtn.classList.remove('saved');
+                }
+            }
+        }
+    }
+}
+
+// Path-based remove key-value function
+function removeKeyValueByPath(path, kvIndex) {
+    if (!confirm('Are you sure you want to remove this section?')) {
+        return;
+    }
+    const subdoc = getSubdocByPath(path);
+    if (subdoc && subdoc.key_values) {
+        // Ensure we're removing the correct index
+        if (kvIndex >= 0 && kvIndex < subdoc.key_values.length) {
+            subdoc.key_values.splice(kvIndex, 1);
+            subdoc.hasUnsavedChanges = true;
+
+            // Update DOM directly instead of re-rendering
+            const kvContainer = document.getElementById(`kvContainer_${path}`);
+            if (kvContainer) {
+                const kvPairs = kvContainer.querySelectorAll('.key-value-pair');
+                if (kvPairs[kvIndex]) {
+                    kvPairs[kvIndex].remove();
+
+                    // Re-index remaining key-value pairs
+                    const remainingPairs = kvContainer.querySelectorAll('.key-value-pair');
+                    remainingPairs.forEach((pair, newIndex) => {
+                        // Update IDs and event handlers
+                        const keyInput = pair.querySelector('input[type="text"]');
+                        const valueTextarea = pair.querySelector('textarea');
+                        const removeBtn = pair.querySelector('.remove-kv-btn');
+
+                        if (keyInput) {
+                            keyInput.id = `key_${path}_${newIndex}`;
+                            keyInput.setAttribute('onchange', `saveKeyValueByPath('${path}', ${newIndex}, 'key', this.value)`);
+                        }
+                        if (valueTextarea) {
+                            valueTextarea.id = `value_${path}_${newIndex}`;
+                            valueTextarea.setAttribute('onchange', `saveKeyValueByPath('${path}', ${newIndex}, 'value', this.value)`);
+                        }
+                        if (removeBtn) {
+                            removeBtn.setAttribute('onclick', `removeKeyValueByPath('${path}', ${newIndex})`);
+                        }
+                    });
+                }
+            }
+
+            // Reset save button state
+            const saveBtn = document.getElementById(`saveBtn_${path}`);
+            if (saveBtn && saveBtn.classList.contains('saved')) {
+                saveBtn.textContent = 'Save changes';
+                saveBtn.classList.remove('saved');
+            }
+        }
+    }
+}
+
+// Path-based add key-value function
+function addKeyValueByPath(path) {
+    const subdoc = getSubdocByPath(path);
+    if (subdoc) {
+        if (!subdoc.key_values) {
+            subdoc.key_values = [];
+        }
+
+        const newIndex = subdoc.key_values.length;
+        subdoc.key_values.push({ key: '', value: '' });
+        subdoc.hasUnsavedChanges = true;
+
+        // Add to DOM directly
+        const kvContainer = document.getElementById(`kvContainer_${path}`);
+        if (kvContainer) {
+            const newKvPair = document.createElement('div');
+            newKvPair.className = 'key-value-pair structured-content-kv';
+            newKvPair.innerHTML = `
+                <input type="text"
+                       class="kv-key-input"
+                       value=""
+                       id="key_${path}_${newIndex}"
+                       placeholder="Key"
+                       onchange="saveKeyValueByPath('${path}', ${newIndex}, 'key', this.value)">
+                <textarea class="key-value-textarea"
+                          id="value_${path}_${newIndex}"
+                          placeholder="Value"
+                          onchange="saveKeyValueByPath('${path}', ${newIndex}, 'value', this.value)"
+                          oninput="autoResizeTextarea(this)"></textarea>
+                <button class="remove-kv-btn" onclick="removeKeyValueByPath('${path}', ${newIndex})">Remove</button>
+            `;
+            kvContainer.appendChild(newKvPair);
+        }
+
+        // Reset save button state
+        const saveBtn = document.getElementById(`saveBtn_${path}`);
+        if (saveBtn && saveBtn.classList.contains('saved')) {
+            saveBtn.textContent = 'Save changes';
+            saveBtn.classList.remove('saved');
+        }
+    }
+}
+
+// Path-based remove subdocument function
+function removeSubdocumentByPath(path) {
+    if (!confirm('Are you sure you want to remove this subdocument?')) {
+        return;
+    }
+    const pathParts = path.split('_');
+    if (pathParts.length < 2) return;
+
+    // Get parent path and index
+    const childIndex = parseInt(pathParts[pathParts.length - 1]);
+    const parentPath = pathParts.slice(0, -1).join('_');
+
+    const parent = parentPath === pathParts[0] ?
+        getSubdocByPath(parentPath) :
+        getSubdocByPath(parentPath);
+
+    if (parent && parent.subdocument) {
+        parent.subdocument.splice(childIndex, 1);
+        parent.hasUnsavedChanges = true;
+        renderExtractedData();
+    }
+}
+
+// Path-based remove image function
+function removeImageByPath(path, imageIndex) {
+    if (!confirm('Are you sure you want to remove this image?')) {
+        return;
+    }
+    const subdoc = getSubdocByPath(path);
+    if (subdoc && subdoc.images) {
+        subdoc.images.splice(imageIndex, 1);
+        subdoc.hasUnsavedChanges = true;
+        renderExtractedData();
+    }
+}
+
+// Path-based save function
+function saveByPath(path, baseParentIndex) {
+    const saveBtn = document.getElementById(`saveBtn_${path}`);
+    if (!saveBtn) return;
+
+    const originalText = saveBtn.textContent;
+    const subdoc = getSubdocByPath(path);
+
+    if (subdoc) {
+        // Collect data from form
+        subdoc.media_type = document.getElementById(`mediaType_${path}`).value;
+        subdoc.description = document.getElementById(`description_${path}`).value;
+
+        // Save manual tags
+        subdoc.manual_tags = [];
+        const manualTagsContainer = document.getElementById(`manualTagsContainer_${path}`);
+        if (manualTagsContainer) {
+            const manualTags = manualTagsContainer.querySelectorAll('.tag.manual');
+            manualTags.forEach(tag => {
+                const tagText = tag.textContent.trim().replace('×', '').trim();
+                if (tagText) subdoc.manual_tags.push(tagText);
+            });
+        }
+
+        // Save auto tags
+        subdoc.auto_tags = [];
+        const autoTagsContainer = document.getElementById(`autoTagsContainer_${path}`);
+        if (autoTagsContainer) {
+            const autoTags = autoTagsContainer.querySelectorAll('.tag.auto');
+            autoTags.forEach(tag => {
+                const tagText = tag.textContent.trim().replace('×', '').trim();
+                if (tagText) subdoc.auto_tags.push(tagText);
+            });
+        }
+
+        // Save key-value pairs
+        subdoc.key_values = [];
+        const kvContainer = document.getElementById(`kvContainer_${path}`);
+        if (kvContainer) {
+            const kvPairs = kvContainer.querySelectorAll('.key-value-pair');
+            kvPairs.forEach((pair) => {
+                const keyInput = pair.querySelector(`input[id^="key_${path}_"]`);
+                const valueInput = pair.querySelector(`input[id^="value_${path}_"]`);
+                if (keyInput && valueInput) {
+                    const key = keyInput.value;
+                    const value = valueInput.value;
+                    if (key || value) {
+                        subdoc.key_values.push({ key, value });
+                    }
+                }
+            });
+        }
+
+        // Mark as saved
+        subdoc.manuallySaved = true;
+        subdoc.savedAt = new Date().toISOString();
+        subdoc.hasUnsavedChanges = false;
+
+        // Update button
+        saveBtn.textContent = '✓ Saved';
+        saveBtn.classList.add('saved');
+        saveBtn.disabled = false;
+
+        resetSaveButtonAfterTimeout(`saveBtn_${path}`, 3000);
+
+
+        // Reset button after 3 seconds
+        setTimeout(() => {
+            saveBtn.textContent = originalText;
+            saveBtn.classList.remove('saved');
+        }, 3000);
+
+        console.log(`Saved subdocument at path ${path}:`, subdoc);
+    }
+}
 
 // Save all files at once
 function saveAllFiles() {
@@ -2000,8 +3132,10 @@ function saveAllFiles() {
 }
 
 // Manual save for current file
-function saveCurrentFile(index) {
-    const saveBtn = document.getElementById(`saveBtn_${index}`);
+function saveCurrentFile(index, isSubdoc = false, parentIndex = null, subdocIndex = null) {
+    const saveBtn = isSubdoc ?
+        document.getElementById(`saveBtn_subdoc_${parentIndex}_${subdocIndex}`) :
+        document.getElementById(`saveBtn_${index}`);
     if (!saveBtn) return;
 
     const originalText = saveBtn.textContent;
@@ -2012,58 +3146,110 @@ function saveCurrentFile(index) {
     const item = validItems[actualIndex];
 
     if (item) {
-        // Save all field values (excluding hidden fields)
-        item.data.media_type = document.getElementById(`mediaType_${index}`).value;
-        item.data.priority = document.getElementById(`priority_${index}`).value;
-        item.data.description = document.getElementById(`description_${index}`).value;
+        if (isSubdoc && item.data.subdocument && item.data.subdocument[subdocIndex]) {
+            // Save subdocument data
+            const subdoc = item.data.subdocument[subdocIndex];
+            subdoc.media_type = document.getElementById(`mediaType_subdoc_${parentIndex}_${subdocIndex}`).value;
+            subdoc.description = document.getElementById(`description_subdoc_${parentIndex}_${subdocIndex}`).value;
 
-        // Save manual tags
-        item.data.manual_tags = [];
-        const manualTagsContainer = document.getElementById(`manualTagsContainer_${index}`);
-        if (manualTagsContainer) {
-            const manualTags = manualTagsContainer.querySelectorAll('.tag.manual');
-            manualTags.forEach(tag => {
-                const tagText = tag.textContent.trim().replace('×', '').trim();
-                if (tagText) item.data.manual_tags.push(tagText);
-            });
-        }
+            // Save manual tags
+            subdoc.manual_tags = [];
+            const manualTagsContainer = document.getElementById(`manualTagsContainer_subdoc_${parentIndex}_${subdocIndex}`);
+            if (manualTagsContainer) {
+                const manualTags = manualTagsContainer.querySelectorAll('.tag.manual');
+                manualTags.forEach(tag => {
+                    const tagText = tag.textContent.trim().replace('×', '').trim();
+                    if (tagText) subdoc.manual_tags.push(tagText);
+                });
+            }
 
-        // Save auto tags
-        item.data.auto_tags = [];
-        const autoTagsContainer = document.getElementById(`autoTagsContainer_${index}`);
-        if (autoTagsContainer) {
-            const autoTags = autoTagsContainer.querySelectorAll('.tag.auto');
-            autoTags.forEach(tag => {
-                const tagText = tag.textContent.trim().replace('×', '').trim();
-                if (tagText) item.data.auto_tags.push(tagText);
-            });
-        }
+            // Save auto tags
+            subdoc.auto_tags = [];
+            const autoTagsContainer = document.getElementById(`autoTagsContainer_subdoc_${parentIndex}_${subdocIndex}`);
+            if (autoTagsContainer) {
+                const autoTags = autoTagsContainer.querySelectorAll('.tag.auto');
+                autoTags.forEach(tag => {
+                    const tagText = tag.textContent.trim().replace('×', '').trim();
+                    if (tagText) subdoc.auto_tags.push(tagText);
+                });
+            }
 
-        // Save key-value pairs
-        item.data.key_values = [];
-        const kvContainer = document.getElementById(`kvContainer_${index}`);
-        if (kvContainer) {
-            const kvPairs = kvContainer.querySelectorAll('.key-value-pair');
-            kvPairs.forEach((pair, kvIndex) => {
-                const keyInput = pair.querySelector(`input[id^="key_"]`);
-                const valueInput = pair.querySelector(`input[id^="value_"]`);
-                if (keyInput && valueInput) {
-                    const key = keyInput.value;
-                    const value = valueInput.value;
-                    if (key || value) {
-                        item.data.key_values.push({ key, value });
+            // Save key-value pairs
+            subdoc.key_values = [];
+            const kvContainer = document.getElementById(`kvContainer_subdoc_${parentIndex}_${subdocIndex}`);
+            if (kvContainer) {
+                const kvPairs = kvContainer.querySelectorAll('.key-value-pair');
+                kvPairs.forEach((pair) => {
+                    const keyInput = pair.querySelector(`input[id^="key_subdoc_"]`);
+                    const valueInput = pair.querySelector(`input[id^="value_subdoc_"]`);
+                    if (keyInput && valueInput) {
+                        const key = keyInput.value;
+                        const value = valueInput.value;
+                        if (key || value) {
+                            subdoc.key_values.push({ key, value });
+                        }
                     }
-                }
-            });
-        }
+                });
+            }
 
-        // Mark this item as manually saved
-        item.manuallySaved = true;
-        item.savedAt = new Date().toISOString();
+            // Mark subdocument as saved
+            subdoc.manuallySaved = true;
+            subdoc.savedAt = new Date().toISOString();
+            subdoc.hasUnsavedChanges = false;
+        } else {
+            // Save main document data
+            item.data.media_type = document.getElementById(`mediaType_${index}`).value;
+            item.data.description = document.getElementById(`description_${index}`).value;
+
+            // Save manual tags
+            item.data.manual_tags = [];
+            const manualTagsContainer = document.getElementById(`manualTagsContainer_${index}`);
+            if (manualTagsContainer) {
+                const manualTags = manualTagsContainer.querySelectorAll('.tag.manual');
+                manualTags.forEach(tag => {
+                    const tagText = tag.textContent.trim().replace('×', '').trim();
+                    if (tagText) item.data.manual_tags.push(tagText);
+                });
+            }
+
+            // Save auto tags
+            item.data.auto_tags = [];
+            const autoTagsContainer = document.getElementById(`autoTagsContainer_${index}`);
+            if (autoTagsContainer) {
+                const autoTags = autoTagsContainer.querySelectorAll('.tag.auto');
+                autoTags.forEach(tag => {
+                    const tagText = tag.textContent.trim().replace('×', '').trim();
+                    if (tagText) item.data.auto_tags.push(tagText);
+                });
+            }
+
+            // Save key-value pairs
+            item.data.key_values = [];
+            const kvContainer = document.getElementById(`kvContainer_${index}`);
+            if (kvContainer) {
+                const kvPairs = kvContainer.querySelectorAll('.key-value-pair');
+                kvPairs.forEach((pair, kvIndex) => {
+                    const keyInput = pair.querySelector(`input[id^="key_"]`);
+                    const valueInput = pair.querySelector(`input[id^="value_"]`);
+                    if (keyInput && valueInput) {
+                        const key = keyInput.value;
+                        const value = valueInput.value;
+                        if (key || value) {
+                            item.data.key_values.push({ key, value });
+                        }
+                    }
+                });
+            }
+
+            // Mark this item as manually saved
+            item.manuallySaved = true;
+            item.savedAt = new Date().toISOString();
+            item.hasUnsavedChanges = false;
+        }
 
         // Update button to show saved state
         saveBtn.textContent = '✓ Saved';
-        saveBtn.classList.add('saved');
+        saveBtn.disabled = false;
 
         // Reset button after 3 seconds
         setTimeout(() => {
@@ -2071,73 +3257,238 @@ function saveCurrentFile(index) {
             saveBtn.classList.remove('saved');
         }, 3000);
 
-        console.log(`Manually saved file ${index}:`, item.data);
+        resetSaveButtonAfterTimeout(isSubdoc ? `saveBtn_subdoc_${parentIndex}_${subdocIndex}` : `saveBtn_${index}`, 3000);
+
+        console.log(`Manually saved ${isSubdoc ? 'subdocument' : 'file'} ${index}:`, item.data);
     }
 }
 
-// Save field data
-function saveFieldData(index, field, value) {
+function resetSaveButtonAfterTimeout(buttonId, delay = 3000) {
+    const saveBtn = document.getElementById(buttonId);
+    if (!saveBtn) return;
+
+    // Clear any existing timeout for this button
+    if (saveBtn.resetTimeout) {
+        clearTimeout(saveBtn.resetTimeout);
+    }
+
+    // Set new timeout
+    saveBtn.resetTimeout = setTimeout(() => {
+        saveBtn.textContent = 'Save current changes';
+        saveBtn.classList.remove('saved');
+        saveBtn.disabled = false;
+    }, delay);
+}
+
+// Save field data with timer
+function saveFieldData(index, field, value, isSubdoc = false, parentIndex = null, subdocIndex = null) {
     const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
     const actualIndex = (currentPage - 1) * itemsPerPage;
     const item = validItems[actualIndex];
 
-    if (item && item.data) {
-        item.data[field] = value;
-        console.log(`Saved ${field} for item ${index}:`, value);
+    if (item) {
+        if (isSubdoc && item.data.subdocument && item.data.subdocument[subdocIndex]) {
+            // Update subdocument field
+            item.data.subdocument[subdocIndex][field] = value;
+            item.data.subdocument[subdocIndex].hasUnsavedChanges = true;
+
+            // Reset save button state
+            const saveBtn = document.getElementById(`saveBtn_subdoc_${parentIndex}_${subdocIndex}`);
+            if (saveBtn) {
+                // Clear any existing timeout
+                if (saveBtn.resetTimeout) {
+                    clearTimeout(saveBtn.resetTimeout);
+                }
+                saveBtn.textContent = 'Save current changes';
+                saveBtn.classList.remove('saved');
+                saveBtn.disabled = false;
+            }
+        } else if (!isSubdoc && item.data) {
+            // Update main document field
+            item.data[field] = value;
+            item.hasUnsavedChanges = true;
+
+            // Reset save button state when changes are made
+            const saveBtn = document.getElementById(`saveBtn_${index}`);
+            if (saveBtn) {
+                // Clear any existing timeout
+                if (saveBtn.resetTimeout) {
+                    clearTimeout(saveBtn.resetTimeout);
+                }
+                saveBtn.textContent = 'Save current changes';
+                saveBtn.classList.remove('saved');
+                saveBtn.disabled = false;
+            }
+        }
+
+        console.log(`Saved ${field} for ${isSubdoc ? 'subdocument' : 'item'} ${index}:`, value);
     }
 }
 
 // Save key-value data
-function saveKeyValueData(index, kvIndex, field, value) {
+function saveKeyValueData(index, kvIndex, field, value, isSubdoc = false, parentIndex = null, subdocIndex = null) {
     const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
     const actualIndex = (currentPage - 1) * itemsPerPage;
     const item = validItems[actualIndex];
 
-    if (item && item.data && item.data.key_values && item.data.key_values[kvIndex]) {
-        item.data.key_values[kvIndex][field] = value;
-        console.log(`Saved ${field} for item ${index}, kv ${kvIndex}:`, value);
+    if (item) {
+        let targetData;
+        if (isSubdoc && item.data.subdocument && item.data.subdocument[subdocIndex]) {
+            targetData = item.data.subdocument[subdocIndex];
+        } else if (!isSubdoc && item.data) {
+            targetData = item.data;
+        }
+
+        if (targetData && targetData.key_values && targetData.key_values[kvIndex]) {
+            targetData.key_values[kvIndex][field] = value;
+            targetData.hasUnsavedChanges = true;
+
+            // Reset save button state
+            const saveBtn = isSubdoc ?
+                document.getElementById(`saveBtn_subdoc_${parentIndex}_${subdocIndex}`) :
+                document.getElementById(`saveBtn_${index}`);
+            if (saveBtn && saveBtn.classList.contains('saved')) {
+                saveBtn.textContent = 'Save current changes';
+                saveBtn.classList.remove('saved');
+            }
+        }
+
+        console.log(`Saved ${field} for ${isSubdoc ? 'subdoc' : 'item'} ${index}, kv ${kvIndex}:`, value);
     }
 }
 
-// Pagination functions
+// Subdocument functions
+function toggleSubdocument(parentIndex, subdocIndex) {
+    const subdocId = `subdoc_${parentIndex}_${subdocIndex}`;
+    const header = document.querySelector(`#${subdocId} .subdocument-header`);
+    const content = document.querySelector(`#${subdocId} .subdocument-content`);
+
+    if (!header || !content) return;
+
+    // If this subdocument is already expanded, close it
+    if (header.classList.contains('expanded')) {
+        header.classList.remove('expanded');
+        content.classList.remove('show');
+        expandedSubdocument = null;
+    } else {
+        // Close any previously expanded subdocument
+        if (expandedSubdocument) {
+            const prevHeader = document.querySelector(`#${expandedSubdocument} .subdocument-header`);
+            const prevContent = document.querySelector(`#${expandedSubdocument} .subdocument-content`);
+            if (prevHeader) prevHeader.classList.remove('expanded');
+            if (prevContent) prevContent.classList.remove('show');
+        }
+
+        // Expand this subdocument
+        header.classList.add('expanded');
+        content.classList.add('show');
+        expandedSubdocument = subdocId;
+    }
+}
+
+function removeSubdocument(parentIndex, subdocIndex) {
+    if (!confirm('Are you sure you want to remove this subdocument?')) {
+        return;
+    }
+    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+    const actualIndex = (currentPage - 1) * itemsPerPage;
+    const item = validItems[actualIndex];
+
+    if (item && item.data && item.data.subdocument) {
+        item.data.subdocument.splice(subdocIndex, 1);
+        item.hasUnsavedChanges = true;
+        renderExtractedData();
+    }
+}
+
+// Image functions
+function openImageModal(base64) {
+    const modal = document.getElementById('imageModal');
+    const modalImg = document.getElementById('modalImage');
+    modal.style.display = "block";
+    modalImg.src = base64;
+}
+
+function closeImageModal() {
+    const modal = document.getElementById('imageModal');
+    modal.style.display = "none";
+}
+
+// Click outside modal to close
+window.onclick = function(event) {
+    const modal = document.getElementById('imageModal');
+    if (event.target == modal) {
+        closeImageModal();
+    }
+}
+
+function removeImage(parentIndex, imageIndex, isSubdoc = false, subdocIndex = null) {
+    if (!confirm('Are you sure you want to remove this image?')) {
+        return;
+    }
+    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+    const actualIndex = (currentPage - 1) * itemsPerPage;
+    const item = validItems[actualIndex];
+
+    if (item) {
+        let targetData;
+        if (isSubdoc && item.data.subdocument && item.data.subdocument[subdocIndex]) {
+            targetData = item.data.subdocument[subdocIndex];
+        } else if (!isSubdoc && item.data) {
+            targetData = item.data;
+        }
+
+        if (targetData && targetData.images) {
+            targetData.images.splice(imageIndex, 1);
+            targetData.hasUnsavedChanges = true;
+            renderExtractedData();
+        }
+    }
+}
+
+// Pagination functions with bottom controls update
 function updatePaginationControls() {
     const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
     const totalValidItems = validItems.length;
 
+    // Update top controls
     document.getElementById('currentItemIndex').textContent = totalValidItems > 0 ? currentPage : 0;
     document.getElementById('totalItems').textContent = totalValidItems;
 
-    // Update page numbers
+    // Update bottom controls
+    document.getElementById('currentItemIndexBottom').textContent = totalValidItems > 0 ? currentPage : 0;
+    document.getElementById('totalItemsBottom').textContent = totalValidItems;
+
+    // Update page numbers - only show current page
     const pageNumbersContainer = document.getElementById('pageNumbers');
+    const pageNumbersContainerBottom = document.getElementById('pageNumbersBottom');
+
     pageNumbersContainer.innerHTML = '';
+    pageNumbersContainerBottom.innerHTML = '';
 
     if (totalValidItems === 0) {
         // Update button states for no items
-        document.getElementById('firstPageBtn').disabled = true;
-        document.getElementById('prevPageBtn').disabled = true;
-        document.getElementById('nextPageBtn').disabled = true;
-        document.getElementById('lastPageBtn').disabled = true;
+        ['firstPageBtn', 'prevPageBtn', 'nextPageBtn', 'lastPageBtn',
+         'firstPageBtnBottom', 'prevPageBtnBottom', 'nextPageBtnBottom', 'lastPageBtnBottom'].forEach(id => {
+            document.getElementById(id).disabled = true;
+        });
+
         document.getElementById('pageJumpInput').max = 0;
         document.getElementById('pageJumpInput').value = 0;
+        document.getElementById('pageJumpInputBottom').max = 0;
+        document.getElementById('pageJumpInputBottom').value = 0;
         return;
     }
 
-    // Show max 5 page numbers around current page
-    const maxVisiblePages = 5;
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    // Only show current page number
+    const pageBtn = document.createElement('button');
+    pageBtn.className = 'page-btn active';
+    pageBtn.textContent = currentPage;
+    pageBtn.disabled = true;
+    pageNumbersContainer.appendChild(pageBtn);
 
-    if (endPage - startPage < maxVisiblePages - 1) {
-        startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-        const pageBtn = document.createElement('button');
-        pageBtn.className = `page-btn ${i === currentPage ? 'active' : ''}`;
-        pageBtn.textContent = i;
-        pageBtn.onclick = () => goToPage(i);
-        pageNumbersContainer.appendChild(pageBtn);
-    }
+    const pageBtnBottom = pageBtn.cloneNode(true);
+    pageNumbersContainerBottom.appendChild(pageBtnBottom);
 
     // Update button states
     document.getElementById('firstPageBtn').disabled = currentPage === 1;
@@ -2145,13 +3496,21 @@ function updatePaginationControls() {
     document.getElementById('nextPageBtn').disabled = currentPage === totalPages;
     document.getElementById('lastPageBtn').disabled = currentPage === totalPages;
 
-    // Update page jump input
+    document.getElementById('firstPageBtnBottom').disabled = currentPage === 1;
+    document.getElementById('prevPageBtnBottom').disabled = currentPage === 1;
+    document.getElementById('nextPageBtnBottom').disabled = currentPage === totalPages;
+    document.getElementById('lastPageBtnBottom').disabled = currentPage === totalPages;
+
+    // Update page jump inputs
     document.getElementById('pageJumpInput').max = totalPages;
     document.getElementById('pageJumpInput').value = currentPage;
+    document.getElementById('pageJumpInputBottom').max = totalPages;
+    document.getElementById('pageJumpInputBottom').value = currentPage;
 }
 
 function goToPage(page) {
     if (page >= 1 && page <= totalPages && page !== currentPage) {
+        expandedSubdocument = null; // Reset expanded subdocument when changing pages
         currentPage = page;
         renderExtractedData();
     }
@@ -2177,23 +3536,200 @@ function jumpToPage() {
     }
 }
 
+function jumpToPageBottom() {
+    const pageInput = document.getElementById('pageJumpInputBottom');
+    const page = parseInt(pageInput.value);
+    if (!isNaN(page)) {
+        goToPage(page);
+    }
+}
+
+// Helper function to render subdocument item
+function renderSubdocumentItem(subdoc, parentIndex, subdocIndex) {
+    const subdocId = `subdoc_${parentIndex}_${subdocIndex}`;
+
+    // Initialize subdoc data structures if missing
+    if (!subdoc.media_type) subdoc.media_type = 'text/plain';
+    if (!subdoc.description) subdoc.description = subdoc.summary || '';
+    if (!subdoc.manual_tags) subdoc.manual_tags = [];
+    if (!subdoc.auto_tags) {
+        // Process tags from subdoc.tags if available
+        if (subdoc.tags && Array.isArray(subdoc.tags)) {
+            subdoc.auto_tags = subdoc.tags.map(tag => {
+                if (typeof tag === 'object' && tag.text) {
+                    return tag.text;
+                } else if (typeof tag === 'string') {
+                    return tag;
+                }
+                return '';
+            }).filter(tag => tag);
+        } else {
+            subdoc.auto_tags = [];
+        }
+    }
+    if (!subdoc.key_values) subdoc.key_values = [];
+
+    // Check if subdocument was manually saved
+    const saveButtonText = (subdoc.manuallySaved && !subdoc.hasUnsavedChanges) ? '✓ Saved' : 'Save changes';
+    const saveButtonClass = (subdoc.manuallySaved && !subdoc.hasUnsavedChanges) ? 'btn btn-save saved' : 'btn btn-save';
+
+    // Generate tags HTML
+    const manualTagsHtml = subdoc.manual_tags.map(tag => {
+        let tagText = typeof tag === 'object' && tag.text ? tag.text : tag;
+        const escapedTagText = tagText.replace(/'/g, "\\'");
+        return `
+            <span class="tag manual">
+                ${tagText}
+                <span class="remove-tag" onclick="removeTag(${parentIndex}, '${escapedTagText}', 'manual', true, ${subdocIndex})">×</span>
+            </span>
+        `;
+    }).join('');
+
+    const autoTagsHtml = subdoc.auto_tags.map(tag => {
+        // Extract tag text properly
+        let tagText = '';
+        if (typeof tag === 'object' && tag.text) {
+            tagText = tag.text;
+        } else if (typeof tag === 'string') {
+            tagText = tag;
+        }
+
+        // Escape single quotes in tag text for onclick handler
+        const escapedTagText = tagText.replace(/'/g, "\\'");
+
+        return `
+            <span class="tag auto">
+                ${tagText}
+                <span class="remove-tag" onclick="removeTag(${parentIndex}, '${escapedTagText}', 'auto', true, ${subdocIndex})">×</span>
+            </span>
+        `;
+    }).join('');
+
+    // Generate key-values HTML
+    const kvHtml = subdoc.key_values.map((kv, kvIndex) => `
+        <div class="key-value-pair">
+            <input type="text" value="${kv.key || ''}" id="key_subdoc_${parentIndex}_${subdocIndex}_${kvIndex}"
+                   onchange="saveKeyValueData(${parentIndex}, ${kvIndex}, 'key', this.value, true, ${parentIndex}, ${subdocIndex})">
+            <input type="text" value="${kv.value || ''}" id="value_subdoc_${parentIndex}_${subdocIndex}_${kvIndex}"
+                   onchange="saveKeyValueData(${parentIndex}, ${kvIndex}, 'value', this.value, true, ${parentIndex}, ${subdocIndex})">
+            <button class="remove-kv-btn" onclick="removeKeyValue(${parentIndex}, ${kvIndex}, true, ${subdocIndex})">Remove</button>
+        </div>
+    `).join('');
+
+    // Generate images HTML
+    let imagesHtml = '';
+    if (subdoc.images && subdoc.images.length > 0) {
+        const imagesGridHtml = subdoc.images.map((img, imgIndex) => `
+            <div class="image-item">
+                <img src="${img.base64}" alt="Image ${imgIndex + 1}" class="image-preview"
+                    onclick="event.stopPropagation(); openImageModal('${img.base64}')">
+                <div class="image-info">
+                    ${img.page ? `<div class="image-page">Page ${img.page}</div>` : ''}
+                    ${img.width && img.height ? `<div>${img.width}x${img.height}</div>` : ''}
+                </div>
+                <button class="remove-image-btn" onclick="removeImage(${parentIndex}, ${imgIndex}, true, ${subdocIndex})">Remove</button>
+            </div>
+        `).join('');
+
+        imagesHtml = `
+            <div class="images-section">
+                <div class="images-header">Images (${subdoc.images.length})</div>
+                <div class="images-grid">
+                    ${imagesGridHtml}
+                </div>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="subdocument-item" id="${subdocId}">
+            <div class="subdocument-header" onclick="toggleSubdocument(${parentIndex}, ${subdocIndex})">
+                <div class="subdocument-title">
+                    ${subdoc.title || `Subdocument ${subdocIndex + 1}`}
+                </div>
+                <div class="subdocument-controls">
+                    <button class="remove-subdoc-btn" onclick="event.stopPropagation(); removeSubdocument(${parentIndex}, ${subdocIndex})">Remove</button>
+                    <svg class="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </div>
+            </div>
+            <div class="subdocument-content">
+                <div class="field-group">
+                    <label>Resource Type</label>
+                    <select id="mediaType_subdoc_${parentIndex}_${subdocIndex}" onchange="saveFieldData(${parentIndex}, 'media_type', this.value, true, ${parentIndex}, ${subdocIndex})">
+                        {% for value, label in media_types %}
+                        <option value="{{ value }}" ${subdoc.media_type === '{{ value }}' ? 'selected' : ''}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="field-group">
+                    <label>Summary</label>
+                    <textarea id="description_subdoc_${parentIndex}_${subdocIndex}"
+                              onchange="saveFieldData(${parentIndex}, 'description', this.value, true, ${parentIndex}, ${subdocIndex})">${subdoc.description || ''}</textarea>
+                </div>
+
+                <div class="field-group">
+                    <label>Tags</label>
+                    <div class="tags-section">
+                        <div class="tags-subsection">
+                            <h4>Manual Tags</h4>
+                            <div class="tags-input" id="manualTagsContainer_subdoc_${parentIndex}_${subdocIndex}">
+                                ${manualTagsHtml}
+                                <input type="text" class="tag-input-field" placeholder="Add manual tag..."
+                                    onkeypress="handleTagInput(event, ${parentIndex}, 'manual', true, ${subdocIndex})">
+                            </div>
+                        </div>
+                        <div class="tags-subsection">
+                            <h4>Auto Tags</h4>
+                            <div class="tags-input" id="autoTagsContainer_subdoc_${parentIndex}_${subdocIndex}">
+                                ${autoTagsHtml}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="field-group">
+                    <label>Sections</label>
+                    <div class="key-values" id="kvContainer_subdoc_${parentIndex}_${subdocIndex}">
+                        ${kvHtml}
+                    </div>
+                    <button class="add-kv-btn" onclick="addKeyValue(${parentIndex}, true, ${subdocIndex})">Add Field</button>
+                </div>
+
+                ${imagesHtml}
+
+                <div style="margin-top: 20px; text-align: right;">
+                    <button class="${saveButtonClass}" id="saveBtn_subdoc_${parentIndex}_${subdocIndex}"
+                            onclick="saveCurrentFile(${parentIndex}, true, ${parentIndex}, ${subdocIndex})">${saveButtonText}</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function autoResizeTextarea(textarea) {
+    textarea.style.height = 'auto';
+    textarea.style.height = (textarea.scrollHeight) + 'px';
+}
+
+function resizeAllTextareas() {
+    document.querySelectorAll('.key-value-textarea').forEach(textarea => {
+        autoResizeTextarea(textarea);
+    });
+}
+
 // Render extracted data for review
 function renderExtractedData() {
     const container = document.getElementById('extractedDataContainer');
     container.innerHTML = '';
 
-    // Only show successful extractions
+    // Only show successful uploads
     const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
     totalPages = Math.ceil(validItems.length / itemsPerPage);
 
     if (validItems.length === 0) {
-        container.innerHTML = `
-            <div style="text-align: center; padding: 40px; color: #666;">
-                No files available for review. All files either failed extraction or were skipped.
-                <br><br>
-                <button class="btn btn-secondary" onclick="updateStepIndicator(1)">Go Back to Upload</button>
-            </div>
-        `;
         updatePaginationControls();
         return;
     }
@@ -2208,8 +3744,8 @@ function renderExtractedData() {
         mediaItem.className = 'media-item active';
 
         // Check if this item was manually saved
-        const saveButtonText = item.manuallySaved ? '✓ Saved' : 'Save';
-        const saveButtonClass = item.manuallySaved ? 'btn btn-save saved' : 'btn btn-save';
+        const saveButtonText = (item.manuallySaved && !item.hasUnsavedChanges) ? '✓ Saved' : 'Save current changes';
+        const saveButtonClass = (item.manuallySaved && !item.hasUnsavedChanges) ? 'btn btn-save saved' : 'btn btn-save';
 
         // Auto-tags content
         const autoTagsContent = (item.data.auto_tags || []).map(tag => `
@@ -2218,6 +3754,45 @@ function renderExtractedData() {
                 <span class="remove-tag" onclick="removeTag(${displayIndex}, '${tag}', 'auto')">×</span>
             </span>
         `).join('');
+
+        // Subdocuments content
+        let subdocsHtml = '';
+        if (item.data.subdocument && item.data.subdocument.length > 0) {
+            subdocsHtml = `
+                <div class="subdocuments-section">
+                    <div class="subdocuments-header">
+                        Subdocuments
+                        <span class="subdocument-count">(${item.data.subdocument.length})</span>
+                    </div>
+                    ${renderNestedSubdocuments(item.data.subdocument, String(displayIndex), displayIndex)}
+                </div>
+            `;
+        }
+
+        // Images content
+        let imagesHtml = '';
+        if (item.data.images && item.data.images.length > 0) {
+            const imagesGridHtml = item.data.images.map((img, imgIndex) => `
+                <div class="image-item">
+                    <img src="${img.base64}" alt="Image ${imgIndex + 1}" class="image-preview"
+                         onclick="openImageModal('${img.base64}')">
+                    <div class="image-info">
+                        ${img.page ? `<div class="image-page">Page ${img.page}</div>` : ''}
+                        ${img.width && img.height ? `<div>${img.width}x${img.height}</div>` : ''}
+                    </div>
+                    <button class="remove-image-btn" onclick="removeImage(${displayIndex}, ${imgIndex})">Remove</button>
+                </div>
+            `).join('');
+
+            imagesHtml = `
+                <div class="images-section">
+                    <div class="images-header">Images (${item.data.images.length})</div>
+                    <div class="images-grid">
+                        ${imagesGridHtml}
+                    </div>
+                </div>
+            `;
+        }
 
         mediaItem.innerHTML = `
             <div class="media-item-header">
@@ -2232,7 +3807,7 @@ function renderExtractedData() {
             </div>
 
             <div class="field-group">
-                <label>Media Type</label>
+                <label>Resource Type</label>
                 <select id="mediaType_${displayIndex}" onchange="saveFieldData(${displayIndex}, 'media_type', this.value)">
                     {% for value, label in media_types %}
                     <option value="{{ value }}" ${item.data.media_type === '{{ value }}' ? 'selected' : ''}>{{ label }}</option>
@@ -2241,17 +3816,8 @@ function renderExtractedData() {
             </div>
 
             <div class="field-group">
-                <label>Priority</label>
-                <select id="priority_${displayIndex}" onchange="saveFieldData(${displayIndex}, 'priority', this.value)">
-                    {% for value, label in priorities %}
-                    <option value="{{ value }}" ${item.data.priority === '{{ value }}' ? 'selected' : ''}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="field-group">
                 <label>Summary</label>
-                <textarea id="description_${displayIndex}" oninput="saveFieldData(${displayIndex}, 'description', this.value)">${item.data.description || ''}</textarea>
+                <textarea id="description_${displayIndex}" onchange="saveFieldData(${displayIndex}, 'description', this.value)">${item.data.description || ''}</textarea>
             </div>
 
             <div class="field-group">
@@ -2280,26 +3846,46 @@ function renderExtractedData() {
             </div>
 
             <div class="field-group">
-                <label>Additional Fields</label>
+                <label>Sections</label>
                 <div class="key-values" id="kvContainer_${displayIndex}">
                     ${(item.data.key_values || []).map((kv, kvIndex) => `
-                        <div class="key-value-pair">
-                            <input type="text" value="${kv.key || ''}" id="key_${displayIndex}_${kvIndex}" oninput="saveKeyValueData(${displayIndex}, ${kvIndex}, 'key', this.value)">
-                            <input type="text" value="${kv.value || ''}" id="value_${displayIndex}_${kvIndex}" oninput="saveKeyValueData(${displayIndex}, ${kvIndex}, 'value', this.value)">
+                        <div class="key-value-pair structured-content-kv">
+                            <input type="text"
+                                   class="kv-key-input"
+                                   value="${kv.key || ''}"
+                                   id="key_${displayIndex}_${kvIndex}"
+                                   placeholder="Key"
+                                   onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'key', this.value)">
+                            <textarea class="key-value-textarea"
+                                      id="value_${displayIndex}_${kvIndex}"
+                                      placeholder="Value"
+                                      onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'value', this.value)"
+                                      oninput="autoResizeTextarea(this)">${kv.value || ''}</textarea>
                             <button class="remove-kv-btn" onclick="removeKeyValue(${displayIndex}, ${kvIndex})">Remove</button>
                         </div>
                     `).join('')}
                 </div>
                 <button class="add-kv-btn" onclick="addKeyValue(${displayIndex})">Add Field</button>
             </div>
+
+            ${subdocsHtml}
+            ${imagesHtml}
         `;
         container.appendChild(mediaItem);
     }
 
     updatePaginationControls();
+
+    setTimeout(() => {
+        resizeAllTextareas();
+        restoreExpandedStates();
+    }, 100);
 }
 
 function removeExtractedItem(validIndex) {
+    if (!confirm('Are you sure you want to remove this file? This will remove it completely from the review.')) {
+        return;
+    }
     const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
     const itemToRemove = validItems[validIndex];
 
@@ -2329,27 +3915,38 @@ function removeExtractedItem(validIndex) {
 
     if (remainingValidItems.length === 0) {
         updateStepIndicator(1);
+        updateFileList();
     }
 }
 
-function removeTag(itemIndex, tag, tagType) {
+function removeTag(itemIndex, tag, tagType, isSubdoc = false, subdocIndex = null) {
     const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
     const actualIndex = (currentPage - 1) * itemsPerPage;
     const item = validItems[actualIndex];
 
-    if (item && item.data) {
-        const tagArray = tagType === 'manual' ? 'manual_tags' : 'auto_tags';
-        if (item.data[tagArray]) {
-            const tagIndex = item.data[tagArray].indexOf(tag);
-            if (tagIndex > -1) {
-                item.data[tagArray].splice(tagIndex, 1);
-                renderExtractedData();
+    if (item) {
+        let targetData;
+        if (isSubdoc && item.data.subdocument && item.data.subdocument[subdocIndex]) {
+            targetData = item.data.subdocument[subdocIndex];
+        } else if (!isSubdoc && item.data) {
+            targetData = item.data;
+        }
+
+        if (targetData) {
+            const tagArray = tagType === 'manual' ? 'manual_tags' : 'auto_tags';
+            if (targetData[tagArray]) {
+                const tagIndex = targetData[tagArray].indexOf(tag);
+                if (tagIndex > -1) {
+                    targetData[tagArray].splice(tagIndex, 1);
+                    targetData.hasUnsavedChanges = true;
+                    renderExtractedData();
+                }
             }
         }
     }
 }
 
-function handleTagInput(event, itemIndex, tagType) {
+function handleTagInput(event, itemIndex, tagType, isSubdoc = false, subdocIndex = null) {
     if (event.key === 'Enter') {
         event.preventDefault();
         const input = event.target;
@@ -2359,42 +3956,75 @@ function handleTagInput(event, itemIndex, tagType) {
         const actualIndex = (currentPage - 1) * itemsPerPage;
         const item = validItems[actualIndex];
 
-        if (item && item.data && tag) {
-            const tagArray = tagType === 'manual' ? 'manual_tags' : 'auto_tags';
-            if (!item.data[tagArray]) {
-                item.data[tagArray] = [];
+        if (item && tag) {
+            let targetData;
+            if (isSubdoc && item.data.subdocument && item.data.subdocument[subdocIndex]) {
+                targetData = item.data.subdocument[subdocIndex];
+            } else if (!isSubdoc && item.data) {
+                targetData = item.data;
             }
 
-            if (!item.data[tagArray].includes(tag)) {
-                item.data[tagArray].push(tag);
-                renderExtractedData();
+            if (targetData) {
+                const tagArray = tagType === 'manual' ? 'manual_tags' : 'auto_tags';
+                if (!targetData[tagArray]) {
+                    targetData[tagArray] = [];
+                }
+
+                if (!targetData[tagArray].includes(tag)) {
+                    targetData[tagArray].push(tag);
+                    targetData.hasUnsavedChanges = true;
+                    renderExtractedData();
+                }
             }
         }
     }
 }
 
-function removeKeyValue(itemIndex, kvIndex) {
+function removeKeyValue(itemIndex, kvIndex, isSubdoc = false, subdocIndex = null) {
+    if (!confirm('Are you sure you want to remove this section?')) {
+        return;
+    }
     const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
     const actualIndex = (currentPage - 1) * itemsPerPage;
     const item = validItems[actualIndex];
 
-    if (item && item.data && item.data.key_values) {
-        item.data.key_values.splice(kvIndex, 1);
-        renderExtractedData();
+    if (item) {
+        let targetData;
+        if (isSubdoc && item.data.subdocument && item.data.subdocument[subdocIndex]) {
+            targetData = item.data.subdocument[subdocIndex];
+        } else if (!isSubdoc && item.data) {
+            targetData = item.data;
+        }
+
+        if (targetData && targetData.key_values) {
+            targetData.key_values.splice(kvIndex, 1);
+            targetData.hasUnsavedChanges = true;
+            renderExtractedData();
+        }
     }
 }
 
-function addKeyValue(itemIndex) {
+function addKeyValue(itemIndex, isSubdoc = false, subdocIndex = null) {
     const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
     const actualIndex = (currentPage - 1) * itemsPerPage;
     const item = validItems[actualIndex];
 
-    if (item && item.data) {
-        if (!item.data.key_values) {
-            item.data.key_values = [];
+    if (item) {
+        let targetData;
+        if (isSubdoc && item.data.subdocument && item.data.subdocument[subdocIndex]) {
+            targetData = item.data.subdocument[subdocIndex];
+        } else if (!isSubdoc && item.data) {
+            targetData = item.data;
         }
-        item.data.key_values.push({ key: '', value: '' });
-        renderExtractedData();
+
+        if (targetData) {
+            if (!targetData.key_values) {
+                targetData.key_values = [];
+            }
+            targetData.key_values.push({ key: '', value: '' });
+            targetData.hasUnsavedChanges = true;
+            renderExtractedData();
+        }
     }
 }
 
@@ -2409,6 +4039,13 @@ function collectFormData() {
                 item.data.auto_tags = item.data.auto_tags_full;
             }
             item.data.tags = [...(item.data.manual_tags || []), ...(item.data.auto_tags || [])];
+
+            // Process subdocuments similarly
+            if (item.data.subdocument && Array.isArray(item.data.subdocument)) {
+                item.data.subdocument.forEach(subdoc => {
+                    subdoc.tags = [...(subdoc.manual_tags || []), ...(subdoc.auto_tags || [])];
+                });
+            }
         }
     });
 }
@@ -2491,8 +4128,11 @@ async function saveToDatabase(data) {
         manual_tags: item.data.manual_tags || [],
         auto_tags: item.data.auto_tags || [],
         file_key: item.data.file_key,
-        session_id: item.data.session_id || sessionId
+        session_id: item.data.session_id || sessionId,
+        subdocument: item.data.subdocument || [],
+        images: item.data.images || []
     }));
+
     showLoading(`Saving ${totalItems} files to database...`);
 
     const response = await fetch("{% url 'admin:chatbot_media_batch_save' %}", {
@@ -2566,7 +4206,9 @@ async function retrySave(resultIndex) {
                 manual_tags: originalItem.data.manual_tags || [],
                 auto_tags: originalItem.data.auto_tags || [],
                 file_key: originalItem.data.file_key,
-                session_id: originalItem.data.session_id || sessionId
+                session_id: originalItem.data.session_id || sessionId,
+                subdocument: originalItem.data.subdocument || [],
+                images: originalItem.data.images || []
             };
         }
 
@@ -2671,12 +4313,10 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
 function displayResults(results) {
     const successCount = results.filter(r => r.success).length;
     const failedCount = results.filter(r => !r.success).length;
-    const skippedCount = extractedData.filter(item => item.status === FILE_STATUS.SKIPPED).length;
 
     document.getElementById('totalFiles').textContent = uploadedFiles.length;
     document.getElementById('finalSuccessCount').textContent = successCount;
     document.getElementById('failedCount').textContent = failedCount;
-    document.getElementById('finalSkippedCount').textContent = skippedCount;
 
     // Show/hide retry all button based on failed count
     const retryAllBtn = document.getElementById('retryAllBtn');
@@ -2704,6 +4344,12 @@ function displayResults(results) {
                 <h4>${result.filename}</h4>
                 <p>${result.message}</p>
                 ${result.success && result.media_id ? `<p>Media ID: ${result.media_id}</p>` : ''}
+                ${result.subdocument_results && result.subdocument_results.length > 0 ? `
+                    <p>Subdocuments: ${result.subdocument_results.filter(s => s.success).length}/${result.subdocument_results.length} saved</p>
+                ` : ''}
+                ${result.image_results && result.image_results.length > 0 ? `
+                    <p>Images: ${result.image_results.filter(i => i.success).length}/${result.image_results.length} saved</p>
+                ` : ''}
             </div>
             <div class="save-result-actions">
                 ${retryButton}
@@ -2724,7 +4370,7 @@ function displayResults(results) {
             <div class="result-icon">⊘</div>
             <div class="save-result-content">
                 <h4>${item.filename}</h4>
-                <p>File was skipped during extraction</p>
+                <p>File was skipped during upload</p>
             </div>
         `;
         resultsList.appendChild(resultItem);
@@ -2737,47 +4383,6 @@ function displayResults(results) {
         showStatus(`${failedCount} file(s) failed to save. You can retry individual files.`, 'warning');
     }
 }
-
-// Navigation handlers
-document.getElementById('backToUploadBtn').addEventListener('click', () => {
-    if (pollingInterval) {
-        clearInterval(pollingInterval);
-        pollingInterval = null;
-        document.getElementById('aiStatus').style.display = 'none';
-    }
-    document.getElementById('uploadArea').style.display = 'block';
-    document.querySelector('.company-bot-selection').style.display = 'block';
-
-    updateStepIndicator(1);
-});
-
-document.getElementById('newBatchBtn').addEventListener('click', () => {
-    // Clear polling
-    if (pollingInterval) {
-        clearInterval(pollingInterval);
-        pollingInterval = null;
-        document.getElementById('aiStatus').style.display = 'none';
-    }
-
-    // Reset everything
-    uploadedFiles = [];
-    extractedData = [];
-    saveResults = [];
-    currentPage = 1;
-    isExtracting = false;
-    isWaitingForAI = false;
-    sessionId = null;
-
-    document.getElementById('uploadArea').style.display = 'block';
-    document.querySelector('.company-bot-selection').style.display = 'block';
-
-    updateFileList();
-    updateStepIndicator(1);
-    document.getElementById('statusMessage').style.display = 'none';
-    // Set back to default bot instead of clearing
-    resetToDefaultBot()
-    document.getElementById('fileInput').value = '';
-});
 
 // Clear polling on page unload
 window.addEventListener('beforeunload', () => {
