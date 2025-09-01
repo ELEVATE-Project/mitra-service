@@ -17,6 +17,7 @@ import base64
 from django.utils.text import slugify
 
 BOT_PROFILE_ID = 1
+ENABLE_SIMILARITY_CHECK = False
 
 
 @method_decorator(staff_member_required, name='dispatch')
@@ -146,14 +147,10 @@ class BatchMediaExtractView(View):
         """Extract data from file and start async AI extraction"""
         file_extension = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else None
 
-        # Test failure condition (commented out as requested)
-        # if "fail" in file.name.lower():
-        #     raise ValueError(f"Forced extraction failure for {file.name}")
-
         # Save file temporarily
-        if "fail" in file.name.lower():
-            print(f"Forced extraction failure for {file.name}")
-            raise ValueError(f"Forced extraction failure for {file.name}")
+        # if "fail" in file.name.lower():
+        #     print(f"Forced extraction failure for {file.name}")
+        #     raise ValueError(f"Forced extraction failure for {file.name}")
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as tmp:
             for chunk in file.chunks():
                 tmp.write(chunk)
@@ -657,6 +654,10 @@ class BatchMediaSaveView(View):
         filename = item_data.get('filename', 'Unknown')
         file_index = item_data.get('file_index')
 
+        if "fail" in filename.lower():
+            print(f"Forced extraction failure for {filename}")
+            raise ValueError(f"Forced extraction failure for {filename}")
+
         try:
             company_bot = CompanyBot.objects.get(id=company_bot_id)
             company = user_profile.company if user_profile else None
@@ -667,8 +668,8 @@ class BatchMediaSaveView(View):
             extracted_text = item_data.get('extracted_text', '')
 
             # Step 1: Similarity check
-            try:
-                if not bypass_similarity:
+            if ENABLE_SIMILARITY_CHECK and not bypass_similarity:
+                try:
                     DuplicateDetector.check_for_duplicates(
                         extracted_text=extracted_text,
                         company_slug=company_slug,
@@ -677,17 +678,17 @@ class BatchMediaSaveView(View):
                         trigram_exact_threshold=0.90,
                         semantic_exact_threshold=0.9
                     )
-            except Exception as similarity_error:
-                return {
-                    'success': False,
-                    'filename': filename,
-                    'message': f'Similarity check failed: {str(similarity_error)}',
-                    'error_type': 'SIMILARITY_CHECK_FAILED',
-                    'file_index': file_index,
-                    'file_key': file_key,
-                    'session_id': session_id,
-                    'vector_db_saved': False
-                }
+                except Exception as similarity_error:
+                    return {
+                        'success': False,
+                        'filename': filename,
+                        'message': f'Similarity check failed: {str(similarity_error)}',
+                        'error_type': 'SIMILARITY_CHECK_FAILED',
+                        'file_index': file_index,
+                        'file_key': file_key,
+                        'session_id': session_id,
+                        'vector_db_saved': False
+                    }
 
             # Step 2: Retrieve file from cache
             file_content = None
@@ -717,7 +718,7 @@ class BatchMediaSaveView(View):
                     media_type=item_data['media_type'],
                     priority=item_data['priority'],
                     description=item_data['description'],
-                    extracted_text=item_data['extracted_text'],
+                    # extracted_text=item_data['extracted_text'],
                     company_bot_id=company_bot_id,
                 )
 
@@ -909,8 +910,9 @@ class BatchMediaSaveView(View):
                 media_type=subdoc_data.get('media_type', FileTypeChoices.TXT.value),
                 priority=parent_media.priority,
                 description=subdoc_data.get('description', subdoc_data.get('summary', '')),
-                extracted_text=subdoc_data.get('exact_content', subdoc_data.get('extracted_text', '')),
+                # extracted_text=subdoc_data.get('exact_content', subdoc_data.get('extracted_text', '')),
                 company_bot_id=company_bot_id,
+                parent=parent_media,
             )
 
             # Save without vector DB for subdocuments

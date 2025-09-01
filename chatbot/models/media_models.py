@@ -46,15 +46,15 @@ class Media(models.Model):
     def save(self, *args, company_slug=None, **kwargs):
         is_new = self.pk is None
         super().save(*args, **kwargs)
-        if is_new:
-            task = save_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
-            return task.id
-        else:
-            task = update_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
-            return task.id
+        # if is_new:
+        #     task = save_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
+        #     return task.id
+        # else:
+        #     task = update_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
+        #     return task.id
 
     def delete(self, *args, **kwargs):
-        status_code = delete_from_vector_db(self.id)
+        status_code = 200#delete_from_vector_db(self.id)
         if status_code == 200:
             super().delete(*args, **kwargs)
         else:
@@ -105,6 +105,9 @@ class Media(models.Model):
     description = models.TextField(null=True, blank=True)
     extracted_text = models.TextField(null=True, blank=True)
     tags = models.ManyToManyField(Tag, related_name="medias")
+    parent = models.ForeignKey(
+        'self', on_delete=models.CASCADE, null=True, blank=True, related_name='subdocuments'
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
