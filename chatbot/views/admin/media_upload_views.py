@@ -85,27 +85,55 @@ class CacheManager:
 
     @staticmethod
     def cache_subdocument(subdoc_data, session_id, parent_index, subdoc_path):
-        """Cache subdocument data for retry purposes"""
+        """Cache subdocument data for retry purposes - with all fields"""
         try:
             cache_key = CacheManager.get_cache_key(session_id, 'subdoc', f"{parent_index}_{subdoc_path}")
+
+            # Ensure all subdocument fields are included
+            complete_subdoc_data = {
+                'title': subdoc_data.get('title', ''),
+                'summary': subdoc_data.get('summary', ''),
+                'description': subdoc_data.get('description', subdoc_data.get('summary', '')),
+                'media_type': subdoc_data.get('media_type', FileTypeChoices.TXT.value),
+                'priority': subdoc_data.get('priority', 'P1'),
+                'extracted_text': subdoc_data.get('extracted_text', subdoc_data.get('exact_content', '')),
+                'exact_content': subdoc_data.get('exact_content', ''),
+                'organization': subdoc_data.get('organization', ''),
+                'document_type': subdoc_data.get('document_type', ''),
+                'key_entities': subdoc_data.get('key_entities', []),
+                'manual_tags': subdoc_data.get('manual_tags', []),
+                'auto_tags': subdoc_data.get('auto_tags', []),
+                'tags': subdoc_data.get('tags', []),
+                'key_values': subdoc_data.get('key_values', []),
+                'images': subdoc_data.get('images', []),
+                'subdocument': subdoc_data.get('subdocument', []),
+                'url': subdoc_data.get('url', [])
+            }
+
             cache_data = {
-                'data': subdoc_data,
+                'data': complete_subdoc_data,
                 'parent_index': parent_index,
                 'path': subdoc_path,
                 'type': 'subdocument'
             }
 
             cache.set(cache_key, cache_data, timeout=CACHE_TIMEOUT)
-            print(f"Cached subdocument: {cache_key}")
+            print(f"Cached subdocument: {cache_key} with data: {complete_subdoc_data.get('title', 'No title')}")
             return cache_key
         except Exception as e:
             print(f"Error caching subdocument: {e}")
+            traceback.print_exc()
             return None
 
     @staticmethod
     def get_cached_item(cache_key):
         """Retrieve item from cache"""
-        return cache.get(cache_key)
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            print(f"Retrieved cached item: {cache_key}")
+            if cached_data.get('type') == 'subdocument':
+                print(f"Cached subdoc title: {cached_data.get('data', {}).get('title', 'No title')}")
+        return cached_data
 
     @staticmethod
     def extend_cache_timeout(cache_keys, additional_timeout=None):
@@ -116,6 +144,43 @@ class CacheManager:
             if cached_item:
                 cache.set(cache_key, cached_item, timeout=timeout)
                 print(f"Extended cache timeout for: {cache_key}")
+
+
+@method_decorator(staff_member_required, name='dispatch')
+class GetCachedItemView(View):
+    """API endpoint to retrieve cached items"""
+
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+            cache_key = data.get('cache_key')
+
+            if not cache_key:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No cache key provided'
+                }, status=400)
+
+            cached_item = CacheManager.get_cached_item(cache_key)
+
+            if cached_item:
+                return JsonResponse({
+                    'success': True,
+                    'data': cached_item,
+                    'cache_key': cache_key
+                })
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'Cache item not found'
+                }, status=404)
+
+        except Exception as e:
+            print(f"Error retrieving cached item: {e}")
+            return JsonResponse({
+                'success': False,
+                'error': str(e)
+            }, status=500)
 
 
 @method_decorator(staff_member_required, name='dispatch')
@@ -899,7 +964,7 @@ class BatchMediaSaveView(View):
         for i, subdoc in enumerate(subdocuments):
             current_path = f"{parent_path}_{i}" if parent_path else str(i)
 
-            # Cache this subdocument
+            # Cache this subdocument with all its data
             CacheManager.cache_subdocument(subdoc, session_id, parent_index, current_path)
 
             # Recursively cache nested subdocuments
@@ -961,16 +1026,19 @@ class BatchMediaSaveView(View):
     def save_subdocument(self, subdoc_data, parent_media, company_bot_id, user_profile, company_slug):
         """Save a subdocument as a separate Media object linked to parent"""
         try:
-            temp_name = subdoc_data.get('title', f'Subdocument of {parent_media.name}')
-            print("subdoc_data: ", subdoc_data)
-            print("temp_name: ", temp_name)
+            # Use the subdocument's actual title, not a generic name
+            subdoc_title = subdoc_data.get('title', f'Subdocument of {parent_media.name}')
+            print(f"Saving subdocument with title: {subdoc_title}")
+
+            # Check for forced failure
             for kv in subdoc_data.get('key_values', []):
-                if "fail" in kv['value'].lower():
-                    print(f"Forced subdoc extraction failure for {temp_name}")
-                    raise ValueError(f"Forced subdoc extraction failure for {temp_name}")
+                if "fail" in kv.get('value', '').lower():
+                    print(f"Forced subdoc extraction failure for {subdoc_title}")
+                    raise ValueError(f"Forced subdoc extraction failure for {subdoc_title}")
+
             # Create subdocument media
             subdoc_media = Media(
-                name=subdoc_data.get('title', f'Subdocument of {parent_media.name}'),
+                name=subdoc_title,
                 media_type=subdoc_data.get('media_type', FileTypeChoices.TXT.value),
                 priority=parent_media.priority,
                 description=subdoc_data.get('description', subdoc_data.get('summary', '')),
@@ -1009,7 +1077,7 @@ class BatchMediaSaveView(View):
                 subdoc_media.tags.set(all_tags)
 
             key_values_to_save = subdoc_data.get('key_values', [])
-            print(f"About to save {len(key_values_to_save)} key-values for subdoc: {temp_name}")
+            print(f"About to save {len(key_values_to_save)} key-values for subdoc: {subdoc_title}")
 
             # Key-value pairs
             for kv in subdoc_data.get('key_values', []):
@@ -1032,9 +1100,11 @@ class BatchMediaSaveView(View):
 
         except Exception as e:
             print(f"Error saving subdocument: {e}")
+            traceback.print_exc()
             return {
                 'success': False,
-                'error': str(e)
+                'error': str(e),
+                'title': subdoc_data.get('title', 'Unknown subdocument')
             }
 
     def save_media_image(self, img_data, media, index):
@@ -1278,6 +1348,8 @@ class BatchMediaRetrySaveView(View):
                         'result': result
                     })
                 except Exception as e:
+                    print(f"Subdocument retry error: {e}")
+                    traceback.print_exc()
                     return JsonResponse({
                         'success': False,
                         'error': str(e)
@@ -1299,7 +1371,7 @@ class BatchMediaRetrySaveView(View):
                 })
 
         except Exception as e:
-            print(f"Unexpected error: {e}")
+            print(f"Unexpected error in retry save: {e}")
             traceback.print_exc()
             return JsonResponse({
                 'success': False,

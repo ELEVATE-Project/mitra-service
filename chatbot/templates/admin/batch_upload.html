@@ -1210,7 +1210,18 @@
 
     .result-icon {
         margin-right: 15px;
-        font-size: 24px;
+        font-size: 28px; /* Increased from 24px */
+        display: flex;
+        align-items: center;
+    }
+
+    /* Specific styling for success/error icons */
+    .save-result-item.success .result-icon {
+        color: #5cb85c;
+    }
+
+    .save-result-item.error .result-icon {
+        color: #f44336;
     }
 
     .result-details h4 {
@@ -1347,6 +1358,19 @@
         border-radius: 4px;
         background-color: #f9f9f9;
         border-left: 3px solid #ddd;
+        gap: 15px; /* Add gap for spacing */
+    }
+
+    .subdoc-result-item > div:first-child {
+        flex: 1;
+        max-width: calc(100% - 100px); /* Leave space for button */
+        overflow: hidden;
+    }
+
+    .subdoc-result-item strong {
+        display: block;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
     }
 
     .subdoc-result-item.success {
@@ -1374,43 +1398,54 @@
         display: block;
     }
 
-    /* Add to your CSS */
-.subdoc-stats {
-    display: inline-flex;
-    gap: 15px;
-    margin-left: 10px;
-    font-size: 13px;
-}
+    .subdoc-stats {
+        display: inline-flex;
+        gap: 15px;
+        margin-left: 10px;
+        font-size: 13px;
+    }
 
-.subdoc-stat {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-}
+    .subdoc-stat {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
 
-.subdoc-stat.success {
-    color: #5cb85c;
-}
+    .subdoc-stat.success {
+        color: #5cb85c;
+    }
 
-.subdoc-stat.failed {
-    color: #f44336;
-}
+    .subdoc-stat.failed {
+        color: #f44336;
+    }
 
-/* Better arrow design */
-.expand-icon {
-    width: 24px;
-    height: 24px;
-    transition: transform 0.3s ease;
-    color: #666;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
+    /* Better arrow design */
+    .expand-icon {
+        width: 24px;
+        height: 24px;
+        transition: transform 0.3s ease;
+        color: #666;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
 
-.expand-icon svg {
-    width: 16px;
-    height: 16px;
-}
+    .expand-icon svg {
+        width: 16px;
+        height: 16px;
+    }
+    .subdoc-toggle-arrow {
+        width: 20px;
+        height: 20px;
+        cursor: pointer;
+        transition: transform 0.3s ease;
+        color: #666;
+        margin-right: 10px;
+    }
+
+    .subdoc-toggle-arrow.expanded {
+        transform: rotate(90deg);
+    }
 </style>
 {% endblock %}
 
@@ -2149,92 +2184,121 @@ async function retryAllFailedUploads() {
 
 // Retry all failed saves
 async function retryAllFailed() {
-    const failedResults = saveResults
-        .map((result, index) => ({ result, index }))
-        .filter(item => !item.result.success);
+    // Collect all failed items including subdocuments
+    const failedItems = [];
 
-    if (failedResults.length === 0) {
+    // Add main document failures
+    saveResults.forEach((result, index) => {
+        if (!result.success) {
+            failedItems.push({
+                type: 'main',
+                index: index,
+                result: result
+            });
+        }
+    });
+
+    // Add subdocument failures
+    saveResults.forEach((result, parentIndex) => {
+        if (result.subdocument_results) {
+            function collectFailedSubdocs(subdocResults, parentIdx) {
+                subdocResults.forEach(subdoc => {
+                    if (!subdoc.success) {
+                        failedItems.push({
+                            type: 'subdoc',
+                            parentIndex: parentIdx,
+                            path: subdoc.path,
+                            cacheKey: subdoc.cache_key,
+                            title: subdoc.title
+                        });
+                    }
+                    if (subdoc.nested_subdocument_results) {
+                        collectFailedSubdocs(subdoc.nested_subdocument_results, parentIdx);
+                    }
+                });
+            }
+            collectFailedSubdocs(result.subdocument_results, parentIndex);
+        }
+    });
+
+    if (failedItems.length === 0) {
         showStatus('No failed saves to retry', 'info');
         return;
     }
 
-    showLoading(`Retrying ${failedResults.length} failed saves...`);
+    showLoading(`Retrying ${failedItems.length} failed saves...`);
 
     let successCount = 0;
     let failCount = 0;
 
-    for (const { result, index } of failedResults) {
+    for (const item of failedItems) {
         try {
-            let itemData;
-
-            // First try to use originalData if available
-            if (result.originalData) {
-                itemData = result.originalData;
-            } else {
-                // Fallback: Find the original item data
-                const originalItem = extractedData.find(item =>
-                    item.filename === result.filename && item.status === FILE_STATUS.SUCCESS
-                );
-
-                if (!originalItem) {
-                    failCount++;
-                    continue;
+            if (item.type === 'main') {
+                // Existing main document retry logic
+                let itemData;
+                if (item.result.originalData) {
+                    itemData = item.result.originalData;
+                } else {
+                    const originalItem = extractedData.find(dataItem =>
+                        dataItem.filename === item.result.filename && dataItem.status === FILE_STATUS.SUCCESS
+                    );
+                    if (!originalItem) {
+                        failCount++;
+                        continue;
+                    }
+                    itemData = {
+                        ...originalItem.data,
+                        filename: originalItem.filename,
+                        file_index: originalItem.file_index,
+                        manual_tags: originalItem.data.manual_tags || [],
+                        auto_tags: originalItem.data.auto_tags || [],
+                        file_key: originalItem.data.file_key,
+                        session_id: originalItem.data.session_id || sessionId,
+                        subdocument: originalItem.data.subdocument || [],
+                        images: originalItem.data.images || []
+                    };
                 }
 
-                // Include subdocuments and images
-                itemData = {
-                    ...originalItem.data,
-                    filename: originalItem.filename,
-                    file_index: originalItem.file_index,
-                    manual_tags: originalItem.data.manual_tags || [],
-                    auto_tags: originalItem.data.auto_tags || [],
-                    file_key: originalItem.data.file_key,
-                    session_id: originalItem.data.session_id || sessionId,
-                    subdocument: originalItem.data.subdocument || [],
-                    images: originalItem.data.images || []
-                };
-            }
+                const response = await fetch("{% url 'admin:chatbot_media_retry_save' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrftoken,
+                    },
+                    body: JSON.stringify({
+                        item_data: itemData,
+                        company_bot_id: document.getElementById('companyBotSelect').value,
+                        session_id: sessionId
+                    })
+                });
 
-            const response = await fetch("{% url 'admin:chatbot_media_retry_save' %}", {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrftoken,
-                },
-                body: JSON.stringify({
-                    item_data: itemData,
-                    company_bot_id: document.getElementById('companyBotSelect').value,
-                    session_id: sessionId
-                })
-            });
-
-            const retryResult = await response.json();
-            if (retryResult.success) {
-                // Update the result
-                saveResults[index] = {
-                    ...retryResult.result,
-                    originalData: itemData
-                };
+                const retryResult = await response.json();
+                if (retryResult.success) {
+                    saveResults[item.index] = {
+                        ...retryResult.result,
+                        originalData: itemData
+                    };
+                    successCount++;
+                } else {
+                    failCount++;
+                }
+            } else if (item.type === 'subdoc') {
+                // Retry subdocument
+                await retrySubdocSave(item.parentIndex, item.path, item.cacheKey);
                 successCount++;
-            } else {
-                failCount++;
             }
 
-            // Update loading message with progress
-            showLoading(`Retrying saves... ${successCount + failCount}/${failedResults.length} processed`);
+            showLoading(`Retrying saves... ${successCount + failCount}/${failedItems.length} processed`);
 
         } catch (error) {
             failCount++;
-            console.error(`Retry failed for ${result.filename}:`, error);
+            console.error(`Retry failed:`, error);
         }
     }
 
     hideLoading();
-
-    // Refresh the display
     displayResults(saveResults);
 
-    // Show final status
     if (successCount > 0 && failCount === 0) {
         showStatus(`Successfully retried all ${successCount} failed saves!`, 'success');
     } else if (successCount > 0 && failCount > 0) {
@@ -2754,8 +2818,8 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
                 </div>
                 <div class="subdocument-controls">
                     <button class="remove-subdoc-btn" onclick="event.stopPropagation(); removeSubdocumentByPath('${path}')">Remove</button>
-                    <svg class="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="6 9 12 15 18 9"></polyline>
+                    <svg class="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m6 9 6 6 6-6"/>
                     </svg>
                 </div>
             </div>
@@ -4432,8 +4496,8 @@ async function retrySubdocSave(parentIndex, path, cacheKey) {
     const result = saveResults[parentIndex];
 
     // Get subdocument data from cache
-    const cachedSubdoc = await getCachedSubdocument(cacheKey);
-    if (!cachedSubdoc) {
+    const cachedData = await getCachedSubdocument(cacheKey);
+    if (!cachedData || !cachedData.data) {
         showStatus('Subdocument data not found in cache', 'error');
         return;
     }
@@ -4448,7 +4512,7 @@ async function retrySubdocSave(parentIndex, path, cacheKey) {
                 'X-CSRFToken': csrftoken,
             },
             body: JSON.stringify({
-                item_data: cachedSubdoc.data,
+                item_data: cachedData.data, // Use the subdocument data from cache
                 company_bot_id: document.getElementById('companyBotSelect').value,
                 session_id: sessionId,
                 is_subdocument: true,
@@ -4457,16 +4521,16 @@ async function retrySubdocSave(parentIndex, path, cacheKey) {
         });
 
         const retryResult = await response.json();
-        if (retryResult.success) {
+        if (retryResult.success && retryResult.result) {
             // Update the subdocument result
             updateSubdocumentResult(parentIndex, path, retryResult.result);
             displayResults(saveResults);
             showStatus('Subdocument saved successfully', 'success');
         } else {
-            showStatus('Subdocument retry failed', 'error');
+            showStatus(`Subdocument retry failed: ${retryResult.error || 'Unknown error'}`, 'error');
         }
     } catch (error) {
-        showStatus('Error retrying subdocument save', 'error');
+        showStatus(`Error retrying subdocument save: ${error.message}`, 'error');
     } finally {
         hideLoading();
     }
@@ -4497,7 +4561,6 @@ function updateSubdocumentResult(parentIndex, path, newResult) {
 
 async function getCachedSubdocument(cacheKey) {
     try {
-        // Request the cached subdocument data from the server
         const response = await fetch("{% url 'admin:chatbot_media_get_cached_item' %}", {
             method: 'POST',
             headers: {
@@ -4509,9 +4572,8 @@ async function getCachedSubdocument(cacheKey) {
 
         const result = await response.json();
         if (result.success && result.data) {
-            return result;
+            return result.data; // Return just the data part
         }
-
         return null;
     } catch (error) {
         console.error('Error retrieving cached subdocument:', error);
@@ -4521,14 +4583,14 @@ async function getCachedSubdocument(cacheKey) {
 
 function toggleSubdocResults(index) {
     const container = document.getElementById(`subdoc-results-${index}`);
-    const toggle = event.target;
+    const arrow = event.currentTarget;
 
     if (container.classList.contains('expanded')) {
         container.classList.remove('expanded');
-        toggle.textContent = '▶';
+        arrow.classList.remove('expanded');
     } else {
         container.classList.add('expanded');
-        toggle.textContent = '▼';
+        arrow.classList.add('expanded');
     }
 }
 
@@ -4556,16 +4618,54 @@ function displayResults(results) {
     const resultsList = document.getElementById('resultsList');
     resultsList.innerHTML = '';
 
+    // In displayResults function, update the results.forEach section:
     results.forEach((result, index) => {
+        // Calculate subdocument stats
+        let subdocStats = { total: 0, success: 0, failed: 0 };
+
+        function countSubdocs(subdocResults) {
+            subdocResults.forEach(subdoc => {
+                subdocStats.total++;
+                if (subdoc.success) {
+                    subdocStats.success++;
+                } else {
+                    subdocStats.failed++;
+                }
+                if (subdoc.nested_subdocument_results) {
+                    countSubdocs(subdoc.nested_subdocument_results);
+                }
+            });
+        }
+
+        if (result.subdocument_results) {
+            countSubdocs(result.subdocument_results);
+        }
+
         const resultItem = document.createElement('div');
         resultItem.className = `save-result-item ${result.success ? 'success' : 'error'}`;
 
         const hasSubdocs = result.subdocument_results && result.subdocument_results.length > 0;
         const subdocToggle = hasSubdocs ?
-            `<span class="subdoc-toggle" onclick="toggleSubdocResults(${index})">▶</span>` : '';
+        `<svg class="subdoc-toggle-arrow" onclick="toggleSubdocResults(${index})" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m9 18 6-6-6-6"/>
+        </svg>` : '';
 
         const retryButton = !result.success ?
             `<button class="btn retry-btn" onclick="retrySave(${index})">Retry Save</button>` : '';
+
+        // Add subdoc stats display
+        const subdocStatsHtml = hasSubdocs ? `
+            <div class="subdoc-stats">
+                <span class="subdoc-stat success">
+                    <span>✓</span>
+                    <span>${subdocStats.success}</span>
+                </span>
+                <span class="subdoc-stat failed">
+                    <span>✗</span>
+                    <span>${subdocStats.failed}</span>
+                </span>
+            </div>
+        ` : '';
 
         resultItem.innerHTML = `
             <div class="result-icon">${subdocToggle}${result.success ? '✓' : '✗'}</div>
@@ -4574,7 +4674,7 @@ function displayResults(results) {
                 <p>${result.message}</p>
                 ${result.success && result.media_id ? `<p>Media ID: ${result.media_id}</p>` : ''}
                 ${hasSubdocs ? `
-                    <p>Subdocuments: ${result.subdocument_results.filter(s => s.success).length}/${result.subdocument_results.length} saved</p>
+                    <p>Subdocuments: ${subdocStats.success}/${subdocStats.total} saved ${subdocStatsHtml}</p>
                 ` : ''}
                 ${result.image_results && result.image_results.length > 0 ? `
                     <p>Images: ${result.image_results.filter(i => i.success).length}/${result.image_results.length} saved</p>
@@ -4595,6 +4695,24 @@ function displayResults(results) {
             resultsList.appendChild(subdocContainer);
         }
     });
+
+    // Update the total failed count to include subdocuments
+    let totalFailedSubdocs = 0;
+    results.forEach(result => {
+        function countFailedSubdocs(subdocResults) {
+            subdocResults.forEach(subdoc => {
+                if (!subdoc.success) totalFailedSubdocs++;
+                if (subdoc.nested_subdocument_results) {
+                    countFailedSubdocs(subdoc.nested_subdocument_results);
+                }
+            });
+        }
+        if (result.subdocument_results) {
+            countFailedSubdocs(result.subdocument_results);
+        }
+    });
+
+    document.getElementById('failedCount').textContent = failedCount + totalFailedSubdocs;
 
     // Add skipped files
     const skippedItems = extractedData.filter(item => item.status === FILE_STATUS.SKIPPED);

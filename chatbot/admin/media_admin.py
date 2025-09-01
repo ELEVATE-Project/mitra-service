@@ -9,7 +9,7 @@ from chatbot.views.admin.media_upload_views import (
     BatchMediaSaveView,
     BatchMediaTaskStatusView,
     BatchMediaRetryExtractView,
-    BatchMediaRetrySaveView, VectorDBTaskStatusView
+    BatchMediaRetrySaveView, VectorDBTaskStatusView, GetCachedItemView
 )
 
 
@@ -97,6 +97,9 @@ class MediaAdmin(admin.ModelAdmin):
             path('api/vector-db-task-status/',
                  self.admin_site.admin_view(VectorDBTaskStatusView.as_view()),
                  name='chatbot_media_vector_db_task_status'),
+            path('api/get-cached-item/',
+                 self.admin_site.admin_view(GetCachedItemView.as_view()),
+                 name='chatbot_media_get_cached_item'),
         ]
         return custom_urls + urls
 

@@ -104,6 +104,7 @@ urlpatterns = [
     path('admin/media/batch-save/', BatchMediaSaveView.as_view(), name='chatbot_media_batch_save'),
     path('admin/media/batch-task-status/', BatchMediaTaskStatusView.as_view(), name='chatbot_media_task_status'),
 
+
     # Retry endpoints
     path('admin/media/retry-extract/', BatchMediaRetryExtractView.as_view(), name='chatbot_media_retry_extract'),
     path('admin/media/retry-save/', BatchMediaRetrySaveView.as_view(), name='chatbot_media_retry_save'),
