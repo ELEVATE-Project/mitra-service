@@ -1330,6 +1330,87 @@
     .btn.retry-btn[onclick*="saveAnywayResult"] {
         display: none !important;
     }
+
+    .subdoc-hierarchy {
+        margin-left: 30px;
+        border-left: 2px solid #e0e0e0;
+        padding-left: 15px;
+        margin-top: 10px;
+    }
+
+    .subdoc-result-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 10px;
+        margin-bottom: 8px;
+        border-radius: 4px;
+        background-color: #f9f9f9;
+        border-left: 3px solid #ddd;
+    }
+
+    .subdoc-result-item.success {
+        border-left-color: #5cb85c;
+        background-color: #f0f9f0;
+    }
+
+    .subdoc-result-item.error {
+        border-left-color: #f44336;
+        background-color: #fff5f5;
+    }
+
+    .subdoc-toggle {
+        cursor: pointer;
+        margin-right: 10px;
+        user-select: none;
+        font-weight: bold;
+    }
+
+    .subdoc-results {
+        display: none;
+    }
+
+    .subdoc-results.expanded {
+        display: block;
+    }
+
+    /* Add to your CSS */
+.subdoc-stats {
+    display: inline-flex;
+    gap: 15px;
+    margin-left: 10px;
+    font-size: 13px;
+}
+
+.subdoc-stat {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.subdoc-stat.success {
+    color: #5cb85c;
+}
+
+.subdoc-stat.failed {
+    color: #f44336;
+}
+
+/* Better arrow design */
+.expand-icon {
+    width: 24px;
+    height: 24px;
+    transition: transform 0.3s ease;
+    color: #666;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.expand-icon svg {
+    width: 16px;
+    height: 16px;
+}
 </style>
 {% endblock %}
 
@@ -3082,10 +3163,10 @@ function saveByPath(path, baseParentIndex) {
             const kvPairs = kvContainer.querySelectorAll('.key-value-pair');
             kvPairs.forEach((pair) => {
                 const keyInput = pair.querySelector(`input[id^="key_${path}_"]`);
-                const valueInput = pair.querySelector(`input[id^="value_${path}_"]`);
-                if (keyInput && valueInput) {
+                const valueTextarea = pair.querySelector(`textarea[id^="value_${path}_"]`); // Changed to textarea
+                if (keyInput && valueTextarea) { // Updated variable name
                     const key = keyInput.value;
-                    const value = valueInput.value;
+                    const value = valueTextarea.value; // Updated variable name
                     if (key || value) {
                         subdoc.key_values.push({ key, value });
                     }
@@ -3233,10 +3314,10 @@ function saveCurrentFile(index, isSubdoc = false, parentIndex = null, subdocInde
                 const kvPairs = kvContainer.querySelectorAll('.key-value-pair');
                 kvPairs.forEach((pair, kvIndex) => {
                     const keyInput = pair.querySelector(`input[id^="key_"]`);
-                    const valueInput = pair.querySelector(`input[id^="value_"]`);
-                    if (keyInput && valueInput) {
+                    const valueTextarea = pair.querySelector(`textarea[id^="value_"]`); // Changed to textarea
+                    if (keyInput && valueTextarea) {
                         const key = keyInput.value;
-                        const value = valueInput.value;
+                        const value = valueTextarea.value;
                         if (key || value) {
                             item.data.key_values.push({ key, value });
                         }
@@ -4215,6 +4296,11 @@ async function retrySave(resultIndex) {
             };
         }
 
+        if (!result.partial_success) {
+            // Main document failed, so don't process subdocuments
+            itemData.subdocument = [];
+        }
+
         console.log('Retrying with data:', itemData); // Debug log
 
         const response = await fetch("{% url 'admin:chatbot_media_retry_save' %}", {
@@ -4312,16 +4398,153 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     }
 });
 
+function renderSubdocumentResults(subdocResults, parentIndex, depth = 0) {
+    let html = '<div class="subdoc-hierarchy">';
+
+    subdocResults.forEach((subdoc, subdocIndex) => {
+        const retryButton = !subdoc.success ?
+            `<button class="btn retry-btn" onclick="retrySubdocSave(${parentIndex}, '${subdoc.path}', '${subdoc.cache_key}')">Retry</button>` : '';
+
+        html += `
+            <div class="subdoc-result-item ${subdoc.success ? 'success' : 'error'}">
+                <div style="flex: 1;">
+                    <strong>${subdoc.title}</strong>
+                    ${subdoc.success ?
+                        `<span style="color: #5cb85c; margin-left: 10px;">✓ Saved</span>` :
+                        `<span style="color: #f44336; margin-left: 10px;">✗ ${subdoc.error || 'Failed'}</span>`
+                    }
+                </div>
+                ${retryButton}
+            </div>
+        `;
+
+        // Render nested subdocuments recursively
+        if (subdoc.nested_subdocument_results && subdoc.nested_subdocument_results.length > 0) {
+            html += renderSubdocumentResults(subdoc.nested_subdocument_results, parentIndex, depth + 1);
+        }
+    });
+
+    html += '</div>';
+    return html;
+}
+
+async function retrySubdocSave(parentIndex, path, cacheKey) {
+    const result = saveResults[parentIndex];
+
+    // Get subdocument data from cache
+    const cachedSubdoc = await getCachedSubdocument(cacheKey);
+    if (!cachedSubdoc) {
+        showStatus('Subdocument data not found in cache', 'error');
+        return;
+    }
+
+    showLoading(`Retrying subdocument save...`);
+
+    try {
+        const response = await fetch("{% url 'admin:chatbot_media_retry_save' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken,
+            },
+            body: JSON.stringify({
+                item_data: cachedSubdoc.data,
+                company_bot_id: document.getElementById('companyBotSelect').value,
+                session_id: sessionId,
+                is_subdocument: true,
+                parent_media_id: result.media_id
+            })
+        });
+
+        const retryResult = await response.json();
+        if (retryResult.success) {
+            // Update the subdocument result
+            updateSubdocumentResult(parentIndex, path, retryResult.result);
+            displayResults(saveResults);
+            showStatus('Subdocument saved successfully', 'success');
+        } else {
+            showStatus('Subdocument retry failed', 'error');
+        }
+    } catch (error) {
+        showStatus('Error retrying subdocument save', 'error');
+    } finally {
+        hideLoading();
+    }
+}
+
+function updateSubdocumentResult(parentIndex, path, newResult) {
+    if (!saveResults[parentIndex]) return;
+
+    function updateResultRecursive(results, targetPath, newResult) {
+        for (let i = 0; i < results.length; i++) {
+            if (results[i].path === targetPath) {
+                results[i] = { ...results[i], ...newResult };
+                return true;
+            }
+            if (results[i].nested_subdocument_results) {
+                if (updateResultRecursive(results[i].nested_subdocument_results, targetPath, newResult)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    if (saveResults[parentIndex].subdocument_results) {
+        updateResultRecursive(saveResults[parentIndex].subdocument_results, path, newResult);
+    }
+}
+
+async function getCachedSubdocument(cacheKey) {
+    try {
+        // Request the cached subdocument data from the server
+        const response = await fetch("{% url 'admin:chatbot_media_get_cached_item' %}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken,
+            },
+            body: JSON.stringify({ cache_key: cacheKey })
+        });
+
+        const result = await response.json();
+        if (result.success && result.data) {
+            return result;
+        }
+
+        return null;
+    } catch (error) {
+        console.error('Error retrieving cached subdocument:', error);
+        return null;
+    }
+}
+
+function toggleSubdocResults(index) {
+    const container = document.getElementById(`subdoc-results-${index}`);
+    const toggle = event.target;
+
+    if (container.classList.contains('expanded')) {
+        container.classList.remove('expanded');
+        toggle.textContent = '▶';
+    } else {
+        container.classList.add('expanded');
+        toggle.textContent = '▼';
+    }
+}
+
 // Display save results
 function displayResults(results) {
     const successCount = results.filter(r => r.success).length;
     const failedCount = results.filter(r => !r.success).length;
 
+    let totalSubdocs = 0;
+    let failedSubdocs = 0;
+
     document.getElementById('totalFiles').textContent = uploadedFiles.length;
     document.getElementById('finalSuccessCount').textContent = successCount;
     document.getElementById('failedCount').textContent = failedCount;
 
-    // Show/hide retry all button based on failed count
+    // Show/hide retry all button
     const retryAllBtn = document.getElementById('retryAllBtn');
     if (failedCount > 0) {
         retryAllBtn.style.display = 'inline-block';
@@ -4337,17 +4560,20 @@ function displayResults(results) {
         const resultItem = document.createElement('div');
         resultItem.className = `save-result-item ${result.success ? 'success' : 'error'}`;
 
+        const hasSubdocs = result.subdocument_results && result.subdocument_results.length > 0;
+        const subdocToggle = hasSubdocs ?
+            `<span class="subdoc-toggle" onclick="toggleSubdocResults(${index})">▶</span>` : '';
+
         const retryButton = !result.success ?
-            `<button class="btn retry-btn" onclick="retrySave(${index})">Retry Save</button>
-             <button class="btn retry-btn" onclick="saveAnywayResult(${index})">Save Anyway</button>` : '';
+            `<button class="btn retry-btn" onclick="retrySave(${index})">Retry Save</button>` : '';
 
         resultItem.innerHTML = `
-            <div class="result-icon">${result.success ? '✓' : '✗'}</div>
+            <div class="result-icon">${subdocToggle}${result.success ? '✓' : '✗'}</div>
             <div class="save-result-content">
                 <h4>${result.filename}</h4>
                 <p>${result.message}</p>
                 ${result.success && result.media_id ? `<p>Media ID: ${result.media_id}</p>` : ''}
-                ${result.subdocument_results && result.subdocument_results.length > 0 ? `
+                ${hasSubdocs ? `
                     <p>Subdocuments: ${result.subdocument_results.filter(s => s.success).length}/${result.subdocument_results.length} saved</p>
                 ` : ''}
                 ${result.image_results && result.image_results.length > 0 ? `
@@ -4359,9 +4585,18 @@ function displayResults(results) {
             </div>
         `;
         resultsList.appendChild(resultItem);
+
+        // Add subdocument results if any
+        if (hasSubdocs) {
+            const subdocContainer = document.createElement('div');
+            subdocContainer.className = 'subdoc-results';
+            subdocContainer.id = `subdoc-results-${index}`;
+            subdocContainer.innerHTML = renderSubdocumentResults(result.subdocument_results, index);
+            resultsList.appendChild(subdocContainer);
+        }
     });
 
-    // Add skipped files to results
+    // Add skipped files
     const skippedItems = extractedData.filter(item => item.status === FILE_STATUS.SKIPPED);
     skippedItems.forEach(item => {
         const resultItem = document.createElement('div');

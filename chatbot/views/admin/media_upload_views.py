@@ -15,9 +15,11 @@ from chatbot.utils.knowledge_service.duplicate_detector import DuplicateDetector
 from django.core.files.base import ContentFile
 import base64
 from django.utils.text import slugify
+from django.conf import settings
 
 BOT_PROFILE_ID = 1
-ENABLE_SIMILARITY_CHECK = False
+ENABLE_SIMILARITY_CHECK = getattr(settings, 'BATCH_UPLOAD_ENABLE_SIMILARITY_CHECK', False)
+CACHE_TIMEOUT = getattr(settings, 'BATCH_UPLOAD_CACHE_TIMEOUT', 7200)
 
 
 @method_decorator(staff_member_required, name='dispatch')
@@ -50,6 +52,72 @@ class BatchMediaUploadView(TemplateView):
         return context
 
 
+class CacheManager:
+    """Centralized cache management for batch upload"""
+
+    @staticmethod
+    def get_cache_key(session_id, item_type, item_id):
+        """Generate consistent cache keys"""
+        return f"batch_upload_{session_id}_{item_type}_{item_id}"
+
+    @staticmethod
+    def cache_file(file, session_id, file_index):
+        """Cache uploaded file content"""
+        try:
+            file_content = b''
+            for chunk in file.chunks():
+                file_content += chunk
+
+            cache_key = CacheManager.get_cache_key(session_id, 'file', f"{file_index}_{file.name}")
+            cache_data = {
+                'content': file_content,
+                'name': file.name,
+                'size': file.size,
+                'type': 'file'
+            }
+
+            cache.set(cache_key, cache_data, timeout=CACHE_TIMEOUT)
+            print(f"Cached file: {cache_key}")
+            return cache_key
+        except Exception as e:
+            print(f"Error caching file: {e}")
+            return None
+
+    @staticmethod
+    def cache_subdocument(subdoc_data, session_id, parent_index, subdoc_path):
+        """Cache subdocument data for retry purposes"""
+        try:
+            cache_key = CacheManager.get_cache_key(session_id, 'subdoc', f"{parent_index}_{subdoc_path}")
+            cache_data = {
+                'data': subdoc_data,
+                'parent_index': parent_index,
+                'path': subdoc_path,
+                'type': 'subdocument'
+            }
+
+            cache.set(cache_key, cache_data, timeout=CACHE_TIMEOUT)
+            print(f"Cached subdocument: {cache_key}")
+            return cache_key
+        except Exception as e:
+            print(f"Error caching subdocument: {e}")
+            return None
+
+    @staticmethod
+    def get_cached_item(cache_key):
+        """Retrieve item from cache"""
+        return cache.get(cache_key)
+
+    @staticmethod
+    def extend_cache_timeout(cache_keys, additional_timeout=None):
+        """Extend cache timeout for failed items"""
+        timeout = additional_timeout or CACHE_TIMEOUT
+        for cache_key in cache_keys:
+            cached_item = cache.get(cache_key)
+            if cached_item:
+                cache.set(cache_key, cached_item, timeout=timeout)
+                print(f"Extended cache timeout for: {cache_key}")
+
+
 @method_decorator(staff_member_required, name='dispatch')
 class BatchMediaExtractView(View):
     """API endpoint for extracting data from uploaded files"""
@@ -58,7 +126,7 @@ class BatchMediaExtractView(View):
         try:
             files = request.FILES.getlist('files')
             company_bot_id = request.POST.get('company_bot_id')
-            session_id = request.POST.get('session_id')  # NEW: for file storage
+            session_id = request.POST.get('session_id')
             extracted_data = []
 
             # Generate session ID if not provided
@@ -75,7 +143,7 @@ class BatchMediaExtractView(View):
             for i, file in enumerate(files):
                 try:
                     # Store file for retry purposes
-                    file_key = self.store_file_for_retry(file, session_id, i)
+                    file_key = CacheManager.cache_file(file, session_id, i)
 
                     data = self.extract_file_data(
                         file=file,
@@ -88,14 +156,17 @@ class BatchMediaExtractView(View):
                     data['session_id'] = session_id
                     data['file_key'] = file_key
                 except Exception as e:
+                    # For failed extractions, still cache the file
+                    file_key = CacheManager.cache_file(file, session_id, i)
+
                     data = {
                         'filename': file.name,
                         'status': 'error',
                         'error': str(e),
                         'file_index': i,
                         'session_id': session_id,
-                        'file_key': self.store_file_for_retry(file, session_id, i),
-                        'name': file.name,  # Use full filename as name
+                        'file_key': file_key,
+                        'name': file.name,
                         'media_type': self.get_media_type(file.name),
                         'description': f'Extracted from {file.name}',
                         'extracted_text': '',
@@ -104,10 +175,10 @@ class BatchMediaExtractView(View):
                         'manual_tags': [],
                         'auto_tags': [],
                         'auto_tag_task_id': None,
-                        'auto_tags_ready': True,  # No task for failed extractions
-                        'key_values': [],  # Start with empty key-values for failed extractions
-                        'subdocument': [],  # Empty subdocuments
-                        'images': []  # Empty images
+                        'auto_tags_ready': True,
+                        'key_values': [],
+                        'subdocument': [],
+                        'images': []
                     }
 
                 extracted_data.append(data)
@@ -123,34 +194,11 @@ class BatchMediaExtractView(View):
                 'error': str(e)
             }, status=400)
 
-    def store_file_for_retry(self, file, session_id, file_index):
-        """Store uploaded file in cache for retry purposes"""
-        try:
-            file_content = b''
-            for chunk in file.chunks():
-                file_content += chunk
-
-            file_key = f"batch_upload_{session_id}_{file_index}_{file.name}"
-            # Store file data in cache for 1 hour
-            cache.set(file_key, {
-                'content': file_content,
-                'name': file.name,
-                'size': file.size
-            }, timeout=3600)
-            print("store_file_for_retry cache set successfully")
-            return file_key
-        except Exception as e:
-            print(f"Error storing file for retry: {e}")
-            return None
-
     def extract_file_data(self, file, company_bot, file_index, request=None):
         """Extract data from file and start async AI extraction"""
         file_extension = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else None
 
         # Save file temporarily
-        # if "fail" in file.name.lower():
-        #     print(f"Forced extraction failure for {file.name}")
-        #     raise ValueError(f"Forced extraction failure for {file.name}")
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as tmp:
             for chunk in file.chunks():
                 tmp.write(chunk)
@@ -159,12 +207,9 @@ class BatchMediaExtractView(View):
         user_profile = None
         company = None
         if request and request.user.is_authenticated:
-            print("User is authenticated")
             try:
                 user_profile = Profile.objects.get(email=request.user.email)
-                print("user_profile: ", user_profile)
                 company = user_profile.company
-                print("company found: ", company)
             except Profile.DoesNotExist:
                 pass
 
@@ -204,7 +249,6 @@ class BatchMediaExtractView(View):
     def get_media_type(self, filename):
         """Map file extension to media type using FileTypeChoices"""
         ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else None
-        # Use get_mime_from_extension instead of get_label_from_extension
         return FileTypeChoices.get_mime_from_extension(ext) if ext else FileTypeChoices.TXT.value
 
 
@@ -237,11 +281,9 @@ class BatchMediaRetryExtractView(View):
             stored_file = None
 
             if file_key:
-                stored_file = cache.get(file_key)
+                stored_file = CacheManager.get_cached_item(file_key)
 
             if not stored_file:
-                # Fallback: create a simple mock for demonstration
-                # In production, you might want to ask user to re-upload
                 return JsonResponse({
                     'success': False,
                     'error': 'Original file data not found. Please re-upload the file or try uploading again.'
@@ -255,7 +297,6 @@ class BatchMediaRetryExtractView(View):
                     self._content = stored_data['content']
 
                 def chunks(self):
-                    # Return chunks of the stored content
                     chunk_size = 8192
                     for i in range(0, len(self._content), chunk_size):
                         yield self._content[i:i + chunk_size]
@@ -266,7 +307,8 @@ class BatchMediaRetryExtractView(View):
                 extracted_data = extract_view.extract_file_data(
                     file=stored_file_obj,
                     company_bot=company_bot,
-                    file_index=file_data.get('file_index', 0)
+                    file_index=file_data.get('file_index', 0),
+                    request=request
                 )
                 extracted_data['status'] = 'success'
                 extracted_data['error'] = None
@@ -328,7 +370,6 @@ def process_tags(tags_data):
         if isinstance(tag, dict):
             processed_tags.append(tag)
         else:
-            # Backward compatibility - assume string tags are extracted
             processed_tags.append({'text': tag, 'source': 'extracted'})
     return processed_tags
 
@@ -344,7 +385,6 @@ def get_master_tags(company=None):
             query = query.filter(company=company)
 
         tag_names = list(query.values_list('name', flat=True).distinct())
-
         return tag_names
 
     except Exception as e:
@@ -375,13 +415,13 @@ def build_key_values(data_dict):
         key_values.append({'key': 'DOCUMENT TYPE', 'value': data_dict['document_type']})
     if data_dict.get('key_entities') and len(data_dict['key_entities']) > 0:
         key_values.append({'key': 'KEY ENTITIES', 'value': ', '.join(data_dict['key_entities'])})
-    print("structured_content: ", data_dict.get('structured_content'))
-    print("Type: ", type(data_dict.get('structured_content')))
+
     if data_dict.get('structured_content') and isinstance(data_dict['structured_content'], dict):
         for heading, content in data_dict['structured_content'].items():
-            if(heading.upper()) in [
-            'basic information', 'general information', 'tags', 'keywords', 'categories', 'classification',
-            'tags for classification']:
+            if heading.upper() in [
+                'BASIC INFORMATION', 'GENERAL INFORMATION', 'TAGS', 'KEYWORDS',
+                'CATEGORIES', 'CLASSIFICATION', 'TAGS FOR CLASSIFICATION'
+            ]:
                 continue
             key_values.append({'key': heading.upper(), 'value': content})
 
@@ -403,10 +443,8 @@ class BatchMediaTaskStatusView(View):
                 task = AsyncResult(task_id)
                 if task.ready():
                     if task.successful():
-                        # Process the AI extracted data
                         ai_data = task.result
                         processed_data = self.process_ai_extracted_data(ai_data)
-
                         results[task_id] = {
                             'status': 'SUCCESS',
                             'result': processed_data
@@ -443,11 +481,10 @@ class BatchMediaTaskStatusView(View):
             if not isinstance(subdoc_data, dict):
                 return None
 
-            # Extract base fields
             processed = {
                 'title': subdoc_data.get('title', ''),
                 'summary': subdoc_data.get('summary', ''),
-                'description': subdoc_data.get('summary', ''),  # Use summary as description
+                'description': subdoc_data.get('summary', ''),
                 'exact_content': subdoc_data.get('exact_content', ''),
                 'extracted_text': subdoc_data.get('exact_content', ''),
                 'organization': subdoc_data.get('organization', ''),
@@ -500,8 +537,7 @@ class BatchMediaTaskStatusView(View):
 
         # Process images
         images = ai_data.get('images', []) if isinstance(ai_data.get('images'), list) else []
-        print("\n\nai_data: ", ai_data)
-        # Return processed data for frontend
+
         return {
             'auto_tags': auto_tags,
             'enhanced_data': {
@@ -583,16 +619,6 @@ class TagProcessor:
 class BatchMediaSaveView(View):
     """API endpoint for saving batch media data with fault tolerance"""
 
-    def preserve_failed_files(self, failed_items, additional_timeout=7200):  # 2 more hours
-        """Extend cache timeout for files that failed to save"""
-        for item in failed_items:
-            file_key = item.get('file_key')
-            if file_key:
-                cached_file = cache.get(file_key)
-                if cached_file:
-                    cache.set(file_key, cached_file, timeout=additional_timeout)
-                    print(f"Extended cache timeout for failed file: {file_key}")
-
     def wait_for_vector_db_save_safe(self, task_id, timeout=30):
         """Enhanced waiting with better error handling"""
         import time
@@ -623,14 +649,12 @@ class BatchMediaSaveView(View):
                                 'error_type': 'VECTOR_DB_TASK_FAILED'
                             }
                 except Exception as poll_error:
-                    # If polling fails, log but continue trying
                     print(f"Polling error for task {task_id}: {poll_error}")
 
                 sleep_time = intervals[min(attempt, len(intervals) - 1)]
                 time.sleep(sleep_time)
                 attempt += 1
 
-            # Timeout reached
             return {
                 'completed': False,
                 'successful': False,
@@ -695,7 +719,7 @@ class BatchMediaSaveView(View):
             file_name = None
 
             if file_key:
-                cached_file = cache.get(file_key)
+                cached_file = CacheManager.get_cached_item(file_key)
                 if cached_file:
                     file_content = cached_file.get('content')
                     file_name = cached_file.get('name')
@@ -718,7 +742,6 @@ class BatchMediaSaveView(View):
                     media_type=item_data['media_type'],
                     priority=item_data['priority'],
                     description=item_data['description'],
-                    # extracted_text=item_data['extracted_text'],
                     company_bot_id=company_bot_id,
                 )
 
@@ -778,21 +801,54 @@ class BatchMediaSaveView(View):
 
             except Exception as tag_kv_error:
                 print(f"Warning: Tag/KV processing failed for {filename}: {tag_kv_error}")
-                # Continue - media is saved, just tags/kvs failed
 
-            # Step 5: Process subdocuments recursively
+            # Step 5: Wait for vector DB save
+            vector_result = {'successful': True, 'result': 'No vector task'}
+            if vector_task_id:
+                vector_result = self.wait_for_vector_db_save_safe(vector_task_id)
+
+                if not vector_result['successful']:
+                    print(f"Vector DB save failed for media {media.id}: {vector_result['result']}")
+                    return {
+                        'success': False,
+                        'filename': filename,
+                        'media_id': media.id,
+                        'message': f"Saved to database but vector DB failed: {vector_result['result']}",
+                        'error_type': vector_result.get('error_type', 'VECTOR_DB_FAILED'),
+                        'file_index': file_index,
+                        'file_key': file_key,
+                        'session_id': session_id,
+                        'vector_db_saved': False,
+                        'partial_success': True,
+                        'vector_task_id': vector_task_id,
+                        'subdocument_results': [],
+                        'image_results': []
+                    }
+
+            # Step 6: Process subdocuments recursively
             subdocument_results = []
             if item_data.get('subdocument'):
+                # Cache subdocuments before processing
+                self._cache_subdocuments_recursive(
+                    item_data['subdocument'],
+                    session_id,
+                    file_index,
+                    ""
+                )
+
                 subdoc_results = self.process_subdocuments_recursive(
                     item_data['subdocument'],
                     media,
                     company_bot_id,
                     user_profile,
-                    company_slug
+                    company_slug,
+                    session_id,
+                    file_index,
+                    ""
                 )
                 subdocument_results.extend(subdoc_results)
 
-            # Step 6: Process images
+            # Step 7: Process images
             image_results = []
             if item_data.get('images'):
                 for index, img_data in enumerate(item_data['images']):
@@ -805,32 +861,6 @@ class BatchMediaSaveView(View):
                             'success': False,
                             'error': str(img_error)
                         })
-
-            # Step 7: Wait for vector DB save
-            vector_result = {'successful': True, 'result': 'No vector task'}
-            if vector_task_id:
-                vector_result = self.wait_for_vector_db_save_safe(vector_task_id)
-
-                if not vector_result['successful']:
-                    # Vector DB failed but media is saved - partial success
-                    print(f"Vector DB save failed for media {media.id}: {vector_result['result']}")
-
-                    # Don't clean cache yet - might want to retry
-                    return {
-                        'success': False,  # Mark as failed so it can be retried
-                        'filename': filename,
-                        'media_id': media.id,
-                        'message': f"Saved to database but vector DB failed: {vector_result['result']}",
-                        'error_type': vector_result.get('error_type', 'VECTOR_DB_FAILED'),
-                        'file_index': file_index,
-                        'file_key': file_key,
-                        'session_id': session_id,
-                        'vector_db_saved': False,
-                        'partial_success': True,  # Indicates media was saved to main DB
-                        'vector_task_id': vector_task_id,
-                        'subdocument_results': subdocument_results,
-                        'image_results': image_results
-                    }
 
             # Step 8: Success - clean up cache
             if file_key and cache.get(file_key):
@@ -851,7 +881,6 @@ class BatchMediaSaveView(View):
             }
 
         except Exception as unexpected_error:
-            # Catch any other unexpected errors
             print(f"Unexpected error processing {filename}: {unexpected_error}")
             traceback.print_exc()
             return {
@@ -865,28 +894,53 @@ class BatchMediaSaveView(View):
                 'vector_db_saved': False
             }
 
-    def process_subdocuments_recursive(self, subdocuments, parent_media, company_bot_id, user_profile, company_slug):
+    def _cache_subdocuments_recursive(self, subdocuments, session_id, parent_index, parent_path):
+        """Cache subdocuments recursively for retry purposes"""
+        for i, subdoc in enumerate(subdocuments):
+            current_path = f"{parent_path}_{i}" if parent_path else str(i)
+
+            # Cache this subdocument
+            CacheManager.cache_subdocument(subdoc, session_id, parent_index, current_path)
+
+            # Recursively cache nested subdocuments
+            if subdoc.get('subdocument'):
+                self._cache_subdocuments_recursive(
+                    subdoc['subdocument'],
+                    session_id,
+                    parent_index,
+                    current_path
+                )
+
+    def process_subdocuments_recursive(self, subdocuments, parent_media, company_bot_id, user_profile,
+                                       company_slug, session_id, parent_index, parent_path):
         """Recursively process subdocuments at any depth"""
         results = []
 
-        for subdoc_data in subdocuments:
+        for i, subdoc_data in enumerate(subdocuments):
+            current_path = f"{parent_path}_{i}" if parent_path else str(i)
+            subdoc_cache_key = CacheManager.get_cache_key(session_id, 'subdoc', f"{parent_index}_{current_path}")
+
             try:
                 subdoc_result = self.save_subdocument(
                     subdoc_data, parent_media, company_bot_id, user_profile, company_slug
                 )
+                subdoc_result['cache_key'] = subdoc_cache_key
+                subdoc_result['path'] = current_path
 
                 # If this subdocument has nested subdocuments, process them recursively
                 if subdoc_data.get('subdocument') and subdoc_result['success']:
                     subdoc_media_id = subdoc_result['subdoc_media_id']
-                    # Get the subdocument media object for recursive processing
                     subdoc_media = Media.objects.get(id=subdoc_media_id)
 
                     nested_results = self.process_subdocuments_recursive(
                         subdoc_data['subdocument'],
-                        subdoc_media,  # The subdocument becomes the parent
+                        subdoc_media,
                         company_bot_id,
                         user_profile,
-                        company_slug
+                        company_slug,
+                        session_id,
+                        parent_index,
+                        current_path
                     )
                     subdoc_result['nested_subdocument_results'] = nested_results
 
@@ -896,7 +950,10 @@ class BatchMediaSaveView(View):
                 print(f"Warning: Subdocument save failed: {subdoc_error}")
                 results.append({
                     'success': False,
-                    'error': str(subdoc_error)
+                    'error': str(subdoc_error),
+                    'cache_key': subdoc_cache_key,
+                    'path': current_path,
+                    'title': subdoc_data.get('title', f'Subdocument at {current_path}')
                 })
 
         return results
@@ -904,13 +961,19 @@ class BatchMediaSaveView(View):
     def save_subdocument(self, subdoc_data, parent_media, company_bot_id, user_profile, company_slug):
         """Save a subdocument as a separate Media object linked to parent"""
         try:
+            temp_name = subdoc_data.get('title', f'Subdocument of {parent_media.name}')
+            print("subdoc_data: ", subdoc_data)
+            print("temp_name: ", temp_name)
+            for kv in subdoc_data.get('key_values', []):
+                if "fail" in kv['value'].lower():
+                    print(f"Forced subdoc extraction failure for {temp_name}")
+                    raise ValueError(f"Forced subdoc extraction failure for {temp_name}")
             # Create subdocument media
             subdoc_media = Media(
                 name=subdoc_data.get('title', f'Subdocument of {parent_media.name}'),
                 media_type=subdoc_data.get('media_type', FileTypeChoices.TXT.value),
                 priority=parent_media.priority,
                 description=subdoc_data.get('description', subdoc_data.get('summary', '')),
-                # extracted_text=subdoc_data.get('exact_content', subdoc_data.get('extracted_text', '')),
                 company_bot_id=company_bot_id,
                 parent=parent_media,
             )
@@ -945,6 +1008,9 @@ class BatchMediaSaveView(View):
             if all_tags:
                 subdoc_media.tags.set(all_tags)
 
+            key_values_to_save = subdoc_data.get('key_values', [])
+            print(f"About to save {len(key_values_to_save)} key-values for subdoc: {temp_name}")
+
             # Key-value pairs
             for kv in subdoc_data.get('key_values', []):
                 KeyValue.objects.create(
@@ -952,18 +1018,6 @@ class BatchMediaSaveView(View):
                     key=kv['key'],
                     value=kv['value']
                 )
-
-            # Link parent and subdoc via key-value
-            KeyValue.objects.create(
-                media=parent_media,
-                key='SUBDOCUMENT_ID',
-                value=str(subdoc_media.id)
-            )
-            KeyValue.objects.create(
-                media=subdoc_media,
-                key='PARENT_ID',
-                value=str(parent_media.id)
-            )
 
             # Process subdocument images
             if subdoc_data.get('images'):
@@ -986,21 +1040,16 @@ class BatchMediaSaveView(View):
     def save_media_image(self, img_data, media, index):
         """Save image associated with media"""
         try:
-            # If base64 is provided, also save as file
             if img_data.get('base64'):
                 try:
                     # Extract image format from base64 string
                     base64_str = img_data['base64']
                     if base64_str.startswith('data:'):
-                        # Extract MIME type
                         mime_start = base64_str.find('image/') + 6
                         mime_end = base64_str.find(';', mime_start)
                         image_format = base64_str[mime_start:mime_end]
-
-                        # Extract actual base64 data
                         base64_data = base64_str.split(',')[1]
                     else:
-                        # Default to PNG if no format specified
                         image_format = img_data.get('format', 'png')
                         base64_data = base64_str
 
@@ -1112,7 +1161,6 @@ class BatchMediaSaveView(View):
                         f"File {i + 1} result: {'✓' if result['success'] else '✗'} - {result.get('message', 'No message')}")
 
                 except Exception as item_error:
-                    # This should rarely happen due to the safe method above
                     print(f"Critical error processing {filename}: {item_error}")
                     stats['failed'] += 1
                     results.append({
@@ -1127,17 +1175,25 @@ class BatchMediaSaveView(View):
                     })
 
             # Preserve cache for failed files
-            failed_items = [r for r in results if not r['success'] and r.get('file_key')]
-            if failed_items:
-                self.preserve_failed_files(failed_items)
+            failed_cache_keys = []
+            for r in results:
+                if not r['success'] and r.get('file_key'):
+                    failed_cache_keys.append(r['file_key'])
+                # Also preserve cache for failed subdocuments
+                if r.get('subdocument_results'):
+                    for subdoc_result in r['subdocument_results']:
+                        if not subdoc_result.get('success') and subdoc_result.get('cache_key'):
+                            failed_cache_keys.append(subdoc_result['cache_key'])
+
+            if failed_cache_keys:
+                CacheManager.extend_cache_timeout(failed_cache_keys)
 
             # Generate summary message
             summary_message = self.generate_batch_summary(stats)
-
             print(f"Batch complete: {summary_message}")
 
             return JsonResponse({
-                'success': True,  # Batch completed (even with individual failures)
+                'success': True,
                 'results': results,
                 'stats': stats,
                 'summary_message': summary_message,
@@ -1187,12 +1243,13 @@ class BatchMediaRetrySaveView(View):
 
     def post(self, request):
         try:
-            print("BatchMediaRetrySaveView called")
             data = json.loads(request.body)
             item_data = data.get('item_data')
             company_bot_id = data.get('company_bot_id')
             session_id = data.get('session_id')
             bypass_similarity = data.get('bypass_similarity', False)
+            is_subdocument = data.get('is_subdocument', False)
+            parent_media_id = data.get('parent_media_id')
 
             # Get current user's profile
             try:
@@ -1200,16 +1257,46 @@ class BatchMediaRetrySaveView(View):
             except Profile.DoesNotExist:
                 user_profile = None
 
-            save_view = BatchMediaSaveView()
-            result = save_view.save_single_item_with_vector_db_wait_safe(
-                item_data=item_data, company_bot_id=company_bot_id, user_profile=user_profile,
-                session_id=session_id, bypass_similarity=bypass_similarity
-            )
+            if is_subdocument and parent_media_id:
+                # Retry subdocument save
+                try:
+                    parent_media = Media.objects.get(id=parent_media_id)
+                    company_bot = CompanyBot.objects.get(id=company_bot_id)
+                    company_slug = company_bot.company.slug
 
-            return JsonResponse({
-                'success': True,
-                'result': result
-            })
+                    save_view = BatchMediaSaveView()
+                    result = save_view.save_subdocument(
+                        subdoc_data=item_data,
+                        parent_media=parent_media,
+                        company_bot_id=company_bot_id,
+                        user_profile=user_profile,
+                        company_slug=company_slug
+                    )
+
+                    return JsonResponse({
+                        'success': True,
+                        'result': result
+                    })
+                except Exception as e:
+                    return JsonResponse({
+                        'success': False,
+                        'error': str(e)
+                    }, status=400)
+            else:
+                # Retry main document save
+                save_view = BatchMediaSaveView()
+                result = save_view.save_single_item_with_vector_db_wait_safe(
+                    item_data=item_data,
+                    company_bot_id=company_bot_id,
+                    user_profile=user_profile,
+                    session_id=session_id,
+                    bypass_similarity=bypass_similarity
+                )
+
+                return JsonResponse({
+                    'success': True,
+                    'result': result
+                })
 
         except Exception as e:
             print(f"Unexpected error: {e}")
