@@ -192,7 +192,10 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
                 company_bot=self.company_bot, step=chat_session.current_step
             )
 
-            if state_machine and state_machine.name in ['INTRODUCTION', 'ORGANIZATION']:
+            if state_machine and state_machine.name in [
+                'INTRODUCTION', 'ORGANIZATION', 'PRI_MEMBER_ATTENDANCE',
+                'SCHOOL_REPRESENTATIVE_ATTENDANCE'
+            ]:
                 transliterate_voice_provider = Voice.objects.filter(
                     company_bot=self.company_bot,
                     type=VoiceType.Transliterate,
