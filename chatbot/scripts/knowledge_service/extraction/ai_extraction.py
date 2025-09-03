@@ -110,47 +110,71 @@ class DocumentExtractor:
     def extract_urls_from_text(self, text: str) -> List[str]:
         """Extract all URLs from text content with improved regex"""
         try:
-            # Enhanced URL patterns to catch more formats including those with fragments
+            # Log the full text for debugging
+            logger.info("=" * 80)
+            logger.info("EXTRACTING URLs FROM TEXT:")
+            logger.info("=" * 80)
+            logger.info(f"{text}")
+            logger.info("=" * 80)
+
+            # First, let's look specifically for patterns like "word: URL" on separate lines
+            lines = text.split('\n')
+            manual_urls = []
+
+            for i, line in enumerate(lines):
+                line = line.strip()
+
+                # Check if line contains http anywhere
+                if 'http' in line:
+                    # Extract all URLs from this line
+                    url_pattern = r'https?://[^\s\n\r]+'
+                    found_urls = re.findall(url_pattern, line, re.IGNORECASE)
+                    manual_urls.extend(found_urls)
+
+                # Also check if previous line ends with description and this line is a URL
+                if i > 0 and line.startswith('http'):
+                    if line not in manual_urls:
+                        manual_urls.append(line)
+
+            # Enhanced URL patterns for more thorough extraction
             url_patterns = [
-                # Standard http/https URLs with all components
-                r'https?://(?:[-\w.])+(?:[:\d]+)?(?:/(?:[\w/_.\-])*)?(?:\?(?:[\w&=%.\-])*)?(?:#(?:[\w.\-=])*)?',
-                # URLs that might start with www
-                r'www\.(?:[-\w.])+(?:[:\d]+)?(?:/(?:[\w/_.\-])*)?(?:\?(?:[\w&=%.\-])*)?(?:#(?:[\w.\-=])*)?',
-                # Google specific patterns that might be missed
-                r'https://docs\.google\.com/[^/]+/d/[A-Za-z0-9_-]+/[^\s]*',
-                r'https://drive\.google\.com/[^/]+/d/[A-Za-z0-9_-]+/[^\s]*',
-                r'https://docs\.google\.com/forms/d/[A-Za-z0-9_-]+/[^\s]*',
-                r'https://docs\.google\.com/spreadsheets/d/[A-Za-z0-9_-]+/[^\s]*',
-                # Add pattern for URLs that might be on their own line
-                r'(?:^|\n)\s*(https?://[^\s\n]+)'
+                # Catch ALL URLs starting with http/https
+                r'https?://[^\s\n\r]+',
+                # Google specific patterns
+                r'https://docs\.google\.com/[^/\s]+/d/[A-Za-z0-9_-]+[^\s\n\r]*',
+                r'https://drive\.google\.com/[^/\s]+/d/[A-Za-z0-9_-]+[^\s\n\r]*',
             ]
 
             urls = []
+
+            # Add manually found URLs first
+            urls.extend(manual_urls)
+
+            # Then use regex patterns on the full text
             for pattern in url_patterns:
-                found_urls = re.findall(pattern, text, re.IGNORECASE)
+                found_urls = re.findall(pattern, text, re.IGNORECASE | re.MULTILINE)
                 urls.extend(found_urls)
 
-            # Add https:// to www URLs
+            # Clean and process URLs
             processed_urls = []
             for url in urls:
+                url = url.strip()
+                # Remove trailing punctuation and special chars
+                url = re.sub(r'[.,;:!?)\]}>]+$', '', url)
                 if url.startswith('www.'):
                     url = 'https://' + url
-                # Clean up URLs - remove trailing punctuation
-                url = url.rstrip('.,;:')
                 processed_urls.append(url)
 
             # Remove duplicates while preserving order
             unique_urls = []
             seen = set()
 
-            # Normalize URLs for deduplication
             for url in processed_urls:
-                # Normalize by removing trailing slashes and sorting query parameters
+                # Normalize by removing trailing slashes
                 normalized = url.rstrip('/')
 
                 # For Google Docs/Sheets, normalize the gid parameter
                 if 'docs.google.com/spreadsheets' in normalized and '#gid=' in normalized:
-                    # Extract base URL and gid separately
                     base_url = normalized.split('#gid=')[0]
                     gid_part = '#gid=' + normalized.split('#gid=')[1].split('&')[0].split('/')[0]
                     normalized = base_url + gid_part
@@ -165,10 +189,6 @@ class DocumentExtractor:
             for i, url in enumerate(unique_urls):
                 logger.info(f"URL {i + 1}: {url}")
             logger.info("=" * 80)
-
-            # Log the URLs for debugging
-            for i, url in enumerate(unique_urls):
-                logger.debug(f"URL {i + 1}: {url}")
 
             return unique_urls
 
@@ -261,61 +281,83 @@ class DocumentExtractor:
                 logger.info(f"  Sheet {i + 1}: '{sheet_name}'")
             logger.info("=" * 80)
 
-            # Only use first sheet (tab 0)
             if not sheet_names:
                 return ""
 
-            first_sheet = sheet_names[0]
-            logger.info(f"Processing only the FIRST sheet: '{first_sheet}'")
+            # Process sheets until we have enough content
+            all_text_parts = []
+            total_chars = 0
+            sheets_processed = 0
 
-            # Read the entire first sheet
-            df = pd.read_excel(
-                excel_file,
-                sheet_name=first_sheet
-            )
+            for sheet_idx, sheet_name in enumerate(sheet_names):
+                if total_chars >= max_chars:
+                    break
 
-            # If the dataframe is empty, return a note
-            if df.empty or len(df) == 0:
-                logger.warning(f"Excel sheet '{first_sheet}' is empty")
-                return f"Empty Excel sheet: '{first_sheet}' (no data)"
+                logger.info(f"Processing sheet {sheet_idx + 1}: '{sheet_name}'")
 
-            # Create a text representation WITHOUT metadata
-            text_parts = []
+                try:
+                    # Read the sheet
+                    df = pd.read_excel(
+                        excel_file,
+                        sheet_name=sheet_name
+                    )
 
-            # Limit rows and columns for processing
-            display_df = df.head(self.excel_max_rows)
-            if len(df.columns) > self.excel_max_cols:
-                display_df = display_df.iloc[:, :self.excel_max_cols]
+                    # Skip empty sheets
+                    if df.empty or len(df) == 0:
+                        logger.warning(f"Sheet '{sheet_name}' is empty, moving to next sheet...")
+                        continue
 
-            # Convert to CSV-like format for better LLM processing
-            csv_string = display_df.to_csv(index=False)
-            text_parts.append(csv_string)
+                    # Limit rows and columns for processing
+                    display_df = df.head(self.excel_max_rows)
+                    if len(df.columns) > self.excel_max_cols:
+                        display_df = display_df.iloc[:, :self.excel_max_cols]
 
-            # Add note if data was truncated (but minimal)
-            if len(df) > self.excel_max_rows or len(df.columns) > self.excel_max_cols:
-                text_parts.append(
-                    f"\n[Showing {min(len(df), self.excel_max_rows)} of {len(df)} rows, {min(len(df.columns), self.excel_max_cols)} of {len(df.columns)} columns]")
+                    # Convert to CSV-like format
+                    csv_string = display_df.to_csv(index=False)
+
+                    # Add sheet header if we're processing multiple sheets
+                    if sheets_processed > 0:
+                        all_text_parts.append(f"\n\n--- Sheet: '{sheet_name}' ---\n")
+
+                    all_text_parts.append(csv_string)
+                    sheets_processed += 1
+
+                    # Update total characters
+                    current_text = '\n'.join(all_text_parts)
+                    total_chars = len(current_text)
+
+                    logger.info(f"Sheet '{sheet_name}' added {len(csv_string)} chars (total: {total_chars} chars)")
+
+                    # Add truncation note for this sheet if needed
+                    if len(df) > self.excel_max_rows or len(df.columns) > self.excel_max_cols:
+                        all_text_parts.append(
+                            f"\n[Sheet '{sheet_name}': Showing {min(len(df), self.excel_max_rows)} of {len(df)} rows, "
+                            f"{min(len(df.columns), self.excel_max_cols)} of {len(df.columns)} columns]"
+                        )
+
+                except Exception as e:
+                    logger.error(f"Error processing sheet '{sheet_name}': {e}")
+                    continue
+
+            # If no sheets had data
+            if sheets_processed == 0:
+                logger.warning("All sheets are empty!")
+                return "All Excel sheets are empty (no data found)"
 
             # Join all parts
-            full_text = '\n'.join(text_parts)
+            full_text = '\n'.join(all_text_parts)
             original_length = len(full_text)
 
-            # Log the extracted Excel content for debugging
-            logger.info(f"Excel content extracted ({len(full_text)} chars)")
+            logger.info(f"Processed {sheets_processed} sheets with data, extracted {original_length} chars")
 
-            # IMPORTANT: Log the actual content that will be sent to LLM
+            # Log the content
             logger.info("=" * 80)
             logger.info("EXCEL CONTENT BEING SENT TO LLM:")
             logger.info("=" * 80)
-            if len(full_text) <= 2000:
-                logger.info(full_text)
-            else:
-                logger.info(f"First 1000 chars:\n{full_text[:1000]}")
-                logger.info(f"\n... [truncated {len(full_text) - 2000} chars] ...\n")
-                logger.info(f"Last 1000 chars:\n{full_text[-1000:]}")
+            logger.info(full_text)
             logger.info("=" * 80)
 
-            # Apply character limit if needed
+            # Apply final character limit if needed
             if len(full_text) > max_chars:
                 # Try to cut at a row boundary
                 lines = full_text.split('\n')
@@ -323,13 +365,13 @@ class DocumentExtractor:
                 current_length = 0
 
                 for line in lines:
-                    if current_length + len(line) + 1 > max_chars - 50:  # Leave room for truncation note
+                    if current_length + len(line) + 1 > max_chars - 50:
                         break
                     truncated_text.append(line)
                     current_length += len(line) + 1
 
                 full_text = '\n'.join(truncated_text) + "\n[Content truncated]"
-                logger.info(f"Excel content truncated from {len(original_length)} to {len(full_text)} chars")
+                logger.info(f"Excel content truncated from {original_length} to {len(full_text)} chars")
 
             return full_text
 
@@ -1112,6 +1154,7 @@ class DocumentExtractor:
 
         try:
             logger.info("Processing content with Bedrock...")
+            logger.info(f"Passing Text to llm: {document_text}")
 
             # Preserve complete content
             complete_content = document_text
