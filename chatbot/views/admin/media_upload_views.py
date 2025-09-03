@@ -1,4 +1,5 @@
 import traceback
+import requests
 from django.views.generic import TemplateView
 from django.contrib.admin.views.decorators import staff_member_required
 from django.utils.decorators import method_decorator
@@ -262,6 +263,12 @@ class BatchMediaExtractView(View):
     def extract_file_data(self, file, company_bot, file_index, request=None):
         """Extract data from file and start async AI extraction"""
         file_extension = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else None
+
+        filename = file.name
+
+        if "fail" in filename.lower():
+            print(f"Forced extract failure for {filename}")
+            raise ValueError(f"Forced extact failure for {filename}")
 
         # Save file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as tmp:
@@ -557,6 +564,8 @@ class BatchMediaTaskStatusView(View):
                 'document_type': subdoc_data.get('document_type', ''),
                 'key_entities': subdoc_data.get('key_entities', []),
                 'url': subdoc_data.get('url', []),
+                'file_url': subdoc_data.get('file_url', ''),
+                'source_document': subdoc_data.get('source_document', ''),
                 'auto_tags': extract_tag_texts(subdoc_data.get('tags', [])),
                 'manual_tags': [],
                 'key_values': build_key_values(subdoc_data),
@@ -754,8 +763,8 @@ class BatchMediaSaveView(View):
         file_index = item_data.get('file_index')
 
         if "fail" in filename.lower():
-            print(f"Forced extraction failure for {filename}")
-            raise ValueError(f"Forced extraction failure for {filename}")
+            print(f"Forced save failure for {filename}")
+            raise ValueError(f"Forced save failure for {filename}")
 
         try:
             company_bot = CompanyBot.objects.get(id=company_bot_id)
@@ -1036,20 +1045,76 @@ class BatchMediaSaveView(View):
     def save_subdocument(self, subdoc_data, parent_media, company_bot_id, user_profile, company_slug):
         """Save a subdocument as a separate Media object linked to parent"""
         try:
-            # Use URL as title if it's a link-based subdocument
-            if subdoc_data.get('document_type') == 'linked_document' and subdoc_data.get('url'):
-                subdoc_title = subdoc_data.get('url')[0] if subdoc_data.get('url') else subdoc_data.get('title',
-                                                                                                        f'Subdocument of {parent_media.name}')
-            else:
-                subdoc_title = subdoc_data.get('title', f'Subdocument of {parent_media.name}')
+            # Get file_url first since we'll need it for the filename
+            file_url = subdoc_data.get('file_url')
+            if not file_url:
+                raise ValueError(f"No file URL provided for subdocument")
 
-            print(f"Saving subdocument with title: {subdoc_title}")
+            print(f"Downloading file from URL: {file_url}")
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            }
+
+            try:
+                response = requests.get(file_url, headers=headers, timeout=30, allow_redirects=True)
+                response.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                error_msg = f"Failed to download file from {file_url}: {str(e)}"
+                print(f"Error: {error_msg}")
+                raise ValueError(error_msg)
+
+            # Determine filename from URL or content-disposition
+            filename = None
+            content_disposition = response.headers.get('content-disposition')
+            if content_disposition:
+                import re
+                matches = re.findall('filename="?([^"]+)"?', content_disposition)
+                if matches:
+                    filename = matches[0]
+
+            if not filename:
+                # Extract from URL
+                from urllib.parse import urlparse, unquote
+                parsed_url = urlparse(file_url)
+                path = parsed_url.path
+                filename = os.path.basename(unquote(path))
+
+                # For Google Docs/Drive, create appropriate filename based on media type
+                if 'docs.google.com' in file_url or 'drive.google.com' in file_url:
+                    base_title = subdoc_data.get('title', 'Document')
+                    media_type = subdoc_data.get('media_type', FileTypeChoices.TXT.value)
+
+                    # Get extension from media type using the enum's mapping
+                    extension_mapping = FileTypeChoices.get_extension_mapping()
+                    extension = extension_mapping.get(media_type, '.txt')
+
+                    filename = f"{slugify(base_title, allow_unicode=True)}{extension}"
+
+                # Ensure filename has an extension
+                if not os.path.splitext(filename)[1]:
+                    # Add extension based on media type using the enum's mapping
+                    media_type = subdoc_data.get('media_type', FileTypeChoices.TXT.value)
+                    extension_mapping = FileTypeChoices.get_extension_mapping()
+                    extension = extension_mapping.get(media_type, '.txt')
+                    filename += extension
+
+            # Use filename (without extension) as the subdocument title
+            filename_without_ext = os.path.splitext(filename)[0]
+            subdoc_title = filename_without_ext
+
+            print(f"Saving subdocument with title: {subdoc_title} (from filename: {filename})")
 
             # Check for forced failure
             for kv in subdoc_data.get('key_values', []):
                 if "fail" in kv.get('value', '').lower():
                     print(f"Forced subdoc extraction failure for {subdoc_title}")
                     raise ValueError(f"Forced subdoc extraction failure for {subdoc_title}")
+
+            # Get file content
+            file_content = response.content
+            if not file_content:
+                raise ValueError(f"Downloaded file is empty for URL: {file_url}")
 
             # Create subdocument media
             subdoc_media = Media(
@@ -1061,52 +1126,32 @@ class BatchMediaSaveView(View):
                 parent=parent_media,
             )
 
+            # Save the file content - use the original filename
+            try:
+                subdoc_media.file.save(filename, ContentFile(file_content), save=False)
+                print(f"Successfully saved file: {filename}")
+            except Exception as e:
+                error_msg = f"Failed to save file content for subdocument: {str(e)}"
+                print(f"Error: {error_msg}")
+                raise ValueError(error_msg)
+
             # Save the media object
             subdoc_media.save()
 
-            # For link-based subdocuments, store the URL in a key-value pair
-            if subdoc_data.get('document_type') == 'linked_document' and subdoc_data.get('url'):
-                # Add URL as a key-value pair
+            # Store the original file URL for reference
+            KeyValue.objects.create(
+                media=subdoc_media,
+                key='ORIGINAL_FILE_URL',
+                value=file_url
+            )
+
+            # Add source document info if available
+            if subdoc_data.get('source_document'):
                 KeyValue.objects.create(
                     media=subdoc_media,
-                    key='SOURCE_URL',
-                    value=subdoc_data.get('url')[0] if subdoc_data.get('url') else ''
+                    key='FOUND_IN_DOCUMENT',
+                    value=subdoc_data.get('source_document')
                 )
-
-                # Add source document info
-                if subdoc_data.get('source_document'):
-                    KeyValue.objects.create(
-                        media=subdoc_media,
-                        key='FOUND_IN_DOCUMENT',
-                        value=subdoc_data.get('source_document')
-                    )
-
-            # Process tags using shared logic
-            company = user_profile.company if user_profile else None
-            all_tags = []
-
-            # Process manual tags
-            manual_tags = TagProcessor.process_tags_for_media(
-                subdoc_data.get('manual_tags', []),
-                'manual',
-                user_profile,
-                company,
-                is_manual=True
-            )
-            all_tags.extend(manual_tags)
-
-            # Process auto tags
-            auto_tags = TagProcessor.process_tags_for_media(
-                subdoc_data.get('auto_tags', []),
-                'extracted',
-                user_profile,
-                company,
-                is_manual=False
-            )
-            all_tags.extend(auto_tags)
-
-            if all_tags:
-                subdoc_media.tags.set(all_tags)
 
             key_values_to_save = subdoc_data.get('key_values', [])
             print(f"About to save {len(key_values_to_save)} key-values for subdoc: {subdoc_title}")

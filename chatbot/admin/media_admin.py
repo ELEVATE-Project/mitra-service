@@ -2,7 +2,7 @@ from django.contrib import admin
 from .generic_upload_admin import BatchUploadMixin
 from chatbot.form.media.media_form import MediaAdminForm
 from chatbot.models import Tag, Profile, TagChoices, TagSourceChoices
-from chatbot.models.media_models import Media, KeyValue
+from chatbot.models.media_models import Media, KeyValue, MediaImage
 from chatbot.views.admin.media_upload_views import (
     BatchMediaUploadView,
     BatchMediaExtractView,
@@ -18,6 +18,13 @@ class KeyValueInline(admin.TabularInline):
     extra = 1
 
 
+class MediaImagesInline(admin.TabularInline):
+    model = MediaImage
+    extra = 1
+    fk_name = 'media'
+    fields = ('name', 'media_type', 'page', 'width', 'height', 'created_at')
+
+
 @admin.register(Media)
 class MediaAdmin(admin.ModelAdmin):
     form = MediaAdminForm
@@ -25,7 +32,7 @@ class MediaAdmin(admin.ModelAdmin):
     search_fields = ('name',)
     actions = ['export_selected']
     list_export = ('csv', 'xlsx')
-    inlines = [KeyValueInline]
+    inlines = [KeyValueInline, MediaImagesInline]
     raw_id_fields = ('company_bot',)
 
     def save_model(self, request, obj, form, change):
@@ -44,7 +51,8 @@ class MediaAdmin(admin.ModelAdmin):
         fieldsets = [
             (None, {
                 'fields': (
-                'name', 'file', 'url', 'description', 'extracted_text', 'priority', 'media_type', 'company_bot')
+                'name', 'file', 'url', 'description', 'extracted_text', 'priority', 'media_type',
+                'company_bot', 'parent')
             }),
             ('Manual Tags', {
                 'fields': ('manual_tags',),

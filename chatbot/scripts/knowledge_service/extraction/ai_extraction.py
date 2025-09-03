@@ -1215,7 +1215,8 @@ class DocumentExtractor:
         return result
 
     def extract_basic_content(
-            self, document_text, company_bot, extracted_images: List[Dict[str, Any]] = None, other_data=None
+            self, document_text, company_bot, extracted_images: List[Dict[str, Any]] = None, other_data=None,
+            is_subdoc=False
     ) -> Dict[str, Any]:
         """Extract basic content using Bedrock"""
         default_response = {
@@ -1244,8 +1245,27 @@ class DocumentExtractor:
                 },
             ]
 
-            tag_context = company_bot.tag_context
+            tool_context_data = json_repair.repair_json(company_bot.tool_context, return_objects=True) if isinstance(
+                company_bot.tool_context, str) else company_bot.tool_context
+
+            if isinstance(tool_context_data, list) and len(tool_context_data) > 0:
+                tool_context_data = tool_context_data[0]
+
+            if is_subdoc:
+                tag_context = company_bot.end_context
+                tool = tool_context_data.get('sub_document', {}) if isinstance(
+                    tool_context_data, dict
+                ) else company_bot.tool_context
+            else:
+                tag_context = company_bot.tag_context
+                tool = tool_context_data.get('main_document', {}) if isinstance(
+                    tool_context_data, dict
+                ) else company_bot.tool_context
+
+            print("tag_context: ", tag_context)
+            print("tool: ", tool)
             if not tag_context:
+                print("Early return due to none tag context value.")
                 default_response['exact_content'] = complete_content
                 return default_response
 
@@ -1274,9 +1294,7 @@ class DocumentExtractor:
                 'role': 'user',
                 'content': [{'text': f"{tag_context}"}]
             }]
-            tool = company_bot.tool_context
-            if tool and isinstance(tool, str):
-                tool = json_repair.repair_json(tool, return_objects=True)
+
             print("Bedrock: Extraction call started.")
             response = handle_bedrock_model(
                 system_prompt=system_prompt,
@@ -1450,7 +1468,8 @@ class DocumentExtractor:
                                     sub_text,
                                     company_bot,
                                     sub_images,
-                                    other_data
+                                    other_data,
+                                    is_subdoc = True
                                 )
 
                                 # Create subdocument entry (without "url" field)
@@ -1466,7 +1485,7 @@ class DocumentExtractor:
                                     "summary": subdoc_result.get("summary", ""),
                                     "tags": subdoc_result.get("tags", []),
                                     "organization": subdoc_result.get("organization", ""),
-                                    "document_type": subdoc_result.get("document_type", "linked_document"),
+                                    "document_type": "",
                                     "key_entities": subdoc_result.get("key_entities", []),
                                     "subdocument": [],
                                     "images": sub_images or []
