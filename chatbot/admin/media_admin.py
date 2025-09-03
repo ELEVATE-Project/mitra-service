@@ -22,18 +22,19 @@ class MediaImagesInline(admin.TabularInline):
     model = MediaImage
     extra = 1
     fk_name = 'media'
-    fields = ('name', 'media_type', 'page', 'width', 'height', 'created_at')
+    fields = ('name', 'media_type', 'page', 'width', 'height')
+    readonly_fields = ('created_at',)
 
 
 @admin.register(Media)
 class MediaAdmin(admin.ModelAdmin):
     form = MediaAdminForm
-    list_display = ('name', 'media_type',)
+    list_display = ('name', 'media_type', 'parent__name')
     search_fields = ('name',)
     actions = ['export_selected']
     list_export = ('csv', 'xlsx')
     inlines = [KeyValueInline, MediaImagesInline]
-    raw_id_fields = ('company_bot',)
+    raw_id_fields = ('company_bot', 'parent')
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
@@ -75,8 +76,8 @@ class MediaAdmin(admin.ModelAdmin):
     def get_actions(self, request):
         """Remove the delete selected action"""
         actions = super().get_actions(request)
-        if 'delete_selected' in actions:
-            del actions['delete_selected']
+        # if 'delete_selected' in actions:
+        #     del actions['delete_selected']
         return actions
 
     def get_urls(self):

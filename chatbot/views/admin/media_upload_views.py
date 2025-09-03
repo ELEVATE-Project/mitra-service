@@ -1,3 +1,4 @@
+import hashlib
 import traceback
 import requests
 from django.views.generic import TemplateView
@@ -265,6 +266,9 @@ class BatchMediaExtractView(View):
         file_extension = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else None
 
         filename = file.name
+
+        if file_extension and not FileTypeChoices.is_valid_extension(file_extension):
+            raise ValueError(f"Unsupported file format: .{file_extension}")
 
         if "fail" in filename.lower():
             print(f"Forced extract failure for {filename}")
@@ -703,6 +707,129 @@ class TagProcessor:
 class BatchMediaSaveView(View):
     """API endpoint for saving batch media data with fault tolerance"""
 
+    def get_or_create_source_document_media(self, source_doc_url, parent_media, company_bot_id, user_profile,
+                                            company_slug):
+        """
+        Download and save source document as a Media object if not already saved.
+        Returns the Media object for the source document.
+        """
+        # Use a class-level cache to track saved source documents within this batch
+        if not hasattr(self, '_source_doc_cache'):
+            self._source_doc_cache = {}
+
+        # Check if we've already processed this source document
+        if source_doc_url in self._source_doc_cache:
+            return self._source_doc_cache[source_doc_url]
+
+        try:
+            # Download the source document
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+            }
+
+            # Convert Google URLs to downloadable format
+            download_url = source_doc_url
+            if 'docs.google.com/document' in source_doc_url and '/d/' in source_doc_url:
+                doc_id = source_doc_url.split('/d/')[1].split('/')[0]
+                download_url = f"https://docs.google.com/document/d/{doc_id}/export?format=docx"
+            elif 'docs.google.com/spreadsheets' in source_doc_url and '/d/' in source_doc_url:
+                sheet_id = source_doc_url.split('/d/')[1].split('/')[0]
+                download_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=xlsx"
+
+            response = requests.get(download_url, headers=headers, timeout=30, allow_redirects=True)
+            response.raise_for_status()
+
+            # Get extension mapping
+            extension_mapping = FileTypeChoices.get_extension_mapping()
+
+            # Determine filename and media type
+            from urllib.parse import urlparse, unquote
+            parsed_url = urlparse(source_doc_url)
+
+            # Default values
+            parent_name_without_ext = os.path.splitext(parent_media.name)[0]
+            url_hash = hashlib.md5(source_doc_url.encode()).hexdigest()[:6]
+            filename = f"linked_doc_{parent_name_without_ext}_{url_hash}"
+            media_type = FileTypeChoices.TXT.value
+
+            # Check content type first
+            content_type = response.headers.get('content-type', '').lower()
+
+            # Determine media type based on URL or content
+            if 'docs.google.com' in source_doc_url:
+                if 'document' in source_doc_url:
+                    media_type = FileTypeChoices.DOCX.value
+                elif 'spreadsheets' in source_doc_url:
+                    media_type = FileTypeChoices.XLSX.value
+                elif 'presentation' in source_doc_url:
+                    media_type = FileTypeChoices.PPTX.value
+            else:
+                # Try to get from content-disposition
+                content_disposition = response.headers.get('content-disposition')
+                if content_disposition:
+                    import re
+                    matches = re.findall('filename="?([^"]+)"?', content_disposition)
+                    if matches:
+                        filename = matches[0]
+                        # Get extension and determine type
+                        ext = os.path.splitext(filename)[1].lower().strip('.')
+                        media_type = FileTypeChoices.get_mime_from_extension(ext) or FileTypeChoices.TXT.value
+                else:
+                    # Try from URL path
+                    path = parsed_url.path
+                    if path:
+                        filename = os.path.basename(unquote(path))
+                        if filename:
+                            ext = os.path.splitext(filename)[1].lower().strip('.')
+                            if ext:
+                                media_type = FileTypeChoices.get_mime_from_extension(ext) or FileTypeChoices.TXT.value
+
+            # Ensure filename has proper extension
+            extension = extension_mapping.get(media_type, '.txt')
+            if not os.path.splitext(filename)[1]:
+                filename = f"{filename}{extension}"
+            elif os.path.splitext(filename)[0] == '':
+                filename = f"source_document{os.path.splitext(filename)[1]}"
+
+            # Create Media object for source document
+            source_media = Media(
+                name=f"{filename}",
+                media_type=media_type,
+                priority=parent_media.priority,
+                company_bot_id=company_bot_id,
+                parent=parent_media,
+            )
+
+            # Save the file
+            source_media.file.save(filename, ContentFile(response.content), save=False)
+            source_media.save()
+
+            # Add reference to original URL
+            KeyValue.objects.create(
+                media=source_media,
+                key='ORIGINAL_URL',
+                value=source_doc_url
+            )
+
+            KeyValue.objects.create(
+                media=source_media,
+                key='DOCUMENT_TYPE',
+                value='Source Document'
+            )
+
+            # Cache the result
+            self._source_doc_cache[source_doc_url] = source_media
+
+            print(f"Created source document media: {source_media.id} - {source_media.name}")
+            return source_media
+
+        except Exception as e:
+            print(f"Error creating source document media for {source_doc_url}: {e}")
+            # Return None if we couldn't create the source document
+            # The subdocument will fall back to using the main document as parent
+            return None
+
     def wait_for_vector_db_save_safe(self, task_id, timeout=30):
         """Enhanced waiting with better error handling"""
         import time
@@ -1046,6 +1173,25 @@ class BatchMediaSaveView(View):
         """Save a subdocument as a separate Media object linked to parent"""
         try:
             # Get file_url first since we'll need it for the filename
+
+            source_doc_url = subdoc_data.get('source_document')
+            actual_parent = parent_media
+
+            if source_doc_url:
+                # Try to get or create the source document media
+                source_media = self.get_or_create_source_document_media(
+                    source_doc_url,
+                    parent_media,
+                    company_bot_id,
+                    user_profile,
+                    company_slug
+                )
+
+                if source_media:
+                    # Use the source document as the parent instead
+                    actual_parent = source_media
+                    print(f"Using source document {source_media.id} as parent for subdocument")
+
             file_url = subdoc_data.get('file_url')
             if not file_url:
                 raise ValueError(f"No file URL provided for subdocument")
@@ -1123,7 +1269,7 @@ class BatchMediaSaveView(View):
                 priority=parent_media.priority,
                 description=subdoc_data.get('description', subdoc_data.get('summary', '')),
                 company_bot_id=company_bot_id,
-                parent=parent_media,
+                parent=actual_parent,
             )
 
             # Save the file content - use the original filename
@@ -1253,6 +1399,7 @@ class BatchMediaSaveView(View):
 
     def post(self, request):
         try:
+            self._source_doc_cache = {}
             data = json.loads(request.body)
             company_bot_id = data.get('company_bot_id')
             media_items = data.get('items', [])

@@ -100,8 +100,6 @@ class FileTypeChoices(models.TextChoices):
     CSV = 'text/csv', _('CSV')
     XLS = 'application/vnd.ms-excel', _('XLS')
     XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', _('XLSX')
-    PPTX = 'application/vnd.openxmlformats-officedocument.presentationml.presentation', _('PPTX')
-    PPT = 'application/vnd.ms-powerpoint', _('PPT')
 
 
     @classmethod
@@ -115,8 +113,6 @@ class FileTypeChoices(models.TextChoices):
             cls.CSV: '.csv',
             cls.XLS: '.xls',
             cls.XLSX: '.xlsx',
-            cls.PPT: '.ppt',
-            cls.PPTX: '.pptx',
         }
 
     @classmethod
@@ -141,6 +137,18 @@ class FileTypeChoices(models.TextChoices):
         if mime_type:
             return cls(mime_type).label
         return cls.TXT.label
+
+    @classmethod
+    def get_valid_extensions(cls):
+        """Get list of valid file extensions without dots"""
+        extension_mapping = cls.get_extension_mapping()
+        return [ext.lstrip('.') for ext in extension_mapping.values()]
+
+    @classmethod
+    def is_valid_extension(cls, extension):
+        """Check if extension is valid"""
+        ext = extension.lower().lstrip('.')
+        return ext in cls.get_valid_extensions()
 
 
 class VoiceProviderChoices(models.TextChoices):

@@ -1520,6 +1520,22 @@
             min-width: unset;
         }
     }
+    .info-message {
+        background-color: #e3f2fd;
+        border: 1px solid #90caf9;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 20px 0;
+    }
+
+    .info-message p {
+        margin: 0;
+        line-height: 1.5;
+    }
+
+    .info-message strong {
+        font-weight: 600;
+    }
 </style>
 {% endblock %}
 
@@ -1938,6 +1954,7 @@ async function handleFiles(files) {
     }
 
     const filesToUpload = [];
+    const unsupportedFiles = [];
 
     Array.from(files).forEach(file => {
         // Check both MIME type and file extension
@@ -1956,10 +1973,68 @@ async function handleFiles(files) {
                 filesToUpload.push(fileData);
             }
         } else {
-            const supportedTypes = fileTypesData.map(ft => ft.label).join(', ');
-            showStatus(`Invalid file type: ${file.name}. Supported types: ${supportedTypes}`, 'error');
+            unsupportedFiles.push(file.name);
         }
     });
+
+    // Show errors for unsupported files
+    if (unsupportedFiles.length > 0) {
+        const supportedTypes = fileTypesData.map(ft => ft.label).join(', ');
+        const unsupportedList = unsupportedFiles.join(', ');
+        showStatus(
+            `Unsupported file format${unsupportedFiles.length > 1 ? 's' : ''}: ${unsupportedList}. ` +
+            `Supported formats: ${supportedTypes}`,
+            'error'
+        );
+    }
+
+    // Hide the upload area after files are selected
+    const uploadArea = document.getElementById('uploadArea');
+    if (uploadArea) {
+        uploadArea.style.display = 'none';
+    }
+
+    // Show a message about adding more files
+    const uploadSection = document.querySelector('#step1 .upload-area').parentElement;
+    if (!document.getElementById('addMoreFilesMessage')) {
+        const addMoreMessage = document.createElement('div');
+        addMoreMessage.id = 'addMoreFilesMessage';
+        addMoreMessage.className = 'info-message';
+        addMoreMessage.innerHTML = `
+            <div style="text-align: center; color: #666; margin: 20px 0;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#417690" stroke-width="2" style="vertical-align: middle; margin-right: 8px;">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                <strong>Files added successfully!</strong>
+            </div>
+            <div style="text-align: center; margin: 15px 0;">
+                <p style="color: #1976d2; font-size: 14px; margin: 5px 0;">
+                    To add more files, please refresh the page.
+                </p>
+                <p style="color: #d32f2f; font-size: 13px; margin: 5px 0;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d32f2f" stroke-width="2" style="vertical-align: middle; margin-right: 5px;">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    <strong>Warning:</strong> Refreshing the page will lose all currently uploaded files that haven't been saved to the database yet.
+                </p>
+            </div>
+            <div style="text-align: center; margin-top: 15px;">
+                <button onclick="location.reload()" class="btn btn-secondary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 5px;">
+                        <path d="M23 4v6h-6"></path>
+                        <path d="M1 20v-6h6"></path>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                    Refresh Page to Add More Files
+                </button>
+            </div>
+        `;
+        uploadSection.appendChild(addMoreMessage);
+    }
 
     // Update the file list display first to show pending files
     updateFileList();
@@ -1968,6 +2043,15 @@ async function handleFiles(files) {
     if (filesToUpload.length > 0) {
         showLoading(`Uploading ${filesToUpload.length} file(s)...`);
         await processFiles(filesToUpload);
+    } else if (unsupportedFiles.length > 0 && filesToUpload.length === 0) {
+        // If all files were unsupported, show the upload area again
+        if (uploadedFiles.length === 0) {
+            uploadArea.style.display = 'block';
+            const addMoreMessage = document.getElementById('addMoreFilesMessage');
+            if (addMoreMessage) {
+                addMoreMessage.remove();
+            }
+        }
     }
 
     fileInput.value = '';
