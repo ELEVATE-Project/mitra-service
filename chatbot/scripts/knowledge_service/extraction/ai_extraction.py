@@ -12,6 +12,7 @@ import os
 import re
 import base64
 import io
+import time
 import logging
 from urllib.parse import urlparse
 from chatbot.llm_models.llm_script import handle_bedrock_model
@@ -83,8 +84,8 @@ class DocumentExtractor:
     def __init__(self, max_depth: int = MAX_DEPTH, max_subdocs: int = 10,
                  enable_ocr: bool = True, compress_images: bool = True,
                  extract_images: bool = False,
-                 main_doc_max_chars: int = 10000,
-                 subdoc_max_chars: int = 5000,
+                 main_doc_max_chars: int = 3000,
+                 subdoc_max_chars: int = 500,
                  excel_max_rows: int = 50,
                  excel_max_cols: int = 20):
         """Initialize with enhanced features and configurable limits"""
@@ -668,9 +669,38 @@ class DocumentExtractor:
 
         return text
 
+    def _extract_full_excel_content_for_urls(self, content_bytes: bytes) -> str:
+        """Extract full Excel content specifically for URL extraction - no limits"""
+        try:
+            excel_file = pd.ExcelFile(io.BytesIO(content_bytes))
+            sheet_names = excel_file.sheet_names
+
+            all_text_parts = []
+
+            # Process ALL sheets without limits
+            for sheet_name in sheet_names:
+                try:
+                    df = pd.read_excel(excel_file, sheet_name=sheet_name)
+                    if not df.empty:
+                        # Convert entire sheet to string
+                        csv_string = df.to_csv(index=False)
+                        all_text_parts.append(f"\n--- Sheet: '{sheet_name}' ---\n")
+                        all_text_parts.append(csv_string)
+                except Exception as e:
+                    logger.error(f"Error processing sheet '{sheet_name}': {e}")
+                    continue
+
+            return '\n'.join(all_text_parts)
+
+        except Exception as e:
+            logger.error(f"Error extracting full Excel content: {e}")
+            return ""
+
     def extract_text_from_url(self, url: str, is_subdoc: bool = False) -> tuple[
-        str, List[Dict[str, Any]], Any, Dict[str, Any]]:
-        """Extract text content and images from document URL, with error handling"""
+        str, List[Dict[str, Any]], Any, Dict[str, Any], str]:
+        """Extract text content and images from document URL, with error handling
+        Returns: (text, images, media_type, error_info, full_text_for_url_extraction)
+        """
         error_info = None
         max_chars = self.subdoc_max_chars if is_subdoc else self.main_doc_max_chars
 
@@ -681,23 +711,59 @@ class DocumentExtractor:
             if url in self.url_cache:
                 cached_result = self.url_cache[url]
                 if isinstance(cached_result, dict) and 'error' in cached_result:
-                    return "", [], None, cached_result
-                return cached_result, [], None, None
+                    return "", [], None, cached_result, ""
+                return cached_result, [], None, None, cached_result
 
             # Convert Google Drive URLs to downloadable format
             download_url = self.convert_google_drive_url(url)
             if download_url is None:
                 logger.info(f"Skipped non-document URL: {url}")
-                return "", [], None, None
+                return "", [], None, None, ""
             if download_url != url:
                 logger.info(f"Converted to: {download_url}")
 
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1'
             }
 
-            response = requests.get(download_url, headers=headers, timeout=30)
-            response.raise_for_status()
+            response = None
+            max_retries = 2
+            retry_count = 0
+
+            while retry_count < max_retries:
+                try:
+                    response = requests.get(download_url, headers=headers, timeout=60, allow_redirects=True)
+                    response.raise_for_status()
+                    break
+                except requests.exceptions.HTTPError as e:
+                    if e.response.status_code == 500 and retry_count < max_retries - 1:
+                        logger.warning(f"500 error, retrying... (attempt {retry_count + 1})")
+                        retry_count += 1
+                        time.sleep(2)  # Wait before retry
+
+                        # Try alternative URL format for Google Drive
+                        if 'drive.google.com' in download_url and '/d/' in url:
+                            file_id = url.split('/d/')[1].split('/')[0]
+                            # Try alternative format
+                            download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+                            logger.info(f"Trying alternative URL format: {download_url}")
+                    else:
+                        raise
+                except requests.exceptions.Timeout:
+                    if retry_count < max_retries - 1:
+                        logger.warning(f"Timeout, retrying... (attempt {retry_count + 1})")
+                        retry_count += 1
+                        time.sleep(2)
+                    else:
+                        raise
+
+            if not response:
+                raise Exception("Failed to get response after retries")
 
             # Get content type
             content_type = response.headers.get('content-type', '').lower()
@@ -735,10 +801,11 @@ class DocumentExtractor:
                             }
                             logger.error(f"Permission denied for URL {url} - found pattern: {pattern}")
                             self.url_cache[url] = error_info
-                            return "", [], None, error_info
+                            return "", [], None, error_info, ""
 
             text = ""
             images = []
+            full_text_for_url_extraction = ""
 
             # Determine file type
             content_preview = response.content[:10] if response.content else b''
@@ -758,21 +825,29 @@ class DocumentExtractor:
                     'url': url
                 }
                 self.url_cache[url] = error_info
-                return "", [], None, error_info
+                return "", [], None, error_info, ""
 
             if is_pdf:
                 text = self._extract_pdf_text_enhanced(response.content)
+                full_text_for_url_extraction = text  # Store full text
                 images = self._extract_images_from_pdf_pymupdf(response.content)
                 media_type = FileTypeChoices.PDF
                 logger.info(f"Assigned media type as : {media_type}")
             elif is_excel or 'officedocument.spreadsheet' in content_type:
-                # Process Excel with limited extraction
+                # For Excel, extract full content first for URL extraction
+                full_text_for_url_extraction = self._extract_full_excel_content_for_urls(response.content)
                 text = self._extract_limited_excel_content(response.content, max_chars)
                 media_type = FileTypeChoices.XLSX
                 logger.info(f"Extracted limited Excel content: {len(text)} chars")
+                logger.info(f"Full Excel content for URL extraction: {len(full_text_for_url_extraction)} chars")
             elif is_csv:
                 # Process CSV with limited extraction
                 try:
+                    # First, get full CSV for URL extraction
+                    df_full = pd.read_csv(io.BytesIO(response.content))
+                    full_text_for_url_extraction = df_full.to_csv(index=False)
+
+                    # Then get limited version for processing
                     df = pd.read_csv(io.BytesIO(response.content), nrows=self.excel_max_rows)
                     if len(df.columns) > self.excel_max_cols:
                         df = df.iloc[:, :self.excel_max_cols]
@@ -782,6 +857,7 @@ class DocumentExtractor:
                     media_type = FileTypeChoices.CSV
                 except Exception as e:
                     logger.error(f"Error processing CSV: {e}")
+                    full_text_for_url_extraction = response.text
                     text = response.text[:max_chars]
                     media_type = FileTypeChoices.CSV
             elif 'word' in content_type or 'document' in content_type or 'officedocument.wordprocessing' in content_type:
@@ -797,6 +873,7 @@ class DocumentExtractor:
                         if para.text.strip():
                             text_parts.append(para.text)
                     text = '\n'.join(text_parts)
+                    full_text_for_url_extraction = text  # Store full text
                     media_type = FileTypeChoices.DOCX
                     logger.info(f"Assigned media type as : {media_type}")
                 finally:
@@ -815,14 +892,15 @@ class DocumentExtractor:
                         'url': url
                     }
                     self.url_cache[url] = error_info
-                    return "", [], None, error_info
+                    return "", [], None, error_info, ""
 
                 # Try as plain text
                 text = response.text
+                full_text_for_url_extraction = text  # Store full text
                 media_type = FileTypeChoices.TXT
                 logger.info(f"Assigned media type as : {media_type}")
 
-            # Apply character limit for subdocuments
+            # Apply character limit for subdocuments AFTER storing full text
             if is_subdoc and len(text) > max_chars:
                 text = text[:max_chars] + "\n...[Content truncated]"
 
@@ -835,7 +913,7 @@ class DocumentExtractor:
                     'url': url
                 }
                 self.url_cache[url] = error_info
-                return "", [], None, error_info
+                return "", [], None, error_info, ""
 
             if text:
                 self.url_cache[url] = text
@@ -844,7 +922,8 @@ class DocumentExtractor:
                 f"For url: {url}, Extracted {len(text)} characters and {len(images)} "
                 f"images and file type as {media_type}"
             )
-            return text, images, media_type, None
+
+            return text, images, media_type, None, full_text_for_url_extraction
 
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 403:
@@ -870,7 +949,7 @@ class DocumentExtractor:
                 }
             logger.error(f"HTTP error extracting from URL {url}: {e}")
             self.url_cache[url] = error_info
-            return "", [], None, error_info
+            return "", [], None, error_info, ""
 
         except requests.exceptions.Timeout:
             error_info = {
@@ -880,7 +959,7 @@ class DocumentExtractor:
             }
             logger.error(f"Timeout extracting from URL {url}")
             self.url_cache[url] = error_info
-            return "", [], None, error_info
+            return "", [], None, error_info, ""
 
         except Exception as e:
             error_info = {
@@ -890,7 +969,7 @@ class DocumentExtractor:
             }
             logger.error(f"Failed to extract from URL {url}: {e}")
             self.url_cache[url] = error_info
-            return "", [], None, error_info
+            return "", [], None, error_info, ""
 
     def extract_text_from_file(self, file, file_extension: str) -> tuple[str, List[Dict[str, Any]]]:
         """Extract text content and images from various file types"""
@@ -1309,7 +1388,7 @@ class DocumentExtractor:
                 processed_urls.add(normalized_url)
 
                 # Extract content from this linked document
-                linked_text, linked_images, linked_media_type, error_info = self.extract_text_from_url(
+                linked_text, linked_images, linked_media_type, error_info, full_text_for_urls = self.extract_text_from_url(
                     main_doc_url, is_subdoc=True
                 )
 
@@ -1322,8 +1401,8 @@ class DocumentExtractor:
                     continue
 
                 if linked_text and len(linked_text.strip()) > 10:
-                    # Extract URLs from within this linked document
-                    links_in_subdoc = self.extract_urls_from_text(linked_text)
+                    # Extract URLs from the FULL text, not the truncated version
+                    links_in_subdoc = self.extract_urls_from_text(full_text_for_urls)
                     logger.info(f"{'  ' * depth}Found {len(links_in_subdoc)} links inside {main_doc_url}")
 
                     # Filter for document URLs
@@ -1349,7 +1428,7 @@ class DocumentExtractor:
                         subdoc_count += 1
 
                         # Extract content from subdocument URL
-                        sub_text, sub_images, sub_media_type, sub_error_info = self.extract_text_from_url(
+                        sub_text, sub_images, sub_media_type, sub_error_info, _ = self.extract_text_from_url(
                             sub_url, is_subdoc=True
                         )
 
@@ -1483,8 +1562,9 @@ class DocumentExtractor:
     def process_document_from_url(self, url: str, company_bot=None) -> Dict[str, Any]:
         """Process document directly from URL"""
         try:
-            text_content, extracted_images, extracted_media_type, error_info = self.extract_text_from_url(url,
-                                                                                                          is_subdoc=False)
+            text_content, extracted_images, extracted_media_type, error_info, _ = self.extract_text_from_url(
+                url, is_subdoc=False
+            )
 
             if error_info:
                 return {

@@ -1446,6 +1446,58 @@
     .subdoc-toggle-arrow.expanded {
         transform: rotate(90deg);
     }
+    .failed-links-section {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #fff5f5;
+        border: 1px solid #ffcdd2;
+        border-radius: 8px;
+    }
+
+    .failed-links-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+
+    .failed-links-title {
+        font-size: 16px;
+        font-weight: 600;
+        color: #d32f2f;
+    }
+
+    .failed-link-item {
+        background-color: white;
+        padding: 10px;
+        margin-bottom: 8px;
+        border-radius: 4px;
+        border: 1px solid #ffcdd2;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .failed-link-info {
+        flex: 1;
+    }
+
+    .failed-link-url {
+        font-weight: 500;
+        color: #333;
+        word-break: break-all;
+    }
+
+    .failed-link-error {
+        color: #d32f2f;
+        font-size: 12px;
+        margin-top: 4px;
+    }
+
+    .failed-link-actions {
+        display: flex;
+        gap: 8px;
+    }
 </style>
 {% endblock %}
 
@@ -1938,6 +1990,7 @@ async function processFiles(files) {
 
     isExtracting = false;
     updateFileList();
+    updateFailedLinks();
     updateButtonStates();
 
     // Ensure loading overlay is hidden (this may be redundant now but good as safety)
@@ -1988,6 +2041,83 @@ function updateFileList() {
 
     updateButtonStates();
     updateExtractionProgress();
+}
+
+function updateFailedLinks() {
+    // Find all files with failed links
+    let allFailedLinks = [];
+
+    extractedData.forEach((item, fileIndex) => {
+        if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.failed_links) {
+            item.data.failed_links.forEach(failedLink => {
+                allFailedLinks.push({
+                    ...failedLink,
+                    parentFileIndex: fileIndex,
+                    parentFileName: item.filename
+                });
+            });
+        }
+    });
+
+    const fileSections = document.getElementById('fileSections');
+
+    // Remove existing failed links section
+    const existingSection = document.getElementById('failedLinksSection');
+    if (existingSection) {
+        existingSection.remove();
+    }
+
+    if (allFailedLinks.length > 0) {
+        const failedLinksSection = document.createElement('div');
+        failedLinksSection.id = 'failedLinksSection';
+        failedLinksSection.className = 'failed-links-section';
+
+        failedLinksSection.innerHTML = `
+            <div class="failed-links-header">
+                <div class="failed-links-title">
+                    Failed Link Extractions (${allFailedLinks.length})
+                </div>
+            </div>
+            <div class="failed-links-list">
+                ${allFailedLinks.map((failed, index) => `
+                    <div class="failed-link-item" id="failed-link-${index}">
+                        <div class="failed-link-info">
+                            <div class="failed-link-url">${failed.url[0]}</div>
+                            <div class="failed-link-error">${failed.error.error}</div>
+                            <div style="font-size: 11px; color: #666; margin-top: 2px;">
+                                From: ${failed.parentFileName}
+                            </div>
+                        </div>
+                        <div class="failed-link-actions">
+                            <button class="retry-btn" onclick="retryFailedLink(${failed.parentFileIndex}, '${failed.url[0]}')">Retry</button>
+                            <button class="skip-btn" onclick="removeFailedLink(${failed.parentFileIndex}, '${failed.url[0]}')">Remove</button>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+
+        fileSections.appendChild(failedLinksSection);
+    }
+}
+
+// Add retry function for failed links
+async function retryFailedLink(parentFileIndex, url) {
+    showStatus(`Retrying extraction for ${url}...`, 'info');
+
+    // Here you would implement the retry logic
+    // This is a placeholder - you'd need to call your backend to retry
+    showStatus('Retry functionality not yet implemented', 'warning');
+}
+
+// Add remove function for failed links
+function removeFailedLink(parentFileIndex, url) {
+    const item = extractedData[parentFileIndex];
+    if (item && item.data && item.data.failed_links) {
+        item.data.failed_links = item.data.failed_links.filter(link => link.url[0] !== url);
+        updateFailedLinks();
+        showStatus(`Removed failed link: ${url}`, 'success');
+    }
 }
 
 // New function to create individual file items
@@ -2400,6 +2530,8 @@ async function retryExtraction(index) {
         uploadedFiles[index].errorTimestamp = new Date().toISOString();
         showStatus(`Upload failed for ${fileData.name}: ${error.message}`, 'error');
         updateFileList();
+    } finally {
+        updateFailedLinks();
     }
 }
 
@@ -2589,6 +2721,9 @@ async function waitForAllTasksToComplete(taskIds) {
                                     if (enhanced.images && Array.isArray(enhanced.images)) {
                                         item.data.images = enhanced.images;
                                     }
+                                    if (enhanced.failed_links && Array.isArray(enhanced.failed_links)) {
+                                        item.data.failed_links = enhanced.failed_links;
+                                    }
                                 }
 
                                 console.log(`AI extraction completed for ${item.filename}:`, aiResult);
@@ -2604,6 +2739,8 @@ async function waitForAllTasksToComplete(taskIds) {
                             }
                         }
                     });
+
+                    updateFailedLinks();
 
                     // Update loading message with progress
                     showLoading(`AI extraction in progress... ${completedTasks}/${totalTasks} completed`);
@@ -2808,13 +2945,18 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
     }
 
     const depth = path.split('_').length - 1;
-    const title = subdoc.title || `Subdocument Level ${depth}`;
+    let title = subdoc.title || `Subdocument Level ${depth}`;
+
+    // Add special handling for link subdocuments
+    if (subdoc.document_type === 'linked_document' && subdoc.url && subdoc.url.length > 0) {
+        title = `📎 ${subdoc.url[0]}`;
+    }
 
     return `
         <div class="subdocument-item" id="${subdocId}" style="margin-left: ${(depth - 1) * 20}px;">
             <div class="subdocument-header" onclick="toggleSubdocumentByPath('${path}')">
                 <div class="subdocument-title">
-                    ${title}
+                    ${subdoc.document_type === 'linked_document' ? '🔗 ' : ''}${title}
                 </div>
                 <div class="subdocument-controls">
                     <button class="remove-subdoc-btn" onclick="event.stopPropagation(); removeSubdocumentByPath('${path}')">Remove</button>
@@ -2824,6 +2966,25 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
                 </div>
             </div>
             <div class="subdocument-content">
+                ${subdoc.document_type === 'linked_document' && subdoc.url ? `
+                    <div class="field-group">
+                        <label>Document URL</label>
+                        <div style="padding: 10px; background-color: #f5f5f5; border-radius: 4px; word-break: break-all;">
+                            <a href="${subdoc.url[0]}" target="_blank" style="color: #417690; text-decoration: none;">
+                                ${subdoc.url[0]}
+                            </a>
+                        </div>
+                    </div>
+                    ${subdoc.source_document ? `
+                        <div class="field-group">
+                            <label>Found In</label>
+                            <div style="padding: 10px; background-color: #f5f5f5; border-radius: 4px;">
+                                ${subdoc.source_document}
+                            </div>
+                        </div>
+                    ` : ''}
+                ` : ''}
+
                 <div class="field-group">
                     <label>Resource Type</label>
                     <select id="mediaType_${path}" onchange="saveFieldByPath('${path}', 'media_type', this.value)">

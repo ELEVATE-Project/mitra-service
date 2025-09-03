@@ -308,7 +308,8 @@ class BatchMediaExtractView(View):
             'auto_tags_ready': False,
             'key_values': [],
             'subdocument': [],
-            'images': []
+            'images': [],
+            'failed_links': []  # Add this
         }
 
     def get_media_type(self, filename):
@@ -563,6 +564,7 @@ class BatchMediaTaskStatusView(View):
                 'media_type': subdoc_data.get(
                     'media_type', get_media_type_from_ai_data(subdoc_data.get('document_type', ''))
                 ),
+                'error': subdoc_data.get('error')  # Include error info
             }
 
             # Recursively process nested subdocuments
@@ -600,6 +602,14 @@ class BatchMediaTaskStatusView(View):
                 if processed_subdoc:
                     subdocuments.append(processed_subdoc)
 
+        # Process failed links
+        failed_links = []
+        if ai_data.get('failed_links') and isinstance(ai_data['failed_links'], list):
+            for failed in ai_data['failed_links']:
+                processed_failed = process_subdocument(failed)
+                if processed_failed:
+                    failed_links.append(processed_failed)
+
         # Process images
         images = ai_data.get('images', []) if isinstance(ai_data.get('images'), list) else []
 
@@ -610,11 +620,11 @@ class BatchMediaTaskStatusView(View):
                 'extracted_text': main_data['extracted_text'],
                 'enhanced_key_values': enhanced_key_values,
                 'subdocument': subdocuments,
+                'failed_links': failed_links,  # Add failed links
                 'images': images,
                 'structured_content': ai_data.get('structured_content', {})
             }
         }
-
 
 # Helper class for shared tag processing logic
 class TagProcessor:
@@ -1026,8 +1036,13 @@ class BatchMediaSaveView(View):
     def save_subdocument(self, subdoc_data, parent_media, company_bot_id, user_profile, company_slug):
         """Save a subdocument as a separate Media object linked to parent"""
         try:
-            # Use the subdocument's actual title, not a generic name
-            subdoc_title = subdoc_data.get('title', f'Subdocument of {parent_media.name}')
+            # Use URL as title if it's a link-based subdocument
+            if subdoc_data.get('document_type') == 'linked_document' and subdoc_data.get('url'):
+                subdoc_title = subdoc_data.get('url')[0] if subdoc_data.get('url') else subdoc_data.get('title',
+                                                                                                        f'Subdocument of {parent_media.name}')
+            else:
+                subdoc_title = subdoc_data.get('title', f'Subdocument of {parent_media.name}')
+
             print(f"Saving subdocument with title: {subdoc_title}")
 
             # Check for forced failure
@@ -1046,8 +1061,25 @@ class BatchMediaSaveView(View):
                 parent=parent_media,
             )
 
-            # Save without vector DB for subdocuments
+            # Save the media object
             subdoc_media.save()
+
+            # For link-based subdocuments, store the URL in a key-value pair
+            if subdoc_data.get('document_type') == 'linked_document' and subdoc_data.get('url'):
+                # Add URL as a key-value pair
+                KeyValue.objects.create(
+                    media=subdoc_media,
+                    key='SOURCE_URL',
+                    value=subdoc_data.get('url')[0] if subdoc_data.get('url') else ''
+                )
+
+                # Add source document info
+                if subdoc_data.get('source_document'):
+                    KeyValue.objects.create(
+                        media=subdoc_media,
+                        key='FOUND_IN_DOCUMENT',
+                        value=subdoc_data.get('source_document')
+                    )
 
             # Process tags using shared logic
             company = user_profile.company if user_profile else None
@@ -1106,7 +1138,7 @@ class BatchMediaSaveView(View):
                 'error': str(e),
                 'title': subdoc_data.get('title', 'Unknown subdocument')
             }
-
+        
     def save_media_image(self, img_data, media, index):
         """Save image associated with media"""
         try:
