@@ -1339,15 +1339,30 @@ class DocumentExtractor:
 
                     # Validate and enhance result
                     result = self._validate_and_enhance_result(extracted_data, complete_content)
+
+                    if not result.get('title') or not result['title'].strip():
+                        error_msg = f"LLM failed to extract title for {'subdocument' if is_subdoc else 'main document'}"
+                        logger.error(error_msg)
+                        if is_subdoc:
+                            result['extraction_error'] = error_msg
+                            result['title_extraction_failed'] = True
+                        else:
+                            # For main document, raise exception to stop processing
+                            raise ValueError(error_msg)
+
                     logger.info("Bedrock extraction successful")
                     return result
 
             default_response['exact_content'] = complete_content
+            if not is_subdoc:
+                raise ValueError("LLM failed to extract any data from main document")
             return default_response
 
         except Exception as e:
             logger.error(f"Bedrock extraction failed: {str(e)}")
             default_response['exact_content'] = document_text
+            if not is_subdoc and "title" in str(e).lower():
+                raise
             return default_response
 
     def _normalize_url_for_tracking(self, url: str) -> str:
@@ -1484,6 +1499,7 @@ class DocumentExtractor:
                         sub_text, sub_images, sub_media_type, sub_error_info, _ = self.extract_text_from_url(
                             sub_url, is_subdoc=True
                         )
+                        logger.info(f"for url: {sub_url}, extracted sub_text is: {sub_text}")
 
                         if sub_error_info:
                             logger.info(f"{'  ' * (depth + 1)}Subdocument failed: {sub_error_info}")
@@ -1527,6 +1543,19 @@ class DocumentExtractor:
                                     is_subdoc=True
                                 )
 
+                                if subdoc_result.get('title_extraction_failed'):
+                                    logger.error(f"Title extraction failed for subdocument: {sub_url}")
+                                    failed_links.append({
+                                        "file_url": downloadable_url,
+                                        "error": {
+                                            'error': 'LLM failed to extract title from subdocument',
+                                            'error_type': 'title_extraction_failed',
+                                            'url': sub_url
+                                        },
+                                        "source_document": main_doc_url
+                                    })
+                                    continue
+
                                 # Create subdocument entry (without "url" field)
                                 subdoc_entry = {
                                     "title": subdoc_result.get(
@@ -1558,7 +1587,7 @@ class DocumentExtractor:
                                     "source_document": main_doc_url
                                 })
                 else:
-                    logger.warning(f"Linked document {main_doc_url} has insufficient content")
+                    logger.warning(f"Linked document {main_doc_url} has insufficient content: {linked_text}")
                     failed_links.append({
                         "file_url": self.convert_google_drive_url(main_doc_url),
                         "error": {
@@ -1588,6 +1617,10 @@ class DocumentExtractor:
                         f"{'  ' * depth}  - {failed['file_url']}: {failed['error'].get('error', 'Unknown error')}")
 
             return main_result
+
+        except ValueError as ve:
+            logger.error(f"Main document processing failed: {str(ve)}")
+            raise
 
         except Exception as e:
             logger.error(f"Error processing document: {str(e)}")

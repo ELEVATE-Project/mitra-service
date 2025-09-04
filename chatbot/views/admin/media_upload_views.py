@@ -604,6 +604,43 @@ class BatchMediaTaskStatusView(View):
                 'error': str(e)
             }, status=500)
 
+    def validate_tags_against_database(self, tags, company=None):
+        """
+        Filter tags to only include those that exist in the database.
+        """
+        if not tags:
+            return []
+
+        # Extract tag texts
+        tag_texts = []
+        for tag in tags:
+            if isinstance(tag, dict) and 'text' in tag:
+                tag_texts.append(tag['text'])
+            elif isinstance(tag, str):
+                tag_texts.append(tag)
+
+        # Query database for existing tags
+        query = Tag.objects.filter(
+            name__in=tag_texts,
+            source_type__in=[TagSourceChoices.MANUAL, TagSourceChoices.AI_EXTRACTED],
+            status=TagChoices.APPROVED
+        )
+
+        if company:
+            query = query.filter(company=company)
+
+        # Get set of valid tag names
+        valid_tag_names = set(query.values_list('name', flat=True))
+
+        # Filter original tags list
+        validated_tags = []
+        for tag in tags:
+            tag_text = tag.get('text') if isinstance(tag, dict) else tag
+            if tag_text in valid_tag_names:
+                validated_tags.append(tag)
+
+        return validated_tags
+
     def process_ai_extracted_data(self, ai_data):
         """Process AI extracted data into format expected by frontend"""
         if not ai_data or not isinstance(ai_data, dict):
@@ -612,13 +649,15 @@ class BatchMediaTaskStatusView(View):
                 'enhanced_data': None
             }
 
-        # Get user's company name from request context
+        # Get user's company
+        company = None
         company_name = None
         if hasattr(self, 'request') and self.request.user.is_authenticated:
             try:
                 user_profile = Profile.objects.get(email=self.request.user.email)
                 if user_profile.company:
-                    company_name = user_profile.company.name
+                    company = user_profile.company
+                    company_name = company.name
             except Profile.DoesNotExist:
                 pass
 
@@ -630,6 +669,13 @@ class BatchMediaTaskStatusView(View):
             # Set organization to company name if empty
             if not subdoc_data.get('organization'):
                 subdoc_data['organization'] = company_name or ''
+
+            raw_tags = extract_tag_texts(subdoc_data.get('tags', []))
+
+            tag_dicts = [{'text': tag, 'source': 'extracted'} for tag in raw_tags]
+            validated_tags = self.validate_tags_against_database(tag_dicts, company)
+
+            validated_tag_texts = [tag['text'] for tag in validated_tags]
 
             processed = {
                 'title': subdoc_data.get('title', ''),
@@ -643,7 +689,7 @@ class BatchMediaTaskStatusView(View):
                 'url': subdoc_data.get('url', []),
                 'file_url': subdoc_data.get('file_url', ''),
                 'source_document': subdoc_data.get('source_document', ''),
-                'auto_tags': extract_tag_texts(subdoc_data.get('tags', [])),
+                'auto_tags': validated_tag_texts,
                 'manual_tags': [],
                 'key_values': build_key_values(subdoc_data),
                 'images': subdoc_data.get('images', []),
@@ -676,6 +722,7 @@ class BatchMediaTaskStatusView(View):
 
         # Process main tags
         auto_tags = process_tags(ai_data.get('tags', []))
+        auto_tags = self.validate_tags_against_database(auto_tags, company)
 
         # Build enhanced key-values for main document
         enhanced_key_values = build_key_values(main_data)
@@ -780,6 +827,28 @@ class TagProcessor:
 @method_decorator(staff_member_required, name='dispatch')
 class BatchMediaSaveView(View):
     """API endpoint for saving batch media data with fault tolerance"""
+
+    def clean_text_to_title_case(self, text):
+        """Convert text to title case, handling common edge cases"""
+        if not text:
+            return text
+
+        # Convert to string and strip whitespace
+        text = str(text).strip()
+
+        # Handle acronyms and special cases
+        words = text.split()
+        cleaned_words = []
+
+        for word in words:
+            # Keep acronyms (all caps) as is
+            if word.isupper() and len(word) > 1:
+                cleaned_words.append(word)
+            else:
+                # Convert to title case
+                cleaned_words.append(word.title())
+
+        return ' '.join(cleaned_words)
 
     def get_or_create_source_document_media(self, source_doc_url, parent_media, company_bot_id, user_profile,
                                             company_slug):
@@ -1087,6 +1156,8 @@ class BatchMediaSaveView(View):
                         # If organization is empty, use company name
                         if not org_value and company_name:
                             org_value = company_name
+
+                        org_value = self.clean_text_to_title_case(org_value)
                         KeyValue.objects.create(
                             media=media,
                             key='ORGANIZATION',
@@ -1101,10 +1172,11 @@ class BatchMediaSaveView(View):
 
                 # If no organization key-value was found, add company name
                 if not org_found and company_name:
+                    org_value = self.clean_text_to_title_case(company_name)
                     KeyValue.objects.create(
                         media=media,
                         key='ORGANIZATION',
-                        value=company_name
+                        value=org_value
                     )
 
             except Exception as tag_kv_error:
@@ -1417,6 +1489,7 @@ class BatchMediaSaveView(View):
             if not subdoc_org and user_profile and user_profile.company:
                 subdoc_org = user_profile.company.name
 
+            subdoc_org = self.clean_text_to_title_case(subdoc_org)
             print(f"Subdocument organization resolved to: {subdoc_org}")
 
             # Create subdocument media
@@ -1478,13 +1551,22 @@ class BatchMediaSaveView(View):
             org_added = False
             for kv in subdoc_data.get('key_values', []):
                 if kv['key'] == 'ORGANIZATION':
+                    org_value = self.clean_text_to_title_case(kv['value'] or subdoc_org or '')
                     # Use the value from subdoc data, not the user's company
                     KeyValue.objects.create(
                         media=subdoc_media,
                         key='ORGANIZATION',
-                        value=kv['value'] or subdoc_org or ''
+                        value=org_value
                     )
                     org_added = True
+                elif kv['key'] == 'DOCUMENT TYPE':
+                    # Apply title case cleanup for document type
+                    doc_type_value = self.clean_text_to_title_case(kv['value'])
+                    KeyValue.objects.create(
+                        media=subdoc_media,
+                        key='DOCUMENT TYPE',
+                        value=doc_type_value
+                    )
                 else:
                     KeyValue.objects.create(
                         media=subdoc_media,
@@ -1494,10 +1576,11 @@ class BatchMediaSaveView(View):
 
             # Add organization if not already added
             if not org_added:
+                org_value = self.clean_text_to_title_case(subdoc_org or '')
                 KeyValue.objects.create(
                     media=subdoc_media,
                     key='ORGANIZATION',
-                    value=subdoc_org or ''
+                    value=org_value
                 )
 
             # Store the original file URL for reference
