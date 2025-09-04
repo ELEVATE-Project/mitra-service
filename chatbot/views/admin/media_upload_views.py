@@ -264,7 +264,6 @@ class BatchMediaExtractView(View):
     def extract_file_data(self, file, company_bot, file_index, request=None):
         """Extract data from file and start async AI extraction"""
         file_extension = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else None
-
         filename = file.name
 
         if file_extension and not FileTypeChoices.is_valid_extension(file_extension):
@@ -272,7 +271,7 @@ class BatchMediaExtractView(View):
 
         if "fail" in filename.lower():
             print(f"Forced extract failure for {filename}")
-            raise ValueError(f"Forced extact failure for {filename}")
+            raise ValueError(f"Forced extract failure for {filename}")
 
         # Save file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as tmp:
@@ -282,10 +281,13 @@ class BatchMediaExtractView(View):
 
         user_profile = None
         company = None
+        company_name = ''
         if request and request.user.is_authenticated:
             try:
                 user_profile = Profile.objects.get(email=request.user.email)
                 company = user_profile.company
+                if company:
+                    company_name = company.name
             except Profile.DoesNotExist:
                 pass
 
@@ -320,7 +322,9 @@ class BatchMediaExtractView(View):
             'key_values': [],
             'subdocument': [],
             'images': [],
-            'failed_links': []  # Add this
+            'failed_links': [],
+            'organization': company_name,
+            'company_name': company_name
         }
 
     def get_media_type(self, filename):
@@ -484,8 +488,9 @@ def build_key_values(data_dict):
 
     if data_dict.get('title'):
         key_values.append({'key': 'TITLE', 'value': data_dict['title']})
-    if data_dict.get('organization'):
-        key_values.append({'key': 'ORGANIZATION', 'value': data_dict['organization']})
+    organization_value = data_dict.get('organization', '')
+    key_values.append({'key': 'ORGANIZATION', 'value': organization_value})
+
     if data_dict.get('document_type'):
         key_values.append({'key': 'DOCUMENT TYPE', 'value': data_dict['document_type']})
     if data_dict.get('key_entities') and len(data_dict['key_entities']) > 0:
@@ -607,10 +612,24 @@ class BatchMediaTaskStatusView(View):
                 'enhanced_data': None
             }
 
+        # Get user's company name from request context
+        company_name = None
+        if hasattr(self, 'request') and self.request.user.is_authenticated:
+            try:
+                user_profile = Profile.objects.get(email=self.request.user.email)
+                if user_profile.company:
+                    company_name = user_profile.company.name
+            except Profile.DoesNotExist:
+                pass
+
         def process_subdocument(subdoc_data):
             """Recursively process subdocument data"""
             if not isinstance(subdoc_data, dict):
                 return None
+
+            # Set organization to company name if empty
+            if not subdoc_data.get('organization'):
+                subdoc_data['organization'] = company_name or ''
 
             processed = {
                 'title': subdoc_data.get('title', ''),
@@ -618,7 +637,7 @@ class BatchMediaTaskStatusView(View):
                 'description': subdoc_data.get('summary', ''),
                 'exact_content': subdoc_data.get('exact_content', ''),
                 'extracted_text': subdoc_data.get('exact_content', ''),
-                'organization': subdoc_data.get('organization', ''),
+                'organization': subdoc_data.get('organization', company_name or ''),
                 'document_type': subdoc_data.get('document_type', ''),
                 'key_entities': subdoc_data.get('key_entities', []),
                 'url': subdoc_data.get('url', []),
@@ -631,7 +650,7 @@ class BatchMediaTaskStatusView(View):
                 'media_type': subdoc_data.get(
                     'media_type', get_media_type_from_ai_data(subdoc_data.get('document_type', ''))
                 ),
-                'error': subdoc_data.get('error')  # Include error info
+                'error': subdoc_data.get('error')
             }
 
             # Recursively process nested subdocuments
@@ -649,7 +668,7 @@ class BatchMediaTaskStatusView(View):
             'title': ai_data.get('title', ''),
             'summary': ai_data.get('summary', ''),
             'extracted_text': ai_data.get('exact_content', '') or ai_data.get('summary', ''),
-            'organization': ai_data.get('organization', ''),
+            'organization': ai_data.get('organization', '') or company_name or '',
             'document_type': ai_data.get('document_type', ''),
             'key_entities': ai_data.get('key_entities', []),
             'structured_content': ai_data.get('structured_content', {})
@@ -685,9 +704,10 @@ class BatchMediaTaskStatusView(View):
             'enhanced_data': {
                 'description': main_data['summary'],
                 'extracted_text': main_data['extracted_text'],
+                'organization': main_data['organization'],
                 'enhanced_key_values': enhanced_key_values,
                 'subdocument': subdocuments,
-                'failed_links': failed_links,  # Add failed links
+                'failed_links': failed_links,
                 'images': images,
                 'structured_content': ai_data.get('structured_content', {})
             }
@@ -948,6 +968,8 @@ class BatchMediaSaveView(View):
         try:
             company_bot = CompanyBot.objects.get(id=company_bot_id)
             company = user_profile.company if user_profile else None
+            company_name = company.name if company else None
+
             if company:
                 company_slug = company.slug
             else:
@@ -1054,12 +1076,35 @@ class BatchMediaSaveView(View):
                 if all_tags:
                     media.tags.set(all_tags)
 
-                # Key-value pairs
+                # Key-value pairs - ensure organization is saved
+                org_value = None
+                org_found = False
+
                 for kv in item_data.get('key_values', []):
+                    if kv['key'] == 'ORGANIZATION':
+                        org_found = True
+                        org_value = kv['value']
+                        # If organization is empty, use company name
+                        if not org_value and company_name:
+                            org_value = company_name
+                        KeyValue.objects.create(
+                            media=media,
+                            key='ORGANIZATION',
+                            value=org_value or ''
+                        )
+                    else:
+                        KeyValue.objects.create(
+                            media=media,
+                            key=kv['key'],
+                            value=kv['value']
+                        )
+
+                # If no organization key-value was found, add company name
+                if not org_found and company_name:
                     KeyValue.objects.create(
                         media=media,
-                        key=kv['key'],
-                        value=kv['value']
+                        key='ORGANIZATION',
+                        value=company_name
                     )
 
             except Exception as tag_kv_error:
@@ -1352,6 +1397,28 @@ class BatchMediaSaveView(View):
             if not file_content:
                 raise ValueError(f"Downloaded file is empty for URL: {file_url}")
 
+            # IMPORTANT FIX: Get organization from subdocument data FIRST
+            subdoc_org = subdoc_data.get('organization', '')
+
+            # If subdocument has no organization, try to get from key-values
+            if not subdoc_org:
+                for kv in subdoc_data.get('key_values', []):
+                    if kv.get('key') == 'ORGANIZATION' and kv.get('value'):
+                        subdoc_org = kv.get('value')
+                        break
+
+            # If still no organization, get from parent media's key-values
+            if not subdoc_org:
+                parent_kvs = KeyValue.objects.filter(media=parent_media, key='ORGANIZATION')
+                if parent_kvs.exists():
+                    subdoc_org = parent_kvs.first().value
+
+            # Only use company name as last resort
+            if not subdoc_org and user_profile and user_profile.company:
+                subdoc_org = user_profile.company.name
+
+            print(f"Subdocument organization resolved to: {subdoc_org}")
+
             # Create subdocument media
             subdoc_media = Media(
                 name=subdoc_title,
@@ -1374,6 +1441,65 @@ class BatchMediaSaveView(View):
             # Save the media object
             subdoc_media.save()
 
+            # Process tags if provided
+            company = user_profile.company if user_profile else None
+            if company:
+                all_tags = []
+
+                # Process manual tags
+                manual_tags = subdoc_data.get('manual_tags', [])
+                if manual_tags:
+                    manual_tag_objs = TagProcessor.process_tags_for_media(
+                        manual_tags,
+                        'manual',
+                        user_profile,
+                        company,
+                        is_manual=True
+                    )
+                    all_tags.extend(manual_tag_objs)
+
+                # Process auto tags
+                auto_tags = subdoc_data.get('auto_tags', [])
+                if auto_tags:
+                    auto_tag_objs = TagProcessor.process_tags_for_media(
+                        auto_tags,
+                        'extracted',
+                        user_profile,
+                        company,
+                        is_manual=False
+                    )
+                    all_tags.extend(auto_tag_objs)
+
+                # Set tags if any
+                if all_tags:
+                    subdoc_media.tags.set(all_tags)
+
+            # Key-value pairs - handle organization specially
+            org_added = False
+            for kv in subdoc_data.get('key_values', []):
+                if kv['key'] == 'ORGANIZATION':
+                    # Use the value from subdoc data, not the user's company
+                    KeyValue.objects.create(
+                        media=subdoc_media,
+                        key='ORGANIZATION',
+                        value=kv['value'] or subdoc_org or ''
+                    )
+                    org_added = True
+                else:
+                    KeyValue.objects.create(
+                        media=subdoc_media,
+                        key=kv['key'],
+                        value=kv['value']
+                    )
+
+            # Add organization if not already added
+            if not org_added:
+                KeyValue.objects.create(
+                    media=subdoc_media,
+                    key='ORGANIZATION',
+                    value=subdoc_org or ''
+                )
+
             # Store the original file URL for reference
             KeyValue.objects.create(
                 media=subdoc_media,
@@ -1389,16 +1515,7 @@ class BatchMediaSaveView(View):
                     value=subdoc_data.get('source_document')
                 )
 
-            key_values_to_save = subdoc_data.get('key_values', [])
-            print(f"About to save {len(key_values_to_save)} key-values for subdoc: {subdoc_title}")
-
-            # Key-value pairs
-            for kv in subdoc_data.get('key_values', []):
-                KeyValue.objects.create(
-                    media=subdoc_media,
-                    key=kv['key'],
-                    value=kv['value']
-                )
+            print(f"Saved {len(subdoc_data.get('key_values', []))} key-values for subdoc: {subdoc_title}")
 
             # Process subdocument images
             if subdoc_data.get('images'):

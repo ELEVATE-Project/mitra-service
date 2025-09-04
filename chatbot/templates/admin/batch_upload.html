@@ -1829,12 +1829,21 @@ let isExtracting = false;
 let sessionId = null;
 let isWaitingForAI = false;
 let lastSaveTimer = null;
-let expandedSubdocument = null; // Track which subdocument is expanded
+let expandedSubdocument = null;
+let userCompanyName = '';
 
 // Media types and priorities from Django
 const mediaTypes = {{ media_types|safe }};
 const priorities = {{ priorities|safe }};
 const BOT_PROFILE_ID = 1;
+
+{% if user.is_authenticated %}
+    {% with user_profile=user.profile %}
+        {% if user_profile and user_profile.company %}
+            userCompanyName = "{{ user_profile.company.name|escapejs }}";
+        {% endif %}
+    {% endwith %}
+{% endif %}
 
 // File status constants
 const FILE_STATUS = {
@@ -2606,7 +2615,6 @@ async function retryAllFailed() {
     }
 }
 
-// Retry upload for single file
 async function retryExtraction(index) {
     const fileData = uploadedFiles[index];
 
@@ -2645,6 +2653,20 @@ async function retryExtraction(index) {
             uploadedFiles[index].status = FILE_STATUS.SUCCESS;
             uploadedFiles[index].error = null;
             uploadedFiles[index].errorTimestamp = null;
+
+            // Ensure organization is set
+            if (!result.data.organization) {
+                result.data.organization = userCompanyName || '';
+            }
+            if (!result.data.key_values) {
+                result.data.key_values = [];
+            }
+            if (!result.data.key_values.some(kv => kv.key === 'ORGANIZATION')) {
+                result.data.key_values.push({
+                    key: 'ORGANIZATION',
+                    value: result.data.organization
+                });
+            }
 
             // Update or add to extracted data
             const existingIndex = extractedData.findIndex(item => item && item.file_index === index);
@@ -2822,12 +2844,44 @@ async function extractDataFromFiles(files) {
     return extractedItems;
 }
 
+function ensureSubdocumentOrganization(subdoc, parentOrg) {
+    // ALWAYS use parent organization, ignore subdoc's extracted organization
+    subdoc.organization = parentOrg || userCompanyName || '';
+
+    // Update or add organization in key-values
+    if (!subdoc.key_values) {
+        subdoc.key_values = [];
+    }
+
+    // Find existing ORGANIZATION key-value
+    let orgKvIndex = subdoc.key_values.findIndex(kv => kv.key === 'ORGANIZATION');
+
+    if (orgKvIndex >= 0) {
+        // Update existing organization to parent's value
+        subdoc.key_values[orgKvIndex].value = subdoc.organization;
+    } else {
+        // Add organization key-value
+        subdoc.key_values.unshift({
+            key: 'ORGANIZATION',
+            value: subdoc.organization
+        });
+    }
+
+    // Process nested subdocuments recursively
+    if (subdoc.subdocument && Array.isArray(subdoc.subdocument)) {
+        subdoc.subdocument.forEach(nestedSub => {
+            // Pass the same parent organization down
+            ensureSubdocumentOrganization(nestedSub, subdoc.organization);
+        });
+    }
+}
+
 // Wait for all AI tasks to complete
 async function waitForAllTasksToComplete(taskIds) {
     return new Promise((resolve, reject) => {
         const totalTasks = taskIds.length;
         let checkAttempts = 0;
-        const maxAttempts = 200; // Maximum attempts (10 minutes with 3-second intervals)
+        const maxAttempts = 200;
 
         const checkInterval = setInterval(async () => {
             checkAttempts++;
@@ -2844,7 +2898,7 @@ async function waitForAllTasksToComplete(taskIds) {
 
                 const result = await response.json();
                 if (result.success) {
-                    let completedTasks = 0;  // Count all completed tasks, not just newly completed
+                    let completedTasks = 0;
 
                     extractedData.forEach(item => {
                         if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id) {
@@ -2860,7 +2914,6 @@ async function waitForAllTasksToComplete(taskIds) {
                                     return typeof tag === 'object' ? tag.text : tag;
                                 });
                                 item.data.auto_tags_full = autoTags;
-
                                 item.data.auto_tags_ready = true;
 
                                 // Update enhanced data if available
@@ -2871,17 +2924,47 @@ async function waitForAllTasksToComplete(taskIds) {
                                     if (enhanced.description) item.data.description = enhanced.description;
                                     if (enhanced.extracted_text) item.data.extracted_text = enhanced.extracted_text;
 
+                                    // Handle organization for main document
+                                    if (enhanced.organization !== undefined) {
+                                        item.data.organization = enhanced.organization || userCompanyName || '';
+                                    }
+
                                     // Merge enhanced key-values with existing ones
                                     if (enhanced.enhanced_key_values && enhanced.enhanced_key_values.length > 0) {
                                         // Keep basic file info and add AI-extracted info
                                         const basicKVs = item.data.key_values.filter(kv =>
                                             kv.key === 'FILE TYPE' || kv.key === 'FILE SIZE'
                                         );
+
+                                        // Ensure organization is in key-values
+                                        let hasOrg = enhanced.enhanced_key_values.some(kv => kv.key === 'ORGANIZATION');
+                                        if (!hasOrg) {
+                                            enhanced.enhanced_key_values.unshift({
+                                                key: 'ORGANIZATION',
+                                                value: enhanced.organization || userCompanyName || ''
+                                            });
+                                        }
+
                                         item.data.key_values = [...basicKVs, ...enhanced.enhanced_key_values];
+                                    } else {
+                                        // If no enhanced key-values, ensure organization is added
+                                        if (!item.data.key_values.some(kv => kv.key === 'ORGANIZATION')) {
+                                            item.data.key_values.push({
+                                                key: 'ORGANIZATION',
+                                                value: item.data.organization || userCompanyName || ''
+                                            });
+                                        }
                                     }
 
-                                    // Update subdocuments if available
+                                    // Update subdocuments if available - FORCE parent organization
                                     if (enhanced.subdocument && Array.isArray(enhanced.subdocument)) {
+                                        // Get the parent's organization value (which may have been edited)
+                                        const parentOrg = item.data.organization || userCompanyName || '';
+
+                                        // Ensure all subdocuments use parent's organization
+                                        enhanced.subdocument.forEach(subdoc => {
+                                            ensureSubdocumentOrganization(subdoc, parentOrg);
+                                        });
                                         item.data.subdocument = enhanced.subdocument;
                                     }
 
@@ -2898,10 +2981,21 @@ async function waitForAllTasksToComplete(taskIds) {
                             } else if (taskResult && taskResult.status === 'FAILURE' && !item.data.auto_tags_ready) {
                                 item.data.auto_tags = [];
                                 item.data.auto_tags_ready = true;
+
+                                // Ensure organization is set even on failure
+                                if (!item.data.organization) {
+                                    item.data.organization = userCompanyName || '';
+                                }
+                                if (!item.data.key_values.some(kv => kv.key === 'ORGANIZATION')) {
+                                    item.data.key_values.push({
+                                        key: 'ORGANIZATION',
+                                        value: userCompanyName || ''
+                                    });
+                                }
+
                                 console.error('AI extraction failed:', taskResult.error);
                             }
 
-                            // Count this task as completed if it's ready (regardless of when it completed)
                             if (item.data.auto_tags_ready) {
                                 completedTasks++;
                             }
@@ -2918,7 +3012,7 @@ async function waitForAllTasksToComplete(taskIds) {
                         clearInterval(checkInterval);
                         console.log(`AI extraction finished. Completed: ${completedTasks}/${totalTasks}`);
 
-                        // Important: Hide the loading overlay before resolving
+                        // Hide the loading overlay before resolving
                         hideLoading();
 
                         // Small delay to ensure UI updates
@@ -2926,14 +3020,14 @@ async function waitForAllTasksToComplete(taskIds) {
                             resolve();
                         }, 100);
 
-                        return;  // Exit early to prevent further execution
+                        return;
                     }
                 }
             } catch (error) {
                 console.error('Error checking task status:', error);
                 if (checkAttempts >= maxAttempts) {
                     clearInterval(checkInterval);
-                    hideLoading();  // Also hide on error
+                    hideLoading();
                     resolve();
                 }
             }
@@ -2943,7 +3037,7 @@ async function waitForAllTasksToComplete(taskIds) {
         setTimeout(() => {
             clearInterval(checkInterval);
             console.warn('AI extraction timed out after 10 minutes');
-            hideLoading();  // Hide on timeout
+            hideLoading();
             resolve();
         }, 600000);
     });
@@ -2986,13 +3080,54 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
     if (!subdoc.media_type) subdoc.media_type = 'text/plain';
     if (!subdoc.description) subdoc.description = subdoc.summary || '';
     if (!subdoc.key_values) subdoc.key_values = [];
+    if (!subdoc.manual_tags) subdoc.manual_tags = [];
+    if (!subdoc.auto_tags) {
+        // Process tags from subdoc.tags if available
+        if (subdoc.tags && Array.isArray(subdoc.tags)) {
+            subdoc.auto_tags = subdoc.tags.map(tag => {
+                if (typeof tag === 'object' && tag.text) {
+                    return tag.text;
+                } else if (typeof tag === 'string') {
+                    return tag;
+                }
+                return '';
+            }).filter(tag => tag);
+        } else {
+            subdoc.auto_tags = [];
+        }
+    }
 
     // Check if subdocument was manually saved
     const saveButtonText = (subdoc.manuallySaved && !subdoc.hasUnsavedChanges) ? '✓ Saved' : 'Save changes';
     const saveButtonClass = (subdoc.manuallySaved && !subdoc.hasUnsavedChanges) ? 'btn btn-save saved' : 'btn btn-save';
 
-    console.log(`Subdocument media_type: ${subdoc.media_type}`);
-    console.log('Available media types:', mediaTypesJS);
+    // Generate tags HTML
+    const manualTagsHtml = subdoc.manual_tags.map(tag => {
+        let tagText = typeof tag === 'object' && tag.text ? tag.text : tag;
+        const escapedTagText = tagText.replace(/'/g, "\\'");
+        return `
+            <span class="tag manual">
+                ${tagText}
+                <span class="remove-tag" onclick="removeTagByPath('${path}', '${escapedTagText}', 'manual')">×</span>
+            </span>
+        `;
+    }).join('');
+
+    const autoTagsHtml = subdoc.auto_tags.map(tag => {
+        let tagText = '';
+        if (typeof tag === 'object' && tag.text) {
+            tagText = tag.text;
+        } else if (typeof tag === 'string') {
+            tagText = tag;
+        }
+        const escapedTagText = tagText.replace(/'/g, "\\'");
+        return `
+            <span class="tag auto">
+                ${tagText}
+                <span class="remove-tag" onclick="removeTagByPath('${path}', '${escapedTagText}', 'auto')">×</span>
+            </span>
+        `;
+    }).join('');
 
     // Generate key-values HTML
     const kvHtml = subdoc.key_values.map((kv, kvIndex) => `
@@ -3122,6 +3257,26 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
                     <label>Summary</label>
                     <textarea id="description_${path}"
                               onchange="saveFieldByPath('${path}', 'description', this.value)">${subdoc.description || ''}</textarea>
+                </div>
+
+                <div class="field-group">
+                    <label>Tags</label>
+                    <div class="tags-section">
+                        <div class="tags-subsection">
+                            <h4>Manual Tags</h4>
+                            <div class="tags-input" id="manualTagsContainer_${path}">
+                                ${manualTagsHtml}
+                                <input type="text" class="tag-input-field" placeholder="Add manual tag..."
+                                    onkeypress="handleTagInputByPath(event, '${path}', 'manual')">
+                            </div>
+                        </div>
+                        <div class="tags-subsection">
+                            <h4>Auto Tags</h4>
+                            <div class="tags-input" id="autoTagsContainer_${path}">
+                                ${autoTagsHtml}
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="field-group">
@@ -3463,7 +3618,27 @@ function saveByPath(path, baseParentIndex) {
         subdoc.media_type = document.getElementById(`mediaType_${path}`).value;
         subdoc.description = document.getElementById(`description_${path}`).value;
 
-        // Remove tag saving for subdocuments - no longer needed
+        // Save manual tags
+        subdoc.manual_tags = [];
+        const manualTagsContainer = document.getElementById(`manualTagsContainer_${path}`);
+        if (manualTagsContainer) {
+            const manualTags = manualTagsContainer.querySelectorAll('.tag.manual');
+            manualTags.forEach(tag => {
+                const tagText = tag.textContent.trim().replace('×', '').trim();
+                if (tagText) subdoc.manual_tags.push(tagText);
+            });
+        }
+
+        // Save auto tags
+        subdoc.auto_tags = [];
+        const autoTagsContainer = document.getElementById(`autoTagsContainer_${path}`);
+        if (autoTagsContainer) {
+            const autoTags = autoTagsContainer.querySelectorAll('.tag.auto');
+            autoTags.forEach(tag => {
+                const tagText = tag.textContent.trim().replace('×', '').trim();
+                if (tagText) subdoc.auto_tags.push(tagText);
+            });
+        }
 
         // Save key-value pairs
         subdoc.key_values = [];
@@ -3894,9 +4069,54 @@ function updatePaginationControls() {
     document.getElementById('pageJumpInputBottom').value = currentPage;
 }
 
+function resetAllSaveButtonStates() {
+    // Find all save buttons and reset their states
+    document.querySelectorAll('[id^="saveBtn_"]').forEach(btn => {
+        // Clear any existing timeout
+        if (btn.resetTimeout) {
+            clearTimeout(btn.resetTimeout);
+        }
+
+        // Reset button appearance
+        btn.textContent = 'Save current changes';
+        btn.classList.remove('saved');
+        btn.disabled = false;
+    });
+
+    // Also reset any "hasUnsavedChanges" flags in the data
+    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+    validItems.forEach(item => {
+        if (item.hasUnsavedChanges !== undefined) {
+            // Don't change the flag, just ensure buttons reflect current state
+        }
+
+        // Check subdocuments recursively
+        function resetSubdocFlags(subdocs) {
+            if (subdocs && Array.isArray(subdocs)) {
+                subdocs.forEach(subdoc => {
+                    if (subdoc.hasUnsavedChanges !== undefined) {
+                        // Don't change the flag
+                    }
+                    if (subdoc.subdocument) {
+                        resetSubdocFlags(subdoc.subdocument);
+                    }
+                });
+            }
+        }
+
+        if (item.data && item.data.subdocument) {
+            resetSubdocFlags(item.data.subdocument);
+        }
+    });
+}
+
 function goToPage(page) {
     if (page >= 1 && page <= totalPages && page !== currentPage) {
+        // Reset all save button states before changing page
+        resetAllSaveButtonStates();
+
         expandedSubdocument = null; // Reset expanded subdocument when changing pages
+        expandedSubdocumentPaths.clear(); // Clear all expanded subdocument tracking
         currentPage = page;
         renderExtractedData();
     }
@@ -4109,9 +4329,10 @@ function renderExtractedData() {
         const mediaItem = document.createElement('div');
         mediaItem.className = 'media-item active';
 
-        // Check if this item was manually saved
-        const saveButtonText = (item.manuallySaved && !item.hasUnsavedChanges) ? '✓ Saved' : 'Save current changes';
-        const saveButtonClass = (item.manuallySaved && !item.hasUnsavedChanges) ? 'btn btn-save saved' : 'btn btn-save';
+        // Check if this item was manually saved and has no unsaved changes
+        const isSaved = item.manuallySaved && !item.hasUnsavedChanges;
+        const saveButtonText = isSaved ? '✓ Saved' : 'Save current changes';
+        const saveButtonClass = isSaved ? 'btn btn-save saved' : 'btn btn-save';
 
         // Auto-tags content
         const autoTagsContent = (item.data.auto_tags || []).map(tag => `
@@ -4242,9 +4463,11 @@ function renderExtractedData() {
 
     updatePaginationControls();
 
+    // Reset all save button timeouts after rendering
     setTimeout(() => {
         resizeAllTextareas();
         restoreExpandedStates();
+        resetAllSaveButtonStates();
     }, 100);
 }
 
@@ -4396,22 +4619,59 @@ function addKeyValue(itemIndex, isSubdoc = false, subdocIndex = null) {
 
 // Collect form data before saving
 function collectFormData() {
-    // The data is already saved in extractedData through auto-save
-    // Just ensure tags are combined for the save operation
     extractedData.forEach((item) => {
         if (item && item.status === FILE_STATUS.SUCCESS && item.data) {
+            // Get the current organization value for this item (may have been edited by user)
+            let parentOrg = item.data.organization || userCompanyName || '';
+
+            // Update organization in parent's key-values if edited
+            const orgKvIndex = item.data.key_values.findIndex(kv => kv.key === 'ORGANIZATION');
+            if (orgKvIndex >= 0) {
+                // Get the potentially edited value from the parent
+                parentOrg = item.data.key_values[orgKvIndex].value || parentOrg;
+                item.data.organization = parentOrg;
+            }
+
             // Combine manual and auto tags for saving
             if (item.data.auto_tags_full) {
                 item.data.auto_tags = item.data.auto_tags_full;
             }
             item.data.tags = [...(item.data.manual_tags || []), ...(item.data.auto_tags || [])];
 
-            // Process subdocuments similarly
-            if (item.data.subdocument && Array.isArray(item.data.subdocument)) {
-                item.data.subdocument.forEach(subdoc => {
-                    subdoc.tags = [...(subdoc.manual_tags || []), ...(subdoc.auto_tags || [])];
-                });
+            // Process subdocuments recursively - FORCE parent organization
+            function processSubdocs(subdocs, parentOrgValue) {
+                if (subdocs && Array.isArray(subdocs)) {
+                    subdocs.forEach(subdoc => {
+                        // Force parent's organization value
+                        subdoc.organization = parentOrgValue;
+
+                        // Update organization in subdoc's key-values
+                        if (!subdoc.key_values) {
+                            subdoc.key_values = [];
+                        }
+
+                        const subdocOrgKvIndex = subdoc.key_values.findIndex(kv => kv.key === 'ORGANIZATION');
+                        if (subdocOrgKvIndex >= 0) {
+                            subdoc.key_values[subdocOrgKvIndex].value = parentOrgValue;
+                        } else {
+                            subdoc.key_values.unshift({
+                                key: 'ORGANIZATION',
+                                value: parentOrgValue
+                            });
+                        }
+
+                        // Combine tags for subdocuments
+                        subdoc.tags = [...(subdoc.manual_tags || []), ...(subdoc.auto_tags || [])];
+
+                        // Process nested subdocuments with same parent org
+                        if (subdoc.subdocument) {
+                            processSubdocs(subdoc.subdocument, parentOrgValue);
+                        }
+                    });
+                }
             }
+
+            processSubdocs(item.data.subdocument, parentOrg);
         }
     });
 }

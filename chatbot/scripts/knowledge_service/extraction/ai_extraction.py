@@ -113,9 +113,7 @@ class DocumentExtractor:
         try:
             # Log the full text for debugging
             logger.info("=" * 80)
-            logger.info("EXTRACTING URLs FROM TEXT:")
-            logger.info("=" * 80)
-            logger.info(f"{text}")
+            logger.info("EXTRACTING URLs FROM TEXT")
             logger.info("=" * 80)
 
             # First, let's look specifically for patterns like "word: URL" on separate lines
@@ -1273,8 +1271,8 @@ class DocumentExtractor:
                 tool_context_data = tool_context_data[0]
 
             if is_subdoc:
-                tag_context = company_bot.end_context
-                tool = tool_context_data.get('sub_document', {}) if isinstance(
+                tag_context = company_bot.tag_context
+                tool = tool_context_data.get('main_document', {}) if isinstance(
                     tool_context_data, dict
                 ) else company_bot.tool_context
             else:
@@ -1283,8 +1281,6 @@ class DocumentExtractor:
                     tool_context_data, dict
                 ) else company_bot.tool_context
 
-            print("tag_context: ", tag_context)
-            print("tool: ", tool)
             if not tag_context:
                 print("Early return due to none tag context value.")
                 default_response['exact_content'] = complete_content
@@ -1310,7 +1306,7 @@ class DocumentExtractor:
             }
             template = Template(tag_context)
             tag_context = template.render(context_data)
-
+            logger.info(f"Updated Tag Context: \n {tag_context}")
             messages = [{
                 'role': 'user',
                 'content': [{'text': f"{tag_context}"}]
@@ -1326,8 +1322,8 @@ class DocumentExtractor:
                 company_bot=company_bot,
                 tools=tool
             )
-
             logger.info(f"Bedrock response type: {type(response)}")
+            logger.info("Bedrock response:\n%s", json.dumps(response, indent=2))
             print(f"Bedrock response type: {type(response)}")
             print("--------\n\n")
             if response and isinstance(response, dict):
@@ -1759,7 +1755,29 @@ def extract_tags_from_document_url(url: str, company_bot) -> Dict[str, Any]:
         "images": []
     }
     try:
-        extractor = DocumentExtractor()
+        # Parse other_params from company_bot
+        extractor_config = {}
+        if company_bot and hasattr(company_bot, 'other_params') and company_bot.other_params:
+            try:
+                other_params = json.loads(company_bot.other_params) if isinstance(
+                    company_bot.other_params, str) else company_bot.other_params
+
+                # Extract DocumentExtractor configuration
+                extractor_config = {
+                    'max_depth': other_params.get('max_depth', MAX_DEPTH),
+                    'max_subdocs': other_params.get('max_subdocs', 10),
+                    'enable_ocr': other_params.get('enable_ocr', True),
+                    'compress_images': other_params.get('compress_images', True),
+                    'extract_images': other_params.get('extract_images', False),
+                    'main_doc_max_chars': other_params.get('main_doc_max_chars', 3000),
+                    'subdoc_max_chars': other_params.get('subdoc_max_chars', 500),
+                    'excel_max_rows': other_params.get('excel_max_rows', 50),
+                    'excel_max_cols': other_params.get('excel_max_cols', 20),
+                }
+            except Exception as e:
+                logger.error(f"Error parsing other_params: {e}")
+
+        extractor = DocumentExtractor(**extractor_config)
         result = extractor.process_document_from_url(url, company_bot)
         return result
     except Exception as e:
@@ -1782,7 +1800,29 @@ def extract_tags_from_document_file(file, company_bot, file_extension: str, othe
         "images": []
     }
     try:
-        extractor = DocumentExtractor()
+        extractor_config = {}
+        if company_bot and hasattr(company_bot, 'other_params') and company_bot.other_params:
+            try:
+                other_params = json.loads(company_bot.other_params) if isinstance(
+                    company_bot.other_params, str
+                ) else company_bot.other_params
+
+                # Extract DocumentExtractor configuration
+                extractor_config = {
+                    'max_depth': other_params.get('max_depth', MAX_DEPTH),
+                    'max_subdocs': other_params.get('max_subdocs', 10),
+                    'enable_ocr': other_params.get('enable_ocr', True),
+                    'compress_images': other_params.get('compress_images', True),
+                    'extract_images': other_params.get('extract_images', False),
+                    'main_doc_max_chars': other_params.get('main_doc_max_chars', 3000),
+                    'subdoc_max_chars': other_params.get('subdoc_max_chars', 500),
+                    'excel_max_rows': other_params.get('excel_max_rows', 50),
+                    'excel_max_cols': other_params.get('excel_max_cols', 20),
+                }
+            except Exception as e:
+                logger.error(f"Error parsing other_params: {e}")
+
+        extractor = DocumentExtractor(**extractor_config)
 
         # Extract text and images from file
         document_text, extracted_images = extractor.extract_text_from_file(file, file_extension)
