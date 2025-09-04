@@ -9,7 +9,7 @@ from chatbot.views.kafka_views import sync_user_project_view
 from chatbot.views.location_views import get_location_view, get_ip_location_view
 from chatbot.views.media_views import MediaSearchView
 from chatbot.views.profile_views import create_profile_views, read_elevate_profile
-from django.urls import path
+from django.urls import path, include
 from chatbot.views import api_views
 from chatbot.views.bhashini_views import text_speech_view, speech_text, text_translation_view, text_transliterate_view
 from chatbot.views.chat_view import save_chats_view, create_chatsession, save_ptm_chats
@@ -23,9 +23,14 @@ from chatbot.views.mitra_views import paraphrase_view, generate_objectives_view,
 from chatbot.views.recommendation import generate_recommendation
 from chatbot.views.story_views import end_story, StoryListCreateView, StoryBySessionView, \
     StoryRetrieveUpdateDestroyView, StoryMediaListCreateView, StoryMediaRetrieveUpdateDestroyView
-
+from rest_framework.routers import DefaultRouter
+from chatbot.views.media_api_views import MediaViewSet
 
 app_name = "chatbot"
+
+router = DefaultRouter()
+router.register(r'media', MediaViewSet, basename='media')
+
 
 urlpatterns = [
     path('api/profile/', api_views.post_profile),
@@ -118,5 +123,8 @@ urlpatterns = [
          name='generic_batch_template'),
     path('admin/<str:app_label>/<str:model_name>/batch-import/', GenericBatchImportView.as_view(),
          name='generic_batch_import'),
+
+    # Media API endpoints
+    path('api/v1/', include(router.urls)),
 
 ]

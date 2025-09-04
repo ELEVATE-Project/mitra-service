@@ -3,8 +3,10 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.contrib.postgres.search import SearchVector, SearchQuery, SearchRank
 from chatbot.models import Media
-from chatbot.serializer.media_serializer import MediaSerializer
 from django.db.models import Q
+
+from chatbot.serializer.media_serializer import MediaDetailSerializer
+
 
 class MediaSearchView(APIView):
     """
@@ -89,7 +91,7 @@ class MediaSearchView(APIView):
             print("SQL being run for final QS:")
             print(str(qs.query))
 
-            data = MediaSerializer(qs, many=True).data
+            data = MediaDetailSerializer(qs, many=True).data
             print(f"Found {len(data)} results\n")
         else:
             print("QS returned no results, fallback disabled")
