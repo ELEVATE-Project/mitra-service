@@ -423,14 +423,12 @@ def get_media_type_from_ai_data(document_type):
     document_type = document_type.lower()
     type_mapping = {
         'report': FileTypeChoices.PDF,
-        'presentation': FileTypeChoices.PPTX,
         'spreadsheet': FileTypeChoices.XLSX,
         'document': FileTypeChoices.DOCX,
         'text': FileTypeChoices.TXT,
         'csv': FileTypeChoices.CSV,
         'excel': FileTypeChoices.XLSX,
         'word': FileTypeChoices.DOCX,
-        'powerpoint': FileTypeChoices.PPTX,
         'pdf': FileTypeChoices.PDF
     }
 
@@ -512,38 +510,94 @@ class BatchMediaTaskStatusView(View):
     def post(self, request):
         try:
             from celery.result import AsyncResult
-            data = json.loads(request.body)
+
+            # Add logging for debugging
+            print(f"BatchMediaTaskStatusView - Request received")
+            print(f"Request body: {request.body[:500]}")  # First 500 chars
+
+            try:
+                data = json.loads(request.body)
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error: {e}")
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Invalid JSON: {str(e)}'
+                }, status=400)
+
             task_ids = data.get('task_ids', [])
+            print(f"Checking status for task IDs: {task_ids}")
 
             results = {}
             for task_id in task_ids:
-                task = AsyncResult(task_id)
-                if task.ready():
-                    if task.successful():
-                        ai_data = task.result
-                        processed_data = self.process_ai_extracted_data(ai_data)
-                        results[task_id] = {
-                            'status': 'SUCCESS',
-                            'result': processed_data
-                        }
+                try:
+                    task = AsyncResult(task_id)
+                    print(f"Task {task_id} - Status: {task.status}, Ready: {task.ready()}")
+
+                    if task.ready():
+                        if task.successful():
+                            try:
+                                ai_data = task.result
+                                print(f"Task {task_id} successful, processing result")
+                                print(f"Result type: {type(ai_data)}")
+
+                                # Check if result is None
+                                if ai_data is None:
+                                    print(f"Warning: Task {task_id} returned None")
+                                    results[task_id] = {
+                                        'status': 'SUCCESS',
+                                        'result': {
+                                            'auto_tags': [],
+                                            'enhanced_data': None
+                                        }
+                                    }
+                                else:
+                                    processed_data = self.process_ai_extracted_data(ai_data)
+                                    results[task_id] = {
+                                        'status': 'SUCCESS',
+                                        'result': processed_data
+                                    }
+                            except Exception as process_error:
+                                print(f"Error processing task result for {task_id}: {process_error}")
+                                import traceback
+                                traceback.print_exc()
+                                results[task_id] = {
+                                    'status': 'ERROR',
+                                    'error': f'Failed to process result: {str(process_error)}'
+                                }
+                        else:
+                            error_info = str(task.info) if task.info else 'Unknown error'
+                            print(f"Task {task_id} failed: {error_info}")
+                            results[task_id] = {
+                                'status': 'FAILURE',
+                                'error': error_info
+                            }
                     else:
                         results[task_id] = {
-                            'status': 'FAILURE',
-                            'error': str(task.info)
+                            'status': 'PENDING'
                         }
-                else:
+                except Exception as task_error:
+                    print(f"Error checking task {task_id}: {task_error}")
+                    import traceback
+                    traceback.print_exc()
                     results[task_id] = {
-                        'status': 'PENDING'
+                        'status': 'ERROR',
+                        'error': str(task_error)
                     }
+
+            print(f"Returning results for {len(results)} tasks")
             return JsonResponse({
                 'success': True,
                 'results': results
             })
+
         except Exception as e:
+            print(f"Unexpected error in BatchMediaTaskStatusView: {e}")
+            import traceback
+            traceback.print_exc()
             return JsonResponse({
                 'success': False,
                 'error': str(e)
-            }, status=400)
+            }, status=500)
 
     def process_ai_extracted_data(self, ai_data):
         """Process AI extracted data into format expected by frontend"""
@@ -762,8 +816,6 @@ class BatchMediaSaveView(View):
                     media_type = FileTypeChoices.DOCX.value
                 elif 'spreadsheets' in source_doc_url:
                     media_type = FileTypeChoices.XLSX.value
-                elif 'presentation' in source_doc_url:
-                    media_type = FileTypeChoices.PPTX.value
             else:
                 # Try to get from content-disposition
                 content_disposition = response.headers.get('content-disposition')
@@ -1172,8 +1224,6 @@ class BatchMediaSaveView(View):
     def save_subdocument(self, subdoc_data, parent_media, company_bot_id, user_profile, company_slug):
         """Save a subdocument as a separate Media object linked to parent"""
         try:
-            # Get file_url first since we'll need it for the filename
-
             source_doc_url = subdoc_data.get('source_document')
             actual_parent = parent_media
 
@@ -1196,6 +1246,17 @@ class BatchMediaSaveView(View):
             if not file_url:
                 raise ValueError(f"No file URL provided for subdocument")
 
+            # Validate file format based on URL extension before downloading
+            from urllib.parse import urlparse, unquote
+            parsed_url = urlparse(file_url)
+            path = unquote(parsed_url.path)
+
+            # Check if URL has an extension and validate it
+            if '.' in path:
+                url_extension = path.rsplit('.', 1)[-1].lower()
+                if url_extension and not FileTypeChoices.is_valid_extension(url_extension):
+                    raise ValueError(f"Unsupported file format: .{url_extension}")
+
             print(f"Downloading file from URL: {file_url}")
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -1210,6 +1271,30 @@ class BatchMediaSaveView(View):
                 print(f"Error: {error_msg}")
                 raise ValueError(error_msg)
 
+            # Additional validation based on content-type
+            content_type = response.headers.get('content-type', '').lower()
+
+            # Map content types to file extensions
+            content_type_mapping = {
+                'application/pdf': 'pdf',
+                'application/msword': 'doc',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+                'text/plain': 'txt',
+                'text/csv': 'csv',
+                'application/vnd.ms-excel': 'xls',
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+            }
+
+            # Check if content type is supported
+            content_extension = None
+            for mime_type, ext in content_type_mapping.items():
+                if mime_type in content_type:
+                    content_extension = ext
+                    break
+
+            if content_extension and not FileTypeChoices.is_valid_extension(content_extension):
+                raise ValueError(f"Unsupported content type: {content_type}")
+
             # Determine filename from URL or content-disposition
             filename = None
             content_disposition = response.headers.get('content-disposition')
@@ -1218,6 +1303,11 @@ class BatchMediaSaveView(View):
                 matches = re.findall('filename="?([^"]+)"?', content_disposition)
                 if matches:
                     filename = matches[0]
+                    # Validate filename extension
+                    if '.' in filename:
+                        file_ext = filename.rsplit('.', 1)[-1].lower()
+                        if not FileTypeChoices.is_valid_extension(file_ext):
+                            raise ValueError(f"Unsupported file format in download: .{file_ext}")
 
             if not filename:
                 # Extract from URL

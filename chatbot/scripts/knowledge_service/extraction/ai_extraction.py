@@ -198,41 +198,39 @@ class DocumentExtractor:
             return []
 
     def is_document_url(self, url: str, depth: int = 0) -> bool:
-        """Check if URL points to a document - now includes Excel files and Google Forms"""
+        """Check if URL points to a document - validates against supported formats"""
         try:
-            # Exclude non-document URLs at all levels
-            excluded_patterns = [
+            # Exclude non-document domains/patterns
+            excluded_domains = [
                 'googleusercontent.com', 'gstatic.com', 'chrome.google.com',
-                'googleapis.com', '/favicon', '.ico', '.png', '.jpg', '.jpeg',
-                '.gif', '.svg', 'youtube.com', 'twitter.com'
+                'googleapis.com', 'youtube.com', 'twitter.com', 'forms.google.com'
             ]
 
-            for pattern in excluded_patterns:
-                if pattern in url.lower():
+            # Check domain exclusions
+            for domain in excluded_domains:
+                if domain in url.lower():
                     return False
 
-            # Check for Google Docs/Drive with document formats
-            if 'docs.google.com/document' in url:
+            # Special handling for Google Docs
+            if any(pattern in url for pattern in [
+                'docs.google.com/document',
+                'drive.google.com/file',
+                'docs.google.com/spreadsheets',
+                'docs.google.com/forms',
+                'docs.google.com/presentation'
+            ]):
                 return True
-            elif 'drive.google.com/file' in url:
-                return True
-            elif 'docs.google.com/spreadsheets' in url:
-                return True
-            elif 'docs.google.com/forms' in url:
-                return True  # Now we support Google Forms
-            elif 'forms.google.com' in url:
-                return False  # Still exclude forms.google.com (different from docs.google.com/forms)
 
-            # Check standard URLs for specific extensions
             parsed_url = urlparse(url)
             path = parsed_url.path.lower()
 
-            # Use class-level allowed extensions for consistency
-            for ext in self.allowed_extensions:
-                if path.endswith(ext):
-                    return True
+            if '.' in path:
+                extension = path.rsplit('.', 1)[-1]
+                # Use FileTypeChoices to validate
+                return FileTypeChoices.is_valid_extension(extension)
 
             return False
+
         except Exception as e:
             logger.error(f"Error checking if URL is document: {e}")
             return False
@@ -803,6 +801,28 @@ class DocumentExtractor:
                             self.url_cache[url] = error_info
                             return "", [], None, error_info, ""
 
+            # Validate file format based on URL extension and content
+            from chatbot.models import FileTypeChoices
+            from urllib.parse import urlparse
+            parsed_url = urlparse(url)
+            path = parsed_url.path.lower()
+            url_extension = None
+
+            # Extract extension from URL path
+            if '.' in path:
+                url_extension = path.rsplit('.', 1)[-1]
+
+            # Validate extension if found in URL
+            if url_extension and not FileTypeChoices.is_valid_extension(url_extension):
+                error_info = {
+                    'error': f'Unsupported file format: .{url_extension}',
+                    'error_type': 'unsupported_format',
+                    'url': url
+                }
+                logger.error(f"Unsupported file format .{url_extension} for URL {url}")
+                self.url_cache[url] = error_info
+                return "", [], None, error_info, ""
+
             text = ""
             images = []
             full_text_for_url_extraction = ""
@@ -820,7 +840,8 @@ class DocumentExtractor:
                 # This is HTML content, likely an error or sign-in page
                 logger.warning(f"Received HTML response for {url}, not processing as document")
                 error_info = {
-                    'error': f'Received HTML response instead of document - possibly a sign-in page or error',
+                    'error': 'This link returned a web page instead of a document file. This can happen with '
+                             'restricted access or unsupported formats',
                     'error_type': 'invalid_content_type',
                     'url': url
                 }
@@ -1411,6 +1432,10 @@ class DocumentExtractor:
                 )
 
                 if error_info:
+                    # Enhanced error handling for different error types
+                    if error_info.get('error_type') == 'unsupported_format':
+                        error_info['error'] = f"Unsupported file format: {error_info['error']}"
+
                     failed_links.append({
                         "file_url": self.convert_google_drive_url(main_doc_url),
                         "error": error_info,
@@ -1419,6 +1444,20 @@ class DocumentExtractor:
                     continue
 
                 if linked_text and len(linked_text.strip()) > 10:
+                    # Check if media type was determined
+                    if linked_media_type is None:
+                        logger.warning(f"Could not determine valid media type for {main_doc_url}")
+                        failed_links.append({
+                            "file_url": self.convert_google_drive_url(main_doc_url),
+                            "error": {
+                                'error': 'Could not determine valid file type',
+                                'error_type': 'unknown_format',
+                                'url': main_doc_url
+                            },
+                            "source_document": "main"
+                        })
+                        continue
+
                     # Extract URLs from the FULL text, not the truncated version
                     links_in_subdoc = self.extract_urls_from_text(full_text_for_urls)
                     logger.info(f"{'  ' * depth}Found {len(links_in_subdoc)} links inside {main_doc_url}")
@@ -1452,6 +1491,12 @@ class DocumentExtractor:
 
                         if sub_error_info:
                             logger.info(f"{'  ' * (depth + 1)}Subdocument failed: {sub_error_info}")
+
+                            # Enhance error message for unsupported formats
+                            if sub_error_info.get('error_type') == 'unsupported_format':
+                                sub_error_info[
+                                    'error'] = f"Unsupported file format in linked document: {sub_error_info['error']}"
+
                             failed_links.append({
                                 "file_url": self.convert_google_drive_url(sub_url),
                                 "error": sub_error_info,
@@ -1463,13 +1508,27 @@ class DocumentExtractor:
                                 # Get the downloadable URL
                                 downloadable_url = self.convert_google_drive_url(sub_url)
 
+                                # Check if media type was determined
+                                if sub_media_type is None:
+                                    logger.warning(f"Could not determine valid media type for {sub_url}")
+                                    failed_links.append({
+                                        "file_url": downloadable_url,
+                                        "error": {
+                                            'error': 'Could not determine valid file type',
+                                            'error_type': 'unknown_format',
+                                            'url': sub_url
+                                        },
+                                        "source_document": main_doc_url
+                                    })
+                                    continue
+
                                 # Process subdocument content with Bedrock
                                 subdoc_result = self.extract_basic_content(
                                     sub_text,
                                     company_bot,
                                     sub_images,
                                     other_data,
-                                    is_subdoc = True
+                                    is_subdoc=True
                                 )
 
                                 # Create subdocument entry (without "url" field)
@@ -1479,18 +1538,40 @@ class DocumentExtractor:
                                         f"Document from {Path(urlparse(main_doc_url).path).name or 'linked document'}"
                                     ),
                                     "file_url": downloadable_url,
-                                    "media_type": sub_media_type or self._determine_media_type_from_url(sub_url),
+                                    "media_type": sub_media_type,
                                     "source_document": main_doc_url,
                                     "exact_content": sub_text,
                                     "summary": subdoc_result.get("summary", ""),
                                     "tags": subdoc_result.get("tags", []),
                                     "organization": subdoc_result.get("organization", ""),
-                                    "document_type": "",
+                                    "document_type": subdoc_result.get("document_type", ""),
                                     "key_entities": subdoc_result.get("key_entities", []),
                                     "subdocument": [],
                                     "images": sub_images or []
                                 }
                                 subdocuments.append(subdoc_entry)
+                            else:
+                                logger.warning(f"Subdocument {sub_url} has insufficient content")
+                                failed_links.append({
+                                    "file_url": self.convert_google_drive_url(sub_url),
+                                    "error": {
+                                        'error': 'Document has insufficient content (less than 10 characters)',
+                                        'error_type': 'insufficient_content',
+                                        'url': sub_url
+                                    },
+                                    "source_document": main_doc_url
+                                })
+                else:
+                    logger.warning(f"Linked document {main_doc_url} has insufficient content")
+                    failed_links.append({
+                        "file_url": self.convert_google_drive_url(main_doc_url),
+                        "error": {
+                            'error': 'Document has insufficient content (less than 10 characters)',
+                            'error_type': 'insufficient_content',
+                            'url': main_doc_url
+                        },
+                        "source_document": "main"
+                    })
 
             main_result["subdocument"] = subdocuments
             main_result["failed_links"] = failed_links
@@ -1503,10 +1584,20 @@ class DocumentExtractor:
             logger.info(f"{'  ' * depth}  - Failed: {len(failed_links)}")
             logger.info(f"{'  ' * depth}  - Total URLs processed: {len(processed_urls)}")
 
+            # Log failed links details if any
+            if failed_links:
+                logger.warning(f"{'  ' * depth}Failed links summary:")
+                for failed in failed_links:
+                    logger.warning(
+                        f"{'  ' * depth}  - {failed['file_url']}: {failed['error'].get('error', 'Unknown error')}")
+
             return main_result
 
         except Exception as e:
             logger.error(f"Error processing document: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
             return {
                 "title": "",
                 "organization": "",
@@ -1527,21 +1618,29 @@ class DocumentExtractor:
             parsed_url = urlparse(url)
             path = parsed_url.path.lower()
 
-            if path.endswith('.pdf'):
-                return FileTypeChoices.PDF.value
-            elif path.endswith('.docx'):
-                return FileTypeChoices.DOCX.value
-            elif path.endswith('.doc'):
-                return FileTypeChoices.DOC.value
-            elif path.endswith('.txt'):
-                return FileTypeChoices.TXT.value
-            elif path.endswith('.xlsx') or path.endswith('.xls'):
-                return FileTypeChoices.XLSX.value
-            elif path.endswith('.csv'):
-                return FileTypeChoices.CSV.value
-            else:
-                return FileTypeChoices.TXT.value
-        except:
+            # Extract extension if present
+            if '.' in path:
+                extension = path.rsplit('.', 1)[-1]
+
+                # Check if it's a valid extension first
+                if not FileTypeChoices.is_valid_extension(extension):
+                    logger.warning(f"Invalid extension {extension} in URL {url}")
+                    return None  # Return None for invalid extensions
+
+                # Use the existing method instead of hardcoding
+                mime_type = FileTypeChoices.get_mime_from_extension(extension)
+                if mime_type:
+                    return mime_type.value
+                else:
+                    # Extension is valid but not mapped - default to TXT
+                    logger.warning(f"No MIME type mapping for valid extension {extension}")
+                    return FileTypeChoices.TXT.value
+
+            # No extension found - default to TXT
+            return FileTypeChoices.TXT.value
+
+        except Exception as e:
+            logger.error(f"Error determining media type from URL {url}: {e}")
             return FileTypeChoices.TXT.value
 
     def extract_with_bedrock(
