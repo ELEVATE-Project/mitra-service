@@ -322,58 +322,26 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                     'count': count
                 })
 
-        # Initialize resource type counts
-        resource_counts = {
-            'documents': 0,
-            'images': 0,
-            'spreadsheets': 0,
-            'videos': 0,
-            'audio': 0,
-            'other': 0
-        }
-
-        # Define document and spreadsheet MIME types from FileTypeChoices
-        document_types = [FileTypeChoices.PDF.value, FileTypeChoices.DOC.value,
-                          FileTypeChoices.DOCX.value, FileTypeChoices.TXT.value]
-        spreadsheet_types = [FileTypeChoices.CSV.value, FileTypeChoices.XLS.value,
-                             FileTypeChoices.XLSX.value]
-
-        # Define image MIME types from MediaTypeChoices
-        image_types = [MediaTypeChoices.JPEG.value, MediaTypeChoices.PNG.value,
-                       MediaTypeChoices.SVG.value, MediaTypeChoices.WEBP.value,
-                       MediaTypeChoices.HEIF.value, MediaTypeChoices.HEIC.value]
-
-        # Categorize based on MIME types
-        for mime_type, count in media_type_counts.items():
-            if mime_type in document_types:
-                resource_counts['documents'] += count
-            elif mime_type in spreadsheet_types:
-                resource_counts['spreadsheets'] += count
-            elif mime_type in image_types:
-                resource_counts['images'] += count
-            elif 'video' in mime_type.lower():
-                resource_counts['videos'] += count
-            elif 'audio' in mime_type.lower():
-                resource_counts['audio'] += count
-            else:
-                resource_counts['other'] += count
-
-        # Format resource_types in the same structure as media_types
         resource_types = []
-        resource_type_display_names = {
-            'documents': 'Documents',
-            'spreadsheets': 'Spreadsheets',
-            'images': 'Images',
-            'videos': 'Videos',
-            'audio': 'Audio',
-            'other': 'Other'
-        }
 
-        for resource_type, count in resource_counts.items():
-            if count > 0:  # Only include types that exist
+        document_type_data = (
+            KeyValue.objects
+            .filter(key='document_type', media__in=queryset)
+            .values('value')
+            .annotate(count=Count('media', distinct=True))
+            .order_by('value')
+        )
+
+        for item in document_type_data:
+            document_type_value = item['value']
+            count = item['count']
+
+            if document_type_value and count > 0:
+                display_name = document_type_value.replace('_', ' ').title()
+
                 resource_types.append({
-                    'value': resource_type,
-                    'display': resource_type_display_names[resource_type],
+                    'value': document_type_value,
+                    'display': display_name,
                     'count': count
                 })
 
