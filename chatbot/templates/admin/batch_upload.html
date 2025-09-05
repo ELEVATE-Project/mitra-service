@@ -2118,34 +2118,109 @@ function updateFileList() {
     const failedFiles = uploadedFiles.filter(f => f.status === FILE_STATUS.ERROR);
     const skippedFiles = uploadedFiles.filter(f => f.status === FILE_STATUS.SKIPPED);
 
-    // Update successful files section
+    // Get references to UI elements
+    const uploadArea = document.getElementById('uploadArea');
+    const addMoreMessage = document.getElementById('addMoreFilesMessage');
     const successfulSection = document.getElementById('successfulSection');
     const successfulList = document.getElementById('successfulFilesList');
     const successfulCount = document.getElementById('successfulCount');
-
-    if (successfulFiles.length > 0 || skippedFiles.length > 0) {
-        successfulSection.style.display = 'block';
-        successfulCount.textContent = `(${successfulFiles.length})`;
-
-        successfulList.innerHTML = '';
-        [...successfulFiles, ...skippedFiles].forEach(fileData => {
-            const fileItem = createFileItem(fileData);
-            successfulList.appendChild(fileItem);
-        });
-    } else {
-        successfulSection.style.display = 'none';
-    }
-
-    // Update failed files section
     const failedSection = document.getElementById('failedSection');
     const failedList = document.getElementById('failedFilesList');
     const failedCount = document.getElementById('failedCount');
 
-    if (failedFiles.length > 0) {
-        failedSection.style.display = 'block';
-        failedCount.textContent = `(${failedFiles.length})`;
+    // Check if we have any files at all
+    const hasAnyFiles = uploadedFiles.length > 0;
 
-        const sectionHeader = failedSection.querySelector('.section-header');
+    // Show/hide upload area based on whether we have files
+    if (!hasAnyFiles) {
+        // No files at all - show upload area, hide message
+        if (uploadArea) {
+            uploadArea.style.display = 'block';
+        }
+        if (addMoreMessage) {
+            addMoreMessage.remove();
+        }
+    } else {
+        // Have files - hide upload area, show message
+        if (uploadArea) {
+            uploadArea.style.display = 'none';
+        }
+
+        // Add "add more files" message if not already present
+        if (!addMoreMessage) {
+            const uploadSection = document.querySelector('#step1 .upload-area').parentElement;
+            const newMessage = document.createElement('div');
+            newMessage.id = 'addMoreFilesMessage';
+            newMessage.className = 'info-message';
+            newMessage.innerHTML = `
+                <div style="text-align: center; color: #666; margin: 20px 0;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#417690" stroke-width="2" style="vertical-align: middle; margin-right: 8px;">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="16" x2="12" y2="12"></line>
+                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    </svg>
+                    <strong>Files added successfully!</strong>
+                </div>
+                <div style="text-align: center; margin: 15px 0;">
+                    <p style="color: #1976d2; font-size: 14px; margin: 5px 0;">
+                        To add more files, please refresh the page.
+                    </p>
+                    <p style="color: #d32f2f; font-size: 13px; margin: 5px 0;">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#d32f2f" stroke-width="2" style="vertical-align: middle; margin-right: 5px;">
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                            <line x1="12" y1="9" x2="12" y2="13"></line>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                        <strong>Warning:</strong> Refreshing the page will lose all currently uploaded files that haven't been saved to the database yet.
+                    </p>
+                </div>
+                <div style="text-align: center; margin-top: 15px;">
+                    <button onclick="location.reload()" class="btn btn-secondary">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 5px;">
+                            <path d="M23 4v6h-6"></path>
+                            <path d="M1 20v-6h6"></path>
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                        </svg>
+                        Refresh Page to Add More Files
+                    </button>
+                </div>
+            `;
+            uploadSection.appendChild(newMessage);
+        }
+    }
+
+    // Update successful files section
+    if (successfulFiles.length > 0 || skippedFiles.length > 0) {
+        if (successfulSection) {
+            successfulSection.style.display = 'block';
+        }
+        if (successfulCount) {
+            successfulCount.textContent = `(${successfulFiles.length})`;
+        }
+
+        if (successfulList) {
+            successfulList.innerHTML = '';
+            [...successfulFiles, ...skippedFiles].forEach(fileData => {
+                const fileItem = createFileItem(fileData);
+                successfulList.appendChild(fileItem);
+            });
+        }
+    } else {
+        if (successfulSection) {
+            successfulSection.style.display = 'none';
+        }
+    }
+
+    // Update failed files section
+    if (failedFiles.length > 0) {
+        if (failedSection) {
+            failedSection.style.display = 'block';
+        }
+        if (failedCount) {
+            failedCount.textContent = `(${failedFiles.length})`;
+        }
+
+        const sectionHeader = failedSection ? failedSection.querySelector('.section-header') : null;
         if (sectionHeader) {
             sectionHeader.innerHTML = `
                 <div>
@@ -2155,17 +2230,22 @@ function updateFileList() {
             `;
         }
 
-        failedList.innerHTML = '';
-        failedFiles.forEach(fileData => {
-            const fileItem = createFileItem(fileData);
-            failedList.appendChild(fileItem);
-        });
+        if (failedList) {
+            failedList.innerHTML = '';
+            failedFiles.forEach(fileData => {
+                const fileItem = createFileItem(fileData);
+                failedList.appendChild(fileItem);
+            });
+        }
     } else {
-        failedSection.style.display = 'none';
+        if (failedSection) {
+            failedSection.style.display = 'none';
+        }
     }
 
     updateButtonStates();
     updateExtractionProgress();
+    updateFailedLinks(); // Always update failed links when file list updates
 }
 
 function updateFailedLinks() {
@@ -2174,7 +2254,7 @@ function updateFailedLinks() {
 
     extractedData.forEach((item, fileIndex) => {
         if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.failed_links) {
-            item.data.failed_links.forEach(failedLink => {
+            item.data.failed_links.forEach((failedLink, linkIndex) => {
                 // Extract the URL from the failed link structure
                 let url = '';
                 if (failedLink.file_url) {
@@ -2200,7 +2280,8 @@ function updateFailedLinks() {
                     url: url,
                     errorMessage: errorMessage,
                     parentFileIndex: fileIndex,
-                    parentFileName: item.filename
+                    parentFileName: item.filename,
+                    uniqueIndex: `${fileIndex}_${linkIndex}` // Create unique identifier
                 });
             });
         }
@@ -2227,7 +2308,7 @@ function updateFailedLinks() {
             </div>
             <div class="failed-links-list">
                 ${allFailedLinks.map((failed, index) => `
-                    <div class="failed-link-item" id="failed-link-${index}">
+                    <div class="failed-link-item" id="failed-link-${failed.uniqueIndex}">
                         <div class="failed-link-info">
                             <div class="failed-link-url">${failed.url || 'Unknown URL'}</div>
                             <div class="failed-link-error">${failed.errorMessage || 'Unknown error'}</div>
@@ -2236,7 +2317,7 @@ function updateFailedLinks() {
                             </div>
                         </div>
                         <div class="failed-link-actions">
-                            <button class="skip-btn" onclick="removeFailedLink(${failed.parentFileIndex}, '${encodeURIComponent(failed.url)}', ${index})">Remove</button>
+                            <button class="skip-btn" onclick="removeFailedLink(${failed.parentFileIndex}, '${encodeURIComponent(failed.url)}', '${failed.uniqueIndex}')">Remove</button>
                         </div>
                     </div>
                 `).join('')}
@@ -2256,12 +2337,14 @@ async function retryFailedLink(parentFileIndex, url) {
     showStatus('Retry functionality not yet implemented', 'warning');
 }
 
+
 function removeFailedLink(parentFileIndex, encodedUrl, failedIndex) {
     const url = decodeURIComponent(encodedUrl);
     const item = extractedData[parentFileIndex];
 
     if (item && item.data && item.data.failed_links) {
-        // Find and remove the failed link
+        // Find and remove the failed link by URL
+        const originalLength = item.data.failed_links.length;
         item.data.failed_links = item.data.failed_links.filter(link => {
             let linkUrl = '';
             if (link.file_url) {
@@ -2274,28 +2357,23 @@ function removeFailedLink(parentFileIndex, encodedUrl, failedIndex) {
             return linkUrl !== url;
         });
 
-        // Remove the DOM element immediately for better UX
-        const failedLinkElement = document.getElementById(`failed-link-${failedIndex}`);
-        if (failedLinkElement) {
-            failedLinkElement.remove();
+        // Check if the link was actually removed
+        if (item.data.failed_links.length < originalLength) {
+            // Mark item as having unsaved changes
+            item.hasUnsavedChanges = true;
+
+            // Update the failed links display
+            updateFailedLinks();
+
+            // Also update the file list to reflect changes
+            updateFileList();
+
+            showStatus(`Removed failed link: ${url}`, 'success');
+        } else {
+            showStatus(`Failed to remove link: ${url}`, 'error');
         }
-
-        // Update the count in the header
-        const failedLinksTitle = document.querySelector('.failed-links-title');
-        if (failedLinksTitle) {
-            const newCount = document.querySelectorAll('.failed-link-item').length;
-            failedLinksTitle.textContent = `Failed Link Extractions (${newCount})`;
-
-            // If no more failed links, remove the entire section
-            if (newCount === 0) {
-                const failedSection = document.getElementById('failedLinksSection');
-                if (failedSection) {
-                    failedSection.remove();
-                }
-            }
-        }
-
-        showStatus(`Removed failed link: ${url}`, 'success');
+    } else {
+        showStatus('Failed to find the link to remove', 'error');
     }
 }
 
@@ -2443,9 +2521,12 @@ function removeFile(index) {
     if (!confirm('Are you sure you want to remove this file from the upload list?')) {
         return;
     }
+    // Remove from uploadedFiles
     uploadedFiles = uploadedFiles.filter(f => f.index !== index);
+
     // Also remove from extractedData
     extractedData = extractedData.filter(item => item.file_index !== index);
+
     // Reindex remaining files
     uploadedFiles.forEach((file, newIndex) => {
         file.index = newIndex;
@@ -2455,7 +2536,25 @@ function removeFile(index) {
             extractedItem.file_index = newIndex;
         }
     });
+
+    // Update the file list - this will handle showing upload area if no files remain
     updateFileList();
+
+    // If no files remain, also ensure we're back to step 1
+    if (uploadedFiles.length === 0) {
+        updateStepIndicator(1);
+        // Clear session data
+        sessionId = null;
+        extractedData = [];
+
+        // Hide progress section
+        const progressSection = document.getElementById('extractionProgress');
+        if (progressSection) {
+            progressSection.classList.remove('show');
+        }
+
+        showStatus('All files removed. You can now upload new files.', 'info');
+    }
 }
 
 function skipFile(index) {

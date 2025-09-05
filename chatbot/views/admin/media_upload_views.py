@@ -264,14 +264,27 @@ class BatchMediaExtractView(View):
     def extract_file_data(self, file, company_bot, file_index, request=None):
         """Extract data from file and start async AI extraction"""
         file_extension = file.name.rsplit('.', 1)[-1].lower() if '.' in file.name else None
-        filename = file.name
 
         if file_extension and not FileTypeChoices.is_valid_extension(file_extension):
             raise ValueError(f"Unsupported file format: .{file_extension}")
 
-        if "fail" in filename.lower():
-            print(f"Forced extract failure for {filename}")
-            raise ValueError(f"Forced extract failure for {filename}")
+        max_file_size_mb = 50
+        if company_bot and hasattr(company_bot, 'other_params') and company_bot.other_params:
+            try:
+                other_params = json.loads(company_bot.other_params) if isinstance(
+                    company_bot.other_params, str
+                ) else company_bot.other_params
+                max_file_size_mb = other_params.get('max_file_size_mb', 50)
+            except:
+                pass
+
+        max_file_size_bytes = max_file_size_mb * 1024 * 1024
+
+        if file.size > max_file_size_bytes:
+            file_size_mb = file.size / (1024 * 1024)
+            raise ValueError(
+                f"File size ({file_size_mb:.2f} MB) exceeds the maximum allowed size of {max_file_size_mb} MB. "
+                f"Please reduce the file size.")
 
         # Save file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as tmp:

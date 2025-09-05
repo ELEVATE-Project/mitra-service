@@ -81,13 +81,12 @@ class DocumentExtractor:
         )
     """
 
-    def __init__(self, max_depth: int = MAX_DEPTH, max_subdocs: int = 10,
-                 enable_ocr: bool = True, compress_images: bool = True,
-                 extract_images: bool = False,
-                 main_doc_max_chars: int = 3000,
-                 subdoc_max_chars: int = 500,
-                 excel_max_rows: int = 50,
-                 excel_max_cols: int = 20):
+    def __init__(
+            self, max_depth: int = MAX_DEPTH, max_subdocs: int = 10, enable_ocr: bool = True,
+            compress_images: bool = True, extract_images: bool = False, main_doc_max_chars: int = 3000,
+            subdoc_max_chars: int = 500, excel_max_rows: int = 50, excel_max_cols: int = 20,
+            max_file_size_mb: int = 50
+    ):
         """Initialize with enhanced features and configurable limits"""
         self.max_depth = max_depth
         self.max_subdocs = max_subdocs
@@ -105,7 +104,7 @@ class DocumentExtractor:
 
         # File validation
         self.allowed_extensions = {'.pdf', '.doc', '.docx', '.txt', '.csv', '.xls', '.xlsx'}
-        self.max_file_size_mb = 50
+        self.max_file_size_mb = max_file_size_mb
         self.max_file_size_bytes = self.max_file_size_mb * 1024 * 1024
 
     def extract_urls_from_text(self, text: str) -> List[str]:
@@ -735,6 +734,19 @@ class DocumentExtractor:
                 try:
                     response = requests.get(download_url, headers=headers, timeout=60, allow_redirects=True)
                     response.raise_for_status()
+                    if response and response.content:
+                        content_size = len(response.content)
+                        if content_size > self.max_file_size_bytes:
+                            content_size_mb = content_size / (1024 * 1024)
+                            error_info = {
+                                'error': f'File size ({content_size_mb:.2f} MB) exceeds the maximum allowed '
+                                         f'size of {self.max_file_size_mb} MB. Please reduce the file size.',
+                                'error_type': 'file_size_exceeded',
+                                'url': url
+                            }
+                            logger.error(f"File too large from URL {url}: {content_size_mb:.2f} MB")
+                            self.url_cache[url] = error_info
+                            return "", [], None, error_info, ""
                     break
                 except requests.exceptions.HTTPError as e:
                     if e.response.status_code == 500 and retry_count < max_retries - 1:
@@ -1806,6 +1818,7 @@ def extract_tags_from_document_url(url: str, company_bot) -> Dict[str, Any]:
                     'subdoc_max_chars': other_params.get('subdoc_max_chars', 500),
                     'excel_max_rows': other_params.get('excel_max_rows', 50),
                     'excel_max_cols': other_params.get('excel_max_cols', 20),
+                    'max_file_size_mb': other_params.get('max_file_size_mb', 50),
                 }
             except Exception as e:
                 logger.error(f"Error parsing other_params: {e}")
@@ -1851,9 +1864,28 @@ def extract_tags_from_document_file(file, company_bot, file_extension: str, othe
                     'subdoc_max_chars': other_params.get('subdoc_max_chars', 500),
                     'excel_max_rows': other_params.get('excel_max_rows', 50),
                     'excel_max_cols': other_params.get('excel_max_cols', 20),
+                    'max_file_size_mb': other_params.get('max_file_size_mb', 50),
                 }
             except Exception as e:
                 logger.error(f"Error parsing other_params: {e}")
+
+        max_file_size_mb = extractor_config.get('max_file_size_mb', 50)
+        max_file_size_bytes = max_file_size_mb * 1024 * 1024
+        file_size = 0
+        if hasattr(file, 'size'):
+            file_size = file.size
+        elif hasattr(file, 'seek') and hasattr(file, 'tell'):
+            current_position = file.tell()
+            file.seek(0, 2)  # Seek to end
+            file_size = file.tell()
+            file.seek(current_position)
+
+        if file_size > max_file_size_bytes:
+            file_size_mb = file_size / (1024 * 1024)
+            error_msg = (f"File size ({file_size_mb:.2f} MB) exceeds the maximum allowed size "
+                         f"of {max_file_size_mb} MB. Please reduce the file size.")
+            logger.error(error_msg)
+            raise ValueError(error_msg)
 
         extractor = DocumentExtractor(**extractor_config)
 
@@ -1877,7 +1909,25 @@ def extract_tags_from_document_file(file, company_bot, file_extension: str, othe
 
 def get_doc_tags_from_ai(file, company_bot, file_extension, other_data):
     """Main entry point for your code"""
-    result = extract_tags_from_document_file(file, company_bot, file_extension, other_data)
-    print("Final result: ", result)
-    logger.info("Final Extraction Result:\n%s", json.dumps(result, indent=2, ensure_ascii=False))
-    return result
+    try:
+        result = extract_tags_from_document_file(file, company_bot, file_extension, other_data)
+        print("Final result: ", result)
+        logger.info("Final Extraction Result:\n%s", json.dumps(result, indent=2, ensure_ascii=False))
+        return result
+    except ValueError as ve:
+        # Return error response for file size validation failures
+        logger.error(f"File validation error: {str(ve)}")
+        return {
+            "error": str(ve),
+            "error_type": "file_size_exceeded",
+            "title": "",
+            "organization": "",
+            "tags": [],
+            "exact_content": "",
+            "summary": "",
+            "document_type": "",
+            "key_entities": [],
+            "url": [],
+            "subdocument": [],
+            "images": []
+        }
