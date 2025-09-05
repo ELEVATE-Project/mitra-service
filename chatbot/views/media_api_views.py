@@ -87,16 +87,15 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
         key_values_param = request.query_params.get('key_values', '').strip()
         organization = request.query_params.get('organization', '').strip()
         media_type = request.query_params.get('media_type', '').strip()
+        resource_type = request.query_params.get('resource_type', '').strip()
         priority = request.query_params.get('priority', '').strip()
         limit = min(int(request.query_params.get('limit', 20)), 100)
 
-        # Validate similarity threshold
         if not 0.0 <= similarity_threshold <= 1.0:
             return Response({
                 'error': 'similarity_threshold must be between 0.0 and 1.0'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Parse tags and key-values
         tags_list = [t.strip() for t in tags_param.split(",") if t.strip()] if tags_param else []
         kv_pairs = {}
         if key_values_param:
@@ -105,31 +104,33 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                     k, v = kv.split(":", 1)
                     kv_pairs[k.strip()] = v.strip()
 
-        # Start with base queryset
+        organizations_list = [org.strip() for org in organization.split(",") if org.strip()] if organization else []
+        resource_types_list = [rt.strip() for rt in resource_type.split(",") if rt.strip()] if resource_type else []
+
+        media_types_list = []
+        if media_type:
+            requested_types = [mt.strip() for mt in media_type.split(",") if mt.strip()]
+            media_types_list = self._resolve_media_types(requested_types)
+
         queryset = self.get_queryset()
         results = None
         search_method = None
 
-        # STEP 1: Try trigram similarity search if text is provided
-        if search_text and len(search_text) >= 3:  # Trigram needs at least 3 characters
-            # Create subqueries that properly scope to current media item
+        if search_text and len(search_text) >= 3:
             from chatbot.models import KeyValue, Tag
 
-            # Subquery for max tag similarity for current media
             tag_similarity_subquery = Tag.objects.filter(
-                medias=OuterRef('pk')  # Use the related_name from ManyToMany
+                medias=OuterRef('pk')
             ).annotate(
                 similarity=TrigramSimilarity('name', search_text)
             ).values('similarity').order_by('-similarity')[:1]
 
-            # Subquery for max key value similarity for current media
             kv_similarity_subquery = KeyValue.objects.filter(
-                media=OuterRef('pk')  # Direct foreign key reference
+                media=OuterRef('pk')
             ).annotate(
                 similarity=TrigramSimilarity('value', search_text)
             ).values('similarity').order_by('-similarity')[:1]
 
-            # Annotate with similarity scores
             trigram_qs = queryset.annotate(
                 name_similarity=Coalesce(
                     TrigramSimilarity('name', search_text),
@@ -147,7 +148,6 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                     Subquery(kv_similarity_subquery),
                     Value(0.0, output_field=FloatField())
                 ),
-                # Max similarity - take the highest score
                 max_similarity=Greatest(
                     'name_similarity',
                     'desc_similarity',
@@ -156,10 +156,8 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                 )
             )
 
-            # Apply similarity threshold
             trigram_qs = trigram_qs.filter(max_similarity__gte=similarity_threshold)
 
-            # Apply additional filters if provided
             filter_conditions = Q()
 
             if tags_list:
@@ -172,14 +170,26 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                 for key, value in kv_pairs.items():
                     filter_conditions &= Q(key_values__key__iexact=key, key_values__value__icontains=value)
 
-            if organization:
-                filter_conditions &= Q(
-                    key_values__key__iexact='ORGANIZATION',
-                    key_values__value__icontains=organization
-                )
+            if organizations_list:
+                org_conditions = Q()
+                for org in organizations_list:
+                    org_conditions |= Q(
+                        key_values__key__iexact='ORGANIZATION',
+                        key_values__value__icontains=org
+                    )
+                filter_conditions &= org_conditions
 
-            if media_type:
-                filter_conditions &= Q(media_type=media_type)
+            if media_types_list:
+                filter_conditions &= Q(media_type__in=media_types_list)
+
+            if resource_types_list:
+                rt_conditions = Q()
+                for rt in resource_types_list:
+                    rt_conditions |= Q(
+                        key_values__key__iregex=r'^document[_\s]type$',
+                        key_values__value__icontains=rt
+                    )
+                filter_conditions &= rt_conditions
 
             if priority:
                 filter_conditions &= Q(priority=priority)
@@ -187,15 +197,12 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
             if filter_conditions:
                 trigram_qs = trigram_qs.filter(filter_conditions)
 
-            # Get distinct results ordered by similarity
             trigram_qs = trigram_qs.distinct().order_by('-max_similarity', '-updated_at')[:limit]
 
-            # Check if we have results
             trigram_results = list(trigram_qs)
             if trigram_results:
                 results = trigram_results
                 search_method = 'trigram_similarity'
-                # Add similarity scores to results for debugging
                 for result in results:
                     result.similarity_info = {
                         'max_value': round(result.max_similarity, 3),
@@ -205,11 +212,9 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                         'key_value': round(result.kv_similarity, 3)
                     }
 
-        # STEP 2: Fallback to basic filtering if no trigram results or no search text
         if results is None:
             fallback_conditions = Q()
 
-            # Text search using icontains (less sophisticated)
             if search_text:
                 text_conditions = Q()
                 text_conditions |= Q(name__icontains=search_text)
@@ -218,7 +223,6 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                 text_conditions |= Q(key_values__value__icontains=search_text)
                 fallback_conditions &= text_conditions
 
-            # Apply all other filters
             if tags_list:
                 tag_conditions = Q()
                 for tag in tags_list:
@@ -229,47 +233,58 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                 for key, value in kv_pairs.items():
                     fallback_conditions &= Q(key_values__key__iexact=key, key_values__value__icontains=value)
 
-            if organization:
-                fallback_conditions &= Q(
-                    key_values__key__iexact='ORGANIZATION',
-                    key_values__value__icontains=organization
-                )
+            if organizations_list:
+                org_conditions = Q()
+                for org in organizations_list:
+                    org_conditions |= Q(
+                        key_values__key__iexact='ORGANIZATION',
+                        key_values__value__icontains=org
+                    )
+                fallback_conditions &= org_conditions
 
-            if media_type:
-                fallback_conditions &= Q(media_type=media_type)
+            if media_types_list:
+                fallback_conditions &= Q(media_type__in=media_types_list)
+
+            if resource_types_list:
+                rt_conditions = Q()
+                for rt in resource_types_list:
+                    rt_conditions |= Q(
+                        key_values__key__iregex=r'^document[_\s]type$',
+                        key_values__value__icontains=rt
+                    )
+                fallback_conditions &= rt_conditions
 
             if priority:
                 fallback_conditions &= Q(priority=priority)
 
-            # Apply filters and get results
             if fallback_conditions:
                 fallback_qs = queryset.filter(fallback_conditions).distinct()
             else:
-                # If no conditions, return empty results
                 fallback_qs = Media.objects.none()
 
             results = list(fallback_qs.order_by('-updated_at')[:limit])
             search_method = 'fallback_filter'
 
-        # Serialize results
         serializer = MediaListSerializer(results, many=True)
         serialized_data = serializer.data
 
-        # Add similarity scores to response if using trigram
         if search_method == 'trigram_similarity' and results and hasattr(results[0], 'similarity_info'):
             for i, item in enumerate(serialized_data):
                 if i < len(results) and hasattr(results[i], 'similarity_info'):
                     item['similarity_scores'] = results[i].similarity_info
 
-        # Build response
         response_data = {
             'search_params': {
                 'q': search_text,
                 'similarity_threshold': similarity_threshold,
                 'tags': tags_list,
                 'key_values': kv_pairs,
-                'organization': organization,
-                'media_type': media_type,
+                'organization': organizations_list,
+                'media_type': {
+                    'requested': media_type.split(',') if media_type else [],
+                    'resolved': media_types_list
+                },
+                'resource_type': resource_types_list,
                 'priority': priority,
                 'limit': limit
             },
@@ -279,6 +294,41 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
         }
 
         return Response(response_data)
+
+    def _resolve_media_types(self, requested_types):
+        from chatbot.models import FileTypeChoices
+
+        resolved_types = []
+
+        for requested_type in requested_types:
+            requested_lower = requested_type.lower().strip()
+
+            if '/' in requested_type:
+                resolved_types.append(requested_type)
+                continue
+
+            mime_type = FileTypeChoices.get_mime_from_extension(requested_lower)
+            if mime_type:
+                resolved_types.append(mime_type)
+                continue
+
+            matches = []
+            for choice in FileTypeChoices.choices:
+                mime_type = choice[0]
+                display_name = choice[1] if len(choice) > 1 else mime_type
+
+                if (requested_lower in mime_type.lower() or
+                        requested_lower in display_name.lower() or
+                        mime_type.lower().endswith(f'/{requested_lower}') or
+                        mime_type.lower().startswith(f'{requested_lower}/')):
+                    matches.append(mime_type)
+
+            resolved_types.extend(matches)
+
+            if not matches and requested_type not in resolved_types:
+                resolved_types.append(requested_type)
+
+        return list(dict.fromkeys(resolved_types))
 
     @action(detail=False, methods=['get'])
     def master_list(self, request):
