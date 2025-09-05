@@ -21,8 +21,9 @@ AWS_KEY = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 
 # Constants for field categorization
-TRANSLITERATE_FIELDS = ["user_name", "organization", "location", "district", "village"]
-TRANSLATE_FIELDS = ["title", "challenges_faced", "solutions_discussed"]
+TRANSLITERATE_FIELDS = ["user_name", "organization", "location", "district", "village", "block"]
+NESTED_TRANSLITERATE_FIELDS = ["pri_member", "school_representative"]
+TRANSLATE_FIELDS = ["title", "challenges_faced", "solutions_discussed", "remarks"]
 PASSTHROUGH_FIELDS = ["participants_count", "discussion_date", "flow"]
 
 
@@ -81,7 +82,7 @@ def process_field_value(field_name, value, target_language, source_language, tra
         return value
 
     # Special handling for 'others' village
-    if field_name in ['village', 'district'] and str(value).lower() in ['others', 'other']:
+    if field_name in ['village', 'district', 'block'] and str(value).lower() in ['others', 'other']:
         return value
 
     # Transliterate names and location fields
@@ -112,10 +113,40 @@ def process_field_value(field_name, value, target_language, source_language, tra
                     target_language=target_language,
                     source_language=source_language
                 )
+    elif field_name in NESTED_TRANSLITERATE_FIELDS:
+        return process_nested_transliterate_field(
+            field_value=value,
+            target_language=target_language,
+            source_language=source_language,
+            transliterate_provider=transliterate_provider
+        )
 
     # Passthrough fields (no translation/transliteration needed)
     return value
 
+
+def process_nested_transliterate_field(field_value, target_language, source_language, transliterate_provider):
+    """Process nested objects like pri_member and school_representative"""
+    if not field_value or not isinstance(field_value, dict):
+        return field_value
+
+    processed_field = {}
+    for sub_field_name in ['name', 'designation']:
+        sub_field_value = field_value.get(sub_field_name, '')
+        if sub_field_value and sub_field_value != '':
+            if transliterate_provider:
+                processed_field[sub_field_name] = transliterate_field(
+                    voice_provider=transliterate_provider,
+                    message_body=str(sub_field_value),
+                    target_language=target_language,
+                    source_language=source_language
+                )
+            else:
+                processed_field[sub_field_name] = sub_field_value
+        else:
+            processed_field[sub_field_name] = sub_field_value
+
+    return processed_field
 
 def get_voice_providers(company_bot, language=None):
     """Get voice providers for translation and transliteration - DRY approach"""
@@ -311,8 +342,9 @@ def correct_metadata_for_story(story):
         updated = True
 
         # Process all metadata fields
-        all_fields = ["user_name", "location", "district", "village", "organization",
-                      "participants_count", "discussion_date", "challenges_faced", "solutions_discussed", "flow"]
+        all_fields = ["user_name", "location", "district", "village", "block", "organization",
+                      "participants_count", "discussion_date", "challenges_faced", "solutions_discussed",
+                      "pri_member", "school_representative", "remarks", "flow"]
 
         # Check if we need to translate existing TRANSLATE_FIELDS to English
         if session_language != 'en' and translate_provider:
@@ -364,11 +396,27 @@ def correct_metadata_for_story(story):
                 updated = True
             else:
                 # Handle missing fields
-                if key == "organization" and key not in story.other_params:
-                    story.other_params[key] = ""
+                if key in ["organization", "pri_member", "school_representative",
+                           "remarks", 'block'] and key not in story.other_params:
+                    if key in ["pri_member", "school_representative"]:
+                        story.other_params[key] = {"name": "", "designation": ""}
+                    else:
+                        story.other_params[key] = ""
                     updated = True
                 elif key not in story.other_params:
                     logger.info(f"🔸 {key} missing in Story ID {story.id}")
+
+        if "participants_count" in story.other_params:
+            participants_count = story.other_params["participants_count"]
+            if isinstance(participants_count, str):
+                story.other_params["participants_count"] = {
+                    "total": participants_count,
+                    "women": "",
+                    "men": "",
+                    "children": ""
+                }
+                updated = True
+                logger.info(f"Converted participants_count to new format for Story ID {story.id}")
 
         # Ensure story language is set to English
         if story.language != 'en':

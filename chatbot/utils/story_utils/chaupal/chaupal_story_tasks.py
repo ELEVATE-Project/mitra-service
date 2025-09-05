@@ -8,7 +8,6 @@ from chatbot.utils.story_utils.format_utils import clean_escaped_text
 from chatbot.utils.transliterate_utils import transliterate_text, get_transliteration_output
 import json_repair
 
-
 logger = logging.getLogger('django')
 
 
@@ -24,8 +23,20 @@ def save_chaupal_report(
         user_name = response_json_story.get('user_name', '')
         user_location = response_json_story.get('location', '')
         organization = response_json_story.get('organization', '')
-        participants_count = response_json_story.get('participants_count', '')
+        participants_count = response_json_story.get('participants_count', {})
+        if isinstance(participants_count, str):
+            participants_count = {
+                'total': participants_count,
+                'women': '',
+                'men': '',
+                'children': ''
+            }
+
         discussion_date = response_json_story.get('discussion_date', '')
+
+        pri_member = response_json_story.get('pri_member', {'name': '', 'designation': ''})
+        school_representative = response_json_story.get('school_representative', {'name': '', 'designation': ''})
+        remarks = response_json_story.get('remarks', '')
 
         if english_solutions_discussed and len(english_solutions_discussed) > 0 and english_challenges_faced and len(
                 english_challenges_faced) > 0:
@@ -52,6 +63,9 @@ def save_chaupal_report(
             'organization': organization,
             'participants_count': participants_count,
             'discussion_date': discussion_date,
+            'pri_member': pri_member,
+            'school_representative': school_representative,
+            'remarks': remarks,
             'flow': flow
         }
 
@@ -88,7 +102,11 @@ def save_chaupal_report(
                 other_data={
                     'user_name': user_name,
                     'organization': organization,
-                    'location': location
+                    'location': location,
+                    'participants_count': participants_count,
+                    'pri_member': pri_member,
+                    'school_representative': school_representative,
+                    'remarks': remarks
                 }
             )
 
@@ -106,6 +124,13 @@ def create_chaupal_translation(story, language, english_title, english_challenge
         translated_title = translate_field(
             voice_provider=voice_provider, message_body=english_title, target_language=language
         )
+
+        remarks = other_data.get('remarks', '')
+        translated_remarks = ''
+        if remarks and remarks.strip():
+            translated_remarks = translate_field(
+                voice_provider=voice_provider, message_body=remarks, target_language=language
+            )
 
         if isinstance(english_challenges_faced, str):
             english_challenges_faced = json_repair.repair_json(english_challenges_faced, return_objects=True)
@@ -134,7 +159,8 @@ def create_chaupal_translation(story, language, english_title, english_challenge
         translated_other_params = story.other_params.copy() if story.other_params else {}
         translated_other_params.update({
             'challenges_faced': translated_challenges_faced,
-            'solutions_discussed': translated_solutions_discussed
+            'solutions_discussed': translated_solutions_discussed,
+            'remarks': translated_remarks
         })
 
         voice_transliterate_provider = Voice.objects.filter(
@@ -150,9 +176,55 @@ def create_chaupal_translation(story, language, english_title, english_challenge
                     message_body=field_value,
                     target_language=language,
                     source_language='en',
-                    is_sentence = is_sentence
+                    is_sentence=is_sentence
                 )
                 translated_other_params[field_name] = get_transliteration_output(data=transliterated)
+
+        participants_count = other_data.get('participants_count', {})
+        if participants_count:
+            translated_other_params['participants_count'] = participants_count
+
+        pri_member = other_data.get('pri_member', {'name': '', 'designation': ''})
+        if pri_member:
+            translated_pri_member = {}
+            for field_name in ['name', 'designation']:
+                field_value = pri_member.get(field_name, '')
+                if field_value and field_value != '':
+                    is_sentence = ' ' in field_value
+                    transliterated = transliterate_text(
+                        voice_provider=voice_transliterate_provider,
+                        message_body=field_value,
+                        target_language=language,
+                        source_language='en',
+                        is_sentence=is_sentence
+                    )
+                    translated_pri_member[field_name] = get_transliteration_output(data=transliterated)
+                else:
+                    translated_pri_member[field_name] = field_value
+            translated_other_params['pri_member'] = translated_pri_member
+
+        school_representative = other_data.get('school_representative', {'name': '', 'designation': ''})
+        if school_representative:
+            translated_school_representative = {}
+            for field_name in ['name', 'designation']:
+                field_value = school_representative.get(field_name, '')
+                if field_value and field_value != '':
+                    is_sentence = ' ' in field_value
+                    transliterated = transliterate_text(
+                        voice_provider=voice_transliterate_provider,
+                        message_body=field_value,
+                        target_language=language,
+                        source_language='en',
+                        is_sentence=is_sentence
+                    )
+                    translated_school_representative[field_name] = get_transliteration_output(data=transliterated)
+                else:
+                    translated_school_representative[field_name] = field_value
+            translated_other_params['school_representative'] = translated_school_representative
+
+        discussion_date = other_data.get('discussion_date', '')
+        if discussion_date:
+            translated_other_params['discussion_date'] = discussion_date
 
         translation, created = StoryTranslation.objects.get_or_create(
             story=story,
