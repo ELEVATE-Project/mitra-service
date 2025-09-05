@@ -126,36 +126,41 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
             for key, value in kv_pairs.items():
                 filter_conditions &= Q(key_values__key__iexact=key, key_values__value__icontains=value)
 
+        # Use subqueries for organization filter to avoid JOIN issues
         if organization:
             organizations_list = [org.strip() for org in organization.split(",") if org.strip()]
             if organizations_list:
                 org_conditions = Q()
                 for org in organizations_list:
                     org_conditions |= Q(
-                        key_values__key__iexact='ORGANIZATION',
-                        key_values__value__icontains=org
+                        key__iexact='ORGANIZATION',
+                        value__icontains=org
                     )
-                filter_conditions &= org_conditions
 
-        if media_type:
-            print(f"DEBUG - Raw media_type param: '{media_type}'")  # DEBUG LINE
-            requested_types = [mt.strip() for mt in media_type.split(",") if mt.strip()]
-            print(f"DEBUG - Requested types: {requested_types}")  # DEBUG LINE
-            media_types_list = self._resolve_media_types(requested_types)
-            print(f"DEBUG - Resolved media types: {media_types_list}")  # DEBUG LINE
-            if media_types_list:
-                filter_conditions &= Q(media_type__in=media_types_list)
+                # Get media IDs that match organization criteria
+                matching_org_media_ids = KeyValue.objects.filter(org_conditions).values_list('media_id', flat=True)
+                filter_conditions &= Q(id__in=matching_org_media_ids)
 
+        # Use subqueries for resource type filter to avoid JOIN issues
         if resource_type:
             resource_types_list = [rt.strip() for rt in resource_type.split(",") if rt.strip()]
             if resource_types_list:
                 rt_conditions = Q()
                 for rt in resource_types_list:
                     rt_conditions |= Q(
-                        key_values__key__iregex=r'^document[_\s]type$',
-                        key_values__value__icontains=rt
+                        key__iregex=r'^document[_\s]type$',
+                        value__icontains=rt
                     )
-                filter_conditions &= rt_conditions
+
+                # Get media IDs that match resource type criteria
+                matching_rt_media_ids = KeyValue.objects.filter(rt_conditions).values_list('media_id', flat=True)
+                filter_conditions &= Q(id__in=matching_rt_media_ids)
+
+        if media_type:
+            requested_types = [mt.strip() for mt in media_type.split(",") if mt.strip()]
+            media_types_list = self._resolve_media_types(requested_types)
+            if media_types_list:
+                filter_conditions &= Q(media_type__in=media_types_list)
 
         if priority:
             filter_conditions &= Q(priority=priority)
