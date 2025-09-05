@@ -40,11 +40,26 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
 
         intro_to_pass = None
 
-        if flow and flow in [SessionFlowName.GuestMiStory]:
-            flow_company_bot = CompanyBot.objects.get(company=profile.company, route='/guided_guest')
-            bot_vernacular = BotVernacular.objects.filter(company_bot=flow_company_bot).first()
-            if bot_vernacular:
-                intro_to_pass = bot_vernacular.introductory_message
+        if flow:
+            route_to_use = None
+            if flow in [SessionFlowName.GuestMiStory]:
+                route_to_use = '/guided_guest'
+            elif flow in [SessionFlowName.GuestDiscussion]:
+                route_to_use = '/shikshalokam_chaupal'
+            if route_to_use:
+                flow_company_bot = CompanyBot.objects.get(company=profile.company, route=route_to_use)
+                bot_vernacular = BotVernacular.objects.filter(company_bot=flow_company_bot).first()
+                if bot_vernacular:
+                    if access_token:
+                        intro_to_pass = bot_vernacular.introductory_message
+                        if profile and profile.first_name and intro_to_pass:
+                            words = intro_to_pass.split(" ", 1)
+                            if len(words) > 1:
+                                intro_to_pass = f"{words[0]} {profile.first_name} {words[1]}"
+                            else:
+                                intro_to_pass = f"{words[0]} {profile.first_name}"
+                    else:
+                        intro_to_pass = bot_vernacular.alt_introductory_message
 
         messages = get_guided_chat(
             company_bot=company_bot, company_chats=company_chats, intro=intro_to_pass
