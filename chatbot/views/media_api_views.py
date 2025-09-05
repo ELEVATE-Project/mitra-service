@@ -326,7 +326,10 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
 
         document_type_data = (
             KeyValue.objects
-            .filter(key='document_type', media__in=queryset)
+            .filter(
+                key__iregex=r'^document[_\s]type$',
+                media__in=queryset
+            )
             .values('value')
             .annotate(count=Count('media', distinct=True))
             .order_by('value')
