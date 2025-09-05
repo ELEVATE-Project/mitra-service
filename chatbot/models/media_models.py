@@ -6,8 +6,7 @@ from chatbot.models import Profile, CompanyBot, MediaTemplateChoices, PDFStrateg
 from shikshalokam.models.enums import PriorityChoices
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVector, TrigramSimilarity
-from chatbot.celery_tasks.knowledge_service.media_tasks import save_in_vector_db, update_in_vector_db, \
-    delete_from_vector_db
+from simple_history.models import HistoricalRecords
 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 
@@ -111,6 +110,7 @@ class Media(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
 
     def __str__(self):
         return self.name

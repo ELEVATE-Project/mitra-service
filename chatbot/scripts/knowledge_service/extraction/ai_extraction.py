@@ -1282,21 +1282,26 @@ class DocumentExtractor:
             if isinstance(tool_context_data, list) and len(tool_context_data) > 0:
                 tool_context_data = tool_context_data[0]
 
-            if is_subdoc:
-                tag_context = company_bot.tag_context
-                tool = tool_context_data.get('main_document', {}) if isinstance(
-                    tool_context_data, dict
-                ) else company_bot.tool_context
-            else:
-                tag_context = company_bot.tag_context
-                tool = tool_context_data.get('main_document', {}) if isinstance(
-                    tool_context_data, dict
-                ) else company_bot.tool_context
+            end_context = company_bot.end_context
 
-            if not tag_context:
-                print("Early return due to none tag context value.")
+            if not end_context:
+                print("Early return due to no data in end context value.")
+                logger.error("Early return due to no data in end context value.")
                 default_response['exact_content'] = complete_content
                 return default_response
+
+            master_document_types = None
+            if company_bot and hasattr(company_bot, 'other_params') and company_bot.other_params:
+                try:
+                    other_params = json_repair.repair_json(company_bot.other_params, return_objects=True) if isinstance(
+                        company_bot.other_params, str
+                    ) else company_bot.other_params
+                    master_document_types = other_params.get('master_document_types', [])
+                except Exception as e:
+                    print(f"Error parsing master_document_types: {e}")
+                    logger.error(f"Error parsing master_document_types: {e}")
+                    default_response['exact_content'] = complete_content
+                    return default_response
 
             # Create analysis version if text is too long
             analysis_text = document_text
@@ -1314,14 +1319,15 @@ class DocumentExtractor:
             context_data = {
                 "document_text": analysis_text,
                 "extracted_images": extracted_images,
-                "master_tags": other_data.get('master_tag', None) if other_data else None
+                "master_tags": other_data.get('master_tag', None) if other_data else None,
+                "master_document_types": master_document_types
             }
-            template = Template(tag_context)
-            tag_context = template.render(context_data)
-            logger.info(f"Updated Tag Context: \n {tag_context}")
+            template = Template(end_context)
+            end_context = template.render(context_data)
+            logger.info(f"Updated Tag Context: \n {end_context}")
             messages = [{
                 'role': 'user',
-                'content': [{'text': f"{tag_context}"}]
+                'content': [{'text': f"{end_context}"}]
             }]
 
             print("Bedrock: Extraction call started.")
@@ -1332,7 +1338,7 @@ class DocumentExtractor:
                 temperature=company_bot.bot_temperature,
                 max_token=company_bot.max_token,
                 company_bot=company_bot,
-                tools=tool
+                tools=tool_context_data
             )
             logger.info(f"Bedrock response type: {type(response)}")
             logger.info("Bedrock response:\n%s", json.dumps(response, indent=2))

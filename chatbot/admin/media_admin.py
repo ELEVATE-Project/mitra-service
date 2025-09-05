@@ -11,6 +11,7 @@ from chatbot.views.admin.media_upload_views import (
     BatchMediaRetryExtractView,
     BatchMediaRetrySaveView, VectorDBTaskStatusView, GetCachedItemView
 )
+from simple_history.admin import SimpleHistoryAdmin
 
 
 class KeyValueInline(admin.TabularInline):
@@ -27,9 +28,9 @@ class MediaImagesInline(admin.TabularInline):
 
 
 @admin.register(Media)
-class MediaAdmin(admin.ModelAdmin):
+class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
     form = MediaAdminForm
-    list_display = ('name', 'media_type', 'parent__name')
+    list_display = ('name', 'media_type', 'parent__name', 'created_at')
     search_fields = ('name',)
     actions = ['export_selected']
     list_export = ('csv', 'xlsx')

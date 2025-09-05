@@ -434,10 +434,16 @@ class BatchMediaRetryExtractView(View):
 # Shared helper functions
 def get_media_type_from_ai_data(document_type):
     """Map AI-detected document type to our media type choices"""
-    if not document_type:
+    if isinstance(document_type, dict):
+        doc_type_text = document_type.get('type', '')
+    else:
+        doc_type_text = document_type or ''
+
+    if not doc_type_text:
         return FileTypeChoices.TXT.value
 
-    document_type = document_type.lower()
+    if doc_type_text and doc_type_text != '':
+        doc_type_text = doc_type_text.lower()
     type_mapping = {
         'report': FileTypeChoices.PDF,
         'spreadsheet': FileTypeChoices.XLSX,
@@ -450,7 +456,7 @@ def get_media_type_from_ai_data(document_type):
     }
 
     for key, value in type_mapping.items():
-        if key in document_type:
+        if key in doc_type_text:
             return value.value
     return FileTypeChoices.TXT.value
 
@@ -504,8 +510,20 @@ def build_key_values(data_dict):
     organization_value = data_dict.get('organization', '')
     key_values.append({'key': 'ORGANIZATION', 'value': organization_value})
 
-    if data_dict.get('document_type'):
-        key_values.append({'key': 'DOCUMENT TYPE', 'value': data_dict['document_type']})
+    document_type = data_dict.get('document_type')
+    if document_type:
+        if isinstance(document_type, dict):
+            doc_type_value = document_type.get('type', '')
+            if doc_type_value:
+                doc_type_value = doc_type_value.title()
+                key_values.append({'key': 'DOCUMENT TYPE', 'value': doc_type_value})
+            reason = document_type.get('reason', '')
+            if reason:
+                key_values.append({'key': 'DOCUMENT TYPE REASON', 'value': reason})
+        else:
+            doc_type_value = document_type.title() if document_type else ''
+            key_values.append({'key': 'DOCUMENT TYPE', 'value': doc_type_value})
+
     if data_dict.get('key_entities') and len(data_dict['key_entities']) > 0:
         key_values.append({'key': 'KEY ENTITIES', 'value': ', '.join(data_dict['key_entities'])})
 
@@ -689,6 +707,12 @@ class BatchMediaTaskStatusView(View):
             validated_tags = self.validate_tags_against_database(tag_dicts, company)
 
             validated_tag_texts = [tag['text'] for tag in validated_tags]
+            document_type = subdoc_data.get('document_type', '')
+            if isinstance(document_type, dict):
+                document_type_value = document_type.get('type', '')
+                document_type_value = document_type_value.title() if document_type_value else ''
+            else:
+                document_type_value = document_type.title() if document_type else ''
 
             processed = {
                 'title': subdoc_data.get('title', ''),
@@ -697,7 +721,7 @@ class BatchMediaTaskStatusView(View):
                 'exact_content': subdoc_data.get('exact_content', ''),
                 'extracted_text': subdoc_data.get('exact_content', ''),
                 'organization': subdoc_data.get('organization', company_name or ''),
-                'document_type': subdoc_data.get('document_type', ''),
+                'document_type': document_type_value,
                 'key_entities': subdoc_data.get('key_entities', []),
                 'url': subdoc_data.get('url', []),
                 'file_url': subdoc_data.get('file_url', ''),
@@ -722,13 +746,19 @@ class BatchMediaTaskStatusView(View):
 
             return processed
 
-        # Extract main document data
+        document_type = ai_data.get('document_type', '')
+        if isinstance(document_type, dict):
+            document_type_value = document_type.get('type', '')
+            document_type_value = document_type_value.title() if document_type_value else ''
+        else:
+            document_type_value = document_type.title() if document_type else ''
+
         main_data = {
             'title': ai_data.get('title', ''),
             'summary': ai_data.get('summary', ''),
             'extracted_text': ai_data.get('exact_content', '') or ai_data.get('summary', ''),
             'organization': ai_data.get('organization', '') or company_name or '',
-            'document_type': ai_data.get('document_type', ''),
+            'document_type': document_type_value,
             'key_entities': ai_data.get('key_entities', []),
             'structured_content': ai_data.get('structured_content', {})
         }
@@ -1573,12 +1603,17 @@ class BatchMediaSaveView(View):
                     )
                     org_added = True
                 elif kv['key'] == 'DOCUMENT TYPE':
-                    # Apply title case cleanup for document type
-                    doc_type_value = self.clean_text_to_title_case(kv['value'])
+                    doc_type_value = kv['value']
+                    if isinstance(doc_type_value, dict):
+                        actual_value = doc_type_value.get('type', '')
+                        actual_value = actual_value.title() if actual_value else ''
+                    else:
+                        actual_value = doc_type_value.title() if doc_type_value else ''
+
                     KeyValue.objects.create(
                         media=subdoc_media,
                         key='DOCUMENT TYPE',
-                        value=doc_type_value
+                        value=actual_value
                     )
                 else:
                     KeyValue.objects.create(
