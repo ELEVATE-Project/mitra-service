@@ -707,7 +707,7 @@ def process_tags(tags_data):
     return processed_tags
 
 
-def get_master_tags(company=None):
+def get_master_tags(company=None, include_description=True):
     try:
         query = Tag.objects.filter(
             source_type__in=[TagSourceChoices.MANUAL, TagSourceChoices.AI_EXTRACTED],
@@ -717,8 +717,16 @@ def get_master_tags(company=None):
         if company:
             query = query.filter(company=company)
 
-        tag_names = list(query.values_list('name', flat=True).distinct())
-        return tag_names
+        if include_description:
+            return [
+                {
+                    'name': tag['name'],
+                    'description': tag['description'] or ''
+                }
+                for tag in query.values('name', 'description').distinct()
+            ]
+        else:
+            return list(query.values_list('name', flat=True).distinct())
 
     except Exception as e:
         print(f"Error getting master tags: {e}")
