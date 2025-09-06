@@ -506,10 +506,10 @@ def clean_all_stories(start=0, end=100):
 def get_story_count(start_time=None, end_time=None):
     """Get story IDs for a specific time range"""
     if not start_time:
-        start_time = make_aware(datetime(2025, 7, 15, 0, 0))
+        start_time = make_aware(datetime(2025, 5, 1, 0, 0))
     if not end_time:
-        end_time = make_aware(datetime(2025, 7, 28, 23, 59, 59))
-
+        end_time = make_aware(datetime(2025, 8, 28, 23, 59, 59))
+    print(f"start_time: {start_time} and end time {end_time}")
     session_ids = list(
         ChatSession.objects.filter(
             session_type=ChatType.shikshaChaupal,
@@ -528,7 +528,7 @@ def get_story_count(start_time=None, end_time=None):
     else:
         print("No sessions found.")
         return []
-
+    print(f"Total session: {len(session_ids)}")
     story_ids = list(
         Story.objects.filter(session__in=session_ids)
         .exclude(other_params=None)

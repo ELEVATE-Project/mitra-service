@@ -1,10 +1,15 @@
 from chatbot.utils.image_converter import convert_image
+from chatbot.views.admin.generic_upload_views import GenericBatchUploadView, GenericBatchTemplateView, \
+    GenericBatchImportView
+from chatbot.views.admin.media_upload_views import BatchMediaUploadView, BatchMediaExtractView, BatchMediaSaveView, \
+    BatchMediaTaskStatusView, BatchMediaRetryExtractView, BatchMediaRetrySaveView, VectorDBTaskStatusView
 from chatbot.views.aws_views import get_presigned_url
 from chatbot.views.gotenberg_view import generate_pdf_view
 from chatbot.views.kafka_views import sync_user_project_view
 from chatbot.views.location_views import get_location_view, get_ip_location_view
+from chatbot.views.media_views import MediaSearchView
 from chatbot.views.profile_views import create_profile_views, read_elevate_profile
-from django.urls import path
+from django.urls import path, include
 from chatbot.views import api_views
 from chatbot.views.bhashini_views import text_speech_view, speech_text, text_translation_view, text_transliterate_view
 from chatbot.views.chat_view import save_chats_view, create_chatsession, save_ptm_chats
@@ -18,9 +23,14 @@ from chatbot.views.mitra_views import paraphrase_view, generate_objectives_view,
 from chatbot.views.recommendation import generate_recommendation
 from chatbot.views.story_views import end_story, StoryListCreateView, StoryBySessionView, \
     StoryRetrieveUpdateDestroyView, StoryMediaListCreateView, StoryMediaRetrieveUpdateDestroyView
-
+from rest_framework.routers import DefaultRouter
+from chatbot.views.media_api_views import MediaViewSet
 
 app_name = "chatbot"
+
+router = DefaultRouter()
+router.register(r'media', MediaViewSet, basename='media')
+
 
 urlpatterns = [
     path('api/profile/', api_views.post_profile),
@@ -90,4 +100,31 @@ urlpatterns = [
     path("api/image-converter/", convert_image, name='image-converter'),
     path("api/read-elevate-profile/", read_elevate_profile, name='read-elevate-profile'),
     path('api/questions/save/', save_ptm_chats, name="save_ptm_chats"),
+
+    path("api/search/", MediaSearchView.as_view(), name="media-search"),
+
+    # path('admin/media/batch-upload/', BatchMediaUploadView.as_view(), name='batch_media_upload'),
+    path('admin/media/batch-upload/', BatchMediaUploadView.as_view(), name='chatbot_media_batch_upload'),
+    path('admin/media/batch-extract/', BatchMediaExtractView.as_view(), name='chatbot_media_batch_extract'),
+    path('admin/media/batch-save/', BatchMediaSaveView.as_view(), name='chatbot_media_batch_save'),
+    path('admin/media/batch-task-status/', BatchMediaTaskStatusView.as_view(), name='chatbot_media_task_status'),
+
+
+    # Retry endpoints
+    path('admin/media/retry-extract/', BatchMediaRetryExtractView.as_view(), name='chatbot_media_retry_extract'),
+    path('admin/media/retry-save/', BatchMediaRetrySaveView.as_view(), name='chatbot_media_retry_save'),
+
+    path('admin/media/vector-db-task-status/', VectorDBTaskStatusView.as_view(), name='chatbot_media_vector_db_task_status'),
+
+    # generic batch upload URLs
+    path('admin/<str:app_label>/<str:model_name>/batch-upload/', GenericBatchUploadView.as_view(),
+         name='generic_batch_upload'),
+    path('admin/<str:app_label>/<str:model_name>/batch-template/', GenericBatchTemplateView.as_view(),
+         name='generic_batch_template'),
+    path('admin/<str:app_label>/<str:model_name>/batch-import/', GenericBatchImportView.as_view(),
+         name='generic_batch_import'),
+
+    # Media API endpoints
+    path('api/v1/', include(router.urls)),
+
 ]

@@ -269,9 +269,9 @@ def get_migration_story_count(start_time=None, end_time=None):
     """Get stories that need migration (non-English with english_json)"""
     try:
         if not start_time:
-            start_time = make_aware(datetime(2025, 7, 15, 0, 0))
+            start_time = make_aware(datetime(2025, 5, 1, 0, 0))
         if not end_time:
-            end_time = make_aware(datetime(2025, 7, 28, 23, 59, 59))
+            end_time = make_aware(datetime(2025, 8, 28, 23, 59, 59))
 
         # Get shikshaChaupal sessions
         session_ids = list(

@@ -92,6 +92,65 @@ class MediaTypeChoices(models.TextChoices):
     HEIC = 'image/heic', _('HEIC')
 
 
+class FileTypeChoices(models.TextChoices):
+    PDF = 'application/pdf', _('PDF')
+    DOC = 'application/msword', _('DOC')
+    DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', _('DOCX')
+    TXT = 'text/plain', _('TXT')
+    CSV = 'text/csv', _('CSV')
+    XLS = 'application/vnd.ms-excel', _('XLS')
+    XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', _('XLSX')
+
+
+    @classmethod
+    def get_extension_mapping(cls):
+        """Returns a dict mapping MIME types to file extensions"""
+        return {
+            cls.PDF: '.pdf',
+            cls.DOC: '.doc',
+            cls.DOCX: '.docx',
+            cls.TXT: '.txt',
+            cls.CSV: '.csv',
+            cls.XLS: '.xls',
+            cls.XLSX: '.xlsx',
+        }
+
+    @classmethod
+    def get_mime_from_extension(cls, extension):
+        """Get MIME type from file extension"""
+        ext = extension.lower().lstrip('.')
+        ext_to_mime = {
+            'pdf': cls.PDF,
+            'doc': cls.DOC,
+            'docx': cls.DOCX,
+            'txt': cls.TXT,
+            'csv': cls.CSV,
+            'xls': cls.XLS,
+            'xlsx': cls.XLSX,
+        }
+        return ext_to_mime.get(ext)
+
+    @classmethod
+    def get_label_from_extension(cls, extension):
+        """Get label (PDF, DOC, etc.) from file extension"""
+        mime_type = cls.get_mime_from_extension(extension)
+        if mime_type:
+            return cls(mime_type).label
+        return cls.TXT.label
+
+    @classmethod
+    def get_valid_extensions(cls):
+        """Get list of valid file extensions without dots"""
+        extension_mapping = cls.get_extension_mapping()
+        return [ext.lstrip('.') for ext in extension_mapping.values()]
+
+    @classmethod
+    def is_valid_extension(cls, extension):
+        """Check if extension is valid"""
+        ext = extension.lower().lstrip('.')
+        return ext in cls.get_valid_extensions()
+
+
 class VoiceProviderChoices(models.TextChoices):
     AWS = 'aws', _('AWS')
     GCP = 'gcp', _('GCP')
@@ -114,6 +173,12 @@ class ChatStageChoices(models.TextChoices):
 class TagChoices(models.TextChoices):
     APPROVED = 'Approved', _('Approved')
     PENDING = 'Pending', _('Pending')
+
+
+class TagSourceChoices(models.TextChoices):
+    MANUAL = 'MANUAL', _('Manual')
+    AI_EXTRACTED = 'AI_EXTRACTED', _('AI Extracted')
+    AI_GENERATED = 'AI_GENERATED', _('AI Generated')
 
 
 class StoryLanguageChoices(models.TextChoices):

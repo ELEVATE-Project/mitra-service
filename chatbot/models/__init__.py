@@ -3,4 +3,5 @@ from .enums import *
 from .story_models import *
 from .chat_models import *
 from .bot_vernacular_model import *
+from .media_models import *
 from .theme_models import *

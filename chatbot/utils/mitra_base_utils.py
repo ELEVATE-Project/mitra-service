@@ -127,6 +127,7 @@ def validate_actions_utils(user_input, user_objective, problem_statement, compan
         template = Template(company_bot.tag_context)
         tag_context = template.render(context_data)
 
+
         messages = [{
             'role': 'user',
             'content': [{'text': f"{tag_context}"}]

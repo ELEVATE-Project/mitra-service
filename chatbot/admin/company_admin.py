@@ -2,6 +2,7 @@ from import_export.admin import ExportActionMixin
 from django.contrib import admin
 from django.db.models import Q
 from simple_history.admin import SimpleHistoryAdmin
+from .generic_upload_admin import BatchUploadMixin
 from chatbot.filter.admin_filter import (CompanyChatCompanyFilter, ChatSessionFilter, ProfileCityFilter,
                                          ProfileStateFilter, ProfileCompanyChatFilter, ProfileEmailFilter)
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
@@ -51,11 +52,15 @@ class CompanyAdmin(admin.ModelAdmin):
 
 
 @admin.register(CompanyBot)
-class CompanyBotAdmin(SimpleHistoryAdmin):
+class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
     list_display = ('name', 'company',)
-    list_filter = ('company', 'name', 'provider', 'llm_model')
+    list_filter = ('company', 'name', 'provider', 'llm_model', 'created_at')
     inlines = [VoiceProviderAdmin]
     actions = ['duplicate_bot']
+
+    enable_batch_upload = True
+    batch_load_foreign_keys = True
+    batch_upload_fields = ['name', 'company', 'provider', 'llm_model', 'context', 'max_token', 'route']
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)

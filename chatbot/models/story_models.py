@@ -4,7 +4,7 @@ import base64
 from django.db import models
 from django.core.validators import MinLengthValidator
 from chatbot.models import Profile, TagChoices, StoryLanguageChoices, StorySourceChoices, MediaTypeChoices, \
-    StoryStatusChoices, Company
+    StoryStatusChoices, Company, TagSourceChoices
 from pillow_heif import register_heif_opener
 from django.core.files.base import ContentFile
 from PIL import Image, UnidentifiedImageError
@@ -153,9 +153,19 @@ class Tag(models.Model):
     status = models.CharField(max_length=100, choices=TagChoices.choices, default=TagChoices.PENDING)
     company = models.ForeignKey(Company, on_delete=models.SET_NULL, null=True, blank=True)
 
+    source_type = models.CharField(
+        max_length=50, choices=TagSourceChoices.choices, null=True, blank=True
+    )
+
+    description = models.TextField(null=True, blank=True)
+
     created_by = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Global Tag"
+        verbose_name_plural = "Global Tags"
 
     def __str__(self):
         return self.name
