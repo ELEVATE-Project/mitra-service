@@ -742,8 +742,14 @@ def build_key_values(data_dict):
 
     if data_dict.get('title'):
         key_values.append({'key': 'TITLE', 'value': data_dict['title']})
+
     organization_value = data_dict.get('organization', '')
     key_values.append({'key': 'ORGANIZATION', 'value': organization_value})
+
+    # ADD GEOGRAPHY HANDLING
+    geography_value = data_dict.get('geography', '')
+    if geography_value:
+        key_values.append({'key': 'GEOGRAPHY', 'value': geography_value})
 
     document_type = data_dict.get('document_type')
     if document_type:
@@ -956,6 +962,7 @@ class BatchMediaTaskStatusView(View):
                 'exact_content': subdoc_data.get('exact_content', ''),
                 'extracted_text': subdoc_data.get('exact_content', ''),
                 'organization': subdoc_data.get('organization', company_name or ''),
+                'geography': to_title_case(subdoc_data.get('geography', '')),
                 'document_type': document_type_value,
                 'key_entities': subdoc_data.get('key_entities', []),
                 'url': subdoc_data.get('url', []),
@@ -988,11 +995,17 @@ class BatchMediaTaskStatusView(View):
         else:
             document_type_value = document_type.title() if document_type else ''
 
+        def to_title_case(text):
+            if not text:
+                return text
+            return str(text).strip().title()
+
         main_data = {
             'title': ai_data.get('title', ''),
             'summary': ai_data.get('summary', ''),
             'extracted_text': ai_data.get('exact_content', '') or ai_data.get('summary', ''),
             'organization': ai_data.get('organization', '') or company_name or '',
+            'geography': to_title_case(ai_data.get('geography', '')),
             'document_type': document_type_value,
             'key_entities': ai_data.get('key_entities', []),
             'structured_content': ai_data.get('structured_content', {})
