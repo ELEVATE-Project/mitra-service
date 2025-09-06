@@ -46,6 +46,9 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = self._apply_custom_filters(queryset)
 
         if self.action == 'list':
+            queryset = self._apply_content_exclusion_filter(queryset)
+
+        if self.action == 'list':
             queryset = queryset.select_related('company_bot', 'parent')
             queryset = queryset.prefetch_related('tags')
         elif self.action == 'retrieve':
@@ -55,6 +58,24 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         return queryset
+
+    def _apply_content_exclusion_filter(self, queryset):
+        """
+        Exclude media that don't have title AND don't have description AND don't have document_type.
+        Keep media that have at least one of: title, description, or document_type.
+        """
+        document_type_exists = KeyValue.objects.filter(
+            media=OuterRef('pk'),
+            key__iregex=r'^document[_\s]type$'
+        )
+
+        content_filter = (
+                Q(name__isnull=False) & ~Q(name__exact='') |
+                Q(description__isnull=False) & ~Q(description__exact='') |
+                Q(pk__in=Subquery(document_type_exists.values('media')))
+        )
+
+        return queryset.filter(content_filter)
 
     def _apply_trigram_search(self, queryset, search_text, similarity_threshold):
         from chatbot.models import KeyValue, Tag
