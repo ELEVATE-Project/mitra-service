@@ -10,7 +10,7 @@ from chatbot.serializer.media_serializer import (
 )
 from chatbot.filter.media_filters import MediaFilter
 from django.contrib.postgres.search import TrigramSimilarity
-from django.db.models import Count, Q, Value, FloatField, OuterRef, Subquery, CharField
+from django.db.models import Count, Q, Value, FloatField, OuterRef, Subquery, CharField, Exists
 from django.db.models.functions import Greatest, Coalesce
 from django.db.models.functions import Lower
 
@@ -70,9 +70,9 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
         content_filter = (
-                Q(name__isnull=False) & ~Q(name__exact='') |
-                Q(description__isnull=False) & ~Q(description__exact='') |
-                Q(pk__in=Subquery(document_type_exists.values('media')))
+                Q(title__isnull=False) & ~Q(title__exact='') |  # Has title
+                Q(description__isnull=False) & ~Q(description__exact='') |  # Has description
+                Q(pk__in=Subquery(document_type_exists.values('media')))  # Has document_type
         )
 
         return queryset.filter(content_filter)
