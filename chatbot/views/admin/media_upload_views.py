@@ -190,6 +190,7 @@ class CacheManager:
     def get_cached_item(cache_key):
         """Retrieve item from cache with Redis-specific debugging"""
         import time
+        from django.core.cache import cache
 
         max_retries = 2
         retry_delay = 0.1
