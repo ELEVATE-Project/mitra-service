@@ -188,20 +188,63 @@ class CacheManager:
 
     @staticmethod
     def get_cached_item(cache_key):
-        """Retrieve item from cache"""
-        try:
-            cached_data = cache.get(cache_key)
-            if cached_data:
-                print(f"✓ Cache HIT: {cache_key}")
-                return cached_data
-            else:
-                print(f"✗ Cache MISS: {cache_key}")
-                # List all cache keys to debug
-                print(f"Available cache keys pattern: batch_upload_*")
-                return None
-        except Exception as e:
-            print(f"Cache retrieval error for {cache_key}: {e}")
-            return None
+        """Retrieve item from cache with Redis-specific debugging"""
+        import time
+
+        max_retries = 2
+        retry_delay = 0.1
+
+        for attempt in range(max_retries + 1):
+            try:
+                # Add timing to detect slow Redis responses
+                start_time = time.time()
+                cached_data = cache.get(cache_key)
+                response_time = time.time() - start_time
+
+                if cached_data:
+                    print(f"✓ Cache HIT: {cache_key} (attempt {attempt + 1}, {response_time:.3f}s)")
+                    return cached_data
+                else:
+                    print(f"✗ Cache MISS: {cache_key} (attempt {attempt + 1}, {response_time:.3f}s)")
+
+                    # For Redis, try to get connection info
+                    try:
+                        from django.core.cache import cache
+                        if hasattr(cache, '_cache') and hasattr(cache._cache, 'get_client'):
+                            redis_client = cache._cache.get_client()
+                            connection_info = redis_client.connection_pool.connection_kwargs
+                            print(f"Redis connection: {connection_info.get('host')}:{connection_info.get('port')}")
+
+                            # Check Redis connection
+                            redis_client.ping()
+                            print("Redis ping successful")
+
+                            # Check if key actually exists
+                            exists = redis_client.exists(cache_key)
+                            print(f"Redis key exists check: {exists}")
+
+                    except Exception as redis_debug_error:
+                        print(f"Redis debug error: {redis_debug_error}")
+
+                    # If not last attempt, wait and retry
+                    if attempt < max_retries:
+                        print(f"Retrying cache get in {retry_delay}s...")
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # Exponential backoff
+                        continue
+                    else:
+                        return None
+
+            except Exception as e:
+                print(f"Cache retrieval error for {cache_key} (attempt {attempt + 1}): {e}")
+                if attempt < max_retries:
+                    time.sleep(retry_delay)
+                    retry_delay *= 2
+                    continue
+                else:
+                    return None
+
+        return None
 
     @staticmethod
     def extend_cache_timeout(cache_keys, additional_timeout=None):

@@ -221,6 +221,26 @@ CHANNEL_LAYERS = {
     },
 }
 
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': 'redis://127.0.0.1:6379/1',  # Use database 1 (different from channels)
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'CONNECTION_POOL_KWARGS': {
+                'max_connections': 50,
+                'retry_on_timeout': True,
+                'socket_connect_timeout': 5,
+                'socket_timeout': 5,
+                'health_check_interval': 30,
+            },
+            'SERIALIZER': 'django_redis.serializers.pickle.PickleSerializer',
+            'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
+        },
+        'TIMEOUT': 7200,
+    }
+}
+
 # TAILWIND_APP_NAME = "theme"
 
 INTERNAL_IPS = [
