@@ -220,34 +220,125 @@ class GetCachedItemView(View):
 
     def post(self, request):
         try:
+            self._source_doc_cache = {}
             data = json.loads(request.body)
-            cache_key = data.get('cache_key')
+            company_bot_id = data.get('company_bot_id')
+            media_items = data.get('items', [])
+            session_id = data.get('session_id')
 
-            if not cache_key:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'No cache key provided'
-                }, status=400)
+            results = []
+            stats = {
+                'total': len(media_items),
+                'successful': 0,
+                'failed': 0,
+                'partial_success': 0,
+                'timeouts': 0,
+                'similarity_failures': 0
+            }
 
-            cached_item = CacheManager.get_cached_item(cache_key)
+            # Get current user's profile
+            try:
+                user_profile = Profile.objects.get(email=request.user.email)
+            except Profile.DoesNotExist:
+                user_profile = None
 
-            if cached_item:
-                return JsonResponse({
-                    'success': True,
-                    'data': cached_item,
-                    'cache_key': cache_key
-                })
-            else:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Cache item not found'
-                }, status=404)
+            print(f"Starting batch save for {len(media_items)} files")
 
-        except Exception as e:
-            print(f"Error retrieving cached item: {e}")
+            # Process each file with fault tolerance
+            for i, item_data in enumerate(media_items):
+                filename = item_data.get('filename', f'File_{i}')
+                print(f"Processing file {i + 1}/{len(media_items)}: {filename}")
+
+                try:
+                    bypass_similarity = item_data.get('bypass_similarity', False)
+
+                    # CRITICAL FIX: Use the file_index from item_data, not the loop index
+                    # The file_index in item_data corresponds to the actual index used during caching
+                    actual_file_index = item_data.get('file_index', i)
+                    print(f"Using file_index {actual_file_index} for {filename} (loop index: {i})")
+
+                    # Ensure the item_data has the correct file_index for cache lookup
+                    item_data['file_index'] = actual_file_index
+
+                    result = self.save_single_item_with_vector_db_wait_safe(
+                        item_data=item_data,
+                        company_bot_id=company_bot_id,
+                        user_profile=user_profile,
+                        session_id=session_id,
+                        bypass_similarity=bypass_similarity
+                    )
+
+                    # Track statistics
+                    if result['success']:
+                        stats['successful'] += 1
+                    else:
+                        stats['failed'] += 1
+                        if result.get('partial_success'):
+                            stats['partial_success'] += 1
+                        if result.get('error_type') in ['VECTOR_DB_TIMEOUT', 'WAIT_ERROR']:
+                            stats['timeouts'] += 1
+                        if result.get('error_type') == 'SIMILARITY_CHECK_FAILED':
+                            stats['similarity_failures'] += 1
+
+                    results.append(result)
+                    print(
+                        f"File {i + 1} result: {'✓' if result['success'] else '✗'} - {result.get('message', 'No message')}")
+
+                except Exception as item_error:
+                    print(f"Critical error processing {filename}: {item_error}")
+                    stats['failed'] += 1
+
+                    # Use the actual file_index for error reporting too
+                    actual_file_index = item_data.get('file_index', i)
+
+                    results.append({
+                        'success': False,
+                        'filename': filename,
+                        'message': f'Critical processing error: {str(item_error)}',
+                        'error_type': 'CRITICAL_ERROR',
+                        'file_index': actual_file_index,
+                        'file_key': item_data.get('file_key'),
+                        'session_id': session_id,
+                        'vector_db_saved': False
+                    })
+
+            # Preserve cache for failed files
+            failed_cache_keys = []
+            for r in results:
+                if not r['success'] and r.get('file_key'):
+                    failed_cache_keys.append(r['file_key'])
+                # Also preserve cache for failed subdocuments
+                if r.get('subdocument_results'):
+                    for subdoc_result in r['subdocument_results']:
+                        if not subdoc_result.get('success') and subdoc_result.get('cache_key'):
+                            failed_cache_keys.append(subdoc_result['cache_key'])
+
+            if failed_cache_keys:
+                CacheManager.extend_cache_timeout(failed_cache_keys)
+
+            # Generate summary message
+            summary_message = self.generate_batch_summary(stats)
+            print(f"Batch complete: {summary_message}")
+
+            return JsonResponse({
+                'success': True,
+                'results': results,
+                'stats': stats,
+                'summary_message': summary_message,
+                'session_id': session_id
+            })
+
+        except json.JSONDecodeError:
             return JsonResponse({
                 'success': False,
-                'error': str(e)
+                'error': 'Invalid JSON data'
+            }, status=400)
+        except Exception as batch_error:
+            print(f"Batch processing error: {batch_error}")
+            traceback.print_exc()
+            return JsonResponse({
+                'success': False,
+                'error': f'Batch processing failed: {str(batch_error)}'
             }, status=500)
 
 
