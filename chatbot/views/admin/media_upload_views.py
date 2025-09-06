@@ -539,7 +539,10 @@ class BatchMediaExtractView(View):
             except Profile.DoesNotExist:
                 pass
 
-        master_tags = get_master_tags(company=company)
+        master_tags = get_master_tags(
+            company=company, other_params=company_bot.other_params if company_bot else None
+        )
+        print("Sending master tags: ", master_tags)
         other_data = {
             "master_tag": master_tags
         }
@@ -707,8 +710,19 @@ def process_tags(tags_data):
     return processed_tags
 
 
-def get_master_tags(company=None, include_description=True):
+def get_master_tags(company=None, other_params=None, include_description=False):
     try:
+        if other_params:
+            try:
+                if isinstance(other_params, str):
+                    params = json.loads(other_params)
+                else:
+                    params = other_params
+
+                include_description = params.get('include_description', include_description)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
         query = Tag.objects.filter(
             source_type__in=[TagSourceChoices.MANUAL, TagSourceChoices.AI_EXTRACTED],
             status=TagChoices.APPROVED

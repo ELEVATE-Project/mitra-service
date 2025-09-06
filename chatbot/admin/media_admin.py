@@ -122,7 +122,7 @@ class MasterTagAdmin(BatchUploadMixin, admin.ModelAdmin):
     readonly_fields = ('source_type', 'company', 'created_by')
 
     enable_batch_upload = True
-    batch_upload_fields = ['name', 'status', 'created_by']
+    batch_upload_fields = ['name', 'status', 'description', 'created_by']
 
     def save_model(self, request, obj, form, change):
         print("In save")
