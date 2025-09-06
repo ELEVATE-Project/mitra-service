@@ -59,30 +59,89 @@ class CacheManager:
 
     @staticmethod
     def get_cache_key(session_id, item_type, item_id):
-        """Generate consistent cache keys"""
-        return f"batch_upload_{session_id}_{item_type}_{item_id}"
+        """Generate consistent cache keys with proper sanitization"""
+        import re
+
+        # Sanitize all components to ensure memcached compatibility
+        sanitized_session_id = re.sub(r'[^a-zA-Z0-9\-_.]', '_', str(session_id))
+        sanitized_item_type = re.sub(r'[^a-zA-Z0-9\-_.]', '_', str(item_type))
+        sanitized_item_id = re.sub(r'[^a-zA-Z0-9\-_.]', '_', str(item_id))
+
+        # Remove multiple consecutive underscores
+        sanitized_session_id = re.sub(r'_+', '_', sanitized_session_id)
+        sanitized_item_type = re.sub(r'_+', '_', sanitized_item_type)
+        sanitized_item_id = re.sub(r'_+', '_', sanitized_item_id)
+
+        # Generate the cache key
+        cache_key = f"batch_upload_{sanitized_session_id}_{sanitized_item_type}_{sanitized_item_id}"
+
+        # Final length check
+        if len(cache_key) > 240:
+            import hashlib
+            key_hash = hashlib.md5(cache_key.encode('utf-8')).hexdigest()
+            cache_key = f"batch_upload_{sanitized_session_id}_{sanitized_item_type}_{key_hash[:16]}"
+
+        # Final sanitization pass
+        cache_key = re.sub(r'[^a-zA-Z0-9\-_.]', '_', cache_key)
+
+        return cache_key
 
     @staticmethod
     def cache_file(file, session_id, file_index):
-        """Cache uploaded file content"""
+        """Cache uploaded file content with sanitized cache key"""
         try:
+            import re
+            import hashlib
+
             file_content = b''
             for chunk in file.chunks():
                 file_content += chunk
 
-            cache_key = CacheManager.get_cache_key(session_id, 'file', f"{file_index}_{file.name}")
+            # More aggressive sanitization for memcached compatibility
+            # Remove all non-alphanumeric characters except dots, hyphens, underscores
+            sanitized_name = re.sub(r'[^a-zA-Z0-9\-_.]', '_', file.name)
+            # Remove multiple consecutive underscores
+            sanitized_name = re.sub(r'_+', '_', sanitized_name)
+            # Remove leading/trailing underscores
+            sanitized_name = sanitized_name.strip('_')
+            # Ensure reasonable length (memcached has 250 char limit for keys)
+            if len(sanitized_name) > 30:
+                # Keep first 30 chars and add hash of full name for uniqueness
+                name_hash = hashlib.md5(file.name.encode('utf-8')).hexdigest()[:8]
+                sanitized_name = sanitized_name[:22] + '_' + name_hash
+
+            # Generate cache key with additional validation
+            cache_key_suffix = f"{file_index}_{sanitized_name}"
+            # Ensure the final cache key component doesn't have problematic characters
+            cache_key_suffix = re.sub(r'[^a-zA-Z0-9\-_.]', '_', cache_key_suffix)
+
+            cache_key = CacheManager.get_cache_key(session_id, 'file', cache_key_suffix)
+
+            # Additional validation: ensure cache key is memcached compatible
+            # Total length should be under 250 chars and contain only safe characters
+            if len(cache_key) > 240:  # Leave some buffer
+                # If still too long, use a hash-based approach
+                key_hash = hashlib.md5(cache_key.encode('utf-8')).hexdigest()
+                cache_key = f"batch_upload_{session_id}_file_{file_index}_{key_hash[:16]}"
+
+            # Final validation - ensure only safe characters
+            cache_key = re.sub(r'[^a-zA-Z0-9\-_.]', '_', cache_key)
+
             cache_data = {
                 'content': file_content,
-                'name': file.name,
+                'name': file.name,  # Keep original name
                 'size': file.size,
-                'type': 'file'
+                'type': 'file',
+                'file_index': file_index
             }
 
             cache.set(cache_key, cache_data, timeout=CACHE_TIMEOUT)
-            print(f"Cached file: {cache_key}")
+            print(f"Cached file: {cache_key} (original: {file.name})")
             return cache_key
         except Exception as e:
-            print(f"Error caching file: {e}")
+            print(f"Error caching file {file.name}: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     @staticmethod
@@ -130,12 +189,19 @@ class CacheManager:
     @staticmethod
     def get_cached_item(cache_key):
         """Retrieve item from cache"""
-        cached_data = cache.get(cache_key)
-        if cached_data:
-            print(f"Retrieved cached item: {cache_key}")
-            if cached_data.get('type') == 'subdocument':
-                print(f"Cached subdoc title: {cached_data.get('data', {}).get('title', 'No title')}")
-        return cached_data
+        try:
+            cached_data = cache.get(cache_key)
+            if cached_data:
+                print(f"✓ Cache HIT: {cache_key}")
+                return cached_data
+            else:
+                print(f"✗ Cache MISS: {cache_key}")
+                # List all cache keys to debug
+                print(f"Available cache keys pattern: batch_upload_*")
+                return None
+        except Exception as e:
+            print(f"Cache retrieval error for {cache_key}: {e}")
+            return None
 
     @staticmethod
     def extend_cache_timeout(cache_keys, additional_timeout=None):
@@ -191,9 +257,16 @@ class BatchMediaExtractView(View):
 
     def post(self, request):
         try:
+            import re
+            import time
+
             files = request.FILES.getlist('files')
             company_bot_id = request.POST.get('company_bot_id')
             session_id = request.POST.get('session_id')
+
+            # Get file indices if provided
+            file_indices = request.POST.getlist('file_indices')
+
             extracted_data = []
 
             # Generate session ID if not provided
@@ -207,30 +280,51 @@ class BatchMediaExtractView(View):
                 except CompanyBot.DoesNotExist:
                     pass
 
+            print(f"Processing {len(files)} files with indices: {file_indices}")
+
             for i, file in enumerate(files):
                 try:
-                    # Store file for retry purposes
-                    file_key = CacheManager.cache_file(file, session_id, i)
+                    # Use provided file index or generate unique one
+                    if i < len(file_indices) and file_indices[i]:
+                        file_index = int(file_indices[i])
+                    else:
+                        # Generate unique index if not provided
+                        file_index = int(time.time() * 1000000) + i
+
+                    print(f"Processing file {i}: {file.name} with index {file_index}")
+
+                    # Store file for retry purposes with sanitized cache key
+                    file_key = CacheManager.cache_file(file, session_id, file_index)
 
                     data = self.extract_file_data(
                         file=file,
                         company_bot=company_bot,
-                        file_index=i,
+                        file_index=file_index,  # Use unique index
                         request=request
                     )
                     data['status'] = 'success'
                     data['error'] = None
                     data['session_id'] = session_id
                     data['file_key'] = file_key
+
+                    print(f"Successfully processed file {file.name}, cache key: {file_key}")
+
                 except Exception as e:
+                    print(f"Error processing file {file.name}: {e}")
+
                     # For failed extractions, still cache the file
-                    file_key = CacheManager.cache_file(file, session_id, i)
+                    if i < len(file_indices) and file_indices[i]:
+                        file_index = int(file_indices[i])
+                    else:
+                        file_index = int(time.time() * 1000000) + i
+
+                    file_key = CacheManager.cache_file(file, session_id, file_index)
 
                     data = {
                         'filename': file.name,
                         'status': 'error',
                         'error': str(e),
-                        'file_index': i,
+                        'file_index': file_index,
                         'session_id': session_id,
                         'file_key': file_key,
                         'name': file.name,
@@ -250,12 +344,18 @@ class BatchMediaExtractView(View):
 
                 extracted_data.append(data)
 
+            print(f"Completed processing {len(extracted_data)} files")
+
             return JsonResponse({
                 'success': True,
                 'data': extracted_data,
                 'session_id': session_id
             })
+
         except Exception as e:
+            print(f"BatchMediaExtractView.post() error: {e}")
+            import traceback
+            traceback.print_exc()
             return JsonResponse({
                 'success': False,
                 'error': str(e)
