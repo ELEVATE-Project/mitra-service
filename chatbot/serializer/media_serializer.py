@@ -99,7 +99,7 @@ class MediaDetailSerializer(serializers.ModelSerializer):
     document_type = serializers.SerializerMethodField()
     key_entities = serializers.SerializerMethodField()
     file_size = serializers.SerializerMethodField()
-    file_size_formatted = serializers.SerializerMethodField()
+    size = serializers.SerializerMethodField()
 
     class Meta:
         model = Media
@@ -110,7 +110,7 @@ class MediaDetailSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at', 's3_url', 'tags',
             'title', 'organization', 'document_type', 'key_entities',
             'key_values', 'images', 'children','file_size',
-            'file_size_formatted',
+            'size',
         ]
 
     def get_key_values(self, obj):
@@ -165,7 +165,7 @@ class MediaDetailSerializer(serializers.ModelSerializer):
         except (ValueError, AttributeError):
             return None
 
-    def get_file_size_formatted(self, obj):
+    def get_size(self, obj):
         """Get human-readable file size"""
         try:
             if obj.file and hasattr(obj.file, 'size'):
