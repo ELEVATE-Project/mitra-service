@@ -3800,7 +3800,27 @@ function handleTagDropdownKeypress(event, identifier) {
                         if (!item.data.manual_tags.includes(searchTerm)) {
                             item.data.manual_tags.push(searchTerm);
                             item.hasUnsavedChanges = true;
-                            renderExtractedData();
+
+                            // Add the tag element directly instead of re-rendering
+                            const container = document.getElementById(`manualTagsContainer_${identifier}`);
+                            if (container) {
+                                const escapedTag = searchTerm.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                                const newTag = document.createElement('span');
+                                newTag.className = 'tag manual';
+                                newTag.innerHTML = `
+                                    ${searchTerm}
+                                    <span class="remove-tag" onclick="removeTag(${itemIndex}, '${escapedTag}', 'manual')">×</span>
+                                `;
+                                const wrapper = container.querySelector('.tag-input-wrapper');
+                                container.insertBefore(newTag, wrapper);
+                            }
+
+                            // Reset save button state
+                            const saveBtn = document.getElementById(`saveBtn_${identifier}`);
+                            if (saveBtn && saveBtn.classList.contains('saved')) {
+                                saveBtn.textContent = 'Save changes';
+                                saveBtn.classList.remove('saved');
+                            }
                         }
                     }
                 }
@@ -3853,7 +3873,8 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
     // Generate tags HTML
     const manualTagsHtml = subdoc.manual_tags.map(tag => {
         let tagText = typeof tag === 'object' && tag.text ? tag.text : tag;
-        const escapedTagText = tagText.replace(/'/g, "\\'");
+        const escapedTagText = tagText.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
         return `
             <span class="tag manual">
                 ${tagText}
@@ -3869,7 +3890,8 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
         } else if (typeof tag === 'string') {
             tagText = tag;
         }
-        const escapedTagText = tagText.replace(/'/g, "\\'");
+        const escapedTagText = tagText.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
         return `
             <span class="tag auto">
                 ${tagText}
@@ -4927,7 +4949,8 @@ function renderSubdocumentItem(subdoc, parentIndex, subdocIndex) {
     // Generate tags HTML
     const manualTagsHtml = subdoc.manual_tags.map(tag => {
         let tagText = typeof tag === 'object' && tag.text ? tag.text : tag;
-        const escapedTagText = tagText.replace(/'/g, "\\'");
+        const escapedTagText = tagText.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
         return `
             <span class="tag manual">
                 ${tagText}
@@ -4946,7 +4969,8 @@ function renderSubdocumentItem(subdoc, parentIndex, subdocIndex) {
         }
 
         // Escape single quotes in tag text for onclick handler
-        const escapedTagText = tagText.replace(/'/g, "\\'");
+        const escapedTagText = tagText.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
 
         return `
             <span class="tag auto">
@@ -5130,12 +5154,15 @@ function renderExtractedData() {
         const saveButtonClass = isSaved ? 'btn btn-save saved' : 'btn btn-save';
 
         // Auto-tags content
-        const autoTagsContent = (item.data.auto_tags || []).map(tag => `
-            <span class="tag auto">
-                ${tag}
-                <span class="remove-tag" onclick="removeTag(${displayIndex}, '${tag}', 'auto')">×</span>
-            </span>
-        `).join('');
+        const autoTagsContent = (item.data.auto_tags || []).map(tag => {
+            const escapedTag = tag.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            return `
+                <span class="tag auto">
+                    ${tag}
+                    <span class="remove-tag" onclick="removeTag(${displayIndex}, '${escapedTag}', 'auto')">×</span>
+                </span>
+            `;
+        }).join('');
 
         // Subdocuments content with informational message
         let subdocsHtml = '';
@@ -5221,12 +5248,15 @@ function renderExtractedData() {
                     <div class="tags-subsection">
                         <h4>Manual Tags</h4>
                         <div class="tags-input" id="manualTagsContainer_${displayIndex}">
-                            ${(item.data.manual_tags || []).map(tag => `
-                                <span class="tag manual">
-                                    ${tag}
-                                    <span class="remove-tag" onclick="removeTag(${displayIndex}, '${tag}', 'manual')">×</span>
-                                </span>
-                            `).join('')}
+                            ${(item.data.manual_tags || []).map(tag => {
+                                const escapedTag = tag.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                                return `
+                                    <span class="tag manual">
+                                        ${tag}
+                                        <span class="remove-tag" onclick="removeTag(${displayIndex}, '${escapedTag}', 'manual')">×</span>
+                                    </span>
+                                `;
+                            }).join('')}
 
                             <div class="tag-input-wrapper">
                                 <div class="custom-dropdown" id="customTagDropdown_${displayIndex}">

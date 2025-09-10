@@ -832,9 +832,6 @@ def build_key_values(data_dict):
             if doc_type_value:
                 doc_type_value = doc_type_value.title()
                 key_values.append({'key': 'DOCUMENT TYPE', 'value': doc_type_value})
-            reason = document_type.get('reason', '')
-            if reason:
-                key_values.append({'key': 'DOCUMENT TYPE REASON', 'value': reason})
         else:
             doc_type_value = document_type.title() if document_type else ''
             key_values.append({'key': 'DOCUMENT TYPE', 'value': doc_type_value})
@@ -1126,6 +1123,7 @@ class BatchMediaTaskStatusView(View):
                 'structured_content': ai_data.get('structured_content', {})
             }
         }
+
 
 # Helper class for shared tag processing logic
 class TagProcessor:
@@ -1967,21 +1965,6 @@ class BatchMediaSaveView(View):
                     value=org_value
                 )
 
-            # Store the original file URL for reference
-            KeyValue.objects.create(
-                media=subdoc_media,
-                key='ORIGINAL_FILE_URL',
-                value=file_url
-            )
-
-            # Add source document info if available
-            if subdoc_data.get('source_document'):
-                KeyValue.objects.create(
-                    media=subdoc_media,
-                    key='FOUND_IN_DOCUMENT',
-                    value=subdoc_data.get('source_document')
-                )
-
             print(f"Saved {len(subdoc_data.get('key_values', []))} key-values for subdoc: {subdoc_title}")
 
             # Process subdocument images
@@ -2003,7 +1986,7 @@ class BatchMediaSaveView(View):
                 'error': str(e),
                 'title': subdoc_data.get('title', 'Unknown subdocument')
             }
-        
+
     def save_media_image(self, img_data, media, index):
         """Save image associated with media"""
         try:

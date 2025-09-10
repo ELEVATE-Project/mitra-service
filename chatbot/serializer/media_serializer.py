@@ -54,7 +54,7 @@ class MediaListSerializer(serializers.ModelSerializer):
     def get_s3_url(self, obj):
         # If current doc is Source Document
         if obj.key_values.annotate(
-            norm_key=Lower(Replace('key', Value('_'), Value(' '), output_field=TextField()))
+                norm_key=Lower(Replace('key', Value('_'), Value(' '), output_field=TextField()))
         ).filter(
             norm_key='document type',
             value__icontains='source document'
@@ -63,7 +63,7 @@ class MediaListSerializer(serializers.ModelSerializer):
 
         # Check parent
         if obj.parent and obj.parent.key_values.annotate(
-            norm_key=Lower(Replace('key', Value('_'), Value(' '), output_field=TextField()))
+                norm_key=Lower(Replace('key', Value('_'), Value(' '), output_field=TextField()))
         ).filter(
             norm_key='document type',
             value__icontains='source document'
@@ -142,7 +142,7 @@ class MediaDetailSerializer(serializers.ModelSerializer):
     def get_s3_url(self, obj):
         # If current doc is Source Document
         if obj.key_values.annotate(
-            norm_key=Lower(Replace('key', Value('_'), Value(' '), output_field=TextField()))
+                norm_key=Lower(Replace('key', Value('_'), Value(' '), output_field=TextField()))
         ).filter(
             norm_key='document type',
             value__icontains='source document'
@@ -151,7 +151,7 @@ class MediaDetailSerializer(serializers.ModelSerializer):
 
         # Check parent
         if obj.parent and obj.parent.key_values.annotate(
-            norm_key=Lower(Replace('key', Value('_'), Value(' '), output_field=TextField()))
+                norm_key=Lower(Replace('key', Value('_'), Value(' '), output_field=TextField()))
         ).filter(
             norm_key='document type',
             value__icontains='source document'
@@ -175,8 +175,15 @@ class MediaDetailSerializer(serializers.ModelSerializer):
         return obj.get_s3_url() if hasattr(obj, 'get_s3_url') else None
 
     def get_key_values(self, obj):
-        excluded_keys = ['TITLE', 'ORGANIZATION', 'DOCUMENT TYPE', 'KEY ENTITIES']
+        excluded_keys = ['TITLE', 'ORGANIZATION', 'DOCUMENT TYPE', 'KEY ENTITIES', 'ORIGINAL_FILE_URL',
+                         'FOUND_IN_DOCUMENT', 'DOCUMENT TYPE REASON']
         filtered_kvs = obj.key_values.exclude(key__in=excluded_keys)
+
+        # If no key-value pairs exist after exclusion, include the metadata fields
+        if not filtered_kvs.exists():
+            metadata_kvs = obj.key_values.filter(key__in=['TITLE', 'ORGANIZATION', 'DOCUMENT TYPE', 'KEY ENTITIES'])
+            return KeyValueSerializer(metadata_kvs, many=True).data
+
         return KeyValueSerializer(filtered_kvs, many=True).data
 
     def get_parent_info(self, obj):
