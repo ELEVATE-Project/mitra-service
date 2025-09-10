@@ -60,6 +60,14 @@ except ImportError:
     HAS_PDFPLUMBER = False
     logger.warning("pdfplumber not available. Using PyMuPDF/PyPDF2 fallback.")
 
+try:
+    import openpyxl
+    HAS_OPENPYXL = True
+    logger.info("openpyxl available for enhanced Excel processing")
+except ImportError:
+    HAS_OPENPYXL = False
+    logger.warning("openpyxl not available. Excel hyperlink extraction will be limited.")
+
 
 class DocumentExtractor:
     """Extract structured content from documents using AWS Bedrock Llama model with enhanced features
@@ -263,7 +271,7 @@ class DocumentExtractor:
             return url
 
     def _extract_limited_excel_content(self, content_bytes: bytes, max_chars: int = None) -> str:
-        """Extract limited content from Excel file for processing"""
+        """Extract limited content from Excel file for LLM processing"""
         if max_chars is None:
             max_chars = self.subdoc_max_chars
 
@@ -373,6 +381,144 @@ class DocumentExtractor:
 
         except Exception as e:
             logger.error(f"Error extracting Excel content: {e}")
+            return ""
+
+    def _extract_comprehensive_excel_content_for_urls(self, content_bytes: bytes) -> str:
+        """Extract COMPLETE Excel content from ALL sheets specifically for URL extraction - no limits at all"""
+        try:
+            logger.info("=" * 80)
+            logger.info("EXTRACTING COMPREHENSIVE EXCEL CONTENT FOR URL EXTRACTION")
+            logger.info("=" * 80)
+
+            excel_file = pd.ExcelFile(io.BytesIO(content_bytes))
+            sheet_names = excel_file.sheet_names
+
+            logger.info(f"Processing ALL {len(sheet_names)} sheets for URL extraction:")
+            for i, sheet_name in enumerate(sheet_names):
+                logger.info(f"  Sheet {i + 1}: '{sheet_name}'")
+
+            all_text_parts = []
+            total_urls_found = 0
+
+            # Process ALL sheets without any limits
+            for sheet_idx, sheet_name in enumerate(sheet_names):
+                logger.info(f"Processing sheet {sheet_idx + 1}/{len(sheet_names)}: '{sheet_name}' for URLs...")
+
+                try:
+                    # Read ENTIRE sheet - no row or column limits
+                    df = pd.read_excel(excel_file, sheet_name=sheet_name)
+
+                    if df.empty:
+                        logger.info(f"  Sheet '{sheet_name}' is empty, skipping...")
+                        continue
+
+                    logger.info(f"  Sheet '{sheet_name}': {len(df)} rows x {len(df.columns)} columns")
+
+                    # Convert entire sheet to string representation
+                    # Use a more comprehensive approach to capture all text content
+                    sheet_text_parts = []
+
+                    # Add sheet header
+                    sheet_text_parts.append(f"\n=== SHEET: {sheet_name} ===")
+
+                    # Add column headers
+                    headers = list(df.columns)
+                    sheet_text_parts.append("COLUMNS: " + " | ".join(str(col) for col in headers))
+
+                    # Process each row individually to capture all content
+                    for row_idx, row in df.iterrows():
+                        row_content = []
+                        for col_name in df.columns:
+                            cell_value = row[col_name]
+                            if pd.notna(cell_value):  # Only include non-null values
+                                # Convert to string and clean
+                                cell_str = str(cell_value).strip()
+                                if cell_str:  # Only include non-empty strings
+                                    row_content.append(f"{col_name}: {cell_str}")
+
+                        if row_content:  # Only add rows that have content
+                            sheet_text_parts.append(f"ROW {row_idx + 1}: " + " | ".join(row_content))
+
+                    # Also add the CSV representation for completeness
+                    sheet_text_parts.append("\n--- CSV FORMAT ---")
+                    csv_content = df.to_csv(index=False, na_rep='')
+                    sheet_text_parts.append(csv_content)
+
+                    # Join all parts for this sheet
+                    sheet_content = '\n'.join(sheet_text_parts)
+
+                    # Count URLs in this sheet for logging
+                    sheet_urls = len(re.findall(r'https?://[^\s\n\r]+', sheet_content, re.IGNORECASE))
+                    total_urls_found += sheet_urls
+
+                    logger.info(
+                        f"  Sheet '{sheet_name}' content: {len(sheet_content)} chars, {sheet_urls} potential URLs")
+
+                    all_text_parts.append(sheet_content)
+
+                except Exception as e:
+                    logger.error(f"Error processing sheet '{sheet_name}' for URLs: {e}")
+                    # Still try to get basic content
+                    try:
+                        df = pd.read_excel(excel_file, sheet_name=sheet_name)
+                        if not df.empty:
+                            basic_content = f"\n=== SHEET: {sheet_name} (ERROR RECOVERY) ===\n"
+                            basic_content += df.to_string()
+                            all_text_parts.append(basic_content)
+                    except:
+                        logger.error(f"Complete failure processing sheet '{sheet_name}'")
+                        continue
+
+            # Join all sheet content
+            complete_content = '\n\n'.join(all_text_parts)
+
+            logger.info("=" * 80)
+            logger.info(f"COMPREHENSIVE EXCEL URL EXTRACTION COMPLETE:")
+            logger.info(f"  - Processed {len(sheet_names)} sheets")
+            logger.info(f"  - Total content: {len(complete_content)} characters")
+            logger.info(f"  - Potential URLs found: {total_urls_found}")
+            logger.info("=" * 80)
+
+            # Log a sample of the content for debugging
+            sample_content = complete_content[:2000] if len(complete_content) > 2000 else complete_content
+            logger.info("SAMPLE OF COMPREHENSIVE EXCEL CONTENT:")
+            logger.info(sample_content)
+            if len(complete_content) > 2000:
+                logger.info(f"... [TRUNCATED - FULL CONTENT IS {len(complete_content)} CHARS] ...")
+            logger.info("=" * 80)
+
+            return complete_content
+
+        except Exception as e:
+            logger.error(f"Error extracting comprehensive Excel content for URLs: {e}")
+            # Fallback to basic method
+            return self._extract_full_excel_content_for_urls(content_bytes)
+
+    def _extract_full_excel_content_for_urls(self, content_bytes: bytes) -> str:
+        """Fallback: Extract full Excel content specifically for URL extraction - no limits"""
+        try:
+            excel_file = pd.ExcelFile(io.BytesIO(content_bytes))
+            sheet_names = excel_file.sheet_names
+
+            all_text_parts = []
+
+            # Process ALL sheets without limits
+            for sheet_name in sheet_names:
+                try:
+                    df = pd.read_excel(excel_file, sheet_name=sheet_name)
+                    if not df.empty:
+                        # Convert entire sheet to string
+                        csv_string = df.to_csv(index=False)
+                        all_text_parts.append(f"\n--- Sheet: '{sheet_name}' ---\n")
+                        all_text_parts.append(csv_string)
+                except Exception as e:
+                    logger.error(f"Error processing sheet '{sheet_name}': {e}")
+                    continue
+
+            return '\n'.join(all_text_parts)
+
+        except Exception as e:
+            logger.error(f"Error extracting full Excel content: {e}")
             return ""
 
     def _image_to_base64(self, image_bytes: bytes, image_format: str = "PNG") -> str:
@@ -486,10 +632,6 @@ class DocumentExtractor:
     def _extract_images_from_docx(self, content_bytes: bytes) -> List[Dict[str, Any]]:
         """Extract images from DOCX file"""
         images = []
-
-        # Check if image extraction is enabled
-        if not self.extract_images:
-            return images
 
         # Check if image extraction is enabled
         if not self.extract_images:
@@ -663,33 +805,6 @@ class DocumentExtractor:
                 text = text + "\n\n[OCR Content]\n" + ocr_text if text else ocr_text
 
         return text
-
-    def _extract_full_excel_content_for_urls(self, content_bytes: bytes) -> str:
-        """Extract full Excel content specifically for URL extraction - no limits"""
-        try:
-            excel_file = pd.ExcelFile(io.BytesIO(content_bytes))
-            sheet_names = excel_file.sheet_names
-
-            all_text_parts = []
-
-            # Process ALL sheets without limits
-            for sheet_name in sheet_names:
-                try:
-                    df = pd.read_excel(excel_file, sheet_name=sheet_name)
-                    if not df.empty:
-                        # Convert entire sheet to string
-                        csv_string = df.to_csv(index=False)
-                        all_text_parts.append(f"\n--- Sheet: '{sheet_name}' ---\n")
-                        all_text_parts.append(csv_string)
-                except Exception as e:
-                    logger.error(f"Error processing sheet '{sheet_name}': {e}")
-                    continue
-
-            return '\n'.join(all_text_parts)
-
-        except Exception as e:
-            logger.error(f"Error extracting full Excel content: {e}")
-            return ""
 
     def extract_text_from_url(self, url: str, is_subdoc: bool = False) -> tuple[
         str, List[Dict[str, Any]], Any, Dict[str, Any], str]:
@@ -865,12 +980,15 @@ class DocumentExtractor:
                 media_type = FileTypeChoices.PDF
                 logger.info(f"Assigned media type as : {media_type}")
             elif is_excel or 'officedocument.spreadsheet' in content_type:
-                # For Excel, extract full content first for URL extraction
-                full_text_for_url_extraction = self._extract_full_excel_content_for_urls(response.content)
+                # For Excel, extract COMPREHENSIVE content for URL extraction
+                logger.info("Excel file detected - extracting comprehensive content for URL detection...")
+                full_text_for_url_extraction = self._extract_comprehensive_excel_content_for_urls(response.content)
+                # Extract limited content for LLM processing
                 text = self._extract_limited_excel_content(response.content, max_chars)
                 media_type = FileTypeChoices.XLSX
-                logger.info(f"Extracted limited Excel content: {len(text)} chars")
-                logger.info(f"Full Excel content for URL extraction: {len(full_text_for_url_extraction)} chars")
+                logger.info(f"Excel processing complete:")
+                logger.info(f"  - Limited content for LLM: {len(text)} chars")
+                logger.info(f"  - Comprehensive content for URLs: {len(full_text_for_url_extraction)} chars")
             elif is_csv:
                 # Process CSV with limited extraction
                 try:
@@ -1002,12 +1120,15 @@ class DocumentExtractor:
             self.url_cache[url] = error_info
             return "", [], None, error_info, ""
 
-    def extract_text_from_file(self, file, file_extension: str) -> tuple[str, List[Dict[str, Any]]]:
-        """Extract text content and images from various file types"""
+    def extract_text_from_file(self, file, file_extension: str) -> tuple[str, List[Dict[str, Any]], str]:
+        """Extract text content and images from various file types
+        Returns: (limited_text_for_llm, images, comprehensive_text_for_urls)
+        """
         try:
             file_extension = file_extension.lower().strip('.')
             text = ""
             images = []
+            comprehensive_text_for_urls = ""
 
             # Handle file path vs file object
             if isinstance(file, (str, Path)):
@@ -1019,41 +1140,84 @@ class DocumentExtractor:
                     with open(file_path, 'rb') as f:
                         content_bytes = f.read()
                     text = self._extract_pdf_text_enhanced(content_bytes)
+                    comprehensive_text_for_urls = text  # Same for PDF
                     images = self._extract_images_from_pdf_pymupdf(content_bytes)
                 elif file_extension in ['doc', 'docx']:
                     text = self._extract_docx_text(file_path)
+                    comprehensive_text_for_urls = text  # Same for DOCX
                     with open(file_path, 'rb') as f:
                         images = self._extract_images_from_docx(f.read())
                 elif file_extension == 'txt':
                     text = self._extract_txt_text(file_path)
+                    comprehensive_text_for_urls = text  # Same for TXT
                 elif file_extension == 'csv':
                     text = self._extract_csv_text(file_path)
+                    # For CSV, get comprehensive content for URLs
+                    try:
+                        df_full = pd.read_csv(file_path)
+                        comprehensive_text_for_urls = df_full.to_csv(index=False)
+                    except:
+                        comprehensive_text_for_urls = text
                 elif file_extension in ['xls', 'xlsx']:
                     text = self._extract_excel_text(file_path)
+                    # For Excel files, extract comprehensive content for URL extraction
+                    try:
+                        with open(file_path, 'rb') as f:
+                            content_bytes = f.read()
+                        comprehensive_text_for_urls = self._extract_comprehensive_excel_content_for_urls(content_bytes)
+                        logger.info(
+                            f"Main Excel file - Limited content: {len(text)} chars, Comprehensive: {len(comprehensive_text_for_urls)} chars")
+                    except:
+                        comprehensive_text_for_urls = text
+                else:
+                    # Default case - ensure we always return 3 values
+                    comprehensive_text_for_urls = text
             else:
                 # Handle file object
                 if file_extension == 'pdf':
                     file.seek(0)
                     content_bytes = file.read()
                     text = self._extract_pdf_text_enhanced(content_bytes)
+                    comprehensive_text_for_urls = text  # Same for PDF
                     images = self._extract_images_from_pdf_pymupdf(content_bytes)
                 elif file_extension in ['doc', 'docx']:
                     file.seek(0)
                     content_bytes = file.read()
                     text = self._extract_docx_text_from_object(io.BytesIO(content_bytes))
+                    comprehensive_text_for_urls = text  # Same for DOCX
                     images = self._extract_images_from_docx(content_bytes)
                 elif file_extension == 'txt':
                     text = self._extract_txt_text_from_object(file)
+                    comprehensive_text_for_urls = text  # Same for TXT
                 elif file_extension == 'csv':
                     text = self._extract_csv_text_from_object(file)
+                    # For CSV, get comprehensive content for URLs
+                    try:
+                        file.seek(0)
+                        df_full = pd.read_csv(file)
+                        comprehensive_text_for_urls = df_full.to_csv(index=False)
+                    except:
+                        comprehensive_text_for_urls = text
                 elif file_extension in ['xls', 'xlsx']:
                     text = self._extract_excel_text_from_object(file)
+                    # For Excel files, extract comprehensive content for URL extraction
+                    try:
+                        file.seek(0)
+                        content_bytes = file.read()
+                        comprehensive_text_for_urls = self._extract_comprehensive_excel_content_for_urls(content_bytes)
+                        logger.info(
+                            f"Main Excel file - Limited content: {len(text)} chars, Comprehensive: {len(comprehensive_text_for_urls)} chars")
+                    except:
+                        comprehensive_text_for_urls = text
+                else:
+                    # Default case - ensure we always return 3 values
+                    comprehensive_text_for_urls = text
 
-            return text, images
+            return text, images, comprehensive_text_for_urls
 
         except Exception as e:
             logger.error(f"Error extracting from file: {e}")
-            return "", []
+            return "", [], ""
 
     def _extract_pdf_text(self, file) -> str:
         """Extract text from PDF (fallback method)"""
@@ -1148,7 +1312,7 @@ class DocumentExtractor:
         file_ext = file_path.suffix.lower().strip('.')
 
         try:
-            text, _ = self.extract_text_from_file(file_path, file_ext)
+            text, _, _ = self.extract_text_from_file(file_path, file_ext)
             return text
         except Exception as e:
             raise Exception(f"Error reading document: {str(e)}")
@@ -1418,7 +1582,7 @@ class DocumentExtractor:
             self, text: str, company_bot, processed_urls=None,
             depth=0, max_depth=MAX_DEPTH, extracted_images: List[Dict[str, Any]] = None, other_data=None
     ) -> Dict[str, Any]:
-        """Process document and extract links from linked documents"""
+        """Process document and extract links from linked documents with enhanced Excel URL extraction"""
         if processed_urls is None:
             processed_urls = set()
 
@@ -1487,9 +1651,14 @@ class DocumentExtractor:
                         })
                         continue
 
-                    # Extract URLs from the FULL text, not the truncated version
+                    # *** CRITICAL: Extract URLs from the COMPREHENSIVE text for Excel files ***
+                    logger.info(f"{'  ' * depth}Extracting URLs from linked document: {main_doc_url}")
+                    logger.info(f"{'  ' * depth}  - Media type: {linked_media_type}")
+                    logger.info(f"{'  ' * depth}  - Using comprehensive content: {len(full_text_for_urls)} chars")
+
+                    # Extract URLs from the comprehensive content (especially important for Excel)
                     links_in_subdoc = self.extract_urls_from_text(full_text_for_urls)
-                    logger.info(f"{'  ' * depth}Found {len(links_in_subdoc)} links inside {main_doc_url}")
+                    logger.info(f"{'  ' * depth}Found {len(links_in_subdoc)} total links inside {main_doc_url}")
 
                     # Filter for document URLs
                     subdoc_document_urls = [url for url in links_in_subdoc if self.is_document_url(url, depth)]
@@ -1760,17 +1929,23 @@ class DocumentExtractor:
                 "file_name": "Unknown",
             }
 
-    def process_document(self, file_path: str) -> Dict[str, Any]:
+    def process_document(self, file_path: str, company_bot=None, other_data=None) -> Dict[str, Any]:
         """Process document from file path"""
         try:
             # Read document content with enhanced extraction
-            text_content, extracted_images = self.extract_text_from_file(file_path, Path(file_path).suffix.strip('.'))
+            text_content, extracted_images, comprehensive_text_for_urls = self.extract_text_from_file(file_path, Path(
+                file_path).suffix.strip('.'))
 
             if not text_content or len(text_content.strip()) < 10:
                 raise ValueError("Document appears to be empty or unreadable")
 
             # Extract structured information using LLM
-            extracted_info = self.extract_with_llm(text_content, extracted_images=extracted_images)
+            extracted_info = self.extract_with_llm(
+                text=text_content,
+                company_bot=company_bot,
+                extracted_images=extracted_images,
+                other_data=other_data,
+            )
 
             # Add metadata
             result = {
@@ -1896,7 +2071,7 @@ def extract_tags_from_document_file(file, company_bot, file_extension: str, othe
         extractor = DocumentExtractor(**extractor_config)
 
         # Extract text and images from file
-        document_text, extracted_images = extractor.extract_text_from_file(file, file_extension)
+        document_text, extracted_images, _  = extractor.extract_text_from_file(file, file_extension)
 
         if not document_text:
             return default_response
