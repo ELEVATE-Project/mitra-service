@@ -1466,7 +1466,7 @@ class DocumentExtractor:
                         error_info['error'] = f"Unsupported file format: {error_info['error']}"
 
                     failed_links.append({
-                        "file_url": self.convert_google_drive_url(main_doc_url),
+                        "file_url": main_doc_url,
                         "error": error_info,
                         "source_document": "main"
                     })
@@ -1477,7 +1477,7 @@ class DocumentExtractor:
                     if linked_media_type is None:
                         logger.warning(f"Could not determine valid media type for {main_doc_url}")
                         failed_links.append({
-                            "file_url": self.convert_google_drive_url(main_doc_url),
+                            "file_url": main_doc_url,
                             "error": {
                                 'error': 'Could not determine valid file type',
                                 'error_type': 'unknown_format',
@@ -1528,7 +1528,7 @@ class DocumentExtractor:
                                     'error'] = f"Unsupported file format in linked document: {sub_error_info['error']}"
 
                             failed_links.append({
-                                "file_url": self.convert_google_drive_url(sub_url),
+                                "file_url": sub_url,
                                 "error": sub_error_info,
                                 "source_document": main_doc_url
                             })
@@ -1542,7 +1542,7 @@ class DocumentExtractor:
                                 if sub_media_type is None:
                                     logger.warning(f"Could not determine valid media type for {sub_url}")
                                     failed_links.append({
-                                        "file_url": downloadable_url,
+                                        "file_url": sub_url,
                                         "error": {
                                             'error': 'Could not determine valid file type',
                                             'error_type': 'unknown_format',
@@ -1564,7 +1564,7 @@ class DocumentExtractor:
                                 if subdoc_result.get('title_extraction_failed'):
                                     logger.error(f"Title extraction failed for subdocument: {sub_url}")
                                     failed_links.append({
-                                        "file_url": downloadable_url,
+                                        "file_url": sub_url,
                                         "error": {
                                             'error': 'LLM failed to extract title from subdocument',
                                             'error_type': 'title_extraction_failed',
@@ -1596,7 +1596,7 @@ class DocumentExtractor:
                             else:
                                 logger.warning(f"Subdocument {sub_url} has insufficient content")
                                 failed_links.append({
-                                    "file_url": self.convert_google_drive_url(sub_url),
+                                    "file_url": sub_url,
                                     "error": {
                                         'error': 'Document has insufficient content (less than 10 characters)',
                                         'error_type': 'insufficient_content',
@@ -1607,7 +1607,7 @@ class DocumentExtractor:
                 else:
                     logger.warning(f"Linked document {main_doc_url} has insufficient content: {linked_text}")
                     failed_links.append({
-                        "file_url": self.convert_google_drive_url(main_doc_url),
+                        "file_url": main_doc_url,
                         "error": {
                             'error': 'Document has insufficient content (less than 10 characters)',
                             'error_type': 'insufficient_content',
