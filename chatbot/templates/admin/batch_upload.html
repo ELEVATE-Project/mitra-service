@@ -1641,6 +1641,95 @@
     .dropdown-option.no-results:hover {
         background-color: white;
     }
+
+    .kv-value-container {
+        width: 100%;
+        padding: 0;
+        border: none;
+        background: white;
+        display: flex;
+        align-items: center;
+        position: relative; /* Important for dropdown positioning */
+    }
+
+    .kv-value-container .custom-dropdown {
+        width: 100%;
+        max-width: 100%;
+        position: relative;
+    }
+
+    .kv-value-container .dropdown-search {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        background: white;
+        cursor: text;
+        box-sizing: border-box;
+        font-family: inherit;
+    }
+
+    .kv-value-container .dropdown-search:focus {
+        outline: none;
+        border-color: #417690;
+        box-shadow: 0 0 0 2px rgba(65, 118, 144, 0.1);
+    }
+
+    /* Ensure dropdown list positioning works properly within the container */
+    .kv-value-container .dropdown-list {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #ddd;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .kv-value-container .dropdown-list.show {
+        display: block;
+    }
+
+    .kv-value-container .dropdown-option {
+        padding: 8px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background-color 0.2s;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        white-space: normal;
+        line-height: 1.4;
+        max-width: 100%;
+    }
+
+    .kv-value-container .dropdown-option:hover {
+        background-color: #f5f5f5;
+    }
+
+    .kv-value-container .dropdown-option:last-child {
+        border-bottom: none;
+    }
+
+    .kv-value-container .dropdown-option.highlighted {
+        background-color: #e3f2fd;
+    }
+
+    .kv-value-container .dropdown-option.no-results {
+        color: #999;
+        font-style: italic;
+        cursor: default;
+    }
+
+    .kv-value-container .dropdown-option.no-results:hover {
+        background-color: white;
+    }
 </style>
 {% endblock %}
 
@@ -1862,7 +1951,7 @@
 
         <div class="button-group">
             <div></div>
-            <a href="{% url 'admin:chatbot_media_changelist' %}" class="btn btn-primary">Submit</a>
+            <a href="{% url 'admin:chatbot_media_changelist' %}" class="btn btn-primary">Exit</a>
         </div>
     </div>
 
@@ -1878,6 +1967,7 @@
 <!-- Pass file types data to JavaScript -->
 {{ file_types|json_script:"file-types-data" }}
 {{ existing_manual_tags|json_script:"existing-manual-tags" }}
+{{ master_document_types|json_script:"master-document-types" }}
 
 <script>
 // CSRF token for Django
@@ -1897,6 +1987,7 @@ function getCookie(name) {
 }
 
 const existingManualTags = JSON.parse(document.getElementById('existing-manual-tags').textContent);
+const masterDocumentTypes = JSON.parse(document.getElementById('master-document-types').textContent);
 
 const csrftoken = getCookie('csrftoken');
 let expandedSubdocumentPaths = new Set();
@@ -2211,6 +2302,231 @@ async function processFiles(files) {
 
     // Ensure loading overlay is hidden (this may be redundant now but good as safety)
     hideLoading();
+}
+
+function isDocumentTypeField(key) {
+    return key && key.toUpperCase() === 'DOCUMENT TYPE';
+}
+
+function createDocumentTypeDropdown(path, kvIndex, currentValue = '') {
+    const dropdownId = `docTypeDropdown_${path}_${kvIndex}`;
+    const listId = `docTypeDropdownList_${path}_${kvIndex}`;
+
+    return `
+        <div class="custom-dropdown" id="customDocTypeDropdown_${path}_${kvIndex}">
+            <input type="text"
+                   class="dropdown-search"
+                   placeholder="Search or enter document type..."
+                   value="${currentValue}"
+                   onclick="toggleDocumentTypeDropdown('${path}', ${kvIndex})"
+                   oninput="filterDocumentTypeDropdown('${path}', ${kvIndex}, this.value)"
+                   onkeypress="handleDocumentTypeDropdownKeypress(event, '${path}', ${kvIndex})"
+                   onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'value', this.value)">
+            <div class="dropdown-list" id="${listId}">
+                ${masterDocumentTypes.map(docType => `
+                    <div class="dropdown-option" onclick="selectDocumentTypeFromDropdown('${path}', ${kvIndex}, '${docType.replace(/'/g, "\\'")}')">
+                        ${docType}
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
+// Function to toggle document type dropdown
+function toggleDocumentTypeDropdown(path, kvIndex) {
+    const listId = `docTypeDropdownList_${path}_${kvIndex}`;
+    const dropdown = document.getElementById(listId);
+    if (!dropdown) return;
+
+    const isVisible = dropdown.classList.contains('show');
+
+    // Close all other dropdowns
+    document.querySelectorAll('.dropdown-list').forEach(dl => {
+        dl.classList.remove('show');
+    });
+
+    // Toggle current dropdown
+    if (!isVisible) {
+        dropdown.classList.add('show');
+        filterDocumentTypeDropdown(path, kvIndex, '');
+    }
+}
+
+// Function to filter document type dropdown
+function filterDocumentTypeDropdown(path, kvIndex, searchTerm) {
+    const listId = `docTypeDropdownList_${path}_${kvIndex}`;
+    const dropdown = document.getElementById(listId);
+    if (!dropdown) return;
+
+    const filteredTypes = masterDocumentTypes.filter(docType =>
+        docType.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    if (filteredTypes.length > 0) {
+        dropdown.innerHTML = filteredTypes.map(docType => {
+            const escapedType = docType.replace(/'/g, "\\'");
+            return `
+                <div class="dropdown-option" onclick="selectDocumentTypeFromDropdown('${path}', ${kvIndex}, '${escapedType}')">
+                    ${docType}
+                </div>
+            `;
+        }).join('');
+    } else if (searchTerm.trim()) {
+        dropdown.innerHTML = `
+            <div class="dropdown-option no-results">
+                No matching document types found
+            </div>
+        `;
+    } else {
+        dropdown.innerHTML = masterDocumentTypes.map(docType => {
+            const escapedType = docType.replace(/'/g, "\\'");
+            return `
+                <div class="dropdown-option" onclick="selectDocumentTypeFromDropdown('${path}', ${kvIndex}, '${escapedType}')">
+                    ${docType}
+                </div>
+            `;
+        }).join('');
+    }
+
+    dropdown.classList.add('show');
+}
+
+// Function to select document type from dropdown
+function selectDocumentTypeFromDropdown(path, kvIndex, docType) {
+    const listId = `docTypeDropdownList_${path}_${kvIndex}`;
+    const dropdown = document.getElementById(listId);
+    const searchInput = dropdown.previousElementSibling;
+
+    dropdown.classList.remove('show');
+    searchInput.value = docType;
+
+    // Save the value based on whether this is a path (subdocument) or index (main document)
+    if (path.includes('_')) {
+        // This is a subdocument path
+        saveKeyValueByPath(path, kvIndex, 'value', docType);
+    } else {
+        // This is a main document index
+        saveKeyValueData(parseInt(path), kvIndex, 'value', docType);
+    }
+}
+
+// Function to handle document type dropdown keypress
+function handleDocumentTypeDropdownKeypress(event, path, kvIndex) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        const searchTerm = event.target.value.trim();
+        const listId = `docTypeDropdownList_${path}_${kvIndex}`;
+        const dropdown = document.getElementById(listId);
+
+        if (searchTerm) {
+            // Check if exact match exists
+            const exactMatch = masterDocumentTypes.find(docType =>
+                docType.toLowerCase() === searchTerm.toLowerCase()
+            );
+
+            if (exactMatch) {
+                selectDocumentTypeFromDropdown(path, kvIndex, exactMatch);
+            } else {
+                // Use the typed value as is (allows manual entry)
+                dropdown.classList.remove('show');
+
+                // Save based on whether this is a path (subdocument) or index (main document)
+                if (path.includes('_')) {
+                    saveKeyValueByPath(path, kvIndex, 'value', searchTerm);
+                } else {
+                    saveKeyValueData(parseInt(path), kvIndex, 'value', searchTerm);
+                }
+            }
+        }
+    } else if (event.key === 'Escape') {
+        const listId = `docTypeDropdownList_${path}_${kvIndex}`;
+        const dropdown = document.getElementById(listId);
+        dropdown.classList.remove('show');
+        event.target.blur();
+    }
+}
+
+// Updated function for rendering key-values in subdocuments with document type dropdown
+function updateKeyValueHtmlWithDocTypeDropdown(subdoc, path) {
+    return subdoc.key_values.map((kv, kvIndex) => {
+        const isDocType = isDocumentTypeField(kv.key);
+
+        if (isDocType) {
+            return `
+                <div class="key-value-pair structured-content-kv">
+                    <input type="text"
+                           class="kv-key-input"
+                           value="${kv.key || ''}"
+                           id="key_${path}_${kvIndex}"
+                           placeholder="Key"
+                           onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'key', this.value)">
+                    <div class="kv-value-container">
+                        ${createDocumentTypeDropdown(path, kvIndex, kv.value || '')}
+                    </div>
+                    <button class="remove-kv-btn" onclick="removeKeyValueByPath('${path}', ${kvIndex})">Remove</button>
+                </div>
+            `;
+        } else {
+            return `
+                <div class="key-value-pair structured-content-kv">
+                    <input type="text"
+                           class="kv-key-input"
+                           value="${kv.key || ''}"
+                           id="key_${path}_${kvIndex}"
+                           placeholder="Key"
+                           onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'key', this.value)">
+                    <textarea class="key-value-textarea"
+                              id="value_${path}_${kvIndex}"
+                              placeholder="Value"
+                              onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'value', this.value)"
+                              oninput="autoResizeTextarea(this)">${kv.value || ''}</textarea>
+                    <button class="remove-kv-btn" onclick="removeKeyValueByPath('${path}', ${kvIndex})">Remove</button>
+                </div>
+            `;
+        }
+    }).join('');
+}
+
+// Updated function for rendering key-values in main documents with document type dropdown
+function updateMainDocumentKeyValueHtml(item, displayIndex) {
+    return (item.data.key_values || []).map((kv, kvIndex) => {
+        const isDocType = isDocumentTypeField(kv.key);
+
+        if (isDocType) {
+            return `
+                <div class="key-value-pair structured-content-kv">
+                    <input type="text"
+                           class="kv-key-input"
+                           value="${kv.key || ''}"
+                           id="key_${displayIndex}_${kvIndex}"
+                           placeholder="Key"
+                           onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'key', this.value)">
+                    <div class="kv-value-container">
+                        ${createDocumentTypeDropdown(displayIndex, kvIndex, kv.value || '')}
+                    </div>
+                    <button class="remove-kv-btn" onclick="removeKeyValue(${displayIndex}, ${kvIndex})">Remove</button>
+                </div>
+            `;
+        } else {
+            return `
+                <div class="key-value-pair structured-content-kv">
+                    <input type="text"
+                           class="kv-key-input"
+                           value="${kv.key || ''}"
+                           id="key_${displayIndex}_${kvIndex}"
+                           placeholder="Key"
+                           onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'key', this.value)">
+                    <textarea class="key-value-textarea"
+                              id="value_${displayIndex}_${kvIndex}"
+                              placeholder="Value"
+                              onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'value', this.value)"
+                              oninput="autoResizeTextarea(this)">${kv.value || ''}</textarea>
+                    <button class="remove-kv-btn" onclick="removeKeyValue(${displayIndex}, ${kvIndex})">Remove</button>
+                </div>
+            `;
+        }
+    }).join('');
 }
 
 // Modified function to show files in separate sections
@@ -3506,7 +3822,6 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
     if (!subdoc.key_values) subdoc.key_values = [];
     if (!subdoc.manual_tags) subdoc.manual_tags = [];
     if (!subdoc.auto_tags) {
-        // Process tags from subdoc.tags if available
         if (subdoc.tags && Array.isArray(subdoc.tags)) {
             subdoc.auto_tags = subdoc.tags.map(tag => {
                 if (typeof tag === 'object' && tag.text) {
@@ -3553,34 +3868,15 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
         `;
     }).join('');
 
-    // Generate key-values HTML
-    const kvHtml = subdoc.key_values.map((kv, kvIndex) => `
-        <div class="key-value-pair structured-content-kv">
-            <input type="text"
-                   class="kv-key-input"
-                   value="${kv.key || ''}"
-                   id="key_${path}_${kvIndex}"
-                   placeholder="Key"
-                   onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'key', this.value)">
-            <textarea class="key-value-textarea"
-                      id="value_${path}_${kvIndex}"
-                      placeholder="Value"
-                      onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'value', this.value)"
-                      oninput="autoResizeTextarea(this)">${kv.value || ''}</textarea>
-            <button class="remove-kv-btn" onclick="removeKeyValueByPath('${path}', ${kvIndex})">Remove</button>
-        </div>
-    `).join('');
+    // Generate key-values HTML with document type dropdown support
+    const kvHtml = updateKeyValueHtmlWithDocTypeDropdown(subdoc, path);
 
-    // Generate images HTML with fixed base64 display
+    // Generate images HTML
     let imagesHtml = '';
     if (subdoc.images && subdoc.images.length > 0) {
         const imagesGridHtml = subdoc.images.map((img, imgIndex) => {
-            // Ensure base64 has proper data URI prefix
             let imgSrc = img.base64;
-
-            // Check if it's already a data URI
             if (imgSrc && !imgSrc.startsWith('data:')) {
-                // Check if it's raw base64
                 if (imgSrc.match(/^[A-Za-z0-9+/]+=*$/)) {
                     imgSrc = `data:image/${img.format || 'png'};base64,${imgSrc}`;
                 }
@@ -3690,7 +3986,6 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
                             <h4>Manual Tags</h4>
                             <div class="tags-input" id="manualTagsContainer_${path}">
                                 ${manualTagsHtml}
-                                <!-- Replace the existing dropdown in renderExtractedData with: -->
                                 <div class="tag-input-wrapper">
                                     <div class="custom-dropdown" id="customTagDropdown_${path}">
                                         <input type="text"
@@ -4832,7 +5127,7 @@ function renderExtractedData() {
             </span>
         `).join('');
 
-        // Subdocuments content
+        // Subdocuments content with informational message
         let subdocsHtml = '';
         if (item.data.subdocument && item.data.subdocument.length > 0) {
             subdocsHtml = `
@@ -4840,6 +5135,16 @@ function renderExtractedData() {
                     <div class="subdocuments-header">
                         Subdocuments
                         <span class="subdocument-count">(${item.data.subdocument.length})</span>
+                    </div>
+                    <div class="subdocument-info-message">
+                        <div style="background-color: #e3f2fd; border: 1px solid #90caf9; border-radius: 6px; padding: 15px; margin: 15px 0; color: #1565c0;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1565c0" stroke-width="2" style="vertical-align: middle; margin-right: 8px;">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                            </svg>
+                            <strong>Information:</strong> These linked files will also be uploaded. Please review them for correctness of metadata.
+                        </div>
                     </div>
                     ${renderNestedSubdocuments(item.data.subdocument, String(displayIndex), displayIndex)}
                 </div>
@@ -4870,6 +5175,9 @@ function renderExtractedData() {
                 </div>
             `;
         }
+
+        // Generate key-values HTML with document type dropdown support for main document
+        const keyValuesHtml = updateMainDocumentKeyValueHtml(item, displayIndex);
 
         mediaItem.innerHTML = `
             <div class="media-item-header">
@@ -4941,22 +5249,7 @@ function renderExtractedData() {
             <div class="field-group">
                 <label>Sections</label>
                 <div class="key-values" id="kvContainer_${displayIndex}">
-                    ${(item.data.key_values || []).map((kv, kvIndex) => `
-                        <div class="key-value-pair structured-content-kv">
-                            <input type="text"
-                                   class="kv-key-input"
-                                   value="${kv.key || ''}"
-                                   id="key_${displayIndex}_${kvIndex}"
-                                   placeholder="Key"
-                                   onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'key', this.value)">
-                            <textarea class="key-value-textarea"
-                                      id="value_${displayIndex}_${kvIndex}"
-                                      placeholder="Value"
-                                      onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'value', this.value)"
-                                      oninput="autoResizeTextarea(this)">${kv.value || ''}</textarea>
-                            <button class="remove-kv-btn" onclick="removeKeyValue(${displayIndex}, ${kvIndex})">Remove</button>
-                        </div>
-                    `).join('')}
+                    ${keyValuesHtml}
                 </div>
                 <button class="add-kv-btn" onclick="addKeyValue(${displayIndex})">Add Field</button>
             </div>

@@ -33,7 +33,6 @@ class BatchMediaUploadView(TemplateView):
         context['media_types'] = FileTypeChoices.choices
         context['priorities'] = PriorityChoices.choices
 
-        # Add file types with complete information
         extension_mapping = FileTypeChoices.get_extension_mapping()
         context['file_types'] = [
             {
@@ -44,13 +43,13 @@ class BatchMediaUploadView(TemplateView):
             for choice in FileTypeChoices.choices
         ]
 
-        # Add company bots for selection
         from chatbot.models import CompanyBot
         context['company_bots'] = CompanyBot.objects.all()
         default_bot = CompanyBot.objects.filter(route='/tag_extractor')
         if default_bot:
             default_bot = default_bot.first()
             context['default_bot_id'] = default_bot.id
+
         try:
             company = None
             if self.request.user.is_authenticated:
@@ -60,7 +59,6 @@ class BatchMediaUploadView(TemplateView):
                 except Profile.DoesNotExist:
                     pass
 
-            # Get existing manual tags
             existing_tags_query = Tag.objects.filter(
                 source_type=TagSourceChoices.MANUAL,
                 status=TagChoices.APPROVED
@@ -72,9 +70,33 @@ class BatchMediaUploadView(TemplateView):
             context['existing_manual_tags'] = list(
                 existing_tags_query.values_list('name', flat=True).distinct().order_by('name')
             )
+
+            document_types = []
+            try:
+                tag_extractor_bot = CompanyBot.objects.filter(route='/tag_extractor').first()
+                if tag_extractor_bot and tag_extractor_bot.other_params:
+                    try:
+                        other_params = json.loads(tag_extractor_bot.other_params) if isinstance(
+                            tag_extractor_bot.other_params, str
+                        ) else tag_extractor_bot.other_params
+
+                        master_document_types = other_params.get('master_document_types', [])
+                        if isinstance(master_document_types, list):
+                            document_types = master_document_types
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+            except Exception as e:
+                print(f"Error getting document types: {e}")
+
+            if not document_types:
+                document_types = []
+
+            context['master_document_types'] = document_types
+
         except Exception as e:
-            print(f"Error getting existing tags: {e}")
+            print(f"Error getting context data: {e}")
             context['existing_manual_tags'] = []
+            context['master_document_types'] = []
 
         return context
 
