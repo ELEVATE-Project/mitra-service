@@ -1,5 +1,7 @@
 import hashlib
 import traceback
+from pathlib import Path
+
 import requests
 from django.views.generic import TemplateView
 from django.contrib.admin.views.decorators import staff_member_required
@@ -1818,8 +1820,20 @@ class BatchMediaSaveView(View):
                     filename += extension
 
             # Use filename (without extension) as the subdocument title
-            filename_without_ext = os.path.splitext(filename)[0]
-            subdoc_title = filename_without_ext
+            filename_without_ext = os.path.splitext(filename)[0] if filename else ""
+
+            if filename_without_ext and len(filename_without_ext.strip()) > 0:
+                subdoc_title = filename_without_ext
+                print(f"Using filename as title: {subdoc_title}")
+            else:
+                llm_title = subdoc_data.get('title', '').strip()
+                if llm_title and len(llm_title) > 0:
+                    subdoc_title = llm_title
+                    print(f"Using LLM-extracted title: {subdoc_title}")
+                else:
+                    # Final fallback - create a descriptive title
+                    subdoc_title = f"Document from {Path(urlparse(file_url).path).name or 'linked document'}"
+                    print(f"Using fallback title: {subdoc_title}")
 
             print(f"Saving subdocument with title: {subdoc_title} (from filename: {filename})")
 
