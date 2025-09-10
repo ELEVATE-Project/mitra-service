@@ -12,6 +12,7 @@ from chatbot.views.admin.media_upload_views import (
     BatchMediaRetrySaveView, VectorDBTaskStatusView, GetCachedItemView
 )
 from simple_history.admin import SimpleHistoryAdmin
+from chatbot.models.enums import ProfileType
 
 
 class KeyValueInline(admin.TabularInline):
@@ -49,21 +50,33 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
         obj.tags.set(manual_tags + auto_tags)
 
     def get_fieldsets(self, request, obj=None):
-        # Base fieldsets
+        # Check if user is a MODERATOR
+        is_moderator = False
+        try:
+            profile = Profile.objects.get(email=request.user.email)
+            is_moderator = profile.profile_type == ProfileType.MODERATOR
+            print("Is User Moderator: ", is_moderator)
+        except Profile.DoesNotExist:
+            is_moderator = False
+
+        if is_moderator:
+            base_fields = ('name', 'file', 'url', 'description', 'extracted_text', 'media_type')
+        else:
+            base_fields = (
+                'name', 'file', 'url', 'description', 'extracted_text', 'priority', 'media_type',
+                'company_bot', 'parent'
+            )
+
         fieldsets = [
             (None, {
-                'fields': (
-                'name', 'file', 'url', 'description', 'extracted_text', 'priority', 'media_type',
-                'company_bot', 'parent')
+                'fields': base_fields
             }),
             ('Manual Tags', {
                 'fields': ('manual_tags',),
             }),
         ]
 
-        # Only add auto_tags fieldset if the object exists and has auto tags
         if obj and obj.pk:
-            # Check if this media has any auto tags
             if obj.tags.filter(created_by_id=1).exists():
                 fieldsets.append(
                     ('Auto Tags', {

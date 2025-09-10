@@ -51,6 +51,31 @@ class BatchMediaUploadView(TemplateView):
         if default_bot:
             default_bot = default_bot.first()
             context['default_bot_id'] = default_bot.id
+        try:
+            company = None
+            if self.request.user.is_authenticated:
+                try:
+                    user_profile = Profile.objects.get(email=self.request.user.email)
+                    company = user_profile.company
+                except Profile.DoesNotExist:
+                    pass
+
+            # Get existing manual tags
+            existing_tags_query = Tag.objects.filter(
+                source_type=TagSourceChoices.MANUAL,
+                status=TagChoices.APPROVED
+            )
+
+            if company:
+                existing_tags_query = existing_tags_query.filter(company=company)
+
+            context['existing_manual_tags'] = list(
+                existing_tags_query.values_list('name', flat=True).distinct().order_by('name')
+            )
+        except Exception as e:
+            print(f"Error getting existing tags: {e}")
+            context['existing_manual_tags'] = []
+
         return context
 
 
@@ -543,8 +568,11 @@ class BatchMediaExtractView(View):
             company=company, other_params=company_bot.other_params if company_bot else None
         )
         print("Sending master tags: ", master_tags)
+        base_name = file.name.rsplit('.', 1)[0] if '.' in file.name else file.name
+
         other_data = {
-            "master_tag": master_tags
+            "master_tag": master_tags,
+            "original_filename": base_name
         }
 
         # Start async task (non-blocking)
@@ -935,7 +963,7 @@ class BatchMediaTaskStatusView(View):
 
         return validated_tags
 
-    def process_ai_extracted_data(self, ai_data):
+    def process_ai_extracted_data(self, ai_data, original_filename=None):
         """Process AI extracted data into format expected by frontend"""
         if not ai_data or not isinstance(ai_data, dict):
             return {
@@ -1022,8 +1050,10 @@ class BatchMediaTaskStatusView(View):
                 return text
             return str(text).strip().title()
 
+        is_template = document_type_value.lower() == 'template'
+        original_filename = ai_data.get('original_filename')
         main_data = {
-            'title': ai_data.get('title', ''),
+            'title': original_filename if (original_filename and not is_template) else ai_data.get('title', ''),
             'summary': ai_data.get('summary', ''),
             'extracted_text': ai_data.get('exact_content', '') or ai_data.get('summary', ''),
             'organization': ai_data.get('organization', '') or company_name or '',

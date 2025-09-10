@@ -15,6 +15,8 @@ def update_project_status_utils(project_id, access_token, status):
     try:
         url = f"https://{base_url}/userProjects/update/{project_id}"
         print("using url: ", url)
+        if access_token.startswith('"') and access_token.endswith('"'):
+            access_token = access_token[1:-1]
         headers = {
             "X-auth-token": access_token,
         }

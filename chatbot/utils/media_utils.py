@@ -157,6 +157,8 @@ def upload_to_cloud(session_value, access_token, story=None, instance=None):
     print("---------------------")
     print("Upload Cloud Url: ", url)
     print("---------------------")
+    if access_token.startswith('"') and access_token.endswith('"'):
+        access_token = access_token[1:-1]
     headers = {"X-auth-token": access_token}
 
     if story:
