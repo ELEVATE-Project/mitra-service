@@ -383,103 +383,143 @@ class DocumentExtractor:
             logger.error(f"Error extracting Excel content: {e}")
             return ""
 
-    def _extract_comprehensive_excel_content_for_urls(self, content_bytes: bytes) -> str:
-        """Extract COMPLETE Excel content from ALL sheets specifically for URL extraction - no limits at all"""
+    def _extract_comprehensive_excel_content_for_urls(self, content_bytes: bytes) -> tuple[str, List[str]]:
+        """Extract COMPLETE Excel content from ALL sheets and hyperlinks using openpyxl
+        Returns: (comprehensive_text, extracted_urls)
+        """
         try:
             logger.info("=" * 80)
-            logger.info("EXTRACTING COMPREHENSIVE EXCEL CONTENT FOR URL EXTRACTION")
+            logger.info("EXTRACTING COMPREHENSIVE EXCEL CONTENT FOR URL EXTRACTION (OPENPYXL)")
             logger.info("=" * 80)
 
-            excel_file = pd.ExcelFile(io.BytesIO(content_bytes))
-            sheet_names = excel_file.sheet_names
+            if not HAS_OPENPYXL:
+                logger.warning("openpyxl not available, falling back to pandas method")
+                return self._extract_full_excel_content_for_urls(content_bytes), []
 
-            logger.info(f"Processing ALL {len(sheet_names)} sheets for URL extraction:")
+            wb = openpyxl.load_workbook(io.BytesIO(content_bytes), data_only=True)
+            sheet_names = wb.sheetnames
+
+            logger.info(f"Processing ALL {len(sheet_names)} sheets for content and URL extraction:")
             for i, sheet_name in enumerate(sheet_names):
                 logger.info(f"  Sheet {i + 1}: '{sheet_name}'")
 
             all_text_parts = []
+            extracted_urls = []
             total_urls_found = 0
 
             # Process ALL sheets without any limits
             for sheet_idx, sheet_name in enumerate(sheet_names):
-                logger.info(f"Processing sheet {sheet_idx + 1}/{len(sheet_names)}: '{sheet_name}' for URLs...")
+                logger.info(
+                    f"Processing sheet {sheet_idx + 1}/{len(sheet_names)}: '{sheet_name}' for content and URLs...")
 
                 try:
-                    # Read ENTIRE sheet - no row or column limits
-                    df = pd.read_excel(excel_file, sheet_name=sheet_name)
+                    sheet = wb[sheet_name]
 
-                    if df.empty:
+                    # Check if sheet has data
+                    if sheet.max_row == 1 and sheet.max_column == 1 and sheet.cell(1, 1).value is None:
                         logger.info(f"  Sheet '{sheet_name}' is empty, skipping...")
                         continue
 
-                    logger.info(f"  Sheet '{sheet_name}': {len(df)} rows x {len(df.columns)} columns")
+                    logger.info(f"  Sheet '{sheet_name}': {sheet.max_row} rows x {sheet.max_column} columns")
 
-                    # Convert entire sheet to string representation
-                    # Use a more comprehensive approach to capture all text content
+                    # Extract content in multiple formats
                     sheet_text_parts = []
+                    sheet_urls = []
 
                     # Add sheet header
                     sheet_text_parts.append(f"\n=== SHEET: {sheet_name} ===")
 
-                    # Add column headers
-                    headers = list(df.columns)
-                    sheet_text_parts.append("COLUMNS: " + " | ".join(str(col) for col in headers))
+                    # Extract column headers (first row)
+                    headers = []
+                    for col in range(1, sheet.max_column + 1):
+                        cell = sheet.cell(1, col)
+                        header_value = cell.value
+                        if header_value is not None:
+                            headers.append(str(header_value))
+                        else:
+                            headers.append(f"Unnamed: {col - 1}")
 
-                    # Process each row individually to capture all content
-                    for row_idx, row in df.iterrows():
+                    sheet_text_parts.append("COLUMNS: " + " | ".join(headers))
+
+                    # Process each row
+                    for row_idx in range(1, sheet.max_row + 1):
                         row_content = []
-                        for col_name in df.columns:
-                            cell_value = row[col_name]
-                            if pd.notna(cell_value):  # Only include non-null values
-                                # Convert to string and clean
+                        row_has_content = False
+
+                        for col_idx in range(1, sheet.max_column + 1):
+                            cell = sheet.cell(row_idx, col_idx)
+
+                            # Extract hyperlinks
+                            if cell.hyperlink and cell.hyperlink.target:
+                                url = cell.hyperlink.target
+                                if url not in sheet_urls:
+                                    sheet_urls.append(url)
+                                    extracted_urls.append(url)
+
+                            # Extract cell content
+                            cell_value = cell.value
+                            if cell_value is not None:
                                 cell_str = str(cell_value).strip()
-                                if cell_str:  # Only include non-empty strings
+                                if cell_str:
+                                    col_name = headers[col_idx - 1] if col_idx - 1 < len(headers) else f"Col{col_idx}"
                                     row_content.append(f"{col_name}: {cell_str}")
+                                    row_has_content = True
 
-                        if row_content:  # Only add rows that have content
-                            sheet_text_parts.append(f"ROW {row_idx + 1}: " + " | ".join(row_content))
+                        if row_has_content:
+                            sheet_text_parts.append(f"ROW {row_idx}: " + " | ".join(row_content))
 
-                    # Also add the CSV representation for completeness
+                    # Also add CSV-like format for compatibility
                     sheet_text_parts.append("\n--- CSV FORMAT ---")
-                    csv_content = df.to_csv(index=False, na_rep='')
-                    sheet_text_parts.append(csv_content)
+                    csv_rows = []
+                    for row_idx in range(1, sheet.max_row + 1):
+                        csv_row = []
+                        for col_idx in range(1, sheet.max_column + 1):
+                            cell = sheet.cell(row_idx, col_idx)
+                            cell_value = cell.value
+                            if cell_value is not None:
+                                csv_row.append(str(cell_value))
+                            else:
+                                csv_row.append("")
+                        csv_rows.append(",".join(f'"{item}"' for item in csv_row))
+
+                    sheet_text_parts.extend(csv_rows)
 
                     # Join all parts for this sheet
                     sheet_content = '\n'.join(sheet_text_parts)
 
                     # Count URLs in this sheet for logging
-                    sheet_urls = len(re.findall(r'https?://[^\s\n\r]+', sheet_content, re.IGNORECASE))
-                    total_urls_found += sheet_urls
+                    sheet_url_count = len(sheet_urls)
+                    total_urls_found += sheet_url_count
 
                     logger.info(
-                        f"  Sheet '{sheet_name}' content: {len(sheet_content)} chars, {sheet_urls} potential URLs")
+                        f"  Sheet '{sheet_name}' content: {len(sheet_content)} chars, {sheet_url_count} hyperlinks extracted")
 
                     all_text_parts.append(sheet_content)
 
                 except Exception as e:
-                    logger.error(f"Error processing sheet '{sheet_name}' for URLs: {e}")
-                    # Still try to get basic content
-                    try:
-                        df = pd.read_excel(excel_file, sheet_name=sheet_name)
-                        if not df.empty:
-                            basic_content = f"\n=== SHEET: {sheet_name} (ERROR RECOVERY) ===\n"
-                            basic_content += df.to_string()
-                            all_text_parts.append(basic_content)
-                    except:
-                        logger.error(f"Complete failure processing sheet '{sheet_name}'")
-                        continue
+                    logger.error(f"Error processing sheet '{sheet_name}' with openpyxl: {e}")
+                    continue
 
             # Join all sheet content
             complete_content = '\n\n'.join(all_text_parts)
 
             logger.info("=" * 80)
-            logger.info(f"COMPREHENSIVE EXCEL URL EXTRACTION COMPLETE:")
+            logger.info(f"COMPREHENSIVE EXCEL EXTRACTION COMPLETE (OPENPYXL):")
             logger.info(f"  - Processed {len(sheet_names)} sheets")
             logger.info(f"  - Total content: {len(complete_content)} characters")
-            logger.info(f"  - Potential URLs found: {total_urls_found}")
+            logger.info(f"  - Hyperlinks extracted: {len(extracted_urls)}")
+            logger.info(f"  - Total URLs found: {total_urls_found}")
             logger.info("=" * 80)
 
-            # Log a sample of the content for debugging
+            # Log extracted URLs
+            if extracted_urls:
+                logger.info("EXTRACTED HYPERLINKS:")
+                for i, url in enumerate(extracted_urls[:10]):  # Log first 10
+                    logger.info(f"  URL {i + 1}: {url}")
+                if len(extracted_urls) > 10:
+                    logger.info(f"  ... and {len(extracted_urls) - 10} more URLs")
+
+            # Log sample content
             sample_content = complete_content[:2000] if len(complete_content) > 2000 else complete_content
             logger.info("SAMPLE OF COMPREHENSIVE EXCEL CONTENT:")
             logger.info(sample_content)
@@ -487,12 +527,12 @@ class DocumentExtractor:
                 logger.info(f"... [TRUNCATED - FULL CONTENT IS {len(complete_content)} CHARS] ...")
             logger.info("=" * 80)
 
-            return complete_content
+            return complete_content, extracted_urls
 
         except Exception as e:
-            logger.error(f"Error extracting comprehensive Excel content for URLs: {e}")
-            # Fallback to basic method
-            return self._extract_full_excel_content_for_urls(content_bytes)
+            logger.error(f"Error extracting comprehensive Excel content with openpyxl: {e}")
+            # Fallback to pandas method
+            return self._extract_full_excel_content_for_urls(content_bytes), []
 
     def _extract_full_excel_content_for_urls(self, content_bytes: bytes) -> str:
         """Fallback: Extract full Excel content specifically for URL extraction - no limits"""
@@ -982,13 +1022,31 @@ class DocumentExtractor:
             elif is_excel or 'officedocument.spreadsheet' in content_type:
                 # For Excel, extract COMPREHENSIVE content for URL extraction
                 logger.info("Excel file detected - extracting comprehensive content for URL detection...")
-                full_text_for_url_extraction = self._extract_comprehensive_excel_content_for_urls(response.content)
+                full_text_for_url_extraction, extracted_hyperlinks = self._extract_comprehensive_excel_content_for_urls(
+                    response.content)
+
+                # Combine text-based URLs with hyperlink URLs
+                combined_urls = []
+                # First add hyperlink URLs (more reliable)
+                combined_urls.extend(extracted_hyperlinks)
+                # Then add any URLs found in text content
+                text_urls = self.extract_urls_from_text(full_text_for_url_extraction)
+                for url in text_urls:
+                    if url not in combined_urls:
+                        combined_urls.append(url)
+
+                # Store combined URLs for later use
+                full_text_for_url_extraction = full_text_for_url_extraction + "\n\n=== EXTRACTED HYPERLINKS ===\n" + "\n".join(
+                    extracted_hyperlinks)
+
                 # Extract limited content for LLM processing
                 text = self._extract_limited_excel_content(response.content, max_chars)
                 media_type = FileTypeChoices.XLSX
                 logger.info(f"Excel processing complete:")
                 logger.info(f"  - Limited content for LLM: {len(text)} chars")
                 logger.info(f"  - Comprehensive content for URLs: {len(full_text_for_url_extraction)} chars")
+                logger.info(f"  - Hyperlinks extracted: {len(extracted_hyperlinks)}")
+                logger.info(f"  - Total URLs for processing: {len(combined_urls)}")
             elif is_csv:
                 # Process CSV with limited extraction
                 try:
@@ -1164,9 +1222,14 @@ class DocumentExtractor:
                     try:
                         with open(file_path, 'rb') as f:
                             content_bytes = f.read()
-                        comprehensive_text_for_urls = self._extract_comprehensive_excel_content_for_urls(content_bytes)
+                        comprehensive_text_for_urls, extracted_hyperlinks = self._extract_comprehensive_excel_content_for_urls(
+                            content_bytes)
+                        # Combine with text URLs
+                        if extracted_hyperlinks:
+                            comprehensive_text_for_urls = comprehensive_text_for_urls + "\n\n=== EXTRACTED HYPERLINKS ===\n" + "\n".join(
+                                extracted_hyperlinks)
                         logger.info(
-                            f"Main Excel file - Limited content: {len(text)} chars, Comprehensive: {len(comprehensive_text_for_urls)} chars")
+                            f"Main Excel file - Limited content: {len(text)} chars, Comprehensive: {len(comprehensive_text_for_urls)} chars, Hyperlinks: {len(extracted_hyperlinks)}")
                     except:
                         comprehensive_text_for_urls = text
                 else:
