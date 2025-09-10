@@ -1,3 +1,4 @@
+#NEW CODE
 import json
 from typing import Dict, List, Any, Set
 from pathlib import Path
@@ -62,6 +63,7 @@ except ImportError:
 
 try:
     import openpyxl
+
     HAS_OPENPYXL = True
     logger.info("openpyxl available for enhanced Excel processing")
 except ImportError:
@@ -561,6 +563,261 @@ class DocumentExtractor:
             logger.error(f"Error extracting full Excel content: {e}")
             return ""
 
+    def _extract_comprehensive_docx_content_for_urls(self, content_bytes: bytes) -> tuple[str, List[str]]:
+        """Extract comprehensive DOCX content and hyperlinks
+        Returns: (comprehensive_text, extracted_hyperlinks)
+        """
+        try:
+            logger.info("=" * 80)
+            logger.info("EXTRACTING COMPREHENSIVE DOCX CONTENT FOR URL EXTRACTION")
+            logger.info("=" * 80)
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as temp_file:
+                temp_file.write(content_bytes)
+                temp_file_path = temp_file.name
+
+            try:
+                doc = docx.Document(temp_file_path)
+
+                # Extract all text content
+                text_parts = []
+                extracted_hyperlinks = []
+
+                # Method 1: Extract from all relationships (most reliable)
+                logger.info("Extracting hyperlinks from document relationships...")
+                for rel_id, rel in doc.part.rels.items():
+                    if hasattr(rel, 'target_ref') and rel.target_ref and rel.target_ref.startswith('http'):
+                        if rel.target_ref not in extracted_hyperlinks:
+                            extracted_hyperlinks.append(rel.target_ref)
+                            logger.info(f"Found relationship hyperlink: {rel.target_ref}")
+
+                # Method 2: Process paragraphs and extract hyperlinks from runs
+                logger.info("Processing paragraphs for content and hyperlinks...")
+                for para in doc.paragraphs:
+                    if para.text.strip():
+                        text_parts.append(para.text)
+
+                    # Extract hyperlinks from paragraph runs
+                    for run in para.runs:
+                        if hasattr(run, '_element'):
+                            # Look for hyperlink elements in the XML
+                            try:
+                                hyperlinks = run._element.xpath('.//w:hyperlink',
+                                                                namespaces={
+                                                                    'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'})
+                                for hyperlink in hyperlinks:
+                                    r_id = hyperlink.get(
+                                        '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id')
+                                    if r_id and r_id in doc.part.rels:
+                                        try:
+                                            rel = doc.part.rels[r_id]
+                                            if hasattr(rel,
+                                                       'target_ref') and rel.target_ref and rel.target_ref not in extracted_hyperlinks:
+                                                extracted_hyperlinks.append(rel.target_ref)
+                                                logger.info(f"Found paragraph hyperlink: {rel.target_ref}")
+                                        except:
+                                            continue
+                            except Exception as e:
+                                logger.debug(f"Error extracting hyperlinks from run: {e}")
+                                continue
+
+                # Method 3: Process tables
+                logger.info("Processing tables for content and hyperlinks...")
+                for table in doc.tables:
+                    for row in table.rows:
+                        for cell in row.cells:
+                            if cell.text.strip():
+                                text_parts.append(f"[Table Cell]: {cell.text}")
+
+                            # Extract hyperlinks from table cells
+                            for para in cell.paragraphs:
+                                for run in para.runs:
+                                    if hasattr(run, '_element'):
+                                        try:
+                                            hyperlinks = run._element.xpath('.//w:hyperlink',
+                                                                            namespaces={
+                                                                                'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'})
+                                            for hyperlink in hyperlinks:
+                                                r_id = hyperlink.get(
+                                                    '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id')
+                                                if r_id and r_id in doc.part.rels:
+                                                    try:
+                                                        rel = doc.part.rels[r_id]
+                                                        if hasattr(rel,
+                                                                   'target_ref') and rel.target_ref and rel.target_ref not in extracted_hyperlinks:
+                                                            extracted_hyperlinks.append(rel.target_ref)
+                                                            logger.info(f"Found table hyperlink: {rel.target_ref}")
+                                                    except:
+                                                        continue
+                                        except Exception as e:
+                                            logger.debug(f"Error extracting hyperlinks from table cell: {e}")
+                                            continue
+
+                comprehensive_text = '\n'.join(text_parts)
+
+                logger.info(f"DOCX extraction complete:")
+                logger.info(f"  - Text content: {len(comprehensive_text)} characters")
+                logger.info(f"  - Hyperlinks extracted: {len(extracted_hyperlinks)}")
+
+                if extracted_hyperlinks:
+                    logger.info("EXTRACTED HYPERLINKS:")
+                    for i, url in enumerate(extracted_hyperlinks[:10]):
+                        logger.info(f"  URL {i + 1}: {url}")
+                    if len(extracted_hyperlinks) > 10:
+                        logger.info(f"  ... and {len(extracted_hyperlinks) - 10} more URLs")
+
+                return comprehensive_text, extracted_hyperlinks
+
+            finally:
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+
+        except Exception as e:
+            logger.error(f"Error extracting comprehensive DOCX content: {e}")
+            # Fallback to basic text extraction
+            try:
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as temp_file:
+                    temp_file.write(content_bytes)
+                    temp_file_path = temp_file.name
+
+                try:
+                    doc = docx.Document(temp_file_path)
+                    text_parts = []
+                    for para in doc.paragraphs:
+                        if para.text.strip():
+                            text_parts.append(para.text)
+                    return '\n'.join(text_parts), []
+                finally:
+                    if os.path.exists(temp_file_path):
+                        os.unlink(temp_file_path)
+            except:
+                return "", []
+
+    def _extract_comprehensive_pdf_content_for_urls(self, content_bytes: bytes) -> tuple[str, List[str]]:
+        """Extract comprehensive PDF content and hyperlinks using PyMuPDF
+        Returns: (comprehensive_text, extracted_hyperlinks)
+        """
+        try:
+            if not HAS_PYMUPDF:
+                # Fallback to basic text extraction
+                text = self._extract_pdf_text_enhanced(content_bytes)
+                return text, []
+
+            logger.info("=" * 80)
+            logger.info("EXTRACTING COMPREHENSIVE PDF CONTENT FOR URL EXTRACTION")
+            logger.info("=" * 80)
+
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+                temp_file.write(content_bytes)
+                temp_file_path = temp_file.name
+
+            try:
+                doc = fitz.open(temp_file_path)
+                text_parts = []
+                extracted_hyperlinks = []
+
+                logger.info(f"Processing {len(doc)} pages for content and hyperlinks...")
+
+                for page_num in range(len(doc)):
+                    page = doc.load_page(page_num)
+
+                    # Extract text
+                    page_text = page.get_text()
+                    if page_text.strip():
+                        text_parts.append(f"[Page {page_num + 1}]\n{page_text}")
+
+                    # Extract links/annotations
+                    links = page.get_links()
+                    page_hyperlinks = []
+
+                    for link in links:
+                        if 'uri' in link and link['uri']:
+                            url = link['uri']
+                            if url.startswith('http') and url not in extracted_hyperlinks:
+                                extracted_hyperlinks.append(url)
+                                page_hyperlinks.append(url)
+
+                    if page_hyperlinks:
+                        logger.info(f"  Page {page_num + 1}: {len(page_hyperlinks)} hyperlinks found")
+                        for url in page_hyperlinks:
+                            logger.info(f"    - {url}")
+
+                doc.close()
+
+                comprehensive_text = '\n'.join(text_parts)
+
+                logger.info(f"PDF extraction complete:")
+                logger.info(f"  - Text content: {len(comprehensive_text)} characters")
+                logger.info(f"  - Hyperlinks extracted: {len(extracted_hyperlinks)}")
+
+                if extracted_hyperlinks:
+                    logger.info("EXTRACTED HYPERLINKS:")
+                    for i, url in enumerate(extracted_hyperlinks[:10]):
+                        logger.info(f"  URL {i + 1}: {url}")
+                    if len(extracted_hyperlinks) > 10:
+                        logger.info(f"  ... and {len(extracted_hyperlinks) - 10} more URLs")
+
+                return comprehensive_text, extracted_hyperlinks
+
+            finally:
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+
+        except Exception as e:
+            logger.error(f"Error extracting comprehensive PDF content: {e}")
+            # Fallback to basic text extraction
+            text = self._extract_pdf_text_enhanced(content_bytes)
+            return text, []
+
+    def _extract_comprehensive_csv_content_for_urls(self, content_bytes: bytes) -> tuple[str, List[str]]:
+        """Extract comprehensive CSV content (CSV files don't have hyperlinks, but we maintain consistency)
+        Returns: (comprehensive_text, extracted_hyperlinks)
+        """
+        try:
+            logger.info("=" * 80)
+            logger.info("EXTRACTING COMPREHENSIVE CSV CONTENT FOR URL EXTRACTION")
+            logger.info("=" * 80)
+
+            # For CSV, there are no embedded hyperlinks, so just extract all text
+            df_full = pd.read_csv(io.BytesIO(content_bytes))
+            comprehensive_text = df_full.to_csv(index=False)
+
+            logger.info(f"CSV extraction complete:")
+            logger.info(f"  - Text content: {len(comprehensive_text)} characters")
+            logger.info(f"  - Rows: {len(df_full)}, Columns: {len(df_full.columns)}")
+            logger.info("  - No hyperlinks (CSV format doesn't support embedded links)")
+
+            return comprehensive_text, []
+
+        except Exception as e:
+            logger.error(f"Error extracting comprehensive CSV content: {e}")
+            return "", []
+
+    def _extract_comprehensive_txt_content_for_urls(self, content_bytes: bytes) -> tuple[str, List[str]]:
+        """Extract comprehensive TXT content (TXT files don't have hyperlinks, but we maintain consistency)
+        Returns: (comprehensive_text, extracted_hyperlinks)
+        """
+        try:
+            logger.info("=" * 80)
+            logger.info("EXTRACTING COMPREHENSIVE TXT CONTENT FOR URL EXTRACTION")
+            logger.info("=" * 80)
+
+            # For TXT, there are no embedded hyperlinks, so just extract all text
+            try:
+                comprehensive_text = content_bytes.decode('utf-8', errors='ignore')
+            except:
+                comprehensive_text = str(content_bytes, errors='ignore')
+
+            logger.info(f"TXT extraction complete:")
+            logger.info(f"  - Text content: {len(comprehensive_text)} characters")
+            logger.info("  - No hyperlinks (TXT format doesn't support embedded links)")
+
+            return comprehensive_text, []
+
+        except Exception as e:
+            logger.error(f"Error extracting comprehensive TXT content: {e}")
+            return "", []
+
     def _image_to_base64(self, image_bytes: bytes, image_format: str = "PNG") -> str:
         """Convert image bytes to base64 string"""
         try:
@@ -991,17 +1248,20 @@ class DocumentExtractor:
             text = ""
             images = []
             full_text_for_url_extraction = ""
+            extracted_hyperlinks = []
 
             # Determine file type
             content_preview = response.content[:10] if response.content else b''
             is_pdf = content_preview.startswith(b'%PDF') or 'pdf' in content_type
             is_excel = any(indicator in content_type for indicator in ['spreadsheet', 'excel', 'xlsx', 'xls'])
             is_csv = 'csv' in content_type or url.lower().endswith('.csv')
+            is_docx = 'word' in content_type or 'document' in content_type or 'officedocument.wordprocessing' in content_type
+            is_txt = not any([is_pdf, is_excel, is_csv, is_docx])
 
-            logger.info(f"File type - PDF: {is_pdf}, Excel: {is_excel}, CSV: {is_csv}")
+            logger.info(f"File type - PDF: {is_pdf}, Excel: {is_excel}, CSV: {is_csv}, DOCX: {is_docx}, TXT: {is_txt}")
 
             # Check if it's HTML content that shouldn't be processed
-            if 'html' in content_type and not is_pdf and not is_excel and not is_csv:
+            if 'html' in content_type and not any([is_pdf, is_excel, is_csv, is_docx]):
                 # This is HTML content, likely an error or sign-in page
                 logger.warning(f"Received HTML response for {url}, not processing as document")
                 error_info = {
@@ -1013,32 +1273,20 @@ class DocumentExtractor:
                 self.url_cache[url] = error_info
                 return "", [], None, error_info, ""
 
+            # *** ENHANCED: Extract comprehensive content and hyperlinks for ALL formats ***
             if is_pdf:
+                full_text_for_url_extraction, extracted_hyperlinks = self._extract_comprehensive_pdf_content_for_urls(
+                    response.content)
                 text = self._extract_pdf_text_enhanced(response.content)
-                full_text_for_url_extraction = text  # Store full text
                 images = self._extract_images_from_pdf_pymupdf(response.content)
                 media_type = FileTypeChoices.PDF
-                logger.info(f"Assigned media type as : {media_type}")
+                logger.info(f"Assigned media type as: {media_type}")
+
             elif is_excel or 'officedocument.spreadsheet' in content_type:
                 # For Excel, extract COMPREHENSIVE content for URL extraction
                 logger.info("Excel file detected - extracting comprehensive content for URL detection...")
                 full_text_for_url_extraction, extracted_hyperlinks = self._extract_comprehensive_excel_content_for_urls(
                     response.content)
-
-                # Combine text-based URLs with hyperlink URLs
-                combined_urls = []
-                # First add hyperlink URLs (more reliable)
-                combined_urls.extend(extracted_hyperlinks)
-                # Then add any URLs found in text content
-                text_urls = self.extract_urls_from_text(full_text_for_url_extraction)
-                for url in text_urls:
-                    if url not in combined_urls:
-                        combined_urls.append(url)
-
-                # Store combined URLs for later use
-                full_text_for_url_extraction = full_text_for_url_extraction + "\n\n=== EXTRACTED HYPERLINKS ===\n" + "\n".join(
-                    extracted_hyperlinks)
-
                 # Extract limited content for LLM processing
                 text = self._extract_limited_excel_content(response.content, max_chars)
                 media_type = FileTypeChoices.XLSX
@@ -1046,15 +1294,13 @@ class DocumentExtractor:
                 logger.info(f"  - Limited content for LLM: {len(text)} chars")
                 logger.info(f"  - Comprehensive content for URLs: {len(full_text_for_url_extraction)} chars")
                 logger.info(f"  - Hyperlinks extracted: {len(extracted_hyperlinks)}")
-                logger.info(f"  - Total URLs for processing: {len(combined_urls)}")
-            elif is_csv:
-                # Process CSV with limited extraction
-                try:
-                    # First, get full CSV for URL extraction
-                    df_full = pd.read_csv(io.BytesIO(response.content))
-                    full_text_for_url_extraction = df_full.to_csv(index=False)
 
-                    # Then get limited version for processing
+            elif is_csv:
+                # For CSV, extract comprehensive content
+                full_text_for_url_extraction, extracted_hyperlinks = self._extract_comprehensive_csv_content_for_urls(
+                    response.content)
+                # Process CSV with limited extraction for LLM
+                try:
                     df = pd.read_csv(io.BytesIO(response.content), nrows=self.excel_max_rows)
                     if len(df.columns) > self.excel_max_cols:
                         df = df.iloc[:, :self.excel_max_cols]
@@ -1064,11 +1310,16 @@ class DocumentExtractor:
                     media_type = FileTypeChoices.CSV
                 except Exception as e:
                     logger.error(f"Error processing CSV: {e}")
-                    full_text_for_url_extraction = response.text
                     text = response.text[:max_chars]
                     media_type = FileTypeChoices.CSV
-            elif 'word' in content_type or 'document' in content_type or 'officedocument.wordprocessing' in content_type:
-                # Process DOCX
+
+            elif is_docx:
+                # For DOCX, extract comprehensive content and hyperlinks
+                logger.info("DOCX file detected - extracting comprehensive content for URL detection...")
+                full_text_for_url_extraction, extracted_hyperlinks = self._extract_comprehensive_docx_content_for_urls(
+                    response.content)
+
+                # Extract limited content for LLM processing
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.docx') as temp_file:
                     temp_file.write(response.content)
                     temp_file_path = temp_file.name
@@ -1080,32 +1331,46 @@ class DocumentExtractor:
                         if para.text.strip():
                             text_parts.append(para.text)
                     text = '\n'.join(text_parts)
-                    full_text_for_url_extraction = text  # Store full text
                     media_type = FileTypeChoices.DOCX
-                    logger.info(f"Assigned media type as : {media_type}")
+                    logger.info(f"Assigned media type as: {media_type}")
                 finally:
                     if os.path.exists(temp_file_path):
                         os.unlink(temp_file_path)
 
                 images = self._extract_images_from_docx(response.content)
-            else:
-                # For any other type, check if it looks like an error page
-                if response.text.strip().startswith('<!DOCTYPE') or response.text.strip().startswith('<html'):
-                    # This might be an error page
-                    logger.warning(f"Received HTML response for {url}, might be an error page")
-                    error_info = {
-                        'error': f'Unexpected HTML response - possibly an error page or access denied',
-                        'error_type': 'unexpected_html',
-                        'url': url
-                    }
-                    self.url_cache[url] = error_info
-                    return "", [], None, error_info, ""
+                logger.info(f"DOCX processing complete:")
+                logger.info(f"  - Limited content for LLM: {len(text)} chars")
+                logger.info(f"  - Comprehensive content for URLs: {len(full_text_for_url_extraction)} chars")
+                logger.info(f"  - Hyperlinks extracted: {len(extracted_hyperlinks)}")
 
-                # Try as plain text
+            else:
+                # For TXT and other formats
+                logger.info("TXT/Other file detected - extracting content...")
+                full_text_for_url_extraction, extracted_hyperlinks = self._extract_comprehensive_txt_content_for_urls(
+                    response.content)
                 text = response.text
-                full_text_for_url_extraction = text  # Store full text
                 media_type = FileTypeChoices.TXT
-                logger.info(f"Assigned media type as : {media_type}")
+                logger.info(f"Assigned media type as: {media_type}")
+
+            # *** CRITICAL: Combine text-based URLs with hyperlink URLs for ALL formats ***
+            combined_urls = []
+            # First add hyperlink URLs (more reliable)
+            combined_urls.extend(extracted_hyperlinks)
+            # Then add any URLs found in text content
+            text_urls = self.extract_urls_from_text(full_text_for_url_extraction)
+            for url_found in text_urls:
+                if url_found not in combined_urls:
+                    combined_urls.append(url_found)
+
+            # Store combined URLs for later use by appending hyperlinks to full text
+            if extracted_hyperlinks:
+                full_text_for_url_extraction = full_text_for_url_extraction + "\n\n=== EXTRACTED HYPERLINKS ===\n" + "\n".join(
+                    extracted_hyperlinks)
+
+            logger.info(f"URL extraction summary for {url}:")
+            logger.info(f"  - Hyperlinks extracted: {len(extracted_hyperlinks)}")
+            logger.info(f"  - Text-based URLs found: {len(text_urls)}")
+            logger.info(f"  - Total unique URLs for processing: {len(combined_urls)}")
 
             # Apply character limit for subdocuments AFTER storing full text
             if is_subdoc and len(text) > max_chars:
@@ -1198,42 +1463,38 @@ class DocumentExtractor:
                     with open(file_path, 'rb') as f:
                         content_bytes = f.read()
                     text = self._extract_pdf_text_enhanced(content_bytes)
-                    comprehensive_text_for_urls = text  # Same for PDF
+                    comprehensive_text_for_urls, _ = self._extract_comprehensive_pdf_content_for_urls(content_bytes)
                     images = self._extract_images_from_pdf_pymupdf(content_bytes)
                 elif file_extension in ['doc', 'docx']:
-                    text = self._extract_docx_text(file_path)
-                    comprehensive_text_for_urls = text  # Same for DOCX
                     with open(file_path, 'rb') as f:
-                        images = self._extract_images_from_docx(f.read())
+                        content_bytes = f.read()
+                    text = self._extract_docx_text(file_path)
+                    comprehensive_text_for_urls, _ = self._extract_comprehensive_docx_content_for_urls(content_bytes)
+                    images = self._extract_images_from_docx(content_bytes)
                 elif file_extension == 'txt':
+                    with open(file_path, 'rb') as f:
+                        content_bytes = f.read()
                     text = self._extract_txt_text(file_path)
-                    comprehensive_text_for_urls = text  # Same for TXT
+                    comprehensive_text_for_urls, _ = self._extract_comprehensive_txt_content_for_urls(content_bytes)
                 elif file_extension == 'csv':
+                    with open(file_path, 'rb') as f:
+                        content_bytes = f.read()
                     text = self._extract_csv_text(file_path)
-                    # For CSV, get comprehensive content for URLs
-                    try:
-                        df_full = pd.read_csv(file_path)
-                        comprehensive_text_for_urls = df_full.to_csv(index=False)
-                    except:
-                        comprehensive_text_for_urls = text
+                    comprehensive_text_for_urls, _ = self._extract_comprehensive_csv_content_for_urls(content_bytes)
                 elif file_extension in ['xls', 'xlsx']:
+                    with open(file_path, 'rb') as f:
+                        content_bytes = f.read()
                     text = self._extract_excel_text(file_path)
-                    # For Excel files, extract comprehensive content for URL extraction
-                    try:
-                        with open(file_path, 'rb') as f:
-                            content_bytes = f.read()
-                        comprehensive_text_for_urls, extracted_hyperlinks = self._extract_comprehensive_excel_content_for_urls(
-                            content_bytes)
-                        # Combine with text URLs
-                        if extracted_hyperlinks:
-                            comprehensive_text_for_urls = comprehensive_text_for_urls + "\n\n=== EXTRACTED HYPERLINKS ===\n" + "\n".join(
-                                extracted_hyperlinks)
-                        logger.info(
-                            f"Main Excel file - Limited content: {len(text)} chars, Comprehensive: {len(comprehensive_text_for_urls)} chars, Hyperlinks: {len(extracted_hyperlinks)}")
-                    except:
-                        comprehensive_text_for_urls = text
+                    comprehensive_text_for_urls, extracted_hyperlinks = self._extract_comprehensive_excel_content_for_urls(
+                        content_bytes)
+                    # Combine with hyperlinks
+                    if extracted_hyperlinks:
+                        comprehensive_text_for_urls = comprehensive_text_for_urls + "\n\n=== EXTRACTED HYPERLINKS ===\n" + "\n".join(
+                            extracted_hyperlinks)
+                    logger.info(
+                        f"Main Excel file - Limited content: {len(text)} chars, Comprehensive: {len(comprehensive_text_for_urls)} chars, Hyperlinks: {len(extracted_hyperlinks)}")
                 else:
-                    # Default case - ensure we always return 3 values
+                    # Default case
                     comprehensive_text_for_urls = text
             else:
                 # Handle file object
@@ -1241,39 +1502,40 @@ class DocumentExtractor:
                     file.seek(0)
                     content_bytes = file.read()
                     text = self._extract_pdf_text_enhanced(content_bytes)
-                    comprehensive_text_for_urls = text  # Same for PDF
+                    comprehensive_text_for_urls, _ = self._extract_comprehensive_pdf_content_for_urls(content_bytes)
                     images = self._extract_images_from_pdf_pymupdf(content_bytes)
                 elif file_extension in ['doc', 'docx']:
                     file.seek(0)
                     content_bytes = file.read()
                     text = self._extract_docx_text_from_object(io.BytesIO(content_bytes))
-                    comprehensive_text_for_urls = text  # Same for DOCX
+                    comprehensive_text_for_urls, _ = self._extract_comprehensive_docx_content_for_urls(content_bytes)
                     images = self._extract_images_from_docx(content_bytes)
                 elif file_extension == 'txt':
+                    file.seek(0)
+                    content_bytes = file.read()
                     text = self._extract_txt_text_from_object(file)
-                    comprehensive_text_for_urls = text  # Same for TXT
+                    comprehensive_text_for_urls, _ = self._extract_comprehensive_txt_content_for_urls(
+                        content_bytes if isinstance(content_bytes, bytes) else content_bytes.encode('utf-8'))
                 elif file_extension == 'csv':
+                    file.seek(0)
+                    content_bytes = file.read()
                     text = self._extract_csv_text_from_object(file)
-                    # For CSV, get comprehensive content for URLs
-                    try:
-                        file.seek(0)
-                        df_full = pd.read_csv(file)
-                        comprehensive_text_for_urls = df_full.to_csv(index=False)
-                    except:
-                        comprehensive_text_for_urls = text
+                    comprehensive_text_for_urls, _ = self._extract_comprehensive_csv_content_for_urls(
+                        content_bytes if isinstance(content_bytes, bytes) else content_bytes.encode('utf-8'))
                 elif file_extension in ['xls', 'xlsx']:
+                    file.seek(0)
+                    content_bytes = file.read()
                     text = self._extract_excel_text_from_object(file)
-                    # For Excel files, extract comprehensive content for URL extraction
-                    try:
-                        file.seek(0)
-                        content_bytes = file.read()
-                        comprehensive_text_for_urls = self._extract_comprehensive_excel_content_for_urls(content_bytes)
-                        logger.info(
-                            f"Main Excel file - Limited content: {len(text)} chars, Comprehensive: {len(comprehensive_text_for_urls)} chars")
-                    except:
-                        comprehensive_text_for_urls = text
+                    comprehensive_text_for_urls, extracted_hyperlinks = self._extract_comprehensive_excel_content_for_urls(
+                        content_bytes)
+                    # Combine with hyperlinks
+                    if extracted_hyperlinks:
+                        comprehensive_text_for_urls = comprehensive_text_for_urls + "\n\n=== EXTRACTED HYPERLINKS ===\n" + "\n".join(
+                            extracted_hyperlinks)
+                    logger.info(
+                        f"Main Excel file - Limited content: {len(text)} chars, Comprehensive: {len(comprehensive_text_for_urls)} chars, Hyperlinks: {len(extracted_hyperlinks)}")
                 else:
-                    # Default case - ensure we always return 3 values
+                    # Default case
                     comprehensive_text_for_urls = text
 
             return text, images, comprehensive_text_for_urls
@@ -1642,10 +1904,10 @@ class DocumentExtractor:
             return url
 
     def process_document_with_links(
-            self, text: str, company_bot, processed_urls=None,
+            self, text: str, company_bot, comprehensive_text: str = None, processed_urls=None,
             depth=0, max_depth=MAX_DEPTH, extracted_images: List[Dict[str, Any]] = None, other_data=None
     ) -> Dict[str, Any]:
-        """Process document and extract links from linked documents with enhanced Excel URL extraction"""
+        """Process document and extract links from linked documents with enhanced URL extraction for ALL formats"""
         if processed_urls is None:
             processed_urls = set()
 
@@ -1654,9 +1916,15 @@ class DocumentExtractor:
             logger.info(f"{'  ' * depth}Processing main document with Bedrock...")
             main_result = self.extract_basic_content(text, company_bot, extracted_images, other_data)
 
-            # Step 2: Extract URLs from main document text
+            # *** CRITICAL FIX: Use comprehensive text for URL extraction ***
+            url_extraction_text = comprehensive_text if comprehensive_text else text
+
+            # Step 2: Extract URLs from comprehensive document content
             logger.info(f"{'  ' * depth}Extracting URLs from main document...")
-            urls = self.extract_urls_from_text(text)
+            logger.info(f"{'  ' * depth}  - Using comprehensive content: {len(url_extraction_text)} chars")
+            logger.info(f"{'  ' * depth}  - Limited text for LLM: {len(text)} chars")
+
+            urls = self.extract_urls_from_text(url_extraction_text)  # ← NOW USING COMPREHENSIVE TEXT
             main_result["url"] = urls
 
             # Log all extracted URLs
@@ -1714,12 +1982,12 @@ class DocumentExtractor:
                         })
                         continue
 
-                    # *** CRITICAL: Extract URLs from the COMPREHENSIVE text for Excel files ***
+                    # *** CRITICAL: Extract URLs from the COMPREHENSIVE text for ALL file formats ***
                     logger.info(f"{'  ' * depth}Extracting URLs from linked document: {main_doc_url}")
                     logger.info(f"{'  ' * depth}  - Media type: {linked_media_type}")
                     logger.info(f"{'  ' * depth}  - Using comprehensive content: {len(full_text_for_urls)} chars")
 
-                    # Extract URLs from the comprehensive content (especially important for Excel)
+                    # Extract URLs from the comprehensive content (now includes hyperlinks for all formats)
                     links_in_subdoc = self.extract_urls_from_text(full_text_for_urls)
                     logger.info(f"{'  ' * depth}Found {len(links_in_subdoc)} total links inside {main_doc_url}")
 
@@ -1859,24 +2127,15 @@ class DocumentExtractor:
             logger.info(f"{'  ' * depth}  - Failed: {len(failed_links)}")
             logger.info(f"{'  ' * depth}  - Total URLs processed: {len(processed_urls)}")
 
-            # Log failed links details if any
-            if failed_links:
-                logger.warning(f"{'  ' * depth}Failed links summary:")
-                for failed in failed_links:
-                    logger.warning(
-                        f"{'  ' * depth}  - {failed['file_url']}: {failed['error'].get('error', 'Unknown error')}")
-
             return main_result
 
         except ValueError as ve:
             logger.error(f"Main document processing failed: {str(ve)}")
             raise
-
         except Exception as e:
             logger.error(f"Error processing document: {str(e)}")
             import traceback
             traceback.print_exc()
-
             return {
                 "title": "",
                 "organization": "",
@@ -1922,15 +2181,41 @@ class DocumentExtractor:
             logger.error(f"Error determining media type from URL {url}: {e}")
             return FileTypeChoices.TXT.value
 
+    def _get_comprehensive_content_for_url_extraction(self, document_text: str, other_data=None) -> str:
+        """Get comprehensive content for URL extraction from the original file"""
+        try:
+            # If we have the comprehensive content stored in other_data, use it
+            if other_data and 'comprehensive_text_for_urls' in other_data:
+                comprehensive_text = other_data['comprehensive_text_for_urls']
+                logger.info(f"Using stored comprehensive content: {len(comprehensive_text)} chars")
+                return comprehensive_text
+
+            # Fallback to the document_text if no comprehensive content available
+            logger.info(f"No comprehensive content available, using document text: {len(document_text)} chars")
+            return document_text
+
+        except Exception as e:
+            logger.error(f"Error getting comprehensive content: {e}")
+            return document_text
+
     def extract_with_bedrock(
             self, document_text, company_bot, extracted_images: List[Dict[str, Any]] = None, other_data=None
-    ) -> Dict[
-        str, Any]:
+    ) -> Dict[str, Any]:
         """Main entry point - processes document with recursive link extraction"""
         try:
             logger.info("Starting document processing with recursive link extraction...")
+
+            # *** CRITICAL FIX: Get comprehensive content for URL extraction ***
+            comprehensive_text_for_urls = self._get_comprehensive_content_for_url_extraction(
+                document_text, other_data
+            )
+
             result = self.process_document_with_links(
-                document_text, company_bot, extracted_images=extracted_images, other_data=other_data
+                text=document_text,  # Limited text for LLM
+                comprehensive_text=comprehensive_text_for_urls,  # Full text for URL extraction
+                company_bot=company_bot,
+                extracted_images=extracted_images,
+                other_data=other_data
             )
             return result
         except Exception as e:
@@ -1939,7 +2224,6 @@ class DocumentExtractor:
                 "title": "",
                 "organization": "",
                 "tags": [],
-                # "exact_content": document_text,
                 "summary": "",
                 "document_type": "",
                 "key_entities": [],
@@ -2133,11 +2417,16 @@ def extract_tags_from_document_file(file, company_bot, file_extension: str, othe
 
         extractor = DocumentExtractor(**extractor_config)
 
-        # Extract text and images from file
-        document_text, extracted_images, _  = extractor.extract_text_from_file(file, file_extension)
+        # *** CRITICAL FIX: Extract both limited and comprehensive content ***
+        document_text, extracted_images, comprehensive_text_for_urls = extractor.extract_text_from_file(file, file_extension)
 
         if not document_text:
             return default_response
+
+        # *** CRITICAL FIX: Pass comprehensive content in other_data ***
+        if not other_data:
+            other_data = {}
+        other_data['comprehensive_text_for_urls'] = comprehensive_text_for_urls
 
         # Extract information using Bedrock with URL processing
         result = extractor.extract_with_llm(
@@ -2149,7 +2438,6 @@ def extract_tags_from_document_file(file, company_bot, file_extension: str, othe
     except Exception as e:
         logger.error(f"Error extracting tags from file: {e}")
         return default_response
-
 
 def get_doc_tags_from_ai(file, company_bot, file_extension, other_data):
     """Main entry point for your code"""

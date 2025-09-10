@@ -51,21 +51,21 @@ class BatchMediaUploadView(TemplateView):
             context['default_bot_id'] = default_bot.id
 
         try:
-            company = None
-            if self.request.user.is_authenticated:
-                try:
-                    user_profile = Profile.objects.get(email=self.request.user.email)
-                    company = user_profile.company
-                except Profile.DoesNotExist:
-                    pass
+            # company = None
+            # if self.request.user.is_authenticated:
+            #     try:
+            #         user_profile = Profile.objects.get(email=self.request.user.email)
+            #         company = user_profile.company
+            #     except Profile.DoesNotExist:
+            #         pass
 
             existing_tags_query = Tag.objects.filter(
                 source_type=TagSourceChoices.MANUAL,
                 status=TagChoices.APPROVED
             )
 
-            if company:
-                existing_tags_query = existing_tags_query.filter(company=company)
+            # if company:
+            #     existing_tags_query = existing_tags_query.filter(company=company)
 
             context['existing_manual_tags'] = list(
                 existing_tags_query.values_list('name', flat=True).distinct().order_by('name')
@@ -778,8 +778,8 @@ def get_master_tags(company=None, other_params=None, include_description=False):
             status=TagChoices.APPROVED
         )
 
-        if company:
-            query = query.filter(company=company)
+        # if company:
+        #     query = query.filter(company=company)
 
         if include_description:
             return [
@@ -970,8 +970,8 @@ class BatchMediaTaskStatusView(View):
             status=TagChoices.APPROVED
         )
 
-        if company:
-            query = query.filter(company=company)
+        # if company:
+        #     query = query.filter(company=company)
 
         # Get set of valid tag names
         valid_tag_names = set(query.values_list('name', flat=True))
@@ -1395,9 +1395,9 @@ class BatchMediaSaveView(View):
         filename = item_data.get('filename', 'Unknown')
         file_index = item_data.get('file_index')
 
-        if "fail" in filename.lower():
-            print(f"Forced save failure for {filename}")
-            raise ValueError(f"Forced save failure for {filename}")
+        # if "fail" in filename.lower():
+        #     print(f"Forced save failure for {filename}")
+        #     raise ValueError(f"Forced save failure for {filename}")
 
         try:
             company_bot = CompanyBot.objects.get(id=company_bot_id)
@@ -1824,10 +1824,10 @@ class BatchMediaSaveView(View):
             print(f"Saving subdocument with title: {subdoc_title} (from filename: {filename})")
 
             # Check for forced failure
-            for kv in subdoc_data.get('key_values', []):
-                if "fail" in kv.get('value', '').lower():
-                    print(f"Forced subdoc extraction failure for {subdoc_title}")
-                    raise ValueError(f"Forced subdoc extraction failure for {subdoc_title}")
+            # for kv in subdoc_data.get('key_values', []):
+            #     if "fail" in kv.get('value', '').lower():
+            #         print(f"Forced subdoc extraction failure for {subdoc_title}")
+            #         raise ValueError(f"Forced subdoc extraction failure for {subdoc_title}")
 
             # Get file content
             file_content = response.content

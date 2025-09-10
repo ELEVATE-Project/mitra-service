@@ -224,7 +224,7 @@ def handle_bedrock_model(
                     json_str = json_str[:-1].strip()
                 try:
                     final_output = json_repair.repair_json(json_str, return_objects=True)
-                    # logger.info('Loads final_output: %s', final_output)
+                    logger.info('Loads final_output: %s', final_output)
                 except json.JSONDecodeError as e:
                     # logger.error('Error decoding JSON: %s', e, exc_info=True)
                     return None

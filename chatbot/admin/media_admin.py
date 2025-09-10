@@ -31,12 +31,39 @@ class MediaImagesInline(admin.TabularInline):
 @admin.register(Media)
 class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
     form = MediaAdminForm
-    list_display = ('name', 'media_type', 'parent__name', 'created_at')
-    search_fields = ('name',)
+    list_display = ('file_name', 'get_title', 'media_type', 'parent__name', 'created_at')
+    search_fields = ('name', 'key_values__value')
     actions = ['export_selected']
     list_export = ('csv', 'xlsx')
     inlines = [KeyValueInline, MediaImagesInline]
     raw_id_fields = ('company_bot', 'parent')
+
+    def file_name(self, obj):
+        return obj.name
+
+    file_name.short_description = "File name"
+
+    def get_title(self, obj):
+        """Get TITLE from key-value pairs"""
+        try:
+            title_kv = obj.key_values.filter(key__iexact='title').first()
+            if title_kv and title_kv.value:
+                # Truncate long titles for display
+                title = title_kv.value
+                if len(title) > 50:
+                    return f"{title[:47]}..."
+                return title
+            return "-"
+        except Exception:
+            return "-"
+
+    get_title.short_description = 'Title'
+    get_title.admin_order_field = 'key_values__value'
+
+    def get_queryset(self, request):
+        """Optimize queries by prefetching related objects"""
+        qs = super().get_queryset(request)
+        return qs.prefetch_related('key_values', 'tags', 'parent')
 
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
