@@ -3,12 +3,38 @@ from django.db.models import TextField, Value
 from django.db.models.functions import Lower, Replace
 from chatbot.models import Media, KeyValue, Tag
 from chatbot.models.media_models import MediaImage
+import ast
+import json
 
 
 class KeyValueSerializer(serializers.ModelSerializer):
+    value = serializers.SerializerMethodField()
+
     class Meta:
         model = KeyValue
         fields = ['id', 'key', 'value']
+
+    def get_value(self, obj):
+        """Convert string representations of lists back to actual lists"""
+        value = obj.value
+
+        # Check if the value looks like a list string representation
+        if isinstance(value, str) and value.strip().startswith('[') and value.strip().endswith(']'):
+            try:
+                # Try to safely evaluate the string as a Python literal
+                parsed_value = ast.literal_eval(value)
+                if isinstance(parsed_value, list):
+                    return parsed_value
+            except (ValueError, SyntaxError):
+                # If parsing fails, try JSON parsing
+                try:
+                    parsed_value = json.loads(value)
+                    if isinstance(parsed_value, list):
+                        return parsed_value
+                except (json.JSONDecodeError, TypeError):
+                    pass
+        # Return original value if not a list or parsing failed
+        return value
 
 
 class TagSerializer(serializers.ModelSerializer):
