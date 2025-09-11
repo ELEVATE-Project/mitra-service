@@ -1,4 +1,3 @@
-#NEW CODE
 import json
 from typing import Dict, List, Any, Set
 from pathlib import Path

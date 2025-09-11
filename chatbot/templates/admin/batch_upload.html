@@ -1730,6 +1730,42 @@
     .kv-value-container .dropdown-option.no-results:hover {
         background-color: white;
     }
+    .key-value-textarea.formatted-list {
+        font-family: inherit;
+        line-height: 1.6;
+        white-space: pre-wrap;
+        background-color: #fafafa;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 12px;
+    }
+
+    .key-value-textarea.long-content {
+        min-height: 120px;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .key-value-textarea.formatted-list::placeholder {
+        opacity: 0.6;
+        font-style: italic;
+    }
+
+    /* Better visual separation for complex content */
+    .structured-content-kv .kv-key-input {
+        font-weight: 600;
+        background-color: #f8f9fa;
+        min-width: 200px;
+    }
+    @media (max-width: 768px) {
+        .structured-content-kv {
+            grid-template-columns: 1fr;
+            gap: 10px;
+        }
+
+        .key-value-textarea.long-content {
+            min-height: 100px;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -2321,7 +2357,8 @@ function createDocumentTypeDropdown(path, kvIndex, currentValue = '') {
                    onclick="toggleDocumentTypeDropdown('${path}', ${kvIndex})"
                    oninput="filterDocumentTypeDropdown('${path}', ${kvIndex}, this.value)"
                    onkeypress="handleDocumentTypeDropdownKeypress(event, '${path}', ${kvIndex})"
-                   onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'value', this.value)">
+                   onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'value', this.value); autoResizeTextarea(this)"
+>
             <div class="dropdown-list" id="${listId}">
                 ${masterDocumentTypes.map(docType => `
                     <div class="dropdown-option" onclick="selectDocumentTypeFromDropdown('${path}', ${kvIndex}, '${docType.replace(/'/g, "\\'")}')">
@@ -2452,6 +2489,14 @@ function updateKeyValueHtmlWithDocTypeDropdown(subdoc, path) {
     return subdoc.key_values.map((kv, kvIndex) => {
         const isDocType = isDocumentTypeField(kv.key);
 
+        // Ensure kv.value is a string before processing
+        const kvValue = kv.value || '';
+        const safeKvValue = typeof kvValue === 'string' ? kvValue : String(kvValue);
+
+        // Enhanced textarea classes that consider structured content
+        const targetItem = { data: subdoc };
+        const textareaClasses = getTextareaClasses(safeKvValue, kv.key, targetItem);
+
         if (isDocType) {
             return `
                 <div class="key-value-pair structured-content-kv">
@@ -2462,12 +2507,18 @@ function updateKeyValueHtmlWithDocTypeDropdown(subdoc, path) {
                            placeholder="Key"
                            onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'key', this.value)">
                     <div class="kv-value-container">
-                        ${createDocumentTypeDropdown(path, kvIndex, kv.value || '')}
+                        ${createDocumentTypeDropdown(path, kvIndex, safeKvValue)}
                     </div>
                     <button class="remove-kv-btn" onclick="removeKeyValueByPath('${path}', ${kvIndex})">Remove</button>
                 </div>
             `;
         } else {
+            // Add placeholder text for array fields
+            const isArrayField = shouldPreserveAsArray(safeKvValue, kv.key, targetItem);
+            const placeholder = isArrayField ?
+                "Enter list items (one per line, use • for bullet points)" :
+                "Value";
+
             return `
                 <div class="key-value-pair structured-content-kv">
                     <input type="text"
@@ -2476,11 +2527,11 @@ function updateKeyValueHtmlWithDocTypeDropdown(subdoc, path) {
                            id="key_${path}_${kvIndex}"
                            placeholder="Key"
                            onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'key', this.value)">
-                    <textarea class="key-value-textarea"
+                    <textarea class="${textareaClasses}"
                               id="value_${path}_${kvIndex}"
-                              placeholder="Value"
-                              onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'value', this.value)"
-                              oninput="autoResizeTextarea(this)">${kv.value || ''}</textarea>
+                              placeholder="${placeholder}"
+                              onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'value', this.value); autoResizeTextarea(this)"
+                              oninput="autoResizeTextarea(this)">${safeKvValue}</textarea>
                     <button class="remove-kv-btn" onclick="removeKeyValueByPath('${path}', ${kvIndex})">Remove</button>
                 </div>
             `;
@@ -2488,10 +2539,48 @@ function updateKeyValueHtmlWithDocTypeDropdown(subdoc, path) {
     }).join('');
 }
 
-// Updated function for rendering key-values in main documents with document type dropdown
+function isFormattedListContent(content) {
+    // Ensure content is a string before calling string methods
+    if (!content || typeof content !== 'string') {
+        return false;
+    }
+
+    return content.includes('•') ||
+           content.includes('\n') ||
+           content.length > 200;
+}
+
+function getTextareaClasses(content, key = null, item = null) {
+    let classes = 'key-value-textarea';
+
+    // Check if this should be treated as an array field
+    if (key && item && shouldPreserveAsArray(content, key, item)) {
+        classes += ' formatted-list';
+        if (content && content.length > 200) {
+            classes += ' long-content';
+        }
+    } else if (isFormattedListContent(content)) {
+        classes += ' formatted-list';
+        if (content && content.length > 200) {
+            classes += ' long-content';
+        }
+    }
+
+    return classes;
+}
+
+
+// Updated function for rendering key-values in main documents with structured content support
 function updateMainDocumentKeyValueHtml(item, displayIndex) {
     return (item.data.key_values || []).map((kv, kvIndex) => {
         const isDocType = isDocumentTypeField(kv.key);
+
+        // Ensure kv.value is a string before processing
+        const kvValue = kv.value || '';
+        const safeKvValue = typeof kvValue === 'string' ? kvValue : String(kvValue);
+
+        // Enhanced textarea classes that consider structured content
+        const textareaClasses = getTextareaClasses(safeKvValue, kv.key, item);
 
         if (isDocType) {
             return `
@@ -2503,12 +2592,18 @@ function updateMainDocumentKeyValueHtml(item, displayIndex) {
                            placeholder="Key"
                            onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'key', this.value)">
                     <div class="kv-value-container">
-                        ${createDocumentTypeDropdown(displayIndex, kvIndex, kv.value || '')}
+                        ${createDocumentTypeDropdown(displayIndex, kvIndex, safeKvValue)}
                     </div>
                     <button class="remove-kv-btn" onclick="removeKeyValue(${displayIndex}, ${kvIndex})">Remove</button>
                 </div>
             `;
         } else {
+            // Add placeholder text for array fields
+            const isArrayField = shouldPreserveAsArray(safeKvValue, kv.key, item);
+            const placeholder = isArrayField ?
+                "Enter list items (one per line, use • for bullet points)" :
+                "Value";
+
             return `
                 <div class="key-value-pair structured-content-kv">
                     <input type="text"
@@ -2517,11 +2612,11 @@ function updateMainDocumentKeyValueHtml(item, displayIndex) {
                            id="key_${displayIndex}_${kvIndex}"
                            placeholder="Key"
                            onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'key', this.value)">
-                    <textarea class="key-value-textarea"
+                    <textarea class="${textareaClasses}"
                               id="value_${displayIndex}_${kvIndex}"
-                              placeholder="Value"
+                              placeholder="${placeholder}"
                               onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'value', this.value)"
-                              oninput="autoResizeTextarea(this)">${kv.value || ''}</textarea>
+                              oninput="autoResizeTextarea(this)">${safeKvValue}</textarea>
                     <button class="remove-kv-btn" onclick="removeKeyValue(${displayIndex}, ${kvIndex})">Remove</button>
                 </div>
             `;
@@ -4265,7 +4360,25 @@ function saveFieldByPath(path, field, value) {
 function saveKeyValueByPath(path, kvIndex, field, value) {
     const subdoc = getSubdocByPath(path);
     if (subdoc && subdoc.key_values && subdoc.key_values[kvIndex]) {
-        subdoc.key_values[kvIndex][field] = value;
+        const keyName = subdoc.key_values[kvIndex].key;
+
+        // Process the value based on whether it should be an array or string
+        let processedValue = value;
+        if (field === 'value') {
+            const targetItem = { data: subdoc };
+
+            if (shouldPreserveAsArray(value, keyName, targetItem)) {
+                // Keep as formatted string for now, will be converted to array in collectFormData
+                processedValue = value;
+            } else {
+                // Process as regular formatted content
+                processedValue = processFormattedContentEnhanced(value, true, targetItem, keyName);
+            }
+        } else {
+            processedValue = value;
+        }
+
+        subdoc.key_values[kvIndex][field] = processedValue;
         subdoc.hasUnsavedChanges = true;
 
         const saveBtn = document.getElementById(`saveBtn_${path}`);
@@ -4413,7 +4526,11 @@ function addKeyValueByPath(path) {
         }
 
         const newIndex = subdoc.key_values.length;
-        subdoc.key_values.push({ key: '', value: '' });
+        subdoc.key_values.push({
+            key: '',
+            value: '',
+            original_type: 'string'  // Default to string type
+        });
         subdoc.hasUnsavedChanges = true;
 
         // Add to DOM directly
@@ -4779,7 +4896,25 @@ function saveKeyValueData(index, kvIndex, field, value, isSubdoc = false, parent
         }
 
         if (targetData && targetData.key_values && targetData.key_values[kvIndex]) {
-            targetData.key_values[kvIndex][field] = value;
+            const keyName = targetData.key_values[kvIndex].key;
+
+            // Process the value based on whether it should be an array or string
+            let processedValue = value;
+            if (field === 'value') {
+                const targetItem = isSubdoc ? { data: targetData } : item;
+
+                if (shouldPreserveAsArray(value, keyName, targetItem)) {
+                    // Keep as formatted string for now, will be converted to array in collectFormData
+                    processedValue = value;
+                } else {
+                    // Process as regular formatted content
+                    processedValue = processFormattedContentEnhanced(value, true, targetItem, keyName);
+                }
+            } else {
+                processedValue = value;
+            }
+
+            targetData.key_values[kvIndex][field] = processedValue;
             targetData.hasUnsavedChanges = true;
 
             // Reset save button state
@@ -4787,12 +4922,12 @@ function saveKeyValueData(index, kvIndex, field, value, isSubdoc = false, parent
                 document.getElementById(`saveBtn_subdoc_${parentIndex}_${subdocIndex}`) :
                 document.getElementById(`saveBtn_${index}`);
             if (saveBtn && saveBtn.classList.contains('saved')) {
-                saveBtn.textContent = 'Save current changes';
+                saveBtn.textContent = 'Save changes';
                 saveBtn.classList.remove('saved');
             }
         }
 
-        console.log(`Saved ${field} for ${isSubdoc ? 'subdoc' : 'item'} ${index}, kv ${kvIndex}:`, value);
+        console.log(`Saved ${field} for ${isSubdoc ? 'subdoc' : 'item'} ${index}, kv ${kvIndex}:`, processedValue);
     }
 }
 
@@ -5175,9 +5310,76 @@ function renderSubdocumentItem(subdoc, parentIndex, subdocIndex) {
     `;
 }
 
+function processFormattedContent(value, isKeyValue = false) {
+    if (!value || typeof value !== 'string') {
+        return value;
+    }
+
+    // Check if content has bullet points or numbered lists
+    const hasBullets = value.includes('•') || /^\s*[-*]\s+/m.test(value) || /^\s*\d+\.\s+/m.test(value);
+    const hasNewlines = value.includes('\n');
+
+    if (hasBullets && hasNewlines) {
+        // Split into lines and process
+        const lines = value.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+        const processedLines = lines.map(line => {
+            // Remove bullet points and numbering
+            return line.replace(/^[•\-*]\s*/, '').replace(/^\d+\.\s*/, '').trim();
+        }).filter(line => line.length > 0);
+
+        if (isKeyValue && processedLines.length > 1) {
+            // For key-values with multiple items, format as bullet list
+            return processedLines.map(line => `• ${line}`).join('\n');
+        } else if (processedLines.length > 1) {
+            // For other content, preserve as formatted list
+            return processedLines.map(line => `• ${line}`).join('\n');
+        }
+    }
+
+    return value;
+}
+
 function autoResizeTextarea(textarea) {
+    if (!textarea) return;
+
     textarea.style.height = 'auto';
-    textarea.style.height = (textarea.scrollHeight) + 'px';
+
+    // Get the key name for this textarea
+    const keyInput = textarea.closest('.key-value-pair')?.querySelector('.kv-key-input');
+    const keyName = keyInput ? keyInput.value : '';
+
+    // Check if content should be formatted as a list
+    const value = textarea.value;
+
+    // Try to get the item context for better array detection
+    let itemContext = null;
+    const mediaItem = textarea.closest('.media-item');
+    if (mediaItem) {
+        const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+        const actualIndex = (currentPage - 1) * itemsPerPage;
+        itemContext = validItems[actualIndex];
+    }
+
+    const shouldBeArray = shouldPreserveAsArray(value, keyName, itemContext);
+    const shouldBeFormatted = shouldBeArray || isFormattedListContent(value);
+
+    if (shouldBeFormatted && !textarea.classList.contains('formatted-list')) {
+        textarea.classList.add('formatted-list');
+        if (value.length > 200) {
+            textarea.classList.add('long-content');
+        }
+    } else if (!shouldBeFormatted && textarea.classList.contains('formatted-list')) {
+        textarea.classList.remove('formatted-list', 'long-content');
+    }
+
+    // For formatted list content, ensure minimum height
+    if (textarea.classList.contains('formatted-list')) {
+        const minHeight = textarea.classList.contains('long-content') ? 120 : 80;
+        const scrollHeight = Math.max(textarea.scrollHeight, minHeight);
+        textarea.style.height = scrollHeight + 'px';
+    } else {
+        textarea.style.height = (textarea.scrollHeight) + 'px';
+    }
 }
 
 function resizeAllTextareas() {
@@ -5234,6 +5436,195 @@ function addTagFromDropdown(itemIndex, tagValue, isSubdoc = false, subdocIndex =
             }
         }
     }
+}
+
+// Helper functions for structured content handling
+
+function isArrayField(key, item) {
+    // Check if this field was originally an array by looking at metadata
+    if (item.data && item.data.array_fields_metadata) {
+        return item.data.array_fields_metadata.includes(key);
+    }
+
+    // Fallback: check key-value metadata
+    if (item.data && item.data.key_values) {
+        const kv = item.data.key_values.find(kvPair => kvPair.key === key);
+        return kv && kv.original_type === 'array';
+    }
+
+    return false;
+}
+
+function convertBulletPointsToArray(text) {
+    /**
+     * Convert bullet-pointed text back to array
+     * Handles various bullet point formats: •, -, *, numbered lists
+     */
+    if (!text || typeof text !== 'string') {
+        return [];
+    }
+
+    const lines = text.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+
+    const items = [];
+
+    for (const line of lines) {
+        // Remove bullet points and numbering
+        let cleanLine = line
+            .replace(/^[•\-*]\s*/, '')           // Remove •, -, * bullets
+            .replace(/^\d+\.\s*/, '')           // Remove numbered lists (1., 2., etc.)
+            .replace(/^\([a-zA-Z0-9]+\)\s*/, '') // Remove lettered lists (a), (1), etc.
+            .trim();
+
+        if (cleanLine.length > 0) {
+            items.push(cleanLine);
+        }
+    }
+
+    return items;
+}
+
+function convertArrayToBulletPoints(array) {
+    /**
+     * Convert array to bullet-pointed text for display
+     */
+    if (!Array.isArray(array)) {
+        return array;
+    }
+
+    return array
+        .filter(item => item !== null && item !== undefined)
+        .map(item => `• ${String(item).trim()}`)
+        .join('\n');
+}
+
+function shouldPreserveAsArray(value, key, item) {
+    /**
+     * Determine if a field should be saved as an array based on:
+     * 1. Original type metadata
+     * 2. Content analysis (has bullet points)
+     * 3. Field name patterns
+     */
+
+    // Check metadata first
+    if (isArrayField(key, item)) {
+        return true;
+    }
+
+    // Check if content looks like a list
+    if (typeof value === 'string' && value.trim()) {
+        const lines = value.split('\n').filter(line => line.trim().length > 0);
+
+        // Multiple lines with bullet points
+        if (lines.length > 1) {
+            const bulletLines = lines.filter(line =>
+                /^[•\-*]\s+/.test(line.trim()) || /^\d+\.\s+/.test(line.trim())
+            );
+
+            // If majority of lines have bullets, treat as array
+            if (bulletLines.length / lines.length >= 0.7) {
+                return true;
+            }
+        }
+    }
+
+    // Common field names that are typically arrays
+    const arrayFieldPatterns = [
+        /COMPONENTS?$/i,
+        /STEPS?$/i,
+        /ITEMS?$/i,
+        /LIST$/i,
+        /ELEMENTS?$/i,
+        /FACTORS?$/i,
+        /RISKS?$/i,
+        /LEARNINGS?$/i,
+        /CONTRIBUTORS?$/i,
+        /ASSETS?$/i,
+        /PREFERENCES?$/i,
+        /EVIDENCE$/i,
+        /THEORY.*CHANGE$/i,
+        /IMPLEMENTATION.*MODEL$/i
+    ];
+
+    return arrayFieldPatterns.some(pattern => pattern.test(key));
+}
+
+function processStructuredContentForSave(keyValues, item) {
+    /**
+     * Process key-values for saving, converting between arrays and strings as needed
+     */
+    return keyValues.map(kv => {
+        const key = kv.key;
+        const value = kv.value;
+
+        if (shouldPreserveAsArray(value, key, item)) {
+            // Convert bullet points back to array
+            if (typeof value === 'string') {
+                const arrayValue = convertBulletPointsToArray(value);
+                return {
+                    key: key,
+                    value: arrayValue,
+                    original_type: 'array'
+                };
+            }
+        } else {
+            // Keep as string, but clean up formatting
+            let cleanValue = value;
+            if (typeof value === 'string') {
+                // Preserve intentional paragraph breaks
+                cleanValue = value
+                    .split('\n')
+                    .map(line => line.trim())
+                    .join('\n')
+                    .replace(/\n{3,}/g, '\n\n'); // Limit to double line breaks
+            }
+
+            return {
+                key: key,
+                value: cleanValue,
+                original_type: 'string'
+            };
+        }
+
+        return kv;
+    });
+}
+
+// Enhanced version of existing processFormattedContent function
+function processFormattedContentEnhanced(value, isKeyValue = false, item = null, key = null) {
+    if (!value || typeof value !== 'string') {
+        return value;
+    }
+
+    // If this should be preserved as an array, don't format as bullet points
+    if (item && key && shouldPreserveAsArray(value, key, item)) {
+        return value; // Keep as-is for array processing later
+    }
+
+    // Check if content has bullet points or numbered lists
+    const hasBullets = value.includes('•') || /^\s*[-*]\s+/m.test(value) || /^\s*\d+\.\s+/m.test(value);
+    const hasNewlines = value.includes('\n');
+
+    if (hasBullets && hasNewlines) {
+        // Split into lines and process
+        const lines = value.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+        const processedLines = lines.map(line => {
+            // Remove bullet points and numbering
+            return line.replace(/^[•\-*]\s*/, '').replace(/^\d+\.\s*/, '').trim();
+        }).filter(line => line.length > 0);
+
+        if (isKeyValue && processedLines.length > 1) {
+            // For key-values with multiple items, format as bullet list
+            return processedLines.map(line => `• ${line}`).join('\n');
+        } else if (processedLines.length > 1) {
+            // For other content, preserve as formatted list
+            return processedLines.map(line => `• ${line}`).join('\n');
+        }
+    }
+
+    return value;
 }
 
 // Render extracted data for review
@@ -5560,7 +5951,11 @@ function addKeyValue(itemIndex, isSubdoc = false, subdocIndex = null) {
             if (!targetData.key_values) {
                 targetData.key_values = [];
             }
-            targetData.key_values.push({ key: '', value: '' });
+            targetData.key_values.push({
+                key: '',
+                value: '',
+                original_type: 'string'  // Default to string type
+            });
             targetData.hasUnsavedChanges = true;
             renderExtractedData();
         }
@@ -5582,6 +5977,11 @@ function collectFormData() {
                 item.data.organization = parentOrg;
             }
 
+            // Process key-values with structured content handling
+            if (item.data.key_values) {
+                item.data.key_values = processStructuredContentForSave(item.data.key_values, item);
+            }
+
             // Combine manual and auto tags for saving
             if (item.data.auto_tags_full) {
                 item.data.auto_tags = item.data.auto_tags_full;
@@ -5594,6 +5994,11 @@ function collectFormData() {
                     subdocs.forEach(subdoc => {
                         // Force parent's organization value
                         subdoc.organization = parentOrgValue;
+
+                        // Process subdocument key-values with structured content handling
+                        if (subdoc.key_values) {
+                            subdoc.key_values = processStructuredContentForSave(subdoc.key_values, { data: subdoc });
+                        }
 
                         // Update organization in subdoc's key-values
                         if (!subdoc.key_values) {

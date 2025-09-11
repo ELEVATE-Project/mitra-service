@@ -1,4 +1,5 @@
 import hashlib
+import logging
 import traceback
 from pathlib import Path
 
@@ -24,6 +25,7 @@ from django.conf import settings
 BOT_PROFILE_ID = 1
 ENABLE_SIMILARITY_CHECK = getattr(settings, 'BATCH_UPLOAD_ENABLE_SIMILARITY_CHECK', False)
 CACHE_TIMEOUT = getattr(settings, 'BATCH_UPLOAD_CACHE_TIMEOUT', 7200)
+logger = logging.getLogger('django')
 
 
 @method_decorator(staff_member_required, name='dispatch')
@@ -814,19 +816,20 @@ def extract_tag_texts(tags_data):
 
 
 def build_key_values(data_dict):
-    """Build key-value pairs from document data"""
+    """Build key-value pairs from document data with metadata tracking"""
     key_values = []
+    array_fields_metadata = []  # Track which fields were originally arrays
 
     if data_dict.get('title'):
-        key_values.append({'key': 'TITLE', 'value': data_dict['title']})
+        key_values.append({'key': 'TITLE', 'value': str(data_dict['title'])})
 
     organization_value = data_dict.get('organization', '')
-    key_values.append({'key': 'ORGANIZATION', 'value': organization_value})
+    key_values.append({'key': 'ORGANIZATION', 'value': str(organization_value)})
 
     # ADD GEOGRAPHY HANDLING
     geography_value = data_dict.get('geography', '')
     if geography_value:
-        key_values.append({'key': 'GEOGRAPHY', 'value': geography_value})
+        key_values.append({'key': 'GEOGRAPHY', 'value': str(geography_value)})
 
     document_type = data_dict.get('document_type')
     if document_type:
@@ -834,14 +837,15 @@ def build_key_values(data_dict):
             doc_type_value = document_type.get('type', '')
             if doc_type_value:
                 doc_type_value = doc_type_value.title()
-                key_values.append({'key': 'DOCUMENT TYPE', 'value': doc_type_value})
+                key_values.append({'key': 'DOCUMENT TYPE', 'value': str(doc_type_value)})
         else:
             doc_type_value = document_type.title() if document_type else ''
-            key_values.append({'key': 'DOCUMENT TYPE', 'value': doc_type_value})
+            key_values.append({'key': 'DOCUMENT TYPE', 'value': str(doc_type_value)})
 
     if data_dict.get('key_entities') and len(data_dict['key_entities']) > 0:
-        key_values.append({'key': 'KEY ENTITIES', 'value': ', '.join(data_dict['key_entities'])})
+        key_values.append({'key': 'KEY ENTITIES', 'value': ', '.join(map(str, data_dict['key_entities']))})
 
+    # ENHANCED: Handle structured content with proper array formatting
     if data_dict.get('structured_content') and isinstance(data_dict['structured_content'], dict):
         for heading, content in data_dict['structured_content'].items():
             if heading.upper() in [
@@ -849,9 +853,59 @@ def build_key_values(data_dict):
                 'CATEGORIES', 'CLASSIFICATION', 'TAGS FOR CLASSIFICATION'
             ]:
                 continue
-            key_values.append({'key': heading.upper(), 'value': content})
 
-    return key_values
+            key_name = heading.upper()
+
+            # Format arrays as multi-line strings with bullet points
+            if isinstance(content, list):
+                # Track that this field was originally an array
+                array_fields_metadata.append(key_name)
+
+                # Ensure all list items are strings
+                string_items = [str(item) for item in content if item is not None]
+                formatted_content = '\n'.join([f"• {item}" for item in string_items])
+                key_values.append({
+                    'key': key_name,
+                    'value': formatted_content,
+                    'original_type': 'array'  # Add metadata
+                })
+            else:
+                # Handle text that might already be formatted
+                content_str = str(content) if content is not None else ''
+                key_values.append({
+                    'key': key_name,
+                    'value': content_str,
+                    'original_type': 'string'  # Add metadata
+                })
+
+    return key_values, array_fields_metadata
+
+
+def process_formatted_content_backend(content):
+    """Process content to maintain bullet point formatting"""
+    if not content or not isinstance(content, str):
+        return content
+
+    # Check if content has bullet points
+    if '•' in content or content.count('\n') > 0:
+        lines = content.split('\n')
+        processed_lines = []
+
+        for line in lines:
+            line = line.strip()
+            if line:
+                # Ensure bullet point formatting
+                if not line.startswith('•') and not line.startswith('-') and not line.startswith('*'):
+                    if len(lines) > 1:  # Multi-line content should have bullets
+                        line = f"• {line}"
+                elif line.startswith('-') or line.startswith('*'):
+                    # Convert other bullet styles to •
+                    line = f"• {line[1:].strip()}"
+                processed_lines.append(line)
+
+        return '\n'.join(processed_lines)
+
+    return content
 
 
 @method_decorator(staff_member_required, name='dispatch')
@@ -1003,6 +1057,44 @@ class BatchMediaTaskStatusView(View):
             print(f"AI extraction failed: {error_msg}")
             raise ValueError(f"{error_msg}")
 
+        def repair_structured_content(structured_content):
+            """Repair and validate structured content JSON"""
+            if not structured_content:
+                return {}
+
+            # If it's already a dict, return as-is
+            if isinstance(structured_content, dict):
+                return structured_content
+
+            # If it's a string, try to parse and repair
+            if isinstance(structured_content, str):
+                import json
+                try:
+                    # Try direct JSON parsing first
+                    return json.loads(structured_content)
+                except json.JSONDecodeError:
+                    try:
+                        # Use JSON repair if available
+                        import json_repair
+                        return json_repair.repair_json(structured_content)
+                    except (ImportError, Exception) as e:
+                        print(f"JSON repair failed for structured_content: {e}")
+                        # Fallback: try to create a basic structure
+                        try:
+                            # Simple repair attempts
+                            repaired = structured_content.strip()
+                            if not repaired.startswith('{'):
+                                repaired = '{' + repaired
+                            if not repaired.endswith('}'):
+                                repaired = repaired + '}'
+                            return json.loads(repaired)
+                        except:
+                            print(f"All JSON repair attempts failed, returning empty dict")
+                            return {}
+
+            # Fallback for other types
+            return {}
+
         # Get user's company
         company = None
         company_name = None
@@ -1038,6 +1130,9 @@ class BatchMediaTaskStatusView(View):
             else:
                 document_type_value = document_type.title() if document_type else ''
 
+            key_values, array_metadata = build_key_values(subdoc_data)
+            subdoc_data['array_fields_metadata'] = array_metadata
+
             processed = {
                 'title': subdoc_data.get('title', ''),
                 'summary': subdoc_data.get('summary', ''),
@@ -1053,7 +1148,7 @@ class BatchMediaTaskStatusView(View):
                 'source_document': subdoc_data.get('source_document', ''),
                 'auto_tags': validated_tag_texts,
                 'manual_tags': [],
-                'key_values': build_key_values(subdoc_data),
+                'key_values': key_values,
                 'images': subdoc_data.get('images', []),
                 'media_type': subdoc_data.get(
                     'media_type', get_media_type_from_ai_data(subdoc_data.get('document_type', ''))
@@ -1085,6 +1180,8 @@ class BatchMediaTaskStatusView(View):
 
         is_template = document_type_value.lower() == 'template'
         original_filename = ai_data.get('original_filename')
+        repaired_structured_content = repair_structured_content(ai_data.get('structured_content'))
+
         main_data = {
             'title': original_filename if (original_filename and not is_template) else ai_data.get('title', ''),
             'summary': ai_data.get('summary', ''),
@@ -1093,7 +1190,7 @@ class BatchMediaTaskStatusView(View):
             'geography': to_title_case(ai_data.get('geography', '')),
             'document_type': document_type_value,
             'key_entities': ai_data.get('key_entities', []),
-            'structured_content': ai_data.get('structured_content', {})
+            'structured_content': repaired_structured_content
         }
 
         # Process main tags
@@ -1101,7 +1198,8 @@ class BatchMediaTaskStatusView(View):
         auto_tags = self.validate_tags_against_database(auto_tags, company)
 
         # Build enhanced key-values for main document
-        enhanced_key_values = build_key_values(main_data)
+        enhanced_key_values, array_fields_metadata = build_key_values(main_data)
+        main_data['array_fields_metadata'] = array_fields_metadata
 
         # Process subdocuments recursively
         subdocuments = []
@@ -1132,7 +1230,7 @@ class BatchMediaTaskStatusView(View):
                 'subdocument': subdocuments,
                 'failed_links': failed_links,
                 'images': images,
-                'structured_content': ai_data.get('structured_content', {})
+                'structured_content': repaired_structured_content
             }
         }
 
