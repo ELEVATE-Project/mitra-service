@@ -220,7 +220,7 @@ class MediaDetailSerializer(serializers.ModelSerializer):
         # Add organization with link to basic info
         if organization and organization.value:
             basic_info.append(
-                f'<div><b>Organization:</b> <a class="text-blue-600 underline underline-offset-2" href="www.google.com" target="_blank" rel="noopener noreferrer">{organization.value}</a></div>')
+                f'<div><b>Organization:</b> <a class="text-blue-600 underline underline-offset-2" href="https://www.google.com" target="_blank" rel="noopener noreferrer">{organization.value}</a></div>')
 
         # Add geography to basic info
         if geography and geography.value:
