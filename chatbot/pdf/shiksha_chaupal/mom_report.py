@@ -8,8 +8,10 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
     if story.other_params:
         challenges_faced = story.other_params.get('challenges_faced')
         solutions_discussed = story.other_params.get('solutions_discussed')
+        remarks = story.other_params.get('remarks')
     else:
-        challenges_faced, solutions_discussed = None, None
+        challenges_faced, solutions_discussed, remarks = None, None, None
+
     translation_json = story_vernacular.translation_json
     if translation_json:
         translation_json = translation_json.get('second_page', {})
@@ -19,6 +21,7 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
     challenges_char_limit = translation_json.get('challenges_char_limit', None)
     first_challenges_char_limit = translation_json.get('first_challenges_char_limit', None)
     solutions_char_limit = translation_json.get('solutions_char_limit', None)
+    remarks_char_limit = translation_json.get('remarks_char_limit', None)
 
     challenges_html = process_steps(
         raw_data=challenges_faced,
@@ -30,24 +33,31 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
     )
 
     solutions_html = process_steps(
-        raw_data=solutions_discussed, fallback_text=translation_json.get('no_solutions_text', ""),
-        heading=translation_json.get('heading3', "Solutions"), char_limit=solutions_char_limit
+        raw_data=solutions_discussed,
+        fallback_text=translation_json.get('no_solutions_text', ""),
+        heading=translation_json.get('heading3', "Solutions"),
+        char_limit=solutions_char_limit
     )
 
-    author, address_string, company_logo, date_of_discussion, number_of_people = get_user_details(
+    remarks_html = process_steps(
+        raw_data=remarks,
+        fallback_text=translation_json.get('no_remarks_text', ""),
+        heading=translation_json.get('heading4', "Remarks"),
+        char_limit=remarks_char_limit
+    )
+
+    author, address_string, company_logo, date_of_discussion, participants_info, organization = get_user_details(
         story=story, profile=profile, voice_provider=voice_provider, translation_json=translation_json
     )
-    # if date_of_discussion and date_of_discussion != '':
-    #     info_html = f"<p style='text-align: center'>{translation_json.get('dateHeader', '')}: {date_of_discussion}<p>"
-    # else:
-    #     info_html=''
 
-    info_parts = []
-    if date_of_discussion:
-        info_parts.append(f"<span>{translation_json.get('dateHeader', '')}:</span> {date_of_discussion}")
-    if number_of_people:
-        info_parts.append(f"<span>{translation_json.get('memberHeader', '')}:</span> {number_of_people}")
-    info_html = f"<p>{' &nbsp;&nbsp; '.join(info_parts)}</p>" if info_parts else ''
+    # Build organization line
+    organization_html = f"<p>{organization}</p>" if organization else ""
+
+    # Build date line
+    date_html = f"<p><span>{translation_json.get('dateHeader', 'Date of discussion')}:</span> {date_of_discussion}</p>" if date_of_discussion else ""
+
+    # Build participants line
+    participants_html = f"<p><span>{translation_json.get('memberHeader', 'Participants')}:</span> {participants_info}</p>" if participants_info else ""
 
     if hasattr(story, 'story'):
         story_obj = story.story
@@ -65,20 +75,24 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
         </div>
         <h1>{story.title}</h1>
         <p>{author if author else ""}</p>
+        {organization_html}
         <p>{address_string}</p>
-         {info_html}
-       
+        {date_html}
+        {participants_html}
+
         {challenges_html if challenges_faced not in [None, [], [""]] else ""}
         {solutions_html if solutions_discussed not in [None, [], [""]] else ""}
+        {remarks_html if remarks not in [None, [], [""]] else ""}
         {get_report_images_page_html(story=story_obj)}
     </div>
     """
     return page_html
 
+
 def clean_escaped_text(text):
-    text = text.replace("\\'", "")# \'  →  '
-    text = text.replace('\\"', '')# \"  →  "
-    text = text.replace("\\\\", "") # \\  →  \
+    text = text.replace("\\'", "")  # \'  →  '
+    text = text.replace('\\"', '')  # \"  →  "
+    text = text.replace("\\\\", "")  # \\  →  \
     print("Text: ", text)
     return text
 
@@ -142,7 +156,6 @@ def process_steps(raw_data, fallback_text, char_limit, first_char_limit=None, he
         page_break = "split-div1" if i < len(chunks) - 1 else ""
         # Only add page break if it's not the last chunk
         html = (
-                # f" <div class='second-main-sec-div {page_break}'> <div class='story-second-page-section'>" +
                 f"<div class='{page_break}'>"
                 f"<div class='second-main-sec-div'>"
                 f"<div class='story-second-page-section'>"
@@ -159,6 +172,36 @@ def process_steps(raw_data, fallback_text, char_limit, first_char_limit=None, he
     return full_html or fallback_text
 
 
+def format_participants_count(participants_count, translation_json):
+    """Format participants count showing Men, Women, Children only if they have values"""
+    if not participants_count or not isinstance(participants_count, dict):
+        return None
+
+    participant_parts = []
+
+    # Get labels from translation
+    women_label = translation_json.get('womenLabel', 'Women')
+    men_label = translation_json.get('menLabel', 'Men')
+    children_label = translation_json.get('childrenLabel', 'Children')
+
+    # Add women count if exists and not empty
+    women_count = participants_count.get('women', '').strip()
+    if women_count:
+        participant_parts.append(f"{women_label}{women_count}")
+
+    # Add men count if exists and not empty
+    men_count = participants_count.get('men', '').strip()
+    if men_count:
+        participant_parts.append(f"{men_label}{men_count}")
+
+    # Add children count if exists and not empty
+    children_count = participants_count.get('children', '').strip()
+    if children_count:
+        participant_parts.append(f"{children_label}{children_count}")
+
+    return ', '.join(participant_parts) if participant_parts else None
+
+
 def get_user_details(story, profile, voice_provider, translation_json):
     company_logo = translation_json.get('main_logo', '')
     print("logo: ", company_logo)
@@ -170,9 +213,15 @@ def get_user_details(story, profile, voice_provider, translation_json):
 
     date_of_discussion = story.other_params.get('discussion_date', None)
     date_of_discussion = format_date_to_ddmmyyyy(date_of_discussion)
-    number_of_people = story.other_params.get('participants_count', None)
 
-    return author, address_string, company_logo, date_of_discussion, number_of_people
+    # Get organization
+    organization = story.other_params.get('organization', '') if story.other_params else ''
+
+    # Process participants count
+    participants_count = story.other_params.get('participants_count', None) if story.other_params else None
+    participants_info = format_participants_count(participants_count, translation_json)
+
+    return author, address_string, company_logo, date_of_discussion, participants_info, organization
 
 
 def format_date_to_ddmmyyyy(date_value):
