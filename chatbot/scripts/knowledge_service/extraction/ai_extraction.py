@@ -1833,44 +1833,87 @@ class DocumentExtractor:
             logger.info("Bedrock response:\n%s", json.dumps(response, indent=2))
             print(f"Bedrock response type: {type(response)}")
             print("--------\n\n")
-            if response and isinstance(response, dict):
-                # Extract the actual data from response
-                extracted_data = response.pop("parameters", response.pop("input", response))
-                if extracted_data and isinstance(extracted_data, dict):
-                    # Preserve complete content
-                    extracted_data['exact_content'] = complete_content
 
-                    # Add images if available
-                    if extracted_images:
-                        extracted_data['images'] = extracted_images
+            # *** SIMPLIFIED: Enhanced response type validation ***
+            if not isinstance(response, dict):
+                error_msg = ("AI processing failed - unable to extract structured data from document. "
+                             "Please try uploading the file again.")
+                logger.error(
+                    f"LLM returned unexpected response type: {type(response)}. Expected dictionary. "
+                    f"Response preview: {str(response)[:200] if response else 'None'}")
 
-                    # Validate and enhance result
-                    result = self._validate_and_enhance_result(extracted_data, complete_content)
+                if not is_subdoc:
+                    # For main document, this is a critical error - stop processing
+                    raise ValueError(error_msg)
+                else:
+                    # For subdocument, handle gracefully
+                    default_response['exact_content'] = complete_content
+                    default_response['extraction_error'] = error_msg
+                    default_response['error'] = error_msg
+                    default_response['error_type'] = 'ai_processing_failed'
+                    default_response['title_extraction_failed'] = True
+                    return default_response
 
-                    if not result.get('title') or not result['title'].strip():
-                        error_msg = f"LLM failed to extract title for {'subdocument' if is_subdoc else 'main document'}"
-                        logger.error(error_msg)
-                        if is_subdoc:
-                            result['extraction_error'] = error_msg
-                            result['title_extraction_failed'] = True
-                        else:
-                            # For main document, raise exception to stop processing
-                            raise ValueError(error_msg)
+            # Extract the actual data from response
+            extracted_data = response.pop("parameters", response.pop("input", response))
+            if not extracted_data or not isinstance(extracted_data, dict):
+                error_msg = "AI processing failed - response structure is invalid. Please try uploading the file again."
+                logger.error(
+                    f"LLM response missing expected data structure. Response keys: {list(response.keys()) if response else 'None'}")
 
-                    logger.info("Bedrock extraction successful")
-                    return result
+                if not is_subdoc:
+                    raise ValueError(error_msg)
 
-            default_response['exact_content'] = complete_content
-            if not is_subdoc:
-                raise ValueError("LLM failed to extract any data from main document")
-            return default_response
+                default_response['exact_content'] = complete_content
+                default_response['extraction_error'] = error_msg
+                default_response['error'] = error_msg
+                default_response['error_type'] = 'ai_processing_failed'
+                default_response['title_extraction_failed'] = True
+                return default_response
 
+            # Preserve complete content
+            extracted_data['exact_content'] = complete_content
+
+            # Add images if available
+            if extracted_images:
+                extracted_data['images'] = extracted_images
+
+            # Validate and enhance result
+            result = self._validate_and_enhance_result(extracted_data, complete_content)
+
+            if not result.get('title') or not result['title'].strip():
+                error_msg = f"AI failed to extract title for {'subdocument' if is_subdoc else 'main document'}"
+                logger.error(error_msg)
+                if is_subdoc:
+                    result['extraction_error'] = error_msg
+                    result['error'] = error_msg
+                    result['error_type'] = 'title_extraction_failed'
+                    result['title_extraction_failed'] = True
+                else:
+                    # For main document, raise exception to stop processing
+                    raise ValueError(error_msg)
+
+            logger.info("Bedrock extraction successful")
+            return result
+
+        except ValueError as ve:
+            # Re-raise ValueError for main document processing failures
+            logger.error(f"LLM processing validation error: {str(ve)}")
+            raise
         except Exception as e:
-            logger.error(f"Bedrock extraction failed: {str(e)}")
+            error_msg = f"LLM processing failed with unexpected error: {str(e)}"
+            logger.error(error_msg)
             default_response['exact_content'] = document_text
-            if not is_subdoc and "title" in str(e).lower():
-                raise
-            return default_response
+            if not is_subdoc:
+                # For main document, raise the exception to stop processing
+                raise ValueError(error_msg)
+            else:
+                # For subdocument, handle gracefully
+                default_response['extraction_error'] = error_msg
+                default_response['error'] = error_msg
+                default_response['error_type'] = 'ai_processing_failed'
+                default_response['title_extraction_failed'] = True
+                return default_response
 
     def _normalize_url_for_tracking(self, url: str) -> str:
         """Normalize URL for deduplication tracking"""
@@ -2061,13 +2104,24 @@ class DocumentExtractor:
                                     is_subdoc=True
                                 )
 
-                                if subdoc_result.get('title_extraction_failed'):
-                                    logger.error(f"Title extraction failed for subdocument: {sub_url}")
+                                # Check for any extraction errors in subdocument
+                                if (subdoc_result.get('title_extraction_failed') or
+                                        subdoc_result.get('extraction_error') or
+                                        subdoc_result.get('error') or
+                                        subdoc_result.get('error_type')):
+                                    error_message = (subdoc_result.get('error') or
+                                                     subdoc_result.get('extraction_error') or
+                                                     'LLM failed to extract title from subdocument')
+
+                                    error_type = (subdoc_result.get('error_type') or
+                                                  'title_extraction_failed')
+
+                                    logger.error(f"Subdocument extraction failed for {sub_url}: {error_message}")
                                     failed_links.append({
                                         "file_url": sub_url,
                                         "error": {
-                                            'error': 'LLM failed to extract title from subdocument',
-                                            'error_type': 'title_extraction_failed',
+                                            'error': error_message,
+                                            'error_type': error_type,
                                             'url': sub_url
                                         },
                                         "source_document": main_doc_url
@@ -2218,8 +2272,12 @@ class DocumentExtractor:
                 other_data=other_data
             )
             return result
+        except ValueError as ve:
+            # Re-raise ValueError so it can be handled by the calling function
+            logger.error(f"Document processing validation failed: {str(ve)}")
+            raise  # This allows the error to propagate to get_doc_tags_from_ai()
         except Exception as e:
-            logger.error(f"Document processing failed: {str(e)}")
+            logger.error(f"Document processing failed with unexpected error: {str(e)}")
             return {
                 "title": "",
                 "organization": "",
@@ -2359,7 +2417,7 @@ def extract_tags_from_document_url(url: str, company_bot) -> Dict[str, Any]:
         return default_response
 
 
-def extract_tags_from_document_file(file, company_bot, file_extension: str, other_data) -> Dict[str, List[str]]:
+def extract_tags_from_document_file(file, company_bot, file_extension, other_data):
     """Extract structured information from document file"""
     default_response = {
         "title": "",
@@ -2435,23 +2493,132 @@ def extract_tags_from_document_file(file, company_bot, file_extension: str, othe
 
         return result
 
+    except ValueError as ve:
+        error_message = str(ve)
+        logger.error(f"Processing error: {error_message}")
+
+        # *** FIX: Return error response instead of default_response ***
+        error_response = {
+            "error": error_message,
+            "title": "",
+            "organization": "",
+            "tags": [],
+            "exact_content": "",
+            "summary": "",
+            "document_type": "",
+            "key_entities": [],
+            "url": [],
+            "subdocument": [],
+            "images": []
+        }
+
+        # *** NEW: Distinguish between different types of ValueError ***
+        if "file size" in error_message.lower() or "exceeds the maximum allowed size" in error_message.lower():
+            # File size validation error
+            error_response["error_type"] = "file_size_exceeded"
+        elif "llm returned" in error_message.lower() or "unexpected list format" in error_message.lower() or "plain text instead" in error_message.lower():
+            # LLM response format error
+            error_response["error_type"] = "llm_response_format_error"
+        elif "failed to extract title" in error_message.lower():
+            # Title extraction error
+            error_response["error_type"] = "title_extraction_error"
+        elif "processing failed with unexpected error" in error_message.lower():
+            # LLM processing error
+            error_response["error_type"] = "llm_processing_error"
+        else:
+            # Generic validation error
+            error_response["error_type"] = "validation_error"
+
+        return error_response  # ← NOW RETURNS ERROR INSTEAD OF DEFAULT
+
     except Exception as e:
-        logger.error(f"Error extracting tags from file: {e}")
-        return default_response
+        # *** NEW: Handle any other unexpected errors ***
+        error_message = f"Unexpected error during document processing: {str(e)}"
+        logger.error(error_message)
+        return {
+            "error": error_message,
+            "error_type": "unexpected_error",
+            "title": "",
+            "organization": "",
+            "tags": [],
+            "exact_content": "",
+            "summary": "",
+            "document_type": "",
+            "key_entities": [],
+            "url": [],
+            "subdocument": [],
+            "images": []
+        }
 
 def get_doc_tags_from_ai(file, company_bot, file_extension, other_data):
-    """Main entry point for your code"""
+    """Main entry point for document processing with improved error handling"""
     try:
         result = extract_tags_from_document_file(file, company_bot, file_extension, other_data)
         print("Final result: ", result)
         logger.info("Final Extraction Result:\n%s", json.dumps(result, indent=2, ensure_ascii=False))
         return result
     except ValueError as ve:
-        # Return error response for file size validation failures
-        logger.error(f"File validation error: {str(ve)}")
+        error_message = str(ve)
+        logger.error(f"Processing error: {error_message}")
+
+        # *** SIMPLIFIED: Common error response for all AI processing failures ***
+        if any(keyword in error_message.lower() for keyword in [
+            "ai processing failed", "unable to extract structured data",
+            "llm returned", "unexpected", "processing failed"
+        ]):
+            return {
+                "error": "AI processing failed - unable to extract structured data from document. Please try uploading the file again.",
+                "error_type": "ai_processing_failed",
+                "title": "",
+                "organization": "",
+                "tags": [],
+                "exact_content": "",
+                "summary": "",
+                "document_type": "",
+                "key_entities": [],
+                "url": [],
+                "subdocument": [],
+                "images": []
+            }
+        elif "file size" in error_message.lower() or "exceeds the maximum allowed size" in error_message.lower():
+            # File size validation error
+            return {
+                "error": error_message,
+                "error_type": "file_size_exceeded",
+                "title": "",
+                "organization": "",
+                "tags": [],
+                "exact_content": "",
+                "summary": "",
+                "document_type": "",
+                "key_entities": [],
+                "url": [],
+                "subdocument": [],
+                "images": []
+            }
+        else:
+            # Generic validation error
+            return {
+                "error": f"Document processing failed: {error_message}",
+                "error_type": "validation_error",
+                "title": "",
+                "organization": "",
+                "tags": [],
+                "exact_content": "",
+                "summary": "",
+                "document_type": "",
+                "key_entities": [],
+                "url": [],
+                "subdocument": [],
+                "images": []
+            }
+    except Exception as e:
+        # *** SIMPLIFIED: Handle any other unexpected errors ***
+        error_message = "AI processing failed - unable to extract structured data from document. Please try uploading the file again."
+        logger.error(f"Unexpected error during document processing: {str(e)}")
         return {
-            "error": str(ve),
-            "error_type": "file_size_exceeded",
+            "error": error_message,
+            "error_type": "ai_processing_failed",
             "title": "",
             "organization": "",
             "tags": [],

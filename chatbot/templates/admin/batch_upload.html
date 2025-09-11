@@ -3511,24 +3511,33 @@ async function waitForAllTasksToComplete(taskIds) {
                                     }
 
                                     console.log(`AI extraction completed for ${item.filename}:`, aiResult);
-                                } else if (taskResult && taskResult.status === 'FAILURE' && !item.data.auto_tags_ready) {
-                                    item.data.auto_tags = [];
-                                    item.data.auto_tags_ready = true;
+                                } else if (taskResult && (taskResult.status === 'FAILURE' || taskResult.status === 'ERROR') && !item.data.auto_tags_ready) {
+                                    // *** CHANGED: Mark entire document as failed ***
+                                    const errorMsg = taskResult.error || 'AI processing failed';
 
-                                    if (!item.data.organization) {
-                                        item.data.organization = userCompanyName || '';
-                                    }
-                                    if (!item.data.key_values.some(kv => kv.key === 'ORGANIZATION')) {
-                                        item.data.key_values.push({
-                                            key: 'ORGANIZATION',
-                                            value: userCompanyName || ''
-                                        });
+                                    // Find the corresponding file in uploadedFiles and mark as failed
+                                    const fileIndex = uploadedFiles.findIndex(f => f.name === item.filename);
+                                    if (fileIndex >= 0) {
+                                        uploadedFiles[fileIndex].status = FILE_STATUS.ERROR;
+                                        uploadedFiles[fileIndex].error = errorMsg;
+                                        uploadedFiles[fileIndex].errorTimestamp = new Date().toISOString();
                                     }
 
-                                    console.error('AI extraction failed:', taskResult.error);
+                                    // Mark the extracted data item as failed
+                                    item.status = FILE_STATUS.ERROR;
+                                    item.error = errorMsg;
+
+                                    // Remove from successful extractedData
+                                    const extractedIndex = extractedData.findIndex(ed => ed.filename === item.filename);
+                                    if (extractedIndex >= 0) {
+                                        extractedData[extractedIndex].status = FILE_STATUS.ERROR;
+                                        extractedData[extractedIndex].error = errorMsg;
+                                    }
+
+                                    console.error(`AI extraction failed for ${item.filename}:`, errorMsg);
                                 }
 
-                                if (item.data.auto_tags_ready) {
+                                if (item.data.auto_tags_ready || item.status === FILE_STATUS.ERROR) {
                                     completedTasks++;
                                 }
                             }
@@ -3536,17 +3545,21 @@ async function waitForAllTasksToComplete(taskIds) {
 
                         updateFailedLinks();
 
-                        // Update loading message with progress and interval info
-                        const elapsedMin = Math.floor((Date.now() - startTime) / (1000 * 60));
-                        const currentInterval = elapsedMinutes < 2 ? '5s' : '30s';
-
+                        // Update loading message with progress
                         showLoading(`AI extraction in progress... ${completedTasks}/${totalTasks} completed`);
 
-                        // Check if all tasks are complete
+                        // Check if all tasks are complete (including failed ones)
                         if (completedTasks >= totalTasks) {
                             console.log(`AI extraction finished. Completed: ${completedTasks}/${totalTasks} in ${checkAttempts} API calls`);
                             hideLoading();
-                            setTimeout(() => resolve(), 100);
+
+                            // *** CHANGED: Update file list to show failed documents, no success message ***
+                            updateFileList();
+                            updateButtonStates();
+
+                            setTimeout(() => {
+                                resolve();
+                            }, 100);
                             return;
                         }
 
@@ -3554,17 +3567,93 @@ async function waitForAllTasksToComplete(taskIds) {
                         if (checkAttempts >= maxAttempts) {
                             console.warn(`AI extraction timed out after ${checkAttempts} attempts`);
                             hideLoading();
+
+                            // *** CHANGED: Mark remaining tasks as failed due to timeout ***
+                            extractedData.forEach(item => {
+                                if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id && !item.data.auto_tags_ready) {
+                                    const errorMsg = 'AI processing timed out';
+
+                                    // Find the corresponding file in uploadedFiles and mark as failed
+                                    const fileIndex = uploadedFiles.findIndex(f => f.name === item.filename);
+                                    if (fileIndex >= 0) {
+                                        uploadedFiles[fileIndex].status = FILE_STATUS.ERROR;
+                                        uploadedFiles[fileIndex].error = errorMsg;
+                                        uploadedFiles[fileIndex].errorTimestamp = new Date().toISOString();
+                                    }
+
+                                    // Mark the extracted data item as failed
+                                    item.status = FILE_STATUS.ERROR;
+                                    item.error = errorMsg;
+                                }
+                            });
+
+                            updateFileList();
+                            updateButtonStates();
                             resolve();
                             return;
                         }
 
                         // Schedule next check
                         scheduleNextCheck();
+                    } else {
+                        // *** CHANGED: Handle API call failures by marking as failed ***
+                        console.error('API call failed:', result);
+                        if (checkAttempts >= maxAttempts) {
+                            hideLoading();
+
+                            // Mark all pending AI tasks as failed
+                            extractedData.forEach(item => {
+                                if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id && !item.data.auto_tags_ready) {
+                                    const errorMsg = 'AI processing failed to complete';
+
+                                    // Find the corresponding file in uploadedFiles and mark as failed
+                                    const fileIndex = uploadedFiles.findIndex(f => f.name === item.filename);
+                                    if (fileIndex >= 0) {
+                                        uploadedFiles[fileIndex].status = FILE_STATUS.ERROR;
+                                        uploadedFiles[fileIndex].error = errorMsg;
+                                        uploadedFiles[fileIndex].errorTimestamp = new Date().toISOString();
+                                    }
+
+                                    // Mark the extracted data item as failed
+                                    item.status = FILE_STATUS.ERROR;
+                                    item.error = errorMsg;
+                                }
+                            });
+
+                            updateFileList();
+                            updateButtonStates();
+                            resolve();
+                            return;
+                        }
+                        // Retry on API failure
+                        scheduleNextCheck();
                     }
                 } catch (error) {
                     console.error('Error checking task status:', error);
                     if (checkAttempts >= maxAttempts) {
                         hideLoading();
+
+                        // *** CHANGED: Mark all pending AI tasks as failed ***
+                        extractedData.forEach(item => {
+                            if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id && !item.data.auto_tags_ready) {
+                                const errorMsg = 'AI processing encountered an error';
+
+                                // Find the corresponding file in uploadedFiles and mark as failed
+                                const fileIndex = uploadedFiles.findIndex(f => f.name === item.filename);
+                                if (fileIndex >= 0) {
+                                    uploadedFiles[fileIndex].status = FILE_STATUS.ERROR;
+                                    uploadedFiles[fileIndex].error = errorMsg;
+                                    uploadedFiles[fileIndex].errorTimestamp = new Date().toISOString();
+                                }
+
+                                // Mark the extracted data item as failed
+                                item.status = FILE_STATUS.ERROR;
+                                item.error = errorMsg;
+                            }
+                        });
+
+                        updateFileList();
+                        updateButtonStates();
                         resolve();
                         return;
                     }
@@ -3581,6 +3670,28 @@ async function waitForAllTasksToComplete(taskIds) {
         setTimeout(() => {
             console.warn('AI extraction timed out after 2 hours');
             hideLoading();
+
+            // *** CHANGED: Mark all pending AI tasks as failed due to overall timeout ***
+            extractedData.forEach(item => {
+                if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id && !item.data.auto_tags_ready) {
+                    const errorMsg = 'AI processing timed out after 2 hours';
+
+                    // Find the corresponding file in uploadedFiles and mark as failed
+                    const fileIndex = uploadedFiles.findIndex(f => f.name === item.filename);
+                    if (fileIndex >= 0) {
+                        uploadedFiles[fileIndex].status = FILE_STATUS.ERROR;
+                        uploadedFiles[fileIndex].error = errorMsg;
+                        uploadedFiles[fileIndex].errorTimestamp = new Date().toISOString();
+                    }
+
+                    // Mark the extracted data item as failed
+                    item.status = FILE_STATUS.ERROR;
+                    item.error = errorMsg;
+                }
+            });
+
+            updateFileList();
+            updateButtonStates();
             resolve();
         }, 7200000); // 2 hours
     });

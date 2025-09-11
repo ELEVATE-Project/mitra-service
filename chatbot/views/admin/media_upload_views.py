@@ -486,6 +486,9 @@ class BatchMediaExtractView(View):
                         file_index=file_index,  # Use unique index
                         request=request
                     )
+                    if data.get('error') or data.get('error_type'):
+                        raise Exception(data.get('error', 'AI extraction failed'))
+
                     data['status'] = 'success'
                     data['error'] = None
                     data['session_id'] = session_id
@@ -892,11 +895,8 @@ class BatchMediaTaskStatusView(View):
                                 if ai_data is None:
                                     print(f"Warning: Task {task_id} returned None")
                                     results[task_id] = {
-                                        'status': 'SUCCESS',
-                                        'result': {
-                                            'auto_tags': [],
-                                            'enhanced_data': None
-                                        }
+                                        'status': 'ERROR',  # CHANGED FROM SUCCESS TO ERROR
+                                        'error': 'AI processing returned no data'
                                     }
                                 else:
                                     processed_data = self.process_ai_extracted_data(ai_data)
@@ -909,8 +909,8 @@ class BatchMediaTaskStatusView(View):
                                 import traceback
                                 traceback.print_exc()
                                 results[task_id] = {
-                                    'status': 'ERROR',
-                                    'error': f'Failed to process result: {str(process_error)}'
+                                    'status': 'ERROR',  # ENSURE THIS IS ERROR NOT FAILURE
+                                    'error': str(process_error)
                                 }
                         else:
                             error_info = str(task.info) if task.info else 'Unknown error'
@@ -986,11 +986,22 @@ class BatchMediaTaskStatusView(View):
 
     def process_ai_extracted_data(self, ai_data, original_filename=None):
         """Process AI extracted data into format expected by frontend"""
-        if not ai_data or not isinstance(ai_data, dict):
+        if not ai_data:
             return {
                 'auto_tags': [],
                 'enhanced_data': None
             }
+
+        # *** SIMPLIFIED: Check if AI data is not a dictionary ***
+        if not isinstance(ai_data, dict):
+            error_msg = "AI processing failed - unable to extract structured data from document"
+            raise ValueError(error_msg)
+
+        # Check for explicit error from AI processing
+        if ai_data.get('error') or ai_data.get('error_type'):
+            error_msg = ai_data.get('error', 'AI processing failed with unknown error')
+            print(f"AI extraction failed: {error_msg}")
+            raise ValueError(f"{error_msg}")
 
         # Get user's company
         company = None
@@ -1007,6 +1018,7 @@ class BatchMediaTaskStatusView(View):
         def process_subdocument(subdoc_data):
             """Recursively process subdocument data"""
             if not isinstance(subdoc_data, dict):
+                logger.warning(f"Subdocument data is not a dictionary: {type(subdoc_data)}")
                 return None
 
             # Set organization to company name if empty
