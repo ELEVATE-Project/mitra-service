@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from django.db.models import TextField, Value
+from django.db.models import TextField, Value, Q
 from django.db.models.functions import Lower, Replace
 from chatbot.models import Media, KeyValue, Tag
 from chatbot.models.media_models import MediaImage
@@ -126,7 +126,9 @@ class MediaListSerializer(serializers.ModelSerializer):
         return self.get_metadata_field(obj, 'ORGANIZATION')
 
     def get_document_type(self, obj):
-        return self.get_metadata_field(obj, 'DOCUMENT TYPE')
+        # Handle both DOCUMENT_TYPE and DOCUMENT TYPE variants
+        document_type = obj.key_values.filter(key__iregex=r'^document[_\s]type$').first()
+        return document_type.value if document_type else None
 
     def get_key_entities(self, obj):
         return self.get_metadata_field(obj, 'KEY ENTITIES')
@@ -201,16 +203,62 @@ class MediaDetailSerializer(serializers.ModelSerializer):
         return obj.get_s3_url() if hasattr(obj, 'get_s3_url') else None
 
     def get_key_values(self, obj):
-        excluded_keys = ['TITLE', 'ORGANIZATION', 'DOCUMENT TYPE', 'KEY ENTITIES', 'ORIGINAL_FILE_URL',
-                         'FOUND_IN_DOCUMENT', 'DOCUMENT TYPE REASON']
-        filtered_kvs = obj.key_values.exclude(key__in=excluded_keys)
+        # Create basic information array
+        basic_info = []
 
-        # If no key-value pairs exist after exclusion, include the metadata fields
-        if not filtered_kvs.exists():
-            metadata_kvs = obj.key_values.filter(key__in=['TITLE', 'ORGANIZATION', 'DOCUMENT TYPE', 'KEY ENTITIES'])
+        # Get basic information fields
+        title = obj.key_values.filter(key__iexact='TITLE').first()
+        organization = obj.key_values.filter(key__iexact='ORGANIZATION').first()
+        geography = obj.key_values.filter(key__iexact='GEOGRAPHY').first()
+        # Handle both DOCUMENT_TYPE and DOCUMENT TYPE variants
+        document_type = obj.key_values.filter(key__iregex=r'^document[_\s]type$').first()
+
+        # Add title to basic info
+        if title and title.value:
+            basic_info.append(f"<div><b>Title:</b> {title.value}</div>")
+
+        # Add organization with link to basic info
+        if organization and organization.value:
+            basic_info.append(
+                f'<div><b>Organization:</b> <a class="text-blue-600 underline underline-offset-2" href="www.google.com" target="_blank" rel="noopener noreferrer">{organization.value}</a></div>')
+
+        # Add geography to basic info
+        if geography and geography.value:
+            basic_info.append(f"<div><b>Geography:</b> {geography.value}</div>")
+
+        # Add document type to basic info
+        if document_type and document_type.value:
+            basic_info.append(f"<div><b>Document Type:</b> {document_type.value}</div>")
+
+        # Get filtered key-value pairs (excluding basic info fields)
+        # Use regex to exclude both DOCUMENT_TYPE and DOCUMENT TYPE variants
+        filtered_kvs = obj.key_values.exclude(
+            Q(key__in=['TITLE', 'ORGANIZATION', 'KEY ENTITIES', 'GEOGRAPHY',
+                       'ORIGINAL_FILE_URL', 'FOUND_IN_DOCUMENT', 'DOCUMENT TYPE REASON']) |
+            Q(key__iregex=r'^document[_\s]type$')
+        )
+
+        # Serialize filtered key-value pairs
+        key_values_data = KeyValueSerializer(filtered_kvs, many=True).data
+
+        # Add basic information as the first key-value pair if any basic info exists
+        if basic_info:
+            basic_info_kv = {
+                'id': None,
+                'key': 'Basic Information',
+                'value': basic_info
+            }
+            key_values_data.insert(0, basic_info_kv)
+
+        # If no key-value pairs exist after exclusion and no basic info, include the metadata fields
+        if not filtered_kvs.exists() and not basic_info:
+            metadata_kvs = obj.key_values.filter(
+                Q(key__in=['TITLE', 'ORGANIZATION', 'KEY ENTITIES', 'GEOGRAPHY']) |
+                Q(key__iregex=r'^document[_\s]type$')
+            )
             return KeyValueSerializer(metadata_kvs, many=True).data
 
-        return KeyValueSerializer(filtered_kvs, many=True).data
+        return key_values_data
 
     def get_parent_info(self, obj):
         if obj.parent:
@@ -236,7 +284,9 @@ class MediaDetailSerializer(serializers.ModelSerializer):
         return self.get_metadata_field(obj, 'ORGANIZATION')
 
     def get_document_type(self, obj):
-        return self.get_metadata_field(obj, 'DOCUMENT TYPE')
+        # Handle both DOCUMENT_TYPE and DOCUMENT TYPE variants
+        document_type = obj.key_values.filter(key__iregex=r'^document[_\s]type$').first()
+        return document_type.value if document_type else None
 
     def get_key_entities(self, obj):
         return self.get_metadata_field(obj, 'KEY ENTITIES')
