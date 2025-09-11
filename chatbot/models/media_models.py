@@ -166,7 +166,7 @@ class MediaVector(models.Model):
 class KeyValue(models.Model):
     media = models.ForeignKey(Media, on_delete=models.CASCADE, related_name='key_values')
     key = models.CharField(max_length=1000)
-    value = models.CharField(max_length=10000)
+    value = models.TextField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.key}: {self.value}"

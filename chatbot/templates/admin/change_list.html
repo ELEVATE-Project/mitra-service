@@ -7,13 +7,13 @@
         {% if has_batch_upload %}
             <li style="list-style-type: none;">
                 <a href="{{ batch_upload_url }}" class="btn btn-success">
-                    <i class="fas fa-upload"></i> {% trans 'Batch Upload' %}
+                    <i class="fas fa-upload"></i> {% trans 'Upload' %}
                 </a>
             </li>
         {% elif opts.model_name == 'media' %}
             <li style="list-style-type: none;">
                 <a href="{% url 'admin:chatbot_media_batch_upload' %}" class="btn btn-success">
-                    <i class="fas fa-upload"></i> {% trans 'Batch Upload' %}
+                    <i class="fas fa-upload"></i> {% trans 'Upload media' %}
                 </a>
             </li>
         {% endif %}

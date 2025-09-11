@@ -1,5 +1,7 @@
 import hashlib
 import traceback
+from pathlib import Path
+
 import requests
 from django.views.generic import TemplateView
 from django.contrib.admin.views.decorators import staff_member_required
@@ -33,7 +35,6 @@ class BatchMediaUploadView(TemplateView):
         context['media_types'] = FileTypeChoices.choices
         context['priorities'] = PriorityChoices.choices
 
-        # Add file types with complete information
         extension_mapping = FileTypeChoices.get_extension_mapping()
         context['file_types'] = [
             {
@@ -44,13 +45,61 @@ class BatchMediaUploadView(TemplateView):
             for choice in FileTypeChoices.choices
         ]
 
-        # Add company bots for selection
         from chatbot.models import CompanyBot
         context['company_bots'] = CompanyBot.objects.all()
         default_bot = CompanyBot.objects.filter(route='/tag_extractor')
         if default_bot:
             default_bot = default_bot.first()
             context['default_bot_id'] = default_bot.id
+
+        try:
+            # company = None
+            # if self.request.user.is_authenticated:
+            #     try:
+            #         user_profile = Profile.objects.get(email=self.request.user.email)
+            #         company = user_profile.company
+            #     except Profile.DoesNotExist:
+            #         pass
+
+            existing_tags_query = Tag.objects.filter(
+                source_type=TagSourceChoices.MANUAL,
+                status=TagChoices.APPROVED
+            )
+
+            # if company:
+            #     existing_tags_query = existing_tags_query.filter(company=company)
+
+            context['existing_manual_tags'] = list(
+                existing_tags_query.values_list('name', flat=True).distinct().order_by('name')
+            )
+
+            document_types = []
+            try:
+                tag_extractor_bot = CompanyBot.objects.filter(route='/tag_extractor').first()
+                if tag_extractor_bot and tag_extractor_bot.other_params:
+                    try:
+                        other_params = json.loads(tag_extractor_bot.other_params) if isinstance(
+                            tag_extractor_bot.other_params, str
+                        ) else tag_extractor_bot.other_params
+
+                        master_document_types = other_params.get('master_document_types', [])
+                        if isinstance(master_document_types, list):
+                            document_types = master_document_types
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+            except Exception as e:
+                print(f"Error getting document types: {e}")
+
+            if not document_types:
+                document_types = []
+
+            context['master_document_types'] = document_types
+
+        except Exception as e:
+            print(f"Error getting context data: {e}")
+            context['existing_manual_tags'] = []
+            context['master_document_types'] = []
+
         return context
 
 
@@ -437,6 +486,9 @@ class BatchMediaExtractView(View):
                         file_index=file_index,  # Use unique index
                         request=request
                     )
+                    if data.get('error') or data.get('error_type'):
+                        raise Exception(data.get('error', 'AI extraction failed'))
+
                     data['status'] = 'success'
                     data['error'] = None
                     data['session_id'] = session_id
@@ -543,8 +595,11 @@ class BatchMediaExtractView(View):
             company=company, other_params=company_bot.other_params if company_bot else None
         )
         print("Sending master tags: ", master_tags)
+        base_name = file.name.rsplit('.', 1)[0] if '.' in file.name else file.name
+
         other_data = {
-            "master_tag": master_tags
+            "master_tag": master_tags,
+            "original_filename": base_name
         }
 
         # Start async task (non-blocking)
@@ -728,8 +783,8 @@ def get_master_tags(company=None, other_params=None, include_description=False):
             status=TagChoices.APPROVED
         )
 
-        if company:
-            query = query.filter(company=company)
+        # if company:
+        #     query = query.filter(company=company)
 
         if include_description:
             return [
@@ -780,9 +835,6 @@ def build_key_values(data_dict):
             if doc_type_value:
                 doc_type_value = doc_type_value.title()
                 key_values.append({'key': 'DOCUMENT TYPE', 'value': doc_type_value})
-            reason = document_type.get('reason', '')
-            if reason:
-                key_values.append({'key': 'DOCUMENT TYPE REASON', 'value': reason})
         else:
             doc_type_value = document_type.title() if document_type else ''
             key_values.append({'key': 'DOCUMENT TYPE', 'value': doc_type_value})
@@ -843,11 +895,8 @@ class BatchMediaTaskStatusView(View):
                                 if ai_data is None:
                                     print(f"Warning: Task {task_id} returned None")
                                     results[task_id] = {
-                                        'status': 'SUCCESS',
-                                        'result': {
-                                            'auto_tags': [],
-                                            'enhanced_data': None
-                                        }
+                                        'status': 'ERROR',  # CHANGED FROM SUCCESS TO ERROR
+                                        'error': 'AI processing returned no data'
                                     }
                                 else:
                                     processed_data = self.process_ai_extracted_data(ai_data)
@@ -860,8 +909,8 @@ class BatchMediaTaskStatusView(View):
                                 import traceback
                                 traceback.print_exc()
                                 results[task_id] = {
-                                    'status': 'ERROR',
-                                    'error': f'Failed to process result: {str(process_error)}'
+                                    'status': 'ERROR',  # ENSURE THIS IS ERROR NOT FAILURE
+                                    'error': str(process_error)
                                 }
                         else:
                             error_info = str(task.info) if task.info else 'Unknown error'
@@ -920,8 +969,8 @@ class BatchMediaTaskStatusView(View):
             status=TagChoices.APPROVED
         )
 
-        if company:
-            query = query.filter(company=company)
+        # if company:
+        #     query = query.filter(company=company)
 
         # Get set of valid tag names
         valid_tag_names = set(query.values_list('name', flat=True))
@@ -935,13 +984,24 @@ class BatchMediaTaskStatusView(View):
 
         return validated_tags
 
-    def process_ai_extracted_data(self, ai_data):
+    def process_ai_extracted_data(self, ai_data, original_filename=None):
         """Process AI extracted data into format expected by frontend"""
-        if not ai_data or not isinstance(ai_data, dict):
+        if not ai_data:
             return {
                 'auto_tags': [],
                 'enhanced_data': None
             }
+
+        # *** SIMPLIFIED: Check if AI data is not a dictionary ***
+        if not isinstance(ai_data, dict):
+            error_msg = "AI processing failed - unable to extract structured data from document"
+            raise ValueError(error_msg)
+
+        # Check for explicit error from AI processing
+        if ai_data.get('error') or ai_data.get('error_type'):
+            error_msg = ai_data.get('error', 'AI processing failed with unknown error')
+            print(f"AI extraction failed: {error_msg}")
+            raise ValueError(f"{error_msg}")
 
         # Get user's company
         company = None
@@ -958,6 +1018,7 @@ class BatchMediaTaskStatusView(View):
         def process_subdocument(subdoc_data):
             """Recursively process subdocument data"""
             if not isinstance(subdoc_data, dict):
+                logger.warning(f"Subdocument data is not a dictionary: {type(subdoc_data)}")
                 return None
 
             # Set organization to company name if empty
@@ -1022,8 +1083,10 @@ class BatchMediaTaskStatusView(View):
                 return text
             return str(text).strip().title()
 
+        is_template = document_type_value.lower() == 'template'
+        original_filename = ai_data.get('original_filename')
         main_data = {
-            'title': ai_data.get('title', ''),
+            'title': original_filename if (original_filename and not is_template) else ai_data.get('title', ''),
             'summary': ai_data.get('summary', ''),
             'extracted_text': ai_data.get('exact_content', '') or ai_data.get('summary', ''),
             'organization': ai_data.get('organization', '') or company_name or '',
@@ -1072,6 +1135,7 @@ class BatchMediaTaskStatusView(View):
                 'structured_content': ai_data.get('structured_content', {})
             }
         }
+
 
 # Helper class for shared tag processing logic
 class TagProcessor:
@@ -1343,9 +1407,9 @@ class BatchMediaSaveView(View):
         filename = item_data.get('filename', 'Unknown')
         file_index = item_data.get('file_index')
 
-        if "fail" in filename.lower():
-            print(f"Forced save failure for {filename}")
-            raise ValueError(f"Forced save failure for {filename}")
+        # if "fail" in filename.lower():
+        #     print(f"Forced save failure for {filename}")
+        #     raise ValueError(f"Forced save failure for {filename}")
 
         try:
             company_bot = CompanyBot.objects.get(id=company_bot_id)
@@ -1766,16 +1830,28 @@ class BatchMediaSaveView(View):
                     filename += extension
 
             # Use filename (without extension) as the subdocument title
-            filename_without_ext = os.path.splitext(filename)[0]
-            subdoc_title = filename_without_ext
+            filename_without_ext = os.path.splitext(filename)[0] if filename else ""
+
+            if filename_without_ext and len(filename_without_ext.strip()) > 0:
+                subdoc_title = filename_without_ext
+                print(f"Using filename as title: {subdoc_title}")
+            else:
+                llm_title = subdoc_data.get('title', '').strip()
+                if llm_title and len(llm_title) > 0:
+                    subdoc_title = llm_title
+                    print(f"Using LLM-extracted title: {subdoc_title}")
+                else:
+                    # Final fallback - create a descriptive title
+                    subdoc_title = f"Document from {Path(urlparse(file_url).path).name or 'linked document'}"
+                    print(f"Using fallback title: {subdoc_title}")
 
             print(f"Saving subdocument with title: {subdoc_title} (from filename: {filename})")
 
             # Check for forced failure
-            for kv in subdoc_data.get('key_values', []):
-                if "fail" in kv.get('value', '').lower():
-                    print(f"Forced subdoc extraction failure for {subdoc_title}")
-                    raise ValueError(f"Forced subdoc extraction failure for {subdoc_title}")
+            # for kv in subdoc_data.get('key_values', []):
+            #     if "fail" in kv.get('value', '').lower():
+            #         print(f"Forced subdoc extraction failure for {subdoc_title}")
+            #         raise ValueError(f"Forced subdoc extraction failure for {subdoc_title}")
 
             # Get file content
             file_content = response.content
@@ -1901,21 +1977,6 @@ class BatchMediaSaveView(View):
                     value=org_value
                 )
 
-            # Store the original file URL for reference
-            KeyValue.objects.create(
-                media=subdoc_media,
-                key='ORIGINAL_FILE_URL',
-                value=file_url
-            )
-
-            # Add source document info if available
-            if subdoc_data.get('source_document'):
-                KeyValue.objects.create(
-                    media=subdoc_media,
-                    key='FOUND_IN_DOCUMENT',
-                    value=subdoc_data.get('source_document')
-                )
-
             print(f"Saved {len(subdoc_data.get('key_values', []))} key-values for subdoc: {subdoc_title}")
 
             # Process subdocument images
@@ -1937,7 +1998,7 @@ class BatchMediaSaveView(View):
                 'error': str(e),
                 'title': subdoc_data.get('title', 'Unknown subdocument')
             }
-        
+
     def save_media_image(self, img_data, media, index):
         """Save image associated with media"""
         try:

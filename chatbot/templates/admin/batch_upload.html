@@ -638,13 +638,6 @@
         font-weight: bold;
     }
 
-    .tag-input-field {
-        border: none;
-        outline: none;
-        flex: 1;
-        min-width: 100px;
-    }
-
     .key-values {
         margin-top: 15px;
     }
@@ -1536,6 +1529,207 @@
     .info-message strong {
         font-weight: 600;
     }
+
+    .tag-input-wrapper {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: 8px;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        background-color: white;
+    }
+
+    .tag-dropdown {
+        padding: 4px 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        background: white;
+        cursor: pointer;
+    }
+
+    .tag-dropdown:focus {
+        outline: none;
+        border-color: #417690;
+    }
+
+    .tag-input-field {
+        flex: 1;
+        min-width: 120px;
+        border: none;
+        outline: none;
+        padding: 4px 8px;
+        font-size: 14px;
+    }
+    .custom-dropdown {
+        position: relative;
+        width: 250px; /* Increased width */
+        max-width: 100%;
+    }
+
+    .dropdown-search {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        background: white;
+        cursor: text;
+        box-sizing: border-box;
+    }
+
+    .dropdown-search:focus {
+        outline: none;
+        border-color: #417690;
+        box-shadow: 0 0 0 2px rgba(65, 118, 144, 0.1);
+    }
+
+    .dropdown-list {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #ddd;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        max-height: 200px; /* Limit height */
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .dropdown-list.show {
+        display: block;
+    }
+
+    .dropdown-option {
+        padding: 8px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background-color 0.2s;
+        /* Text wrapping */
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        white-space: normal;
+        line-height: 1.4;
+        max-width: 100%;
+    }
+
+    .dropdown-option:hover {
+        background-color: #f5f5f5;
+    }
+
+    .dropdown-option:last-child {
+        border-bottom: none;
+    }
+
+    .dropdown-option.highlighted {
+        background-color: #e3f2fd;
+    }
+
+    .dropdown-option.no-results {
+        color: #999;
+        font-style: italic;
+        cursor: default;
+    }
+
+    .dropdown-option.no-results:hover {
+        background-color: white;
+    }
+
+    .kv-value-container {
+        width: 100%;
+        padding: 0;
+        border: none;
+        background: white;
+        display: flex;
+        align-items: center;
+        position: relative; /* Important for dropdown positioning */
+    }
+
+    .kv-value-container .custom-dropdown {
+        width: 100%;
+        max-width: 100%;
+        position: relative;
+    }
+
+    .kv-value-container .dropdown-search {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+        background: white;
+        cursor: text;
+        box-sizing: border-box;
+        font-family: inherit;
+    }
+
+    .kv-value-container .dropdown-search:focus {
+        outline: none;
+        border-color: #417690;
+        box-shadow: 0 0 0 2px rgba(65, 118, 144, 0.1);
+    }
+
+    /* Ensure dropdown list positioning works properly within the container */
+    .kv-value-container .dropdown-list {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #ddd;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        max-height: 200px;
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .kv-value-container .dropdown-list.show {
+        display: block;
+    }
+
+    .kv-value-container .dropdown-option {
+        padding: 8px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background-color 0.2s;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        white-space: normal;
+        line-height: 1.4;
+        max-width: 100%;
+    }
+
+    .kv-value-container .dropdown-option:hover {
+        background-color: #f5f5f5;
+    }
+
+    .kv-value-container .dropdown-option:last-child {
+        border-bottom: none;
+    }
+
+    .kv-value-container .dropdown-option.highlighted {
+        background-color: #e3f2fd;
+    }
+
+    .kv-value-container .dropdown-option.no-results {
+        color: #999;
+        font-style: italic;
+        cursor: default;
+    }
+
+    .kv-value-container .dropdown-option.no-results:hover {
+        background-color: white;
+    }
 </style>
 {% endblock %}
 
@@ -1624,14 +1818,6 @@
                     <div class="progress-stat error">
                         <span>✗</span>
                         <span id="errorCount">0</span>
-                    </div>
-                    <div class="progress-stat processing">
-                        <span class="spinner" style="width: 14px; height: 14px; border-width: 2px;"></span>
-                        <span id="processingCount">0</span>
-                    </div>
-                    <div class="progress-stat skipped">
-                        <span>⊘</span>
-                        <span id="skippedCount">0</span>
                     </div>
                 </div>
             </div>
@@ -1765,7 +1951,7 @@
 
         <div class="button-group">
             <div></div>
-            <a href="{% url 'admin:chatbot_media_changelist' %}" class="btn btn-primary">Submit</a>
+            <a href="{% url 'admin:chatbot_media_changelist' %}" class="btn btn-primary">Exit</a>
         </div>
     </div>
 
@@ -1780,6 +1966,8 @@
 
 <!-- Pass file types data to JavaScript -->
 {{ file_types|json_script:"file-types-data" }}
+{{ existing_manual_tags|json_script:"existing-manual-tags" }}
+{{ master_document_types|json_script:"master-document-types" }}
 
 <script>
 // CSRF token for Django
@@ -1797,6 +1985,10 @@ function getCookie(name) {
     }
     return cookieValue;
 }
+
+const existingManualTags = JSON.parse(document.getElementById('existing-manual-tags').textContent);
+const masterDocumentTypes = JSON.parse(document.getElementById('master-document-types').textContent);
+
 const csrftoken = getCookie('csrftoken');
 let expandedSubdocumentPaths = new Set();
 const DEFAULT_BOT_ID = {{ default_bot_id|default:"null" }};
@@ -2110,6 +2302,231 @@ async function processFiles(files) {
 
     // Ensure loading overlay is hidden (this may be redundant now but good as safety)
     hideLoading();
+}
+
+function isDocumentTypeField(key) {
+    return key && key.toUpperCase() === 'DOCUMENT TYPE';
+}
+
+function createDocumentTypeDropdown(path, kvIndex, currentValue = '') {
+    const dropdownId = `docTypeDropdown_${path}_${kvIndex}`;
+    const listId = `docTypeDropdownList_${path}_${kvIndex}`;
+
+    return `
+        <div class="custom-dropdown" id="customDocTypeDropdown_${path}_${kvIndex}">
+            <input type="text"
+                   class="dropdown-search"
+                   placeholder="Search or enter document type..."
+                   value="${currentValue}"
+                   onclick="toggleDocumentTypeDropdown('${path}', ${kvIndex})"
+                   oninput="filterDocumentTypeDropdown('${path}', ${kvIndex}, this.value)"
+                   onkeypress="handleDocumentTypeDropdownKeypress(event, '${path}', ${kvIndex})"
+                   onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'value', this.value)">
+            <div class="dropdown-list" id="${listId}">
+                ${masterDocumentTypes.map(docType => `
+                    <div class="dropdown-option" onclick="selectDocumentTypeFromDropdown('${path}', ${kvIndex}, '${docType.replace(/'/g, "\\'")}')">
+                        ${docType}
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `;
+}
+
+// Function to toggle document type dropdown
+function toggleDocumentTypeDropdown(path, kvIndex) {
+    const listId = `docTypeDropdownList_${path}_${kvIndex}`;
+    const dropdown = document.getElementById(listId);
+    if (!dropdown) return;
+
+    const isVisible = dropdown.classList.contains('show');
+
+    // Close all other dropdowns
+    document.querySelectorAll('.dropdown-list').forEach(dl => {
+        dl.classList.remove('show');
+    });
+
+    // Toggle current dropdown
+    if (!isVisible) {
+        dropdown.classList.add('show');
+        filterDocumentTypeDropdown(path, kvIndex, '');
+    }
+}
+
+// Function to filter document type dropdown
+function filterDocumentTypeDropdown(path, kvIndex, searchTerm) {
+    const listId = `docTypeDropdownList_${path}_${kvIndex}`;
+    const dropdown = document.getElementById(listId);
+    if (!dropdown) return;
+
+    const filteredTypes = masterDocumentTypes.filter(docType =>
+        docType.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    if (filteredTypes.length > 0) {
+        dropdown.innerHTML = filteredTypes.map(docType => {
+            const escapedType = docType.replace(/'/g, "\\'");
+            return `
+                <div class="dropdown-option" onclick="selectDocumentTypeFromDropdown('${path}', ${kvIndex}, '${escapedType}')">
+                    ${docType}
+                </div>
+            `;
+        }).join('');
+    } else if (searchTerm.trim()) {
+        dropdown.innerHTML = `
+            <div class="dropdown-option no-results">
+                No matching document types found
+            </div>
+        `;
+    } else {
+        dropdown.innerHTML = masterDocumentTypes.map(docType => {
+            const escapedType = docType.replace(/'/g, "\\'");
+            return `
+                <div class="dropdown-option" onclick="selectDocumentTypeFromDropdown('${path}', ${kvIndex}, '${escapedType}')">
+                    ${docType}
+                </div>
+            `;
+        }).join('');
+    }
+
+    dropdown.classList.add('show');
+}
+
+// Function to select document type from dropdown
+function selectDocumentTypeFromDropdown(path, kvIndex, docType) {
+    const listId = `docTypeDropdownList_${path}_${kvIndex}`;
+    const dropdown = document.getElementById(listId);
+    const searchInput = dropdown.previousElementSibling;
+
+    dropdown.classList.remove('show');
+    searchInput.value = docType;
+
+    // Save the value based on whether this is a path (subdocument) or index (main document)
+    if (path.includes('_')) {
+        // This is a subdocument path
+        saveKeyValueByPath(path, kvIndex, 'value', docType);
+    } else {
+        // This is a main document index
+        saveKeyValueData(parseInt(path), kvIndex, 'value', docType);
+    }
+}
+
+// Function to handle document type dropdown keypress
+function handleDocumentTypeDropdownKeypress(event, path, kvIndex) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        const searchTerm = event.target.value.trim();
+        const listId = `docTypeDropdownList_${path}_${kvIndex}`;
+        const dropdown = document.getElementById(listId);
+
+        if (searchTerm) {
+            // Check if exact match exists
+            const exactMatch = masterDocumentTypes.find(docType =>
+                docType.toLowerCase() === searchTerm.toLowerCase()
+            );
+
+            if (exactMatch) {
+                selectDocumentTypeFromDropdown(path, kvIndex, exactMatch);
+            } else {
+                // Use the typed value as is (allows manual entry)
+                dropdown.classList.remove('show');
+
+                // Save based on whether this is a path (subdocument) or index (main document)
+                if (path.includes('_')) {
+                    saveKeyValueByPath(path, kvIndex, 'value', searchTerm);
+                } else {
+                    saveKeyValueData(parseInt(path), kvIndex, 'value', searchTerm);
+                }
+            }
+        }
+    } else if (event.key === 'Escape') {
+        const listId = `docTypeDropdownList_${path}_${kvIndex}`;
+        const dropdown = document.getElementById(listId);
+        dropdown.classList.remove('show');
+        event.target.blur();
+    }
+}
+
+// Updated function for rendering key-values in subdocuments with document type dropdown
+function updateKeyValueHtmlWithDocTypeDropdown(subdoc, path) {
+    return subdoc.key_values.map((kv, kvIndex) => {
+        const isDocType = isDocumentTypeField(kv.key);
+
+        if (isDocType) {
+            return `
+                <div class="key-value-pair structured-content-kv">
+                    <input type="text"
+                           class="kv-key-input"
+                           value="${kv.key || ''}"
+                           id="key_${path}_${kvIndex}"
+                           placeholder="Key"
+                           onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'key', this.value)">
+                    <div class="kv-value-container">
+                        ${createDocumentTypeDropdown(path, kvIndex, kv.value || '')}
+                    </div>
+                    <button class="remove-kv-btn" onclick="removeKeyValueByPath('${path}', ${kvIndex})">Remove</button>
+                </div>
+            `;
+        } else {
+            return `
+                <div class="key-value-pair structured-content-kv">
+                    <input type="text"
+                           class="kv-key-input"
+                           value="${kv.key || ''}"
+                           id="key_${path}_${kvIndex}"
+                           placeholder="Key"
+                           onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'key', this.value)">
+                    <textarea class="key-value-textarea"
+                              id="value_${path}_${kvIndex}"
+                              placeholder="Value"
+                              onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'value', this.value)"
+                              oninput="autoResizeTextarea(this)">${kv.value || ''}</textarea>
+                    <button class="remove-kv-btn" onclick="removeKeyValueByPath('${path}', ${kvIndex})">Remove</button>
+                </div>
+            `;
+        }
+    }).join('');
+}
+
+// Updated function for rendering key-values in main documents with document type dropdown
+function updateMainDocumentKeyValueHtml(item, displayIndex) {
+    return (item.data.key_values || []).map((kv, kvIndex) => {
+        const isDocType = isDocumentTypeField(kv.key);
+
+        if (isDocType) {
+            return `
+                <div class="key-value-pair structured-content-kv">
+                    <input type="text"
+                           class="kv-key-input"
+                           value="${kv.key || ''}"
+                           id="key_${displayIndex}_${kvIndex}"
+                           placeholder="Key"
+                           onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'key', this.value)">
+                    <div class="kv-value-container">
+                        ${createDocumentTypeDropdown(displayIndex, kvIndex, kv.value || '')}
+                    </div>
+                    <button class="remove-kv-btn" onclick="removeKeyValue(${displayIndex}, ${kvIndex})">Remove</button>
+                </div>
+            `;
+        } else {
+            return `
+                <div class="key-value-pair structured-content-kv">
+                    <input type="text"
+                           class="kv-key-input"
+                           value="${kv.key || ''}"
+                           id="key_${displayIndex}_${kvIndex}"
+                           placeholder="Key"
+                           onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'key', this.value)">
+                    <textarea class="key-value-textarea"
+                              id="value_${displayIndex}_${kvIndex}"
+                              placeholder="Value"
+                              onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'value', this.value)"
+                              oninput="autoResizeTextarea(this)">${kv.value || ''}</textarea>
+                    <button class="remove-kv-btn" onclick="removeKeyValue(${displayIndex}, ${kvIndex})">Remove</button>
+                </div>
+            `;
+        }
+    }).join('');
 }
 
 // Modified function to show files in separate sections
@@ -2488,8 +2905,6 @@ function updateExtractionProgress() {
     // Update progress stats
     document.getElementById('successCount').textContent = stats.success;
     document.getElementById('errorCount').textContent = stats.error;
-    document.getElementById('processingCount').textContent = stats.processing;
-    document.getElementById('skippedCount').textContent = stats.skipped;
 
     // Update progress bar
     const completed = stats.success + stats.error + stats.skipped;
@@ -2999,165 +3414,286 @@ async function waitForAllTasksToComplete(taskIds) {
     return new Promise((resolve, reject) => {
         const totalTasks = taskIds.length;
         let checkAttempts = 0;
-        const maxAttempts = 200;
+        const maxAttempts = 300; // High limit to handle very long tasks
+        let startTime = Date.now();
 
-        const checkInterval = setInterval(async () => {
-            checkAttempts++;
+        const scheduleNextCheck = () => {
+            // Calculate interval based on elapsed time
+            const elapsedMinutes = (Date.now() - startTime) / (1000 * 60);
+            const interval = elapsedMinutes < 2 ? 5000 : 30000; // 5s for first 2 min, then 30s
 
-            try {
-                const response = await fetch("{% url 'admin:chatbot_media_task_status' %}", {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrftoken,
-                    },
-                    body: JSON.stringify({ task_ids: taskIds })
-                });
+            setTimeout(async () => {
+                checkAttempts++;
 
-                const result = await response.json();
-                if (result.success) {
-                    let completedTasks = 0;
-
-                    extractedData.forEach(item => {
-                        if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id) {
-                            const taskResult = result.results[item.data.auto_tag_task_id];
-
-                            if (taskResult && taskResult.status === 'SUCCESS' && !item.data.auto_tags_ready) {
-                                // Process the enhanced AI data
-                                const aiResult = taskResult.result;
-
-                                // Update auto tags
-                                const autoTags = aiResult.auto_tags || [];
-                                item.data.auto_tags = autoTags.map(tag => {
-                                    return typeof tag === 'object' ? tag.text : tag;
-                                });
-                                item.data.auto_tags_full = autoTags;
-                                item.data.auto_tags_ready = true;
-
-                                // Update enhanced data if available
-                                if (aiResult.enhanced_data) {
-                                    const enhanced = aiResult.enhanced_data;
-
-                                    // Don't update name - keep filename
-                                    if (enhanced.description) item.data.description = enhanced.description;
-                                    if (enhanced.extracted_text) item.data.extracted_text = enhanced.extracted_text;
-
-                                    // Handle organization for main document
-                                    if (enhanced.organization !== undefined) {
-                                        item.data.organization = enhanced.organization || userCompanyName || '';
-                                    }
-
-                                    // Merge enhanced key-values with existing ones
-                                    if (enhanced.enhanced_key_values && enhanced.enhanced_key_values.length > 0) {
-                                        // Keep basic file info and add AI-extracted info
-                                        const basicKVs = item.data.key_values.filter(kv =>
-                                            kv.key === 'FILE TYPE' || kv.key === 'FILE SIZE'
-                                        );
-
-                                        // Ensure organization is in key-values
-                                        let hasOrg = enhanced.enhanced_key_values.some(kv => kv.key === 'ORGANIZATION');
-                                        if (!hasOrg) {
-                                            enhanced.enhanced_key_values.unshift({
-                                                key: 'ORGANIZATION',
-                                                value: enhanced.organization || userCompanyName || ''
-                                            });
-                                        }
-
-                                        item.data.key_values = [...basicKVs, ...enhanced.enhanced_key_values];
-                                    } else {
-                                        // If no enhanced key-values, ensure organization is added
-                                        if (!item.data.key_values.some(kv => kv.key === 'ORGANIZATION')) {
-                                            item.data.key_values.push({
-                                                key: 'ORGANIZATION',
-                                                value: item.data.organization || userCompanyName || ''
-                                            });
-                                        }
-                                    }
-
-                                    // Update subdocuments if available - FORCE parent organization
-                                    if (enhanced.subdocument && Array.isArray(enhanced.subdocument)) {
-                                        // Get the parent's organization value (which may have been edited)
-                                        const parentOrg = item.data.organization || userCompanyName || '';
-
-                                        // Ensure all subdocuments use parent's organization
-                                        enhanced.subdocument.forEach(subdoc => {
-                                            ensureSubdocumentOrganization(subdoc, parentOrg);
-                                        });
-                                        item.data.subdocument = enhanced.subdocument;
-                                    }
-
-                                    // Update images if available
-                                    if (enhanced.images && Array.isArray(enhanced.images)) {
-                                        item.data.images = enhanced.images;
-                                    }
-                                    if (enhanced.failed_links && Array.isArray(enhanced.failed_links)) {
-                                        item.data.failed_links = enhanced.failed_links;
-                                    }
-                                }
-
-                                console.log(`AI extraction completed for ${item.filename}:`, aiResult);
-                            } else if (taskResult && taskResult.status === 'FAILURE' && !item.data.auto_tags_ready) {
-                                item.data.auto_tags = [];
-                                item.data.auto_tags_ready = true;
-
-                                // Ensure organization is set even on failure
-                                if (!item.data.organization) {
-                                    item.data.organization = userCompanyName || '';
-                                }
-                                if (!item.data.key_values.some(kv => kv.key === 'ORGANIZATION')) {
-                                    item.data.key_values.push({
-                                        key: 'ORGANIZATION',
-                                        value: userCompanyName || ''
-                                    });
-                                }
-
-                                console.error('AI extraction failed:', taskResult.error);
-                            }
-
-                            if (item.data.auto_tags_ready) {
-                                completedTasks++;
-                            }
-                        }
+                try {
+                    const response = await fetch("{% url 'admin:chatbot_media_task_status' %}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrftoken,
+                        },
+                        body: JSON.stringify({ task_ids: taskIds })
                     });
 
-                    updateFailedLinks();
+                    const result = await response.json();
+                    if (result.success) {
+                        let completedTasks = 0;
 
-                    // Update loading message with progress
-                    showLoading(`AI extraction in progress... ${completedTasks}/${totalTasks} completed`);
+                        extractedData.forEach(item => {
+                            if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id) {
+                                const taskResult = result.results[item.data.auto_tag_task_id];
 
-                    // Check if all tasks are complete
-                    if (completedTasks >= totalTasks || checkAttempts >= maxAttempts) {
-                        clearInterval(checkInterval);
-                        console.log(`AI extraction finished. Completed: ${completedTasks}/${totalTasks}`);
+                                if (taskResult && taskResult.status === 'SUCCESS' && !item.data.auto_tags_ready) {
+                                    // Process the enhanced AI data
+                                    const aiResult = taskResult.result;
 
-                        // Hide the loading overlay before resolving
+                                    // Update auto tags
+                                    const autoTags = aiResult.auto_tags || [];
+                                    item.data.auto_tags = autoTags.map(tag => {
+                                        return typeof tag === 'object' ? tag.text : tag;
+                                    });
+                                    item.data.auto_tags_full = autoTags;
+                                    item.data.auto_tags_ready = true;
+
+                                    // Update enhanced data if available
+                                    if (aiResult.enhanced_data) {
+                                        const enhanced = aiResult.enhanced_data;
+
+                                        if (enhanced.description) item.data.description = enhanced.description;
+                                        if (enhanced.extracted_text) item.data.extracted_text = enhanced.extracted_text;
+
+                                        // Handle organization for main document
+                                        if (enhanced.organization !== undefined) {
+                                            item.data.organization = enhanced.organization || userCompanyName || '';
+                                        }
+
+                                        // Merge enhanced key-values with existing ones
+                                        if (enhanced.enhanced_key_values && enhanced.enhanced_key_values.length > 0) {
+                                            const basicKVs = item.data.key_values.filter(kv =>
+                                                kv.key === 'FILE TYPE' || kv.key === 'FILE SIZE'
+                                            );
+
+                                            let hasOrg = enhanced.enhanced_key_values.some(kv => kv.key === 'ORGANIZATION');
+                                            if (!hasOrg) {
+                                                enhanced.enhanced_key_values.unshift({
+                                                    key: 'ORGANIZATION',
+                                                    value: enhanced.organization || userCompanyName || ''
+                                                });
+                                            }
+
+                                            item.data.key_values = [...basicKVs, ...enhanced.enhanced_key_values];
+                                        } else {
+                                            if (!item.data.key_values.some(kv => kv.key === 'ORGANIZATION')) {
+                                                item.data.key_values.push({
+                                                    key: 'ORGANIZATION',
+                                                    value: item.data.organization || userCompanyName || ''
+                                                });
+                                            }
+                                        }
+
+                                        // Update subdocuments if available - FORCE parent organization
+                                        if (enhanced.subdocument && Array.isArray(enhanced.subdocument)) {
+                                            const parentOrg = item.data.organization || userCompanyName || '';
+
+                                            enhanced.subdocument.forEach(subdoc => {
+                                                ensureSubdocumentOrganization(subdoc, parentOrg);
+                                            });
+                                            item.data.subdocument = enhanced.subdocument;
+                                        }
+
+                                        // Update images if available
+                                        if (enhanced.images && Array.isArray(enhanced.images)) {
+                                            item.data.images = enhanced.images;
+                                        }
+                                        if (enhanced.failed_links && Array.isArray(enhanced.failed_links)) {
+                                            item.data.failed_links = enhanced.failed_links;
+                                        }
+                                    }
+
+                                    console.log(`AI extraction completed for ${item.filename}:`, aiResult);
+                                } else if (taskResult && (taskResult.status === 'FAILURE' || taskResult.status === 'ERROR') && !item.data.auto_tags_ready) {
+                                    // *** CHANGED: Mark entire document as failed ***
+                                    const errorMsg = taskResult.error || 'AI processing failed';
+
+                                    // Find the corresponding file in uploadedFiles and mark as failed
+                                    const fileIndex = uploadedFiles.findIndex(f => f.name === item.filename);
+                                    if (fileIndex >= 0) {
+                                        uploadedFiles[fileIndex].status = FILE_STATUS.ERROR;
+                                        uploadedFiles[fileIndex].error = errorMsg;
+                                        uploadedFiles[fileIndex].errorTimestamp = new Date().toISOString();
+                                    }
+
+                                    // Mark the extracted data item as failed
+                                    item.status = FILE_STATUS.ERROR;
+                                    item.error = errorMsg;
+
+                                    // Remove from successful extractedData
+                                    const extractedIndex = extractedData.findIndex(ed => ed.filename === item.filename);
+                                    if (extractedIndex >= 0) {
+                                        extractedData[extractedIndex].status = FILE_STATUS.ERROR;
+                                        extractedData[extractedIndex].error = errorMsg;
+                                    }
+
+                                    console.error(`AI extraction failed for ${item.filename}:`, errorMsg);
+                                }
+
+                                if (item.data.auto_tags_ready || item.status === FILE_STATUS.ERROR) {
+                                    completedTasks++;
+                                }
+                            }
+                        });
+
+                        updateFailedLinks();
+
+                        // Update loading message with progress
+                        showLoading(`AI extraction in progress... ${completedTasks}/${totalTasks} completed`);
+
+                        // Check if all tasks are complete (including failed ones)
+                        if (completedTasks >= totalTasks) {
+                            console.log(`AI extraction finished. Completed: ${completedTasks}/${totalTasks} in ${checkAttempts} API calls`);
+                            hideLoading();
+
+                            // *** CHANGED: Update file list to show failed documents, no success message ***
+                            updateFileList();
+                            updateButtonStates();
+
+                            setTimeout(() => {
+                                resolve();
+                            }, 100);
+                            return;
+                        }
+
+                        // Check if we've exceeded max attempts
+                        if (checkAttempts >= maxAttempts) {
+                            console.warn(`AI extraction timed out after ${checkAttempts} attempts`);
+                            hideLoading();
+
+                            // *** CHANGED: Mark remaining tasks as failed due to timeout ***
+                            extractedData.forEach(item => {
+                                if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id && !item.data.auto_tags_ready) {
+                                    const errorMsg = 'AI processing timed out';
+
+                                    // Find the corresponding file in uploadedFiles and mark as failed
+                                    const fileIndex = uploadedFiles.findIndex(f => f.name === item.filename);
+                                    if (fileIndex >= 0) {
+                                        uploadedFiles[fileIndex].status = FILE_STATUS.ERROR;
+                                        uploadedFiles[fileIndex].error = errorMsg;
+                                        uploadedFiles[fileIndex].errorTimestamp = new Date().toISOString();
+                                    }
+
+                                    // Mark the extracted data item as failed
+                                    item.status = FILE_STATUS.ERROR;
+                                    item.error = errorMsg;
+                                }
+                            });
+
+                            updateFileList();
+                            updateButtonStates();
+                            resolve();
+                            return;
+                        }
+
+                        // Schedule next check
+                        scheduleNextCheck();
+                    } else {
+                        // *** CHANGED: Handle API call failures by marking as failed ***
+                        console.error('API call failed:', result);
+                        if (checkAttempts >= maxAttempts) {
+                            hideLoading();
+
+                            // Mark all pending AI tasks as failed
+                            extractedData.forEach(item => {
+                                if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id && !item.data.auto_tags_ready) {
+                                    const errorMsg = 'AI processing failed to complete';
+
+                                    // Find the corresponding file in uploadedFiles and mark as failed
+                                    const fileIndex = uploadedFiles.findIndex(f => f.name === item.filename);
+                                    if (fileIndex >= 0) {
+                                        uploadedFiles[fileIndex].status = FILE_STATUS.ERROR;
+                                        uploadedFiles[fileIndex].error = errorMsg;
+                                        uploadedFiles[fileIndex].errorTimestamp = new Date().toISOString();
+                                    }
+
+                                    // Mark the extracted data item as failed
+                                    item.status = FILE_STATUS.ERROR;
+                                    item.error = errorMsg;
+                                }
+                            });
+
+                            updateFileList();
+                            updateButtonStates();
+                            resolve();
+                            return;
+                        }
+                        // Retry on API failure
+                        scheduleNextCheck();
+                    }
+                } catch (error) {
+                    console.error('Error checking task status:', error);
+                    if (checkAttempts >= maxAttempts) {
                         hideLoading();
 
-                        // Small delay to ensure UI updates
-                        setTimeout(() => {
-                            resolve();
-                        }, 100);
+                        // *** CHANGED: Mark all pending AI tasks as failed ***
+                        extractedData.forEach(item => {
+                            if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id && !item.data.auto_tags_ready) {
+                                const errorMsg = 'AI processing encountered an error';
 
+                                // Find the corresponding file in uploadedFiles and mark as failed
+                                const fileIndex = uploadedFiles.findIndex(f => f.name === item.filename);
+                                if (fileIndex >= 0) {
+                                    uploadedFiles[fileIndex].status = FILE_STATUS.ERROR;
+                                    uploadedFiles[fileIndex].error = errorMsg;
+                                    uploadedFiles[fileIndex].errorTimestamp = new Date().toISOString();
+                                }
+
+                                // Mark the extracted data item as failed
+                                item.status = FILE_STATUS.ERROR;
+                                item.error = errorMsg;
+                            }
+                        });
+
+                        updateFileList();
+                        updateButtonStates();
+                        resolve();
                         return;
                     }
+                    // Retry on error
+                    scheduleNextCheck();
                 }
-            } catch (error) {
-                console.error('Error checking task status:', error);
-                if (checkAttempts >= maxAttempts) {
-                    clearInterval(checkInterval);
-                    hideLoading();
-                    resolve();
-                }
-            }
-        }, 3000); // Check every 3 seconds
+            }, interval);
+        };
 
-        // Timeout after 10 minutes
+        // Start the checking process
+        scheduleNextCheck();
+
+        // Overall safety timeout (2 hours)
         setTimeout(() => {
-            clearInterval(checkInterval);
-            console.warn('AI extraction timed out after 10 minutes');
+            console.warn('AI extraction timed out after 2 hours');
             hideLoading();
+
+            // *** CHANGED: Mark all pending AI tasks as failed due to overall timeout ***
+            extractedData.forEach(item => {
+                if (item.status === FILE_STATUS.SUCCESS && item.data && item.data.auto_tag_task_id && !item.data.auto_tags_ready) {
+                    const errorMsg = 'AI processing timed out after 2 hours';
+
+                    // Find the corresponding file in uploadedFiles and mark as failed
+                    const fileIndex = uploadedFiles.findIndex(f => f.name === item.filename);
+                    if (fileIndex >= 0) {
+                        uploadedFiles[fileIndex].status = FILE_STATUS.ERROR;
+                        uploadedFiles[fileIndex].error = errorMsg;
+                        uploadedFiles[fileIndex].errorTimestamp = new Date().toISOString();
+                    }
+
+                    // Mark the extracted data item as failed
+                    item.status = FILE_STATUS.ERROR;
+                    item.error = errorMsg;
+                }
+            });
+
+            updateFileList();
+            updateButtonStates();
             resolve();
-        }, 600000);
+        }, 7200000); // 2 hours
     });
 }
 
@@ -3191,6 +3727,233 @@ function renderNestedSubdocuments(subdocs, parentPath, baseParentIndex) {
     }).join('');
 }
 
+function addTagFromDropdownByPath(path, tagValue) {
+    if (!tagValue) return;
+
+    const subdoc = getSubdocByPath(path);
+    if (subdoc) {
+        if (!subdoc.manual_tags) {
+            subdoc.manual_tags = [];
+        }
+
+        if (!subdoc.manual_tags.includes(tagValue)) {
+            subdoc.manual_tags.push(tagValue);
+            subdoc.hasUnsavedChanges = true;
+
+            // Add the tag element directly
+            const container = document.getElementById(`manualTagsContainer_${path}`);
+            if (container) {
+                const newTag = document.createElement('span');
+                newTag.className = 'tag manual';
+                newTag.innerHTML = `
+                    ${tagValue}
+                    <span class="remove-tag" onclick="removeTagByPath('${path}', '${tagValue.replace(/'/g, "\\'")}', 'manual')">×</span>
+                `;
+                const wrapper = container.querySelector('.tag-input-wrapper');
+                container.insertBefore(newTag, wrapper);
+            }
+
+            // Reset save button state
+            const saveBtn = document.getElementById(`saveBtn_${path}`);
+            if (saveBtn && saveBtn.classList.contains('saved')) {
+                saveBtn.textContent = 'Save changes';
+                saveBtn.classList.remove('saved');
+            }
+        }
+
+        // Reset dropdown
+        const dropdown = document.getElementById(`tagDropdown_${path}`);
+        if (dropdown) {
+            dropdown.value = '';
+        }
+    }
+}
+
+function toggleTagDropdown(identifier) {
+    const dropdown = document.getElementById(`tagDropdownList_${identifier}`);
+    if (!dropdown) return;
+
+    const isVisible = dropdown.classList.contains('show');
+
+    // Close all other tag dropdowns
+    document.querySelectorAll('.dropdown-list').forEach(dl => {
+        dl.classList.remove('show');
+    });
+
+    // Toggle current dropdown
+    if (!isVisible) {
+        dropdown.classList.add('show');
+        // Show all options initially
+        filterTagDropdown(identifier, '');
+    }
+}
+
+function filterTagDropdown(identifier, searchTerm) {
+    const dropdown = document.getElementById(`tagDropdownList_${identifier}`);
+    if (!dropdown) return;
+
+    const filteredTags = existingManualTags.filter(tag =>
+        tag.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    if (filteredTags.length > 0) {
+        dropdown.innerHTML = filteredTags.map(tag => {
+            const escapedTag = tag.replace(/'/g, "\\'");
+            return `
+                <div class="dropdown-option" onclick="selectTagFromDropdown('${identifier}', '${escapedTag}')">
+                    ${tag}
+                </div>
+            `;
+        }).join('');
+    } else if (searchTerm.trim()) {
+        dropdown.innerHTML = `
+            <div class="dropdown-option no-results">
+                No matching tags found
+            </div>
+        `;
+    } else {
+        dropdown.innerHTML = existingManualTags.map(tag => {
+            const escapedTag = tag.replace(/'/g, "\\'");
+            return `
+                <div class="dropdown-option" onclick="selectTagFromDropdown('${identifier}', '${escapedTag}')">
+                    ${tag}
+                </div>
+            `;
+        }).join('');
+    }
+
+    dropdown.classList.add('show');
+}
+
+function selectTagFromDropdown(identifier, tagValue) {
+    // Close dropdown
+    const dropdown = document.getElementById(`tagDropdownList_${identifier}`);
+    const searchInput = dropdown.previousElementSibling;
+
+    dropdown.classList.remove('show');
+    searchInput.value = '';
+
+    // Determine if this is a path (subdocument) or index (main item)
+    if (identifier.includes('_')) {
+        // This is a path for subdocument
+        addTagFromDropdownByPath(identifier, tagValue);
+    } else {
+        // This is an index for main item
+        addTagFromDropdown(parseInt(identifier), tagValue);
+    }
+}
+
+function handleTagDropdownKeypress(event, identifier) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        const searchTerm = event.target.value.trim();
+        const dropdown = document.getElementById(`tagDropdownList_${identifier}`);
+
+        if (searchTerm) {
+            // Check if exact match exists
+            const exactMatch = existingManualTags.find(tag =>
+                tag.toLowerCase() === searchTerm.toLowerCase()
+            );
+
+            if (exactMatch) {
+                selectTagFromDropdown(identifier, exactMatch);
+            } else {
+                // Add as new tag
+                dropdown.classList.remove('show');
+                event.target.value = '';
+
+                // Determine if this is a path (subdocument) or index (main item)
+                if (identifier.includes('_')) {
+                    // This is a path for subdocument
+                    const subdoc = getSubdocByPath(identifier);
+                    if (subdoc && searchTerm) {
+                        if (!subdoc.manual_tags) {
+                            subdoc.manual_tags = [];
+                        }
+
+                        if (!subdoc.manual_tags.includes(searchTerm)) {
+                            subdoc.manual_tags.push(searchTerm);
+                            subdoc.hasUnsavedChanges = true;
+
+                            // Add the tag element directly
+                            const container = document.getElementById(`manualTagsContainer_${identifier}`);
+                            if (container) {
+                                const newTag = document.createElement('span');
+                                newTag.className = 'tag manual';
+                                newTag.innerHTML = `
+                                    ${searchTerm}
+                                    <span class="remove-tag" onclick="removeTagByPath('${identifier}', '${searchTerm.replace(/'/g, "\\'")}', 'manual')">×</span>
+                                `;
+                                const wrapper = container.querySelector('.tag-input-wrapper');
+                                container.insertBefore(newTag, wrapper);
+                            }
+
+                            // Reset save button state
+                            const saveBtn = document.getElementById(`saveBtn_${identifier}`);
+                            if (saveBtn && saveBtn.classList.contains('saved')) {
+                                saveBtn.textContent = 'Save changes';
+                                saveBtn.classList.remove('saved');
+                            }
+                        }
+                    }
+                } else {
+                    // This is an index for main item
+                    const itemIndex = parseInt(identifier);
+                    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+                    const actualIndex = (currentPage - 1) * itemsPerPage;
+                    const item = validItems[actualIndex];
+
+                    if (item && searchTerm) {
+                        if (!item.data.manual_tags) {
+                            item.data.manual_tags = [];
+                        }
+
+                        if (!item.data.manual_tags.includes(searchTerm)) {
+                            item.data.manual_tags.push(searchTerm);
+                            item.hasUnsavedChanges = true;
+
+                            // Add the tag element directly instead of re-rendering
+                            const container = document.getElementById(`manualTagsContainer_${identifier}`);
+                            if (container) {
+                                const escapedTag = searchTerm.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                                const newTag = document.createElement('span');
+                                newTag.className = 'tag manual';
+                                newTag.innerHTML = `
+                                    ${searchTerm}
+                                    <span class="remove-tag" onclick="removeTag(${itemIndex}, '${escapedTag}', 'manual')">×</span>
+                                `;
+                                const wrapper = container.querySelector('.tag-input-wrapper');
+                                container.insertBefore(newTag, wrapper);
+                            }
+
+                            // Reset save button state
+                            const saveBtn = document.getElementById(`saveBtn_${identifier}`);
+                            if (saveBtn && saveBtn.classList.contains('saved')) {
+                                saveBtn.textContent = 'Save changes';
+                                saveBtn.classList.remove('saved');
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    } else if (event.key === 'Escape') {
+        // Close dropdown on escape
+        const dropdown = document.getElementById(`tagDropdownList_${identifier}`);
+        dropdown.classList.remove('show');
+        event.target.blur();
+    }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    if (!event.target.closest('.custom-dropdown')) {
+        document.querySelectorAll('.dropdown-list').forEach(dl => {
+            dl.classList.remove('show');
+        });
+    }
+});
+
 function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
     const subdocId = `subdoc_${path}`;
 
@@ -3200,7 +3963,6 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
     if (!subdoc.key_values) subdoc.key_values = [];
     if (!subdoc.manual_tags) subdoc.manual_tags = [];
     if (!subdoc.auto_tags) {
-        // Process tags from subdoc.tags if available
         if (subdoc.tags && Array.isArray(subdoc.tags)) {
             subdoc.auto_tags = subdoc.tags.map(tag => {
                 if (typeof tag === 'object' && tag.text) {
@@ -3222,7 +3984,8 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
     // Generate tags HTML
     const manualTagsHtml = subdoc.manual_tags.map(tag => {
         let tagText = typeof tag === 'object' && tag.text ? tag.text : tag;
-        const escapedTagText = tagText.replace(/'/g, "\\'");
+        const escapedTagText = tagText.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
         return `
             <span class="tag manual">
                 ${tagText}
@@ -3238,7 +4001,8 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
         } else if (typeof tag === 'string') {
             tagText = tag;
         }
-        const escapedTagText = tagText.replace(/'/g, "\\'");
+        const escapedTagText = tagText.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
         return `
             <span class="tag auto">
                 ${tagText}
@@ -3247,34 +4011,15 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
         `;
     }).join('');
 
-    // Generate key-values HTML
-    const kvHtml = subdoc.key_values.map((kv, kvIndex) => `
-        <div class="key-value-pair structured-content-kv">
-            <input type="text"
-                   class="kv-key-input"
-                   value="${kv.key || ''}"
-                   id="key_${path}_${kvIndex}"
-                   placeholder="Key"
-                   onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'key', this.value)">
-            <textarea class="key-value-textarea"
-                      id="value_${path}_${kvIndex}"
-                      placeholder="Value"
-                      onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'value', this.value)"
-                      oninput="autoResizeTextarea(this)">${kv.value || ''}</textarea>
-            <button class="remove-kv-btn" onclick="removeKeyValueByPath('${path}', ${kvIndex})">Remove</button>
-        </div>
-    `).join('');
+    // Generate key-values HTML with document type dropdown support
+    const kvHtml = updateKeyValueHtmlWithDocTypeDropdown(subdoc, path);
 
-    // Generate images HTML with fixed base64 display
+    // Generate images HTML
     let imagesHtml = '';
     if (subdoc.images && subdoc.images.length > 0) {
         const imagesGridHtml = subdoc.images.map((img, imgIndex) => {
-            // Ensure base64 has proper data URI prefix
             let imgSrc = img.base64;
-
-            // Check if it's already a data URI
             if (imgSrc && !imgSrc.startsWith('data:')) {
-                // Check if it's raw base64
                 if (imgSrc.match(/^[A-Za-z0-9+/]+=*$/)) {
                     imgSrc = `data:image/${img.format || 'png'};base64,${imgSrc}`;
                 }
@@ -3384,8 +4129,23 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
                             <h4>Manual Tags</h4>
                             <div class="tags-input" id="manualTagsContainer_${path}">
                                 ${manualTagsHtml}
-                                <input type="text" class="tag-input-field" placeholder="Add manual tag..."
-                                    onkeypress="handleTagInputByPath(event, '${path}', 'manual')">
+                                <div class="tag-input-wrapper">
+                                    <div class="custom-dropdown" id="customTagDropdown_${path}">
+                                        <input type="text"
+                                               class="dropdown-search"
+                                               placeholder="Search or add tag..."
+                                               onclick="toggleTagDropdown('${path}')"
+                                               oninput="filterTagDropdown('${path}', this.value)"
+                                               onkeypress="handleTagDropdownKeypress(event, '${path}')">
+                                        <div class="dropdown-list" id="tagDropdownList_${path}">
+                                            ${existingManualTags.map(tag => `
+                                                <div class="dropdown-option" onclick="selectTagFromDropdown('${path}', '${tag.replace(/'/g, "\\'")}')">
+                                                    ${tag}
+                                                </div>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div class="tags-subsection">
@@ -4300,7 +5060,8 @@ function renderSubdocumentItem(subdoc, parentIndex, subdocIndex) {
     // Generate tags HTML
     const manualTagsHtml = subdoc.manual_tags.map(tag => {
         let tagText = typeof tag === 'object' && tag.text ? tag.text : tag;
-        const escapedTagText = tagText.replace(/'/g, "\\'");
+        const escapedTagText = tagText.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
         return `
             <span class="tag manual">
                 ${tagText}
@@ -4319,7 +5080,8 @@ function renderSubdocumentItem(subdoc, parentIndex, subdocIndex) {
         }
 
         // Escape single quotes in tag text for onclick handler
-        const escapedTagText = tagText.replace(/'/g, "\\'");
+        const escapedTagText = tagText.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
 
         return `
             <span class="tag auto">
@@ -4424,6 +5186,56 @@ function resizeAllTextareas() {
     });
 }
 
+function addTagFromDropdown(itemIndex, tagValue, isSubdoc = false, subdocIndex = null) {
+    if (!tagValue) return;
+
+    const validItems = extractedData.filter(item => item.status === FILE_STATUS.SUCCESS);
+    const actualIndex = (currentPage - 1) * itemsPerPage;
+    const item = validItems[actualIndex];
+
+    if (item) {
+        let targetData;
+        if (isSubdoc && item.data.subdocument && item.data.subdocument[subdocIndex]) {
+            targetData = item.data.subdocument[subdocIndex];
+        } else if (!isSubdoc && item.data) {
+            targetData = item.data;
+        }
+
+        if (targetData) {
+            if (!targetData.manual_tags) {
+                targetData.manual_tags = [];
+            }
+
+            // Check if tag already exists
+            if (!targetData.manual_tags.includes(tagValue)) {
+                targetData.manual_tags.push(tagValue);
+                targetData.hasUnsavedChanges = true;
+
+                // Reset save button state
+                const saveBtn = isSubdoc ?
+                    document.getElementById(`saveBtn_subdoc_${itemIndex}_${subdocIndex}`) :
+                    document.getElementById(`saveBtn_${itemIndex}`);
+                if (saveBtn && saveBtn.classList.contains('saved')) {
+                    saveBtn.textContent = 'Save current changes';
+                    saveBtn.classList.remove('saved');
+                }
+
+                renderExtractedData();
+            }
+
+            // Reset dropdown
+            const dropdown = document.getElementById(
+                isSubdoc ?
+                `tagDropdown_subdoc_${itemIndex}_${subdocIndex}` :
+                `tagDropdown_${itemIndex}`
+            );
+            if (dropdown) {
+                dropdown.value = '';
+            }
+        }
+    }
+}
+
 // Render extracted data for review
 function renderExtractedData() {
     const container = document.getElementById('extractedDataContainer');
@@ -4453,14 +5265,17 @@ function renderExtractedData() {
         const saveButtonClass = isSaved ? 'btn btn-save saved' : 'btn btn-save';
 
         // Auto-tags content
-        const autoTagsContent = (item.data.auto_tags || []).map(tag => `
-            <span class="tag auto">
-                ${tag}
-                <span class="remove-tag" onclick="removeTag(${displayIndex}, '${tag}', 'auto')">×</span>
-            </span>
-        `).join('');
+        const autoTagsContent = (item.data.auto_tags || []).map(tag => {
+            const escapedTag = tag.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            return `
+                <span class="tag auto">
+                    ${tag}
+                    <span class="remove-tag" onclick="removeTag(${displayIndex}, '${escapedTag}', 'auto')">×</span>
+                </span>
+            `;
+        }).join('');
 
-        // Subdocuments content
+        // Subdocuments content with informational message
         let subdocsHtml = '';
         if (item.data.subdocument && item.data.subdocument.length > 0) {
             subdocsHtml = `
@@ -4468,6 +5283,16 @@ function renderExtractedData() {
                     <div class="subdocuments-header">
                         Subdocuments
                         <span class="subdocument-count">(${item.data.subdocument.length})</span>
+                    </div>
+                    <div class="subdocument-info-message">
+                        <div style="background-color: #e3f2fd; border: 1px solid #90caf9; border-radius: 6px; padding: 15px; margin: 15px 0; color: #1565c0;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1565c0" stroke-width="2" style="vertical-align: middle; margin-right: 8px;">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <line x1="12" y1="16" x2="12" y2="12"></line>
+                                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                            </svg>
+                            <strong>Information:</strong> These linked files will also be uploaded. Please review them for correctness of metadata.
+                        </div>
                     </div>
                     ${renderNestedSubdocuments(item.data.subdocument, String(displayIndex), displayIndex)}
                 </div>
@@ -4498,6 +5323,9 @@ function renderExtractedData() {
                 </div>
             `;
         }
+
+        // Generate key-values HTML with document type dropdown support for main document
+        const keyValuesHtml = updateMainDocumentKeyValueHtml(item, displayIndex);
 
         mediaItem.innerHTML = `
             <div class="media-item-header">
@@ -4531,14 +5359,33 @@ function renderExtractedData() {
                     <div class="tags-subsection">
                         <h4>Manual Tags</h4>
                         <div class="tags-input" id="manualTagsContainer_${displayIndex}">
-                            ${(item.data.manual_tags || []).map(tag => `
-                                <span class="tag manual">
-                                    ${tag}
-                                    <span class="remove-tag" onclick="removeTag(${displayIndex}, '${tag}', 'manual')">×</span>
-                                </span>
-                            `).join('')}
-                            <input type="text" class="tag-input-field" placeholder="Add manual tag..."
-                                onkeypress="handleTagInput(event, ${displayIndex}, 'manual')">
+                            ${(item.data.manual_tags || []).map(tag => {
+                                const escapedTag = tag.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+                                return `
+                                    <span class="tag manual">
+                                        ${tag}
+                                        <span class="remove-tag" onclick="removeTag(${displayIndex}, '${escapedTag}', 'manual')">×</span>
+                                    </span>
+                                `;
+                            }).join('')}
+
+                            <div class="tag-input-wrapper">
+                                <div class="custom-dropdown" id="customTagDropdown_${displayIndex}">
+                                    <input type="text"
+                                           class="dropdown-search"
+                                           placeholder="Search or add tag..."
+                                           onclick="toggleTagDropdown('${displayIndex}')"
+                                           oninput="filterTagDropdown('${displayIndex}', this.value)"
+                                           onkeypress="handleTagDropdownKeypress(event, '${displayIndex}')">
+                                    <div class="dropdown-list" id="tagDropdownList_${displayIndex}">
+                                        ${existingManualTags.map(tag => `
+                                            <div class="dropdown-option" onclick="selectTagFromDropdown('${displayIndex}', '${tag.replace(/'/g, "\\'")}')">
+                                                ${tag}
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="tags-subsection">
@@ -4553,22 +5400,7 @@ function renderExtractedData() {
             <div class="field-group">
                 <label>Sections</label>
                 <div class="key-values" id="kvContainer_${displayIndex}">
-                    ${(item.data.key_values || []).map((kv, kvIndex) => `
-                        <div class="key-value-pair structured-content-kv">
-                            <input type="text"
-                                   class="kv-key-input"
-                                   value="${kv.key || ''}"
-                                   id="key_${displayIndex}_${kvIndex}"
-                                   placeholder="Key"
-                                   onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'key', this.value)">
-                            <textarea class="key-value-textarea"
-                                      id="value_${displayIndex}_${kvIndex}"
-                                      placeholder="Value"
-                                      onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'value', this.value)"
-                                      oninput="autoResizeTextarea(this)">${kv.value || ''}</textarea>
-                            <button class="remove-kv-btn" onclick="removeKeyValue(${displayIndex}, ${kvIndex})">Remove</button>
-                        </div>
-                    `).join('')}
+                    ${keyValuesHtml}
                 </div>
                 <button class="add-kv-btn" onclick="addKeyValue(${displayIndex})">Add Field</button>
             </div>

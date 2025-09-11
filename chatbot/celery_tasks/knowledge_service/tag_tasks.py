@@ -24,6 +24,9 @@ def get_auto_extracted_data(file_path, company_bot_id=None, file_extension=None,
             file_extension=file_extension,
             other_data=other_data
         )
+        if extracted_data and other_data and other_data.get('original_filename'):
+            extracted_data['original_filename'] = other_data['original_filename']
+
     except Exception as e:
         # log the error if needed
         print(f"[AutoTags] Error processing {file_path}: {e}")

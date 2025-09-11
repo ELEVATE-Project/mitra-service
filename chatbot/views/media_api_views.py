@@ -10,9 +10,8 @@ from chatbot.serializer.media_serializer import (
 )
 from chatbot.filter.media_filters import MediaFilter
 from django.contrib.postgres.search import TrigramSimilarity
-from django.db.models import Count, Q, Value, FloatField, OuterRef, Subquery, CharField, Exists
-from django.db.models.functions import Greatest, Coalesce
-from django.db.models.functions import Lower
+from django.db.models import Count, Q, Value, FloatField, OuterRef, Subquery, TextField
+from django.db.models.functions import Greatest, Coalesce, Lower
 
 
 class MediaViewSet(viewsets.ReadOnlyModelViewSet):
@@ -25,6 +24,7 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = Media.objects.all()
 
+        # Fix: make sure subquery resolves to TextField
         org_subquery = KeyValue.objects.filter(
             media=OuterRef('pk'),
             key='ORGANIZATION'
@@ -33,7 +33,7 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = queryset.annotate(
             organization=Coalesce(
                 Subquery(org_subquery),
-                Value('', output_field=CharField())
+                Value('', output_field=TextField())
             )
         )
 
@@ -47,13 +47,9 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
 
         if self.action == 'list':
             queryset = self._apply_content_exclusion_filter(queryset)
-
-        if self.action == 'list':
-            queryset = queryset.select_related('company_bot', 'parent')
-            queryset = queryset.prefetch_related('tags')
+            queryset = queryset.select_related('company_bot', 'parent').prefetch_related('tags')
         elif self.action == 'retrieve':
-            queryset = queryset.select_related('company_bot', 'parent')
-            queryset = queryset.prefetch_related(
+            queryset = queryset.select_related('company_bot', 'parent').prefetch_related(
                 'tags', 'key_values', 'images', 'subdocuments'
             )
 
@@ -63,16 +59,16 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
         """
         Exclude media where document_type is "Source Document"
         """
-        source_document_media = KeyValue.objects.filter(
-            key__iregex=r'^document[_\s]type$',
+        source_document_media = KeyValue.objects.annotate(
+            norm_key=Lower('key', output_field=TextField())
+        ).filter(
+            norm_key__iregex=r'^document[_\s]type$',
             value__icontains='source document'
         ).values_list('media_id', flat=True)
 
         return queryset.exclude(id__in=source_document_media)
 
     def _apply_trigram_search(self, queryset, search_text, similarity_threshold):
-        from chatbot.models import KeyValue, Tag
-
         tag_similarity_subquery = Tag.objects.filter(
             medias=OuterRef('pk')
         ).annotate(
@@ -140,7 +136,6 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
             for key, value in kv_pairs.items():
                 filter_conditions &= Q(key_values__key__iexact=key, key_values__value__icontains=value)
 
-        # Use subqueries for organization filter to avoid JOIN issues
         if organization:
             organizations_list = [org.strip() for org in organization.split(",") if org.strip()]
             if organizations_list:
@@ -150,12 +145,9 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                         key__iexact='ORGANIZATION',
                         value__icontains=org
                     )
-
-                # Get media IDs that match organization criteria
                 matching_org_media_ids = KeyValue.objects.filter(org_conditions).values_list('media_id', flat=True)
                 filter_conditions &= Q(id__in=matching_org_media_ids)
 
-        # Use subqueries for resource type filter to avoid JOIN issues
         if resource_type:
             resource_types_list = [rt.strip() for rt in resource_type.split(",") if rt.strip()]
             if resource_types_list:
@@ -165,8 +157,6 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                         key__iregex=r'^document[_\s]type$',
                         value__icontains=rt
                     )
-
-                # Get media IDs that match resource type criteria
                 matching_rt_media_ids = KeyValue.objects.filter(rt_conditions).values_list('media_id', flat=True)
                 filter_conditions &= Q(id__in=matching_rt_media_ids)
 
