@@ -1635,9 +1635,13 @@ class BatchMediaSaveView(View):
                     media.tags.set(all_tags)
 
                 # Key-value pairs - ensure organization is saved
-                org_found = False
-
                 for kv in item_data.get('key_values', []):
+                    key = kv.get('key', '').strip() if kv.get('key') else ''
+                    value = kv.get('value', '').strip() if kv.get('value') else ''
+                    # Skip if both key and value are blank
+                    if not key and not value:
+                        continue
+
                     KeyValue.objects.create(
                         media=media,
                         key=kv['key'],
@@ -2031,8 +2035,15 @@ class BatchMediaSaveView(View):
                 if all_tags:
                     subdoc_media.tags.set(all_tags)
 
-            # Key-value pairs - handle organization specially
+            # Key-value pairs - handle organization specially, skip if both key and value are blank
             for kv in subdoc_data.get('key_values', []):
+                key = kv.get('key', '').strip() if kv.get('key') else ''
+                value = kv.get('value', '').strip() if kv.get('value') else ''
+
+                # Skip if both key and value are blank
+                if not key and not value:
+                    continue
+
                 if kv['key'] == 'DOCUMENT TYPE':
                     doc_type_value = kv['value']
                     if isinstance(doc_type_value, dict):

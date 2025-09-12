@@ -241,7 +241,9 @@ class MediaDetailSerializer(serializers.ModelSerializer):
         filtered_kvs = obj.key_values.exclude(
             Q(key__in=['TITLE', 'ORGANIZATION', 'KEY ENTITIES', 'GEOGRAPHY',
                        'ORIGINAL_FILE_URL', 'FOUND_IN_DOCUMENT', 'DOCUMENT TYPE REASON']) |
-            Q(key__iregex=r'^document[_\s]type$')
+            Q(key__iregex=r'^document[_\s]type$') |
+            Q(key__isnull=True, value__isnull=True) |
+            Q(key='', value='')
         )
 
         # Serialize filtered key-value pairs
@@ -261,6 +263,9 @@ class MediaDetailSerializer(serializers.ModelSerializer):
             metadata_kvs = obj.key_values.filter(
                 Q(key__in=['TITLE', 'KEY ENTITIES', 'GEOGRAPHY']) |  # Removed ORGANIZATION from here
                 Q(key__iregex=r'^document[_\s]type$')
+            ).exclude(
+                Q(key__isnull=True, value__isnull=True) |
+                Q(key='', value='')
             )
             serialized_data = KeyValueSerializer(metadata_kvs, many=True).data
 
