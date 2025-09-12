@@ -235,7 +235,6 @@ class MediaDetailSerializer(serializers.ModelSerializer):
             organization_url = obj.organization.url if obj.organization and obj.organization.url else "#"
             basic_info.append(
             f'<div><b>Organization:</b> <a class="text-blue-600 underline underline-offset-2" href="{organization_url}" target="_blank" rel="noopener noreferrer">{organization_name}</a></div>')
-            # Add geography to basic info
         if geography and geography.value:
             basic_info.append(f"<div><b>Geography:</b> {geography.value}</div>")
 
@@ -255,6 +254,18 @@ class MediaDetailSerializer(serializers.ModelSerializer):
 
         # Serialize filtered key-value pairs
         key_values_data = KeyValueSerializer(filtered_kvs, many=True).data
+
+        # Add Tags for Classification if tags exist and document type is not template
+        if obj.tags.exists():
+            document_type_value = document_type.value.lower() if document_type and document_type.value else ''
+            if document_type_value != 'template':
+                tag_names = list(obj.tags.values_list("name", flat=True))
+                tags_classification_kv = {
+                    'id': None,
+                    'key': 'Tags for Classification',
+                    'value': tag_names
+                }
+                key_values_data.append(tags_classification_kv)
 
         # Add basic information as the first key-value pair if any basic info exists
         if basic_info:
@@ -284,6 +295,20 @@ class MediaDetailSerializer(serializers.ModelSerializer):
                     'value': organization_name
                 }
                 serialized_data.append(org_kv)
+
+            # Add Tags for Classification in fallback case (if document type is not template)
+            if obj.tags.exists():
+                # Re-check document type for this case
+                fallback_document_type = obj.key_values.filter(key__iregex=r'^document[_\s]type$').first()
+                document_type_value = fallback_document_type.value.lower() if fallback_document_type and fallback_document_type.value else ''
+                if document_type_value != 'template':
+                    tag_names = list(obj.tags.values_list("name", flat=True))
+                    tags_classification_kv = {
+                        'id': None,
+                        'key': 'Tags for Classification',
+                        'value': tag_names
+                    }
+                    serialized_data.append(tags_classification_kv)
 
             return serialized_data
 
