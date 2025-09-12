@@ -36,7 +36,7 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
     actions = ['export_selected']
     list_export = ('csv', 'xlsx')
     inlines = [KeyValueInline, MediaImagesInline]
-    raw_id_fields = ('company_bot', 'parent')
+    raw_id_fields = ('company_bot', 'parent', 'organization')
 
     def file_name(self, obj):
         return obj.name
@@ -87,10 +87,10 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
             is_moderator = False
 
         if is_moderator:
-            base_fields = ('name', 'file', 'url', 'description', 'extracted_text', 'media_type')
+            base_fields = ('name', 'organization', 'file', 'url', 'description', 'extracted_text', 'media_type')
         else:
             base_fields = (
-                'name', 'file', 'url', 'description', 'extracted_text', 'priority', 'media_type',
+                'name', 'organization', 'file', 'url', 'description', 'extracted_text', 'priority', 'media_type',
                 'company_bot', 'parent'
             )
 

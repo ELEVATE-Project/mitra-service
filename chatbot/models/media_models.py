@@ -96,6 +96,7 @@ class Media(models.Model):
         return f"{S3_BASE_URL}{self.file.name}"
 
     name = models.CharField(max_length=1000)
+    organization = models.ForeignKey(Company, on_delete=models.CASCADE, null=True, blank=True)
     url = models.URLField(max_length=1000, null=True, blank=True)
     priority = models.CharField(max_length=50, default=PriorityChoices.P1, choices=PriorityChoices.choices)
     media_type = models.CharField(max_length=100, choices=FileTypeChoices.choices, default=FileTypeChoices.TXT)

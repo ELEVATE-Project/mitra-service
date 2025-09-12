@@ -10,7 +10,7 @@ from chatbot.serializer.media_serializer import (
 )
 from chatbot.filter.media_filters import MediaFilter
 from django.contrib.postgres.search import TrigramSimilarity
-from django.db.models import Count, Q, Value, FloatField, OuterRef, Subquery, TextField
+from django.db.models import Count, Q, Value, FloatField, OuterRef, Subquery, TextField, CharField
 from django.db.models.functions import Greatest, Coalesce, Lower
 
 
@@ -24,16 +24,10 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         queryset = Media.objects.all()
 
-        # Fix: make sure subquery resolves to TextField
-        org_subquery = KeyValue.objects.filter(
-            media=OuterRef('pk'),
-            key='ORGANIZATION'
-        ).values('value')[:1]
-
         queryset = queryset.annotate(
-            organization=Coalesce(
-                Subquery(org_subquery),
-                Value('', output_field=TextField())
+            organization_name=Coalesce(
+                'organization__name',
+                Value('', output_field=CharField())
             )
         )
 
@@ -47,9 +41,9 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
 
         if self.action == 'list':
             queryset = self._apply_content_exclusion_filter(queryset)
-            queryset = queryset.select_related('company_bot', 'parent').prefetch_related('tags')
+            queryset = queryset.select_related('organization', 'parent').prefetch_related('tags')
         elif self.action == 'retrieve':
-            queryset = queryset.select_related('company_bot', 'parent').prefetch_related(
+            queryset = queryset.select_related('organization', 'parent').prefetch_related(
                 'tags', 'key_values', 'images', 'subdocuments'
             )
 
@@ -141,12 +135,8 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
             if organizations_list:
                 org_conditions = Q()
                 for org in organizations_list:
-                    org_conditions |= Q(
-                        key__iexact='ORGANIZATION',
-                        value__icontains=org
-                    )
-                matching_org_media_ids = KeyValue.objects.filter(org_conditions).values_list('media_id', flat=True)
-                filter_conditions &= Q(id__in=matching_org_media_ids)
+                    org_conditions |= Q(organization__name__icontains=org)
+                filter_conditions &= org_conditions
 
         if resource_type:
             resource_types_list = [rt.strip() for rt in resource_type.split(",") if rt.strip()]
@@ -154,11 +144,10 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                 rt_conditions = Q()
                 for rt in resource_types_list:
                     rt_conditions |= Q(
-                        key__iregex=r'^document[_\s]type$',
-                        value__icontains=rt
+                        key_values__key__iregex=r'^document[_\s]type$',
+                        key_values__value__icontains=rt
                     )
-                matching_rt_media_ids = KeyValue.objects.filter(rt_conditions).values_list('media_id', flat=True)
-                filter_conditions &= Q(id__in=matching_rt_media_ids)
+                filter_conditions &= rt_conditions
 
         if media_type:
             requested_types = [mt.strip() for mt in media_type.split(",") if mt.strip()]
@@ -220,16 +209,18 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
 
         queryset = self.filter_queryset(self.get_queryset())
 
+        # Already correct - using direct organization field
         organizations = (
-            KeyValue.objects
-            .filter(key='ORGANIZATION', media__in=queryset)
-            .values('value')
+            queryset
+            .exclude(organization__name__isnull=True)
+            .exclude(organization__name='')
+            .values('organization__name')
             .annotate(
-                lower_value=Lower('value')
+                lower_name=Lower('organization__name')
             )
-            .values('lower_value')
+            .values('lower_name')
             .distinct()
-            .values_list('lower_value', flat=True)
+            .values_list('lower_name', flat=True)
         )
         organizations = sorted([org.title() if org else '' for org in organizations])
 
