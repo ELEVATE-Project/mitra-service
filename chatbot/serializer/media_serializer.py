@@ -64,6 +64,7 @@ class MediaListSerializer(serializers.ModelSerializer):
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
     title = serializers.SerializerMethodField()
     organization = serializers.SerializerMethodField()
+    organization_url = serializers.SerializerMethodField()
     document_type = serializers.SerializerMethodField()
     key_entities = serializers.SerializerMethodField()
     file_size = serializers.SerializerMethodField()
@@ -74,7 +75,7 @@ class MediaListSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'priority', 'priority_display',
             'media_type', 'media_type_display', 'created_at', 'updated_at',
             's3_url', 'file', 'tag_names', 'title', 'organization',
-            'document_type', 'key_entities', 'file_size'
+            'document_type', 'key_entities', 'file_size', 'organization_url'
         ]
 
     def get_s3_url(self, obj):
@@ -126,6 +127,12 @@ class MediaListSerializer(serializers.ModelSerializer):
         # Already correct - using direct organization field
         if obj.organization:
             return obj.organization.name
+        return None
+
+    def get_organization_url(self, obj):
+        # New method for organization URL
+        if obj.organization:
+            return obj.organization.url
         return None
 
     def get_document_type(self, obj):

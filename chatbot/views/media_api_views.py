@@ -17,14 +17,20 @@ from django.db.models.functions import Greatest, Coalesce, Lower
 class MediaViewSet(viewsets.ReadOnlyModelViewSet):
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter, filters.SearchFilter]
     filterset_class = MediaFilter
-    ordering_fields = ['id', 'name', 'created_at', 'updated_at', 'priority', 'media_type', 'organization']
+    ordering_fields = ['id', 'name', 'created_at', 'updated_at', 'priority', 'media_type', 'organization', 'title']
     ordering = ['-created_at']
     search_fields = ['name', 'description', 'extracted_text']
 
     def get_queryset(self):
         queryset = Media.objects.all()
 
+        title_subquery = KeyValue.objects.filter(
+            media=OuterRef('pk'),
+            key__iexact='TITLE'
+        ).values('value')[:1]
+
         queryset = queryset.annotate(
+            title=Subquery(title_subquery, output_field=CharField()),
             organization_name=Coalesce(
                 'organization__name',
                 Value('', output_field=CharField())
@@ -214,15 +220,14 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
             queryset
             .exclude(organization__name__isnull=True)
             .exclude(organization__name='')
-            .values('organization__name')
             .annotate(
                 lower_name=Lower('organization__name')
             )
-            .values('lower_name')
-            .distinct()
             .values_list('lower_name', flat=True)
+            .distinct()
         )
-        organizations = sorted([org.title() if org else '' for org in organizations])
+        # Convert to set to remove any remaining duplicates, then sort
+        organizations = sorted(list(set([org.title() for org in organizations if org])))
 
         media_types = []
         media_type_counts = dict(
