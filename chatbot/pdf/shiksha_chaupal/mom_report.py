@@ -57,7 +57,7 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
     date_html = f"<p><span>{translation_json.get('dateHeader', 'Date of discussion')}:</span> {date_of_discussion}</p>" if date_of_discussion else ""
 
     # Build participants line
-    participants_html = f"<p><span>{translation_json.get('memberHeader', 'Participants')}:</span> {participants_info}</p>" if participants_info else ""
+    participants_html = f"<p>{participants_info}</p>" if participants_info else ""
 
     if hasattr(story, 'story'):
         story_obj = story.story
@@ -173,33 +173,46 @@ def process_steps(raw_data, fallback_text, char_limit, first_char_limit=None, he
 
 
 def format_participants_count(participants_count, translation_json):
-    """Format participants count showing Men, Women, Children only if they have values"""
+    """Format participants count showing only non-zero values and include total."""
     if not participants_count or not isinstance(participants_count, dict):
         return None
 
     participant_parts = []
+    total = 0
 
-    # Get labels from translation
+    # Get labels from translation_json (fallbacks if not present)
     women_label = translation_json.get('womenLabel', 'Women')
     men_label = translation_json.get('menLabel', 'Men')
     children_label = translation_json.get('childrenLabel', 'Children')
 
-    # Add women count if exists and not empty
-    women_count = participants_count.get('women', '').strip()
-    if women_count:
-        participant_parts.append(f"{women_label}{women_count}")
+    def safe_int(value):
+        try:
+            return int(value)
+        except (ValueError, TypeError):
+            return 0
 
-    # Add men count if exists and not empty
-    men_count = participants_count.get('men', '').strip()
-    if men_count:
-        participant_parts.append(f"{men_label}{men_count}")
+    # Women
+    women_count = safe_int(participants_count.get('women'))
+    if women_count > 0:
+        participant_parts.append(f"{women_count}-{women_label.lower()}")
+        total += women_count
 
-    # Add children count if exists and not empty
-    children_count = participants_count.get('children', '').strip()
-    if children_count:
-        participant_parts.append(f"{children_label}{children_count}")
+    # Men
+    men_count = safe_int(participants_count.get('men'))
+    if men_count > 0:
+        participant_parts.append(f"{men_count}-{men_label.lower()}")
+        total += men_count
 
-    return ', '.join(participant_parts) if participant_parts else None
+    # Children
+    children_count = safe_int(participants_count.get('children'))
+    if children_count > 0:
+        participant_parts.append(f"{children_count}-{children_label.lower()}")
+        total += children_count
+
+    if not participant_parts or total <= 0:
+        return None
+
+    return f"Total Participants: {total} [{', '.join(participant_parts)}]"
 
 
 def get_user_details(story, profile, voice_provider, translation_json):
