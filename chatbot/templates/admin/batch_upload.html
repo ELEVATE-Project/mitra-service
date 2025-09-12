@@ -1766,6 +1766,56 @@
             min-height: 100px;
         }
     }
+    .kv-key-input[readonly],
+    .key-value-textarea[readonly] {
+        background-color: #f8f9fa !important;
+        border-color: #e9ecef !important;
+        cursor: not-allowed !important;
+        color: #6c757d !important;
+    }
+
+    .kv-key-input[readonly]:focus,
+    .key-value-textarea[readonly]:focus {
+        box-shadow: none !important;
+        border-color: #e9ecef !important;
+    }
+    /* Editable field indicator */
+    .editable-field {
+        position: relative;
+    }
+
+    .editable-field::after {
+        content: "✏️";
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        font-size: 14px;
+        pointer-events: none;
+        z-index: 2;
+        background: rgba(255, 255, 255, 0.8);
+        border-radius: 3px;
+        padding: 2px;
+        opacity: 0.7;
+    }
+
+    .editable-field:focus::after {
+        opacity: 0.3;
+    }
+
+    /* Ensure container positioning for absolute placement */
+    .field-group {
+        position: relative;
+    }
+
+    .key-value-pair {
+        position: relative;
+    }
+
+    /* Adjust padding-right for editable textareas to prevent text overlap */
+    .editable-field textarea,
+    .editable-field input[type="text"]:not([readonly]) {
+        padding-right: 35px !important;
+    }
 </style>
 {% endblock %}
 
@@ -1809,6 +1859,41 @@
     <!-- Step 1: Upload -->
     <div id="step1" class="content-section active">
         <h2>Upload Files</h2>
+
+        <!-- Organization Selection -->
+        <div class="field-group" style="margin-bottom: 30px; padding: 20px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e0e0e0;">
+            <label for="organizationSelect" style="font-size: 16px; font-weight: 600; margin-bottom: 10px; display: block;">
+                Select Organization *
+            </label>
+            <select id="organizationSelect" required style="padding: 12px; font-size: 14px; border: 1px solid #ddd; border-radius: 4px; width: 300px;">
+                <option value="">-- Select Organization --</option>
+                {% for company in companies %}
+                    <option value="{{ company.slug }}"
+                            data-name="{{ company.name }}"
+                            {% if user_company and company.id == user_company.id %}selected{% endif %}>
+                        {{ company.name }}
+                    </option>
+                {% endfor %}
+            </select>
+            <div style="margin-top: 8px; font-size: 12px; color: #666;">
+                This organization will be used as metadata for all uploaded files.
+            </div>
+        </div>
+
+        <!-- Organization Confirmation Modal -->
+        <div id="orgConfirmModal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+            <div style="background-color: white; margin: 15% auto; padding: 30px; border-radius: 8px; width: 436px; text-align: center;">
+                <h3 style="margin-bottom: 20px; color: #ff9800;">Organization Selection</h3>
+                <p style="margin-bottom: 20px; line-height: 1.5;">
+                    You've selected a different organization than your profile organization.
+                    Are you sure you want to proceed with "<span id="selectedOrgName" style="font-weight: bold;"></span>"?
+                </p>
+                <div style="display: flex; gap: 15px; justify-content: center;">
+                    <button onclick="confirmOrgSelection(true)" class="btn btn-primary">Yes, Use Selected</button>
+                    <button onclick="confirmOrgSelection(false)" class="btn btn-secondary">No, Use Default</button>
+                </div>
+            </div>
+        </div>
 
         <!-- Hidden Company Bot Selection -->
         <div class="company-bot-selection">
@@ -2024,6 +2109,9 @@ function getCookie(name) {
 
 const existingManualTags = JSON.parse(document.getElementById('existing-manual-tags').textContent);
 const masterDocumentTypes = JSON.parse(document.getElementById('master-document-types').textContent);
+let selectedOrganization = null;
+let userDefaultCompany = null;
+let pendingOrgSelection = null;
 
 const csrftoken = getCookie('csrftoken');
 let expandedSubdocumentPaths = new Set();
@@ -2073,6 +2161,13 @@ const BOT_PROFILE_ID = 1;
     {% endwith %}
 {% endif %}
 
+{% if user_company %}
+userDefaultCompany = {
+    slug: "{{ user_company.slug|escapejs }}",
+    name: "{{ user_company.name|escapejs }}"
+};
+{% endif %}
+
 // File status constants
 const FILE_STATUS = {
     PENDING: 'pending',
@@ -2082,8 +2177,74 @@ const FILE_STATUS = {
     SKIPPED: 'skipped'
 };
 
+function initializeOrganizationSelect() {
+    const orgSelect = document.getElementById('organizationSelect');
+
+    // Set default selection
+    if (userDefaultCompany) {
+        orgSelect.value = userDefaultCompany.slug;
+        selectedOrganization = userDefaultCompany;
+    }
+
+    // Add change event listener
+    orgSelect.addEventListener('change', function() {
+        const selectedSlug = this.value;
+        const selectedName = this.options[this.selectedIndex].getAttribute('data-name');
+
+        if (!selectedSlug) {
+            selectedOrganization = null;
+            return;
+        }
+
+        const newSelection = {
+            slug: selectedSlug,
+            name: selectedName
+        };
+
+        // Check if different from user's default company
+        if (userDefaultCompany && selectedSlug !== userDefaultCompany.slug) {
+            // Show confirmation modal
+            pendingOrgSelection = newSelection;
+            document.getElementById('selectedOrgName').textContent = selectedName;
+            document.getElementById('orgConfirmModal').style.display = 'block';
+        } else {
+            selectedOrganization = newSelection;
+        }
+    });
+}
+
+function confirmOrgSelection(confirmed) {
+    const modal = document.getElementById('orgConfirmModal');
+    const orgSelect = document.getElementById('organizationSelect');
+
+    if (confirmed && pendingOrgSelection) {
+        selectedOrganization = pendingOrgSelection;
+    } else {
+        // Revert to default
+        if (userDefaultCompany) {
+            orgSelect.value = userDefaultCompany.slug;
+            selectedOrganization = userDefaultCompany;
+        } else {
+            orgSelect.value = '';
+            selectedOrganization = null;
+        }
+    }
+
+    modal.style.display = 'none';
+    pendingOrgSelection = null;
+}
+
+function validateOrganizationSelection() {
+    if (!selectedOrganization) {
+        showStatus('Please select an organization before uploading files', 'error');
+        return false;
+    }
+    return true;
+}
+
 // Initialize with default bot selected
 window.addEventListener('DOMContentLoaded', function() {
+    initializeOrganizationSelect();
     resetToDefaultBot();
 });
 
@@ -2179,12 +2340,15 @@ fileInput.addEventListener('change', (e) => {
 
 async function handleFiles(files) {
     // Check if bot is selected
+    if (!validateOrganizationSelection()) {
+        return;
+    }
+
     const companyBotId = document.getElementById('companyBotSelect').value;
     if (!companyBotId) {
         showStatus('Please select a company bot before uploading files', 'error');
         return;
     }
-
     // Generate session ID if not exists
     if (!sessionId) {
         sessionId = 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
@@ -2488,6 +2652,9 @@ function handleDocumentTypeDropdownKeypress(event, path, kvIndex) {
 function updateKeyValueHtmlWithDocTypeDropdown(subdoc, path) {
     return subdoc.key_values.map((kv, kvIndex) => {
         const isDocType = isDocumentTypeField(kv.key);
+        const isOrganization = kv.key === 'ORGANIZATION';
+        const isAiExtracted = kv.source === 'ai' || isOrganization || isDocType;
+        const isUserAdded = kv.source === 'user';
 
         // Ensure kv.value is a string before processing
         const kvValue = kv.value || '';
@@ -2497,7 +2664,30 @@ function updateKeyValueHtmlWithDocTypeDropdown(subdoc, path) {
         const targetItem = { data: subdoc };
         const textareaClasses = getTextareaClasses(safeKvValue, kv.key, targetItem);
 
+        // Key input styling and properties
+        const keyInputProps = isAiExtracted ?
+            'readonly style="background-color: #f8f9fa; cursor: not-allowed;"' :
+            'class="editable-field" onchange="saveKeyValueByPath(\'' + path + '\', ' + kvIndex + ', \'key\', this.value)"';
+
+        // Remove button visibility
+        const removeButtonStyle = isUserAdded ? '' : 'style="display: none;"';
+
         if (isDocType) {
+            return `
+                <div class="key-value-pair structured-content-kv">
+                    <input type="text"
+                       class="kv-key-input ${isUserAdded ? 'editable-field' : ''}"
+                       value="${kv.key || ''}"
+                       id="key_${path}_${kvIndex}"
+                       placeholder="Key"
+                       ${keyInputProps}>
+                    <div class="kv-value-container">
+                        ${createDocumentTypeDropdown(path, kvIndex, safeKvValue)}
+                    </div>
+                    <button class="remove-kv-btn" onclick="removeKeyValueByPath('${path}', ${kvIndex})" ${removeButtonStyle}>Remove</button>
+                </div>
+            `;
+        } else if (isOrganization) {
             return `
                 <div class="key-value-pair structured-content-kv">
                     <input type="text"
@@ -2505,11 +2695,14 @@ function updateKeyValueHtmlWithDocTypeDropdown(subdoc, path) {
                            value="${kv.key || ''}"
                            id="key_${path}_${kvIndex}"
                            placeholder="Key"
-                           onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'key', this.value)">
-                    <div class="kv-value-container">
-                        ${createDocumentTypeDropdown(path, kvIndex, safeKvValue)}
-                    </div>
-                    <button class="remove-kv-btn" onclick="removeKeyValueByPath('${path}', ${kvIndex})">Remove</button>
+                           readonly
+                           style="background-color: #f8f9fa; cursor: not-allowed;">
+                    <textarea class="${textareaClasses}"
+                              id="value_${path}_${kvIndex}"
+                              readonly
+                              style="background-color: #f8f9fa; cursor: not-allowed; resize: none;"
+                              title="Organization is inherited from parent document selection">${safeKvValue}</textarea>
+                    <button class="remove-kv-btn" onclick="removeKeyValueByPath('${path}', ${kvIndex})" style="display: none;">Remove</button>
                 </div>
             `;
         } else {
@@ -2522,17 +2715,18 @@ function updateKeyValueHtmlWithDocTypeDropdown(subdoc, path) {
             return `
                 <div class="key-value-pair structured-content-kv">
                     <input type="text"
-                           class="kv-key-input"
-                           value="${kv.key || ''}"
-                           id="key_${path}_${kvIndex}"
-                           placeholder="Key"
-                           onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'key', this.value)">
-                    <textarea class="${textareaClasses}"
-                              id="value_${path}_${kvIndex}"
-                              placeholder="${placeholder}"
-                              onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'value', this.value); autoResizeTextarea(this)"
-                              oninput="autoResizeTextarea(this)">${safeKvValue}</textarea>
-                    <button class="remove-kv-btn" onclick="removeKeyValueByPath('${path}', ${kvIndex})">Remove</button>
+                       class="kv-key-input ${isUserAdded ? 'editable-field' : ''}"
+                       value="${kv.key || ''}"
+                       id="key_${path}_${kvIndex}"
+                       placeholder="Key"
+                       ${keyInputProps}>
+                    <textarea class="${textareaClasses} editable-field"
+                          id="value_${path}_${kvIndex}"
+                          placeholder="${placeholder}"
+                          onchange="saveKeyValueByPath('${path}', ${kvIndex}, 'value', this.value); autoResizeTextarea(this)"
+                          oninput="autoResizeTextarea(this)">${safeKvValue}
+                    </textarea>
+                    <button class="remove-kv-btn" onclick="removeKeyValueByPath('${path}', ${kvIndex})" ${removeButtonStyle}>Remove</button>
                 </div>
             `;
         }
@@ -2574,6 +2768,9 @@ function getTextareaClasses(content, key = null, item = null) {
 function updateMainDocumentKeyValueHtml(item, displayIndex) {
     return (item.data.key_values || []).map((kv, kvIndex) => {
         const isDocType = isDocumentTypeField(kv.key);
+        const isOrganization = kv.key === 'ORGANIZATION';
+        const isAiExtracted = kv.source === 'ai' || isOrganization || isDocType; // AI-extracted or special fields
+        const isUserAdded = kv.source === 'user';
 
         // Ensure kv.value is a string before processing
         const kvValue = kv.value || '';
@@ -2582,7 +2779,31 @@ function updateMainDocumentKeyValueHtml(item, displayIndex) {
         // Enhanced textarea classes that consider structured content
         const textareaClasses = getTextareaClasses(safeKvValue, kv.key, item);
 
+        // Key input styling and properties
+        // Key input styling and properties
+        const keyInputProps = isAiExtracted ?
+            'readonly style="background-color: #f8f9fa; cursor: not-allowed;"' :
+            'class="editable-field" onchange="saveKeyValueData(' + displayIndex + ', ' + kvIndex + ', \'key\', this.value)"';
+
+        // Remove button visibility
+        const removeButtonStyle = isUserAdded ? '' : 'style="display: none;"';
+
         if (isDocType) {
+            return `
+                <div class="key-value-pair structured-content-kv">
+                    <input type="text"
+                        class="kv-key-input ${isUserAdded ? 'editable-field' : ''}"
+                       value="${kv.key || ''}"
+                       id="key_${displayIndex}_${kvIndex}"
+                       placeholder="Key"
+                       ${keyInputProps}>
+                    <div class="kv-value-container">
+                        ${createDocumentTypeDropdown(displayIndex, kvIndex, safeKvValue)}
+                    </div>
+                    <button class="remove-kv-btn" onclick="removeKeyValue(${displayIndex}, ${kvIndex})" ${removeButtonStyle}>Remove</button>
+                </div>
+            `;
+        } else if (isOrganization) {
             return `
                 <div class="key-value-pair structured-content-kv">
                     <input type="text"
@@ -2590,11 +2811,14 @@ function updateMainDocumentKeyValueHtml(item, displayIndex) {
                            value="${kv.key || ''}"
                            id="key_${displayIndex}_${kvIndex}"
                            placeholder="Key"
-                           onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'key', this.value)">
-                    <div class="kv-value-container">
-                        ${createDocumentTypeDropdown(displayIndex, kvIndex, safeKvValue)}
-                    </div>
-                    <button class="remove-kv-btn" onclick="removeKeyValue(${displayIndex}, ${kvIndex})">Remove</button>
+                           readonly
+                           style="background-color: #f8f9fa; cursor: not-allowed;">
+                    <textarea class="${textareaClasses}"
+                              id="value_${displayIndex}_${kvIndex}"
+                              readonly
+                              style="background-color: #f8f9fa; cursor: not-allowed; resize: none;"
+                              title="Organization is set from the dropdown selection above">${safeKvValue}</textarea>
+                    <button class="remove-kv-btn" onclick="removeKeyValue(${displayIndex}, ${kvIndex})" style="display: none;">Remove</button>
                 </div>
             `;
         } else {
@@ -2607,17 +2831,18 @@ function updateMainDocumentKeyValueHtml(item, displayIndex) {
             return `
                 <div class="key-value-pair structured-content-kv">
                     <input type="text"
-                           class="kv-key-input"
-                           value="${kv.key || ''}"
-                           id="key_${displayIndex}_${kvIndex}"
-                           placeholder="Key"
-                           onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'key', this.value)">
-                    <textarea class="${textareaClasses}"
-                              id="value_${displayIndex}_${kvIndex}"
-                              placeholder="${placeholder}"
-                              onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'value', this.value)"
-                              oninput="autoResizeTextarea(this)">${safeKvValue}</textarea>
-                    <button class="remove-kv-btn" onclick="removeKeyValue(${displayIndex}, ${kvIndex})">Remove</button>
+                        class="kv-key-input ${isUserAdded ? 'editable-field' : ''}"
+                       value="${kv.key || ''}"
+                       id="key_${displayIndex}_${kvIndex}"
+                       placeholder="Key"
+                       ${keyInputProps}>
+                    <textarea class="${textareaClasses} editable-field"
+                      id="value_${displayIndex}_${kvIndex}"
+                      placeholder="${placeholder}"
+                      onchange="saveKeyValueData(${displayIndex}, ${kvIndex}, 'value', this.value)"
+                      oninput="autoResizeTextarea(this)">${safeKvValue}
+                    </textarea>
+                    <button class="remove-kv-btn" onclick="removeKeyValue(${displayIndex}, ${kvIndex})" ${removeButtonStyle}>Remove</button>
                 </div>
             `;
         }
@@ -3404,16 +3629,18 @@ async function extractDataFromFiles(files) {
                     uploadedFiles[fileIndex].fileKey = uploadResult.file_key;
 
                     // Ensure organization is set
-                    if (!uploadResult.organization) {
-                        uploadResult.organization = userCompanyName || '';
-                    }
+                    uploadResult.organization = selectedOrganization ? selectedOrganization.name : (userCompanyName || '');
                     if (!uploadResult.key_values) {
                         uploadResult.key_values = [];
                     }
-                    if (!uploadResult.key_values.some(kv => kv.key === 'ORGANIZATION')) {
-                        uploadResult.key_values.push({
+                    const orgKvIndex = uploadResult.key_values.findIndex(kv => kv.key === 'ORGANIZATION');
+                    if (orgKvIndex >= 0) {
+                        uploadResult.key_values[orgKvIndex].value = uploadResult.organization;
+                    } else {
+                        uploadResult.key_values.unshift({
                             key: 'ORGANIZATION',
-                            value: uploadResult.organization
+                            value: uploadResult.organization,
+                            source: 'ai'
                         });
                     }
 
@@ -3473,8 +3700,9 @@ async function extractDataFromFiles(files) {
 }
 
 function ensureSubdocumentOrganization(subdoc, parentOrg) {
-    // ALWAYS use parent organization, ignore subdoc's extracted organization
-    subdoc.organization = parentOrg || userCompanyName || '';
+    // Use selected organization instead of parent's extracted organization
+    const orgToUse = selectedOrganization ? selectedOrganization.name : (parentOrg || userCompanyName || '');
+    subdoc.organization = orgToUse;
 
     // Update or add organization in key-values
     if (!subdoc.key_values) {
@@ -3485,7 +3713,7 @@ function ensureSubdocumentOrganization(subdoc, parentOrg) {
     let orgKvIndex = subdoc.key_values.findIndex(kv => kv.key === 'ORGANIZATION');
 
     if (orgKvIndex >= 0) {
-        // Update existing organization to parent's value
+        // Update existing organization to selected value
         subdoc.key_values[orgKvIndex].value = subdoc.organization;
     } else {
         // Add organization key-value
@@ -3498,7 +3726,7 @@ function ensureSubdocumentOrganization(subdoc, parentOrg) {
     // Process nested subdocuments recursively
     if (subdoc.subdocument && Array.isArray(subdoc.subdocument)) {
         subdoc.subdocument.forEach(nestedSub => {
-            // Pass the same parent organization down
+            // Pass the same selected organization down
             ensureSubdocumentOrganization(nestedSub, subdoc.organization);
         });
     }
@@ -3556,42 +3784,52 @@ async function waitForAllTasksToComplete(taskIds) {
 
                                         if (enhanced.description) item.data.description = enhanced.description;
                                         if (enhanced.extracted_text) item.data.extracted_text = enhanced.extracted_text;
-
-                                        // Handle organization for main document
-                                        if (enhanced.organization !== undefined) {
-                                            item.data.organization = enhanced.organization || userCompanyName || '';
-                                        }
-
                                         // Merge enhanced key-values with existing ones
+                                        // Merge enhanced key-values with existing ones, but preserve user-selected organization
                                         if (enhanced.enhanced_key_values && enhanced.enhanced_key_values.length > 0) {
                                             const basicKVs = item.data.key_values.filter(kv =>
                                                 kv.key === 'FILE TYPE' || kv.key === 'FILE SIZE'
                                             );
 
-                                            let hasOrg = enhanced.enhanced_key_values.some(kv => kv.key === 'ORGANIZATION');
-                                            if (!hasOrg) {
-                                                enhanced.enhanced_key_values.unshift({
-                                                    key: 'ORGANIZATION',
-                                                    value: enhanced.organization || userCompanyName || ''
-                                                });
-                                            }
+                                            // Filter out AI-extracted organization from enhanced key-values
+                                            const enhancedKVsWithoutOrg = enhanced.enhanced_key_values.filter(kv => kv.key !== 'ORGANIZATION');
 
-                                            item.data.key_values = [...basicKVs, ...enhanced.enhanced_key_values];
+                                            // Keep user-selected organization
+                                            const userSelectedOrg = selectedOrganization ? selectedOrganization.name : (userCompanyName || '');
+                                            enhancedKVsWithoutOrg.unshift({
+                                                key: 'ORGANIZATION',
+                                                value: userSelectedOrg,
+                                                source: 'ai'
+                                            });
+
+                                            item.data.key_values = [...basicKVs, ...enhancedKVsWithoutOrg];
                                         } else {
+                                            // Ensure organization reflects user selection
+                                            const userSelectedOrg = selectedOrganization ? selectedOrganization.name : (userCompanyName || '');
                                             if (!item.data.key_values.some(kv => kv.key === 'ORGANIZATION')) {
                                                 item.data.key_values.push({
                                                     key: 'ORGANIZATION',
-                                                    value: item.data.organization || userCompanyName || ''
+                                                    value: userSelectedOrg,
+                                                    source: 'ai'
                                                 });
+                                            } else {
+                                                // Update existing organization key-value to user selection
+                                                const orgKvIndex = item.data.key_values.findIndex(kv => kv.key === 'ORGANIZATION');
+                                                if (orgKvIndex >= 0) {
+                                                    item.data.key_values[orgKvIndex].value = userSelectedOrg;
+                                                }
                                             }
                                         }
 
-                                        // Update subdocuments if available - FORCE parent organization
+                                        // Ensure main organization field reflects user selection, not AI extraction
+                                        item.data.organization = selectedOrganization ? selectedOrganization.name : (userCompanyName || '');
+
+                                       // Update subdocuments if available - FORCE user-selected organization
                                         if (enhanced.subdocument && Array.isArray(enhanced.subdocument)) {
-                                            const parentOrg = item.data.organization || userCompanyName || '';
+                                            const userSelectedOrg = selectedOrganization ? selectedOrganization.name : (userCompanyName || '');
 
                                             enhanced.subdocument.forEach(subdoc => {
-                                                ensureSubdocumentOrganization(subdoc, parentOrg);
+                                                ensureSubdocumentOrganization(subdoc, userSelectedOrg);
                                             });
                                             item.data.subdocument = enhanced.subdocument;
                                         }
@@ -4213,8 +4451,9 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
 
                 <div class="field-group">
                     <label>Summary</label>
-                    <textarea id="description_${path}"
-                              onchange="saveFieldByPath('${path}', 'description', this.value)">${subdoc.description || ''}</textarea>
+                    <textarea class="editable-field" id="description_${path}"
+                       onchange="saveFieldByPath('${path}', 'description', this.value)">${subdoc.description || ''}
+                    </textarea>
                 </div>
 
                 <div class="field-group">
@@ -4529,7 +4768,8 @@ function addKeyValueByPath(path) {
         subdoc.key_values.push({
             key: '',
             value: '',
-            original_type: 'string'  // Default to string type
+            source: 'user', // Mark as user-added
+            original_type: 'string'
         });
         subdoc.hasUnsavedChanges = true;
 
@@ -5741,7 +5981,7 @@ function renderExtractedData() {
 
             <div class="field-group">
                 <label>Summary</label>
-                <textarea id="description_${displayIndex}" onchange="saveFieldData(${displayIndex}, 'description', this.value)">${item.data.description || ''}</textarea>
+                <textarea class="editable-field" id="description_${displayIndex}" onchange="saveFieldData(${displayIndex}, 'description', this.value)">${item.data.description || ''}</textarea>
             </div>
 
             <div class="field-group">
@@ -5954,7 +6194,8 @@ function addKeyValue(itemIndex, isSubdoc = false, subdocIndex = null) {
             targetData.key_values.push({
                 key: '',
                 value: '',
-                original_type: 'string'  // Default to string type
+                source: 'user', // Mark as user-added
+                original_type: 'string'
             });
             targetData.hasUnsavedChanges = true;
             renderExtractedData();
@@ -5966,19 +6207,17 @@ function addKeyValue(itemIndex, isSubdoc = false, subdocIndex = null) {
 function collectFormData() {
     extractedData.forEach((item) => {
         if (item && item.status === FILE_STATUS.SUCCESS && item.data) {
-            // Get the current organization value for this item (may have been edited by user)
-            let parentOrg = item.data.organization || userCompanyName || '';
+            // Get the selected organization for saving to Media model FK
+            const selectedOrgSlug = selectedOrganization ? selectedOrganization.slug : null;
+            const selectedOrgName = selectedOrganization ? selectedOrganization.name : (userCompanyName || '');
 
-            // Update organization in parent's key-values if edited
-            const orgKvIndex = item.data.key_values.findIndex(kv => kv.key === 'ORGANIZATION');
-            if (orgKvIndex >= 0) {
-                // Get the potentially edited value from the parent
-                parentOrg = item.data.key_values[orgKvIndex].value || parentOrg;
-                item.data.organization = parentOrg;
-            }
+            // Store organization info for Media model FK
+            item.data.organization_slug = selectedOrgSlug;
+            item.data.organization = selectedOrgName;
 
-            // Process key-values with structured content handling
+            // Remove ORGANIZATION from key_values as it will be saved to Media FK
             if (item.data.key_values) {
+                item.data.key_values = item.data.key_values.filter(kv => kv.key !== 'ORGANIZATION');
                 item.data.key_values = processStructuredContentForSave(item.data.key_values, item);
             }
 
@@ -5988,45 +6227,32 @@ function collectFormData() {
             }
             item.data.tags = [...(item.data.manual_tags || []), ...(item.data.auto_tags || [])];
 
-            // Process subdocuments recursively - FORCE parent organization
-            function processSubdocs(subdocs, parentOrgValue) {
+            // Process subdocuments recursively
+            function processSubdocs(subdocs, parentOrgSlug, parentOrgName) {
                 if (subdocs && Array.isArray(subdocs)) {
                     subdocs.forEach(subdoc => {
-                        // Force parent's organization value
-                        subdoc.organization = parentOrgValue;
+                        // Set organization info for subdocument
+                        subdoc.organization_slug = parentOrgSlug;
+                        subdoc.organization = parentOrgName;
 
-                        // Process subdocument key-values with structured content handling
+                        // Process subdocument key-values and remove ORGANIZATION
                         if (subdoc.key_values) {
+                            subdoc.key_values = subdoc.key_values.filter(kv => kv.key !== 'ORGANIZATION');
                             subdoc.key_values = processStructuredContentForSave(subdoc.key_values, { data: subdoc });
-                        }
-
-                        // Update organization in subdoc's key-values
-                        if (!subdoc.key_values) {
-                            subdoc.key_values = [];
-                        }
-
-                        const subdocOrgKvIndex = subdoc.key_values.findIndex(kv => kv.key === 'ORGANIZATION');
-                        if (subdocOrgKvIndex >= 0) {
-                            subdoc.key_values[subdocOrgKvIndex].value = parentOrgValue;
-                        } else {
-                            subdoc.key_values.unshift({
-                                key: 'ORGANIZATION',
-                                value: parentOrgValue
-                            });
                         }
 
                         // Combine tags for subdocuments
                         subdoc.tags = [...(subdoc.manual_tags || []), ...(subdoc.auto_tags || [])];
 
-                        // Process nested subdocuments with same parent org
+                        // Process nested subdocuments
                         if (subdoc.subdocument) {
-                            processSubdocs(subdoc.subdocument, parentOrgValue);
+                            processSubdocs(subdoc.subdocument, parentOrgSlug, parentOrgName);
                         }
                     });
                 }
             }
 
-            processSubdocs(item.data.subdocument, parentOrg);
+            processSubdocs(item.data.subdocument, selectedOrgSlug, selectedOrgName);
         }
     });
 }

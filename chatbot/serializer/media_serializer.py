@@ -123,7 +123,10 @@ class MediaListSerializer(serializers.ModelSerializer):
         return self.get_metadata_field(obj, 'TITLE')
 
     def get_organization(self, obj):
-        return self.get_metadata_field(obj, 'ORGANIZATION')
+        # Already correct - using direct organization field
+        if obj.organization:
+            return obj.organization.name
+        return None
 
     def get_document_type(self, obj):
         # Handle both DOCUMENT_TYPE and DOCUMENT TYPE variants
@@ -147,7 +150,7 @@ class MediaDetailSerializer(serializers.ModelSerializer):
     children = serializers.SerializerMethodField()
     media_type_display = serializers.CharField(source='get_media_type_display', read_only=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
-    company_bot_name = serializers.CharField(source='company_bot.name', read_only=True)
+    # company_bot_name = serializers.CharField(source='company_bot.name', read_only=True)
     title = serializers.SerializerMethodField()
     organization = serializers.SerializerMethodField()
     document_type = serializers.SerializerMethodField()
@@ -160,7 +163,7 @@ class MediaDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'name', 'description', 'priority', 'priority_display',
             'media_type', 'media_type_display', 'extracted_text',
-            'file', 'url', 'company_bot', 'company_bot_name',
+            'file', 'url', 'company_bot',
             'parent', 'parent_info', 'created_at', 'updated_at',
             's3_url', 'tags', 'title', 'organization', 'document_type',
             'key_entities', 'key_values', 'images', 'children',
@@ -208,7 +211,10 @@ class MediaDetailSerializer(serializers.ModelSerializer):
 
         # Get basic information fields
         title = obj.key_values.filter(key__iexact='TITLE').first()
-        organization = obj.key_values.filter(key__iexact='ORGANIZATION').first()
+        organization_name = None
+        if obj.organization:
+            organization_name = obj.organization.name
+
         geography = obj.key_values.filter(key__iexact='GEOGRAPHY').first()
         # Handle both DOCUMENT_TYPE and DOCUMENT TYPE variants
         document_type = obj.key_values.filter(key__iregex=r'^document[_\s]type$').first()
@@ -217,12 +223,12 @@ class MediaDetailSerializer(serializers.ModelSerializer):
         if title and title.value:
             basic_info.append(f"<div><b>Title:</b> {title.value}</div>")
 
-        # Add organization with link to basic info
-        if organization and organization.value:
+        # Add organization with link to basic info (from direct organization FK)
+        if organization_name:
+            organization_url = obj.organization.url if obj.organization and obj.organization.url else "#"
             basic_info.append(
-                f'<div><b>Organization:</b> <a class="text-blue-600 underline underline-offset-2" href="https://www.google.com" target="_blank" rel="noopener noreferrer">{organization.value}</a></div>')
-
-        # Add geography to basic info
+            f'<div><b>Organization:</b> <a class="text-blue-600 underline underline-offset-2" href="{organization_url}" target="_blank" rel="noopener noreferrer">{organization_name}</a></div>')
+            # Add geography to basic info
         if geography and geography.value:
             basic_info.append(f"<div><b>Geography:</b> {geography.value}</div>")
 
@@ -230,7 +236,7 @@ class MediaDetailSerializer(serializers.ModelSerializer):
         if document_type and document_type.value:
             basic_info.append(f"<div><b>Document Type:</b> {document_type.value}</div>")
 
-        # Get filtered key-value pairs (excluding basic info fields)
+        # Get filtered key-value pairs (excluding basic info fields and ORGANIZATION since we get it from FK)
         # Use regex to exclude both DOCUMENT_TYPE and DOCUMENT TYPE variants
         filtered_kvs = obj.key_values.exclude(
             Q(key__in=['TITLE', 'ORGANIZATION', 'KEY ENTITIES', 'GEOGRAPHY',
@@ -253,10 +259,21 @@ class MediaDetailSerializer(serializers.ModelSerializer):
         # If no key-value pairs exist after exclusion and no basic info, include the metadata fields
         if not filtered_kvs.exists() and not basic_info:
             metadata_kvs = obj.key_values.filter(
-                Q(key__in=['TITLE', 'ORGANIZATION', 'KEY ENTITIES', 'GEOGRAPHY']) |
+                Q(key__in=['TITLE', 'KEY ENTITIES', 'GEOGRAPHY']) |  # Removed ORGANIZATION from here
                 Q(key__iregex=r'^document[_\s]type$')
             )
-            return KeyValueSerializer(metadata_kvs, many=True).data
+            serialized_data = KeyValueSerializer(metadata_kvs, many=True).data
+
+            # Add organization from direct organization FK if it exists
+            if organization_name:
+                org_kv = {
+                    'id': None,
+                    'key': 'ORGANIZATION',
+                    'value': organization_name
+                }
+                serialized_data.append(org_kv)
+
+            return serialized_data
 
         return key_values_data
 
@@ -281,7 +298,9 @@ class MediaDetailSerializer(serializers.ModelSerializer):
         return self.get_metadata_field(obj, 'TITLE')
 
     def get_organization(self, obj):
-        return self.get_metadata_field(obj, 'ORGANIZATION')
+        if obj.organization:
+            return obj.organization.name
+        return None
 
     def get_document_type(self, obj):
         # Handle both DOCUMENT_TYPE and DOCUMENT TYPE variants

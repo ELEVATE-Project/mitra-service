@@ -9,7 +9,8 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.utils.decorators import method_decorator
 from django.http import JsonResponse
 from django.views import View
-from chatbot.models import Media, Tag, KeyValue, Profile, FileTypeChoices, CompanyBot, TagSourceChoices, TagChoices
+from chatbot.models import Media, Tag, KeyValue, Profile, FileTypeChoices, CompanyBot, TagSourceChoices, TagChoices, \
+    Company, EntityStatus
 from chatbot.models.media_models import PriorityChoices, MediaImage, MediaTypeChoices
 import json
 import tempfile, os
@@ -54,22 +55,24 @@ class BatchMediaUploadView(TemplateView):
             default_bot = default_bot.first()
             context['default_bot_id'] = default_bot.id
 
-        try:
-            # company = None
-            # if self.request.user.is_authenticated:
-            #     try:
-            #         user_profile = Profile.objects.get(email=self.request.user.email)
-            #         company = user_profile.company
-            #     except Profile.DoesNotExist:
-            #         pass
+        # Add companies for organization selection
+        context['companies'] = Company.objects.filter(status=EntityStatus.ACTIVE).order_by('name')
 
+        # Add user's company info
+        user_company = None
+        if self.request.user.is_authenticated:
+            try:
+                user_profile = Profile.objects.get(email=self.request.user.email)
+                user_company = user_profile.company
+                context['user_company'] = user_company
+            except Profile.DoesNotExist:
+                pass
+
+        try:
             existing_tags_query = Tag.objects.filter(
                 source_type=TagSourceChoices.MANUAL,
                 status=TagChoices.APPROVED
             )
-
-            # if company:
-            #     existing_tags_query = existing_tags_query.filter(company=company)
 
             context['existing_manual_tags'] = list(
                 existing_tags_query.values_list('name', flat=True).distinct().order_by('name')
@@ -821,15 +824,15 @@ def build_key_values(data_dict):
     array_fields_metadata = []  # Track which fields were originally arrays
 
     if data_dict.get('title'):
-        key_values.append({'key': 'TITLE', 'value': str(data_dict['title'])})
+        key_values.append({'key': 'TITLE', 'value': str(data_dict['title']), 'source': 'ai'})
 
     organization_value = data_dict.get('organization', '')
-    key_values.append({'key': 'ORGANIZATION', 'value': str(organization_value)})
+    key_values.append({'key': 'ORGANIZATION', 'value': str(organization_value), 'source': 'ai'})
 
     # ADD GEOGRAPHY HANDLING
     geography_value = data_dict.get('geography', '')
     if geography_value:
-        key_values.append({'key': 'GEOGRAPHY', 'value': str(geography_value)})
+        key_values.append({'key': 'GEOGRAPHY', 'value': str(geography_value), 'source': 'ai'})
 
     document_type = data_dict.get('document_type')
     if document_type:
@@ -837,13 +840,13 @@ def build_key_values(data_dict):
             doc_type_value = document_type.get('type', '')
             if doc_type_value:
                 doc_type_value = doc_type_value.title()
-                key_values.append({'key': 'DOCUMENT TYPE', 'value': str(doc_type_value)})
+                key_values.append({'key': 'DOCUMENT TYPE', 'value': str(doc_type_value), 'source': 'ai'})
         else:
             doc_type_value = document_type.title() if document_type else ''
-            key_values.append({'key': 'DOCUMENT TYPE', 'value': str(doc_type_value)})
+            key_values.append({'key': 'DOCUMENT TYPE', 'value': str(doc_type_value), 'source': 'ai'})
 
     if data_dict.get('key_entities') and len(data_dict['key_entities']) > 0:
-        key_values.append({'key': 'KEY ENTITIES', 'value': ', '.join(map(str, data_dict['key_entities']))})
+        key_values.append({'key': 'KEY ENTITIES', 'value': ', '.join(map(str, data_dict['key_entities'])), 'source': 'ai'})
 
     # ENHANCED: Handle structured content with proper array formatting
     if data_dict.get('structured_content') and isinstance(data_dict['structured_content'], dict):
@@ -867,7 +870,8 @@ def build_key_values(data_dict):
                 key_values.append({
                     'key': key_name,
                     'value': formatted_content,
-                    'original_type': 'array'  # Add metadata
+                    'original_type': 'array',
+                    'source': 'ai'  # Mark as AI-extracted
                 })
             else:
                 # Handle text that might already be formatted
@@ -875,7 +879,8 @@ def build_key_values(data_dict):
                 key_values.append({
                     'key': key_name,
                     'value': content_str,
-                    'original_type': 'string'  # Add metadata
+                    'original_type': 'string',
+                    'source': 'ai'  # Mark as AI-extracted
                 })
 
     return key_values, array_fields_metadata
@@ -1415,6 +1420,7 @@ class BatchMediaSaveView(View):
                 priority=parent_media.priority,
                 company_bot_id=company_bot_id,
                 parent=parent_media,
+                organization=parent_media.organization,
             )
 
             # Save the file
@@ -1566,12 +1572,20 @@ class BatchMediaSaveView(View):
 
             # Step 3: Create and save media
             try:
+                organization_instance = None
+                if item_data.get('organization_slug'):
+                    try:
+                        organization_instance = Company.objects.get(slug=item_data['organization_slug'])
+                    except Company.DoesNotExist:
+                        print(f"Warning: Company with slug {item_data['organization_slug']} not found")
+
                 media = Media(
                     name=item_data['name'],
                     media_type=item_data['media_type'],
                     priority=item_data['priority'],
                     description=item_data['description'],
                     company_bot_id=company_bot_id,
+                    organization=organization_instance,
                 )
 
                 if file_content and file_name:
@@ -1621,37 +1635,13 @@ class BatchMediaSaveView(View):
                     media.tags.set(all_tags)
 
                 # Key-value pairs - ensure organization is saved
-                org_value = None
                 org_found = False
 
                 for kv in item_data.get('key_values', []):
-                    if kv['key'] == 'ORGANIZATION':
-                        org_found = True
-                        org_value = kv['value']
-                        # If organization is empty, use company name
-                        if not org_value and company_name:
-                            org_value = company_name
-
-                        org_value = self.clean_text_to_title_case(org_value)
-                        KeyValue.objects.create(
-                            media=media,
-                            key='ORGANIZATION',
-                            value=org_value or ''
-                        )
-                    else:
-                        KeyValue.objects.create(
-                            media=media,
-                            key=kv['key'],
-                            value=kv['value']
-                        )
-
-                # If no organization key-value was found, add company name
-                if not org_found and company_name:
-                    org_value = self.clean_text_to_title_case(company_name)
                     KeyValue.objects.create(
                         media=media,
-                        key='ORGANIZATION',
-                        value=org_value
+                        key=kv['key'],
+                        value=kv['value']
                     )
 
             except Exception as tag_kv_error:
@@ -1978,6 +1968,12 @@ class BatchMediaSaveView(View):
 
             subdoc_org = self.clean_text_to_title_case(subdoc_org)
             print(f"Subdocument organization resolved to: {subdoc_org}")
+            organization_instance = None
+            if subdoc_data.get('organization_slug'):
+                try:
+                    organization_instance = Company.objects.get(slug=subdoc_data['organization_slug'])
+                except Company.DoesNotExist:
+                    print(f"Warning: Company with slug {subdoc_data['organization_slug']} not found")
 
             # Create subdocument media
             subdoc_media = Media(
@@ -1987,6 +1983,7 @@ class BatchMediaSaveView(View):
                 description=subdoc_data.get('description', subdoc_data.get('summary', '')),
                 company_bot_id=company_bot_id,
                 parent=actual_parent,
+                organization=organization_instance,
             )
 
             # Save the file content - use the original filename
@@ -2035,18 +2032,8 @@ class BatchMediaSaveView(View):
                     subdoc_media.tags.set(all_tags)
 
             # Key-value pairs - handle organization specially
-            org_added = False
             for kv in subdoc_data.get('key_values', []):
-                if kv['key'] == 'ORGANIZATION':
-                    org_value = self.clean_text_to_title_case(kv['value'] or subdoc_org or '')
-                    # Use the value from subdoc data, not the user's company
-                    KeyValue.objects.create(
-                        media=subdoc_media,
-                        key='ORGANIZATION',
-                        value=org_value
-                    )
-                    org_added = True
-                elif kv['key'] == 'DOCUMENT TYPE':
+                if kv['key'] == 'DOCUMENT TYPE':
                     doc_type_value = kv['value']
                     if isinstance(doc_type_value, dict):
                         actual_value = doc_type_value.get('type', '')
@@ -2065,15 +2052,6 @@ class BatchMediaSaveView(View):
                         key=kv['key'],
                         value=kv['value']
                     )
-
-            # Add organization if not already added
-            if not org_added:
-                org_value = self.clean_text_to_title_case(subdoc_org or '')
-                KeyValue.objects.create(
-                    media=subdoc_media,
-                    key='ORGANIZATION',
-                    value=org_value
-                )
 
             print(f"Saved {len(subdoc_data.get('key_values', []))} key-values for subdoc: {subdoc_title}")
 
