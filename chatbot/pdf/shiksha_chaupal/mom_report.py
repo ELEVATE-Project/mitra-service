@@ -184,6 +184,7 @@ def format_participants_count(participants_count, translation_json):
             return 0
 
     participant_parts = []
+    print("participants_count: ", participants_count)
     total = safe_int(participants_count.get('total'))
 
     # Get labels from translation_json (fallbacks if not present)
