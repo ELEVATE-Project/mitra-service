@@ -196,21 +196,18 @@ def format_participants_count(participants_count, translation_json):
     women_count = safe_int(participants_count.get('women'))
     if women_count > 0:
         participant_parts.append(f"{women_count}{women_label.lower()}")
-        total += women_count
 
     # Men
     men_count = safe_int(participants_count.get('men'))
     if men_count > 0:
         participant_parts.append(f"{men_count}{men_label.lower()}")
-        total += men_count
 
     # Children
     children_count = safe_int(participants_count.get('children'))
     if children_count > 0:
         participant_parts.append(f"{children_count}{children_label.lower()}")
-        total += children_count
 
-    if not participant_parts or total <= 0:
+    if not participant_parts and total <= 0:
         return None
 
     return f"Total Participants: {total}" if not participant_parts else f"Total Participants: {total} [{', '.join(participant_parts)}]"
