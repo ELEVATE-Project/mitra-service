@@ -1636,7 +1636,7 @@ class BatchMediaSaveView(View):
 
                 # Key-value pairs - ensure organization is saved
                 org_found = False
-
+                print("item_data: ", item_data)
                 for kv in item_data.get('key_values', []):
                     KeyValue.objects.create(
                         media=media,
