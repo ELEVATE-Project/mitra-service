@@ -209,8 +209,8 @@ def format_participants_count(participants_count, translation_json):
 
     if not participant_parts and total <= 0:
         return None
-
-    return f"Total Participants: {total}" if not participant_parts else f"Total Participants: {total} [{', '.join(participant_parts)}]"
+    participants_label=translation_json.get('memberHeader', 'Total Participants')
+    return f"{participants_label}: {total}" if not participant_parts else f"{participants_label}: {total} [{', '.join(participant_parts)}]"
 
 
 def get_user_details(story, profile, voice_provider, translation_json):
