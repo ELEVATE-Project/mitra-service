@@ -177,19 +177,19 @@ def format_participants_count(participants_count, translation_json):
     if not participants_count or not isinstance(participants_count, dict):
         return None
 
-    participant_parts = []
-    total = 0
-
-    # Get labels from translation_json (fallbacks if not present)
-    women_label = translation_json.get('womenLabel', 'Women')
-    men_label = translation_json.get('menLabel', 'Men')
-    children_label = translation_json.get('childrenLabel', 'Children')
-
     def safe_int(value):
         try:
             return int(value)
         except (ValueError, TypeError):
             return 0
+
+    participant_parts = []
+    total = safe_int(participants_count.get('total'))
+
+    # Get labels from translation_json (fallbacks if not present)
+    women_label = translation_json.get('womenLabel', 'Women')
+    men_label = translation_json.get('menLabel', 'Men')
+    children_label = translation_json.get('childrenLabel', 'Children')
 
     # Women
     women_count = safe_int(participants_count.get('women'))
@@ -212,7 +212,7 @@ def format_participants_count(participants_count, translation_json):
     if not participant_parts or total <= 0:
         return None
 
-    return f"Total Participants: {total} [{', '.join(participant_parts)}]"
+    return f"Total Participants: {total}" if not participant_parts else f"Total Participants: {total} [{', '.join(participant_parts)}]"
 
 
 def get_user_details(story, profile, voice_provider, translation_json):
