@@ -82,7 +82,7 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
 
         {challenges_html if challenges_faced not in [None, [], [""]] else ""}
         {solutions_html if solutions_discussed not in [None, [], [""]] else ""}
-        {remarks_html if remarks not in [None, [], [""]] else ""}
+        {remarks_html if remarks not in [None, [], [""], ""] else ""}
         {get_report_images_page_html(story=story_obj)}
     </div>
     """
