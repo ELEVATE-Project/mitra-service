@@ -7,6 +7,39 @@ import ast
 import json
 
 
+class S3UrlMixin:
+    def resolve_s3_url(self, obj):
+        # Get document type (case-insensitive)
+        doc_type = None
+        kv = obj.key_values.filter(key__iregex=r'^document[_\s]type$').first()
+        if kv and kv.value:
+            doc_type = kv.value.lower()
+
+        # Rule 1: Template File
+        if doc_type == "template":
+            linked_file = obj.subdocuments.filter(
+                key_values__key__iregex=r'^document[_\s]type$',
+                key_values__value__icontains="source document"
+            ).first()
+            if linked_file:
+                return linked_file.get_s3_url()
+            return obj.get_s3_url()
+
+        # Rule 2: Non-template file → download directly
+        if doc_type and doc_type != "template":
+            return obj.get_s3_url()
+
+        # Rule 3: AI extracted file (subdocument of template’s linked file)
+        if obj.parent:
+            parent_kv = obj.parent.key_values.filter(key__iregex=r'^document[_\s]type$').first()
+            parent_doc_type = parent_kv.value.lower() if parent_kv and parent_kv.value else None
+            if parent_doc_type in ["template", "source document"]:
+                return obj.get_s3_url()
+
+        # Default fallback
+        return obj.get_s3_url()
+
+
 class KeyValueSerializer(serializers.ModelSerializer):
     value = serializers.SerializerMethodField()
 
@@ -56,7 +89,7 @@ class MediaImageSerializer(serializers.ModelSerializer):
         return None
 
 
-class MediaListSerializer(serializers.ModelSerializer):
+class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
     s3_url = serializers.SerializerMethodField()
     file = serializers.SerializerMethodField()
     tag_names = serializers.SerializerMethodField()
@@ -69,46 +102,61 @@ class MediaListSerializer(serializers.ModelSerializer):
     key_entities = serializers.SerializerMethodField()
     file_size = serializers.SerializerMethodField()
 
+    # Search matching scores
+    keyword_coverage = serializers.IntegerField(read_only=True)
+    total_matching_fields = serializers.IntegerField(read_only=True)
+    avg_relevance_score = serializers.FloatField(read_only=True)
+    max_similarity = serializers.FloatField(read_only=True)
+    match_reason = serializers.SerializerMethodField()
+
     class Meta:
         model = Media
         fields = [
             'id', 'name', 'description', 'priority', 'priority_display',
             'media_type', 'media_type_display', 'created_at', 'updated_at',
             's3_url', 'file', 'tag_names', 'title', 'organization',
-            'document_type', 'key_entities', 'file_size', 'organization_url'
+            'document_type', 'key_entities', 'file_size', 'organization_url',
+            'keyword_coverage', 'total_matching_fields', 'avg_relevance_score', 'max_similarity',
+            'match_reason'
         ]
 
+    def get_match_reason(self, obj):
+        """
+        Return a human-readable explanation of why this record was returned.
+        Uses the annotated match flags from the viewset.
+        """
+        # Get the similarity threshold from the request context
+        request = self.context.get('request')
+        similarity_threshold = 0.3  # default
+        if request:
+            similarity_threshold = float(request.query_params.get('similarity_threshold', 0.3))
+
+        # Check exact title match first (highest priority)
+        if getattr(obj, "exact_title_match_flag", 0) == 1:
+            return "Exact title match found."
+
+        # Check trigram similarity match
+        if getattr(obj, "trigram_match", 0) == 1:
+            max_sim = getattr(obj, "max_similarity", 0)
+            if max_sim >= similarity_threshold:
+                return f"Fuzzy string similarity match found (similarity: {max_sim:.2f}, threshold: {similarity_threshold})."
+
+        # Check icontains match (substring match)
+        if getattr(obj, "icontains_match", 0) == 1:
+            return "Direct text match found in one or more fields."
+
+        # Fallback for legacy code or edge cases
+        if getattr(obj, "keyword_coverage", 0) > 0:
+            return "This result matched your search keywords."
+
+        if getattr(obj, "max_similarity", 0) > 0:
+            max_sim = getattr(obj, "max_similarity", 0)
+            return f"Fuzzy string similarity found (similarity: {max_sim:.2f})."
+
+        return "Match found through search criteria."
+
     def get_s3_url(self, obj):
-        # If current doc is Source Document
-        if obj.key_values.annotate(
-                norm_key=Lower(Replace('key', Value('_'), Value(' '), output_field=TextField()))
-        ).filter(
-            norm_key='document type',
-            value__icontains='source document'
-        ).exists():
-            return obj.get_s3_url()
-
-        # Check parent
-        if obj.parent and obj.parent.key_values.annotate(
-                norm_key=Lower(Replace('key', Value('_'), Value(' '), output_field=TextField()))
-        ).filter(
-            norm_key='document type',
-            value__icontains='source document'
-        ).exists():
-            return obj.parent.get_s3_url()
-
-        # Check children
-        child = obj.subdocuments.annotate(
-            norm_key=Lower(Replace('key_values__key', Value('_'), Value(' '), output_field=TextField()))
-        ).filter(
-            norm_key='document type',
-            key_values__value__icontains='source document'
-        ).first()
-        if child:
-            return child.get_s3_url()
-
-        # fallback
-        return obj.get_s3_url()
+        return self.resolve_s3_url(obj)
 
     def get_file(self, obj):
         return obj.get_s3_url() if hasattr(obj, 'get_s3_url') else None
@@ -147,7 +195,7 @@ class MediaListSerializer(serializers.ModelSerializer):
         return getattr(obj.file, "size", None) if obj.file else None
 
 
-class MediaDetailSerializer(serializers.ModelSerializer):
+class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
     s3_url = serializers.SerializerMethodField()
     file = serializers.SerializerMethodField()
     tags = TagSerializer(many=True, read_only=True)
@@ -178,36 +226,7 @@ class MediaDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_s3_url(self, obj):
-        # If current doc is Source Document
-        if obj.key_values.annotate(
-                norm_key=Lower(Replace('key', Value('_'), Value(' '), output_field=TextField()))
-        ).filter(
-            norm_key='document type',
-            value__icontains='source document'
-        ).exists():
-            return obj.get_s3_url()
-
-        # Check parent
-        if obj.parent and obj.parent.key_values.annotate(
-                norm_key=Lower(Replace('key', Value('_'), Value(' '), output_field=TextField()))
-        ).filter(
-            norm_key='document type',
-            value__icontains='source document'
-        ).exists():
-            return obj.parent.get_s3_url()
-
-        # Check children
-        child = obj.subdocuments.annotate(
-            norm_key=Lower(Replace('key_values__key', Value('_'), Value(' '), output_field=TextField()))
-        ).filter(
-            norm_key='document type',
-            key_values__value__icontains='source document'
-        ).first()
-        if child:
-            return child.get_s3_url()
-
-        # fallback
-        return obj.get_s3_url()
+        return self.resolve_s3_url(obj)
 
     def get_file(self, obj):
         return obj.get_s3_url() if hasattr(obj, 'get_s3_url') else None
@@ -234,7 +253,7 @@ class MediaDetailSerializer(serializers.ModelSerializer):
         if organization_name:
             organization_url = obj.organization.url if obj.organization and obj.organization.url else "#"
             basic_info.append(
-            f'<div><b>Organization:</b> <a class="text-blue-600 underline underline-offset-2" href="{organization_url}" target="_blank" rel="noopener noreferrer">{organization_name}</a></div>')
+                f'<div><b>Organization:</b> <a class="text-blue-600 underline underline-offset-2" href="{organization_url}" target="_blank" rel="noopener noreferrer">{organization_name}</a></div>')
         if geography and geography.value:
             basic_info.append(f"<div><b>Geography:</b> {geography.value}</div>")
 
