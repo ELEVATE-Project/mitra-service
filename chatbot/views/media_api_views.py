@@ -23,6 +23,22 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['-created_at']
     search_fields = ['name', 'description', 'extracted_text']
 
+    def filter_queryset(self, queryset):
+        """
+        Override to skip OrderingFilter when search is active to preserve search ranking
+        """
+        search_text = self.request.query_params.get('q', '').strip()
+
+        if search_text and len(search_text) >= 3:
+            # When search is active, apply all filters except OrderingFilter
+            for backend in self.filter_backends:
+                if backend != filters.OrderingFilter:
+                    queryset = backend().filter_queryset(self.request, queryset, self)
+            return queryset
+        else:
+            # Normal filtering when no search - apply all backends
+            return super().filter_queryset(queryset)
+
     def get_queryset(self):
         queryset = Media.objects.all()
 
