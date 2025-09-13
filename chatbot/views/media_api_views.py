@@ -269,13 +269,13 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
 
         # Order by ranking
         return queryset.order_by(
-            '-exact_title_match_flag',
-            '-trigram_match',
-            '-icontains_match',
-            '-keyword_coverage',
-            '-total_matching_fields',
-            '-avg_relevance_score',
-            '-max_similarity'
+            '-exact_title_match_flag',  # Exact title match ALWAYS first
+            '-keyword_coverage',  # Then by keyword coverage
+            '-total_matching_fields',  # Then by matching fields count
+            '-avg_relevance_score',  # Then by relevance score
+            '-max_similarity',  # Then by similarity
+            '-trigram_match',  # Then trigram matches
+            '-icontains_match'  # Finally substring matches
         )
 
     def _apply_custom_filters(self, queryset):
