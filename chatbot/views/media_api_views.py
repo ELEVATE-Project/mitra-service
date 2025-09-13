@@ -2,6 +2,7 @@ from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db import models
 
 from chatbot.models import Tag, FileTypeChoices
 from chatbot.models.media_models import Media, KeyValue
@@ -57,7 +58,10 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                 keyword_coverage=Value(0, output_field=IntegerField()),
                 total_matching_fields=Value(0, output_field=IntegerField()),
                 avg_relevance_score=Value(0.0, output_field=FloatField()),
-                max_similarity=Value(0.0, output_field=FloatField())
+                max_similarity=Value(0.0, output_field=FloatField()),
+                exact_title_match_flag=Value(0, output_field=IntegerField()),
+                trigram_match=Value(0, output_field=IntegerField()),
+                icontains_match=Value(0, output_field=IntegerField())
             )
 
         queryset = self._apply_custom_filters(queryset)
@@ -70,7 +74,8 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                 'tags', 'key_values', 'images', 'subdocuments'
             )
 
-        return queryset
+        # Apply distinct to remove duplicates caused by joins
+        return queryset.distinct()
 
     def _apply_content_exclusion_filter(self, queryset):
         """
@@ -87,48 +92,42 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
 
     def _apply_enhanced_multi_keyword_search(self, queryset, search_text, similarity_threshold):
         """
-        Enhanced search with multi-keyword ranking:
+        Enhanced search with multi-keyword ranking + exact + substring fallback.
         Search fields: Title, Organization, Document Type, Tags, Media Type
-        Ranking:
-        1. Files matching multiple keywords listed first
-        2. Files matching single keyword listed last
-        3. Within each group, ordered by relevance score (highest first)
-        4. Four-level ranking: keyword_coverage -> total_matching_fields -> avg_relevance_score -> max_similarity
+        Ranking priority:
+            1. Exact title matches (always on top)
+            2. Trigram similarity above threshold
+            3. icontains fallback
         """
-        # Split search text into keywords
-        keywords = [keyword.strip().lower() for keyword in search_text.split() if keyword.strip()]
-
+        keywords = [kw.strip().lower() for kw in search_text.split() if kw.strip()]
         if not keywords:
-            return queryset
+            return queryset.annotate(
+                keyword_coverage=Value(0, output_field=IntegerField()),
+                total_matching_fields=Value(0, output_field=IntegerField()),
+                avg_relevance_score=Value(0.0, output_field=FloatField()),
+                max_similarity=Value(0.0, output_field=FloatField()),
+                exact_title_match_flag=Value(0, output_field=IntegerField()),
+                trigram_match=Value(0, output_field=IntegerField()),
+                icontains_match=Value(0, output_field=IntegerField())
+            )
 
-        # Get document type subquery
+        # Document type subquery
         doc_type_subquery = KeyValue.objects.filter(
             media=OuterRef('pk'),
             key__iregex=r'^document[_\s]type$'
         ).values('value')[:1]
 
         queryset = queryset.annotate(
-            doc_type=Subquery(doc_type_subquery, output_field=CharField())
+            doc_type=Subquery(doc_type_subquery, output_field=CharField()),
+            exact_title_match=Case(
+                When(title__iexact=search_text.strip(), then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField()
+            )
         )
 
-        # Initialize aggregated scores
-        total_matching_fields = Value(0, output_field=IntegerField())
-        total_relevance_score = Value(0.0, output_field=FloatField())
-        max_similarity_overall = Value(0.0, output_field=FloatField())
-        keyword_coverage_score = Value(0, output_field=IntegerField())
-
-        # Process each keyword and build annotations
         keyword_annotations = {}
-
         for i, keyword in enumerate(keywords):
-            # Tag similarity subquery for this keyword
-            tag_similarity_subquery = Tag.objects.filter(
-                medias=OuterRef('pk')
-            ).annotate(
-                similarity=TrigramSimilarity('name', keyword)
-            ).values('similarity').order_by('-similarity')[:1]
-
-            # Individual field similarities for this keyword
             keyword_annotations.update({
                 f'title_sim_{i}': Coalesce(
                     TrigramSimilarity('title', keyword),
@@ -143,7 +142,13 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                     Value(0.0, output_field=FloatField())
                 ),
                 f'tag_sim_{i}': Coalesce(
-                    Subquery(tag_similarity_subquery),
+                    Subquery(
+                        Tag.objects.filter(
+                            medias=OuterRef('pk')
+                        ).annotate(
+                            similarity=TrigramSimilarity('name', keyword)
+                        ).values('similarity').order_by('-similarity')[:1]
+                    ),
                     Value(0.0, output_field=FloatField())
                 ),
                 f'media_type_display_sim_{i}': Coalesce(
@@ -152,42 +157,41 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                 )
             })
 
-        # Apply all keyword annotations at once
         queryset = queryset.annotate(**keyword_annotations)
 
-        # Now calculate aggregated scores
+        # Aggregate scores across keywords
+        total_matching_fields = Value(0, output_field=IntegerField())
+        total_relevance_score = Value(0.0, output_field=FloatField())
+        max_similarity_overall = Value(0.0, output_field=FloatField())
+        keyword_coverage_score = Value(0, output_field=IntegerField())
+
         for i, keyword in enumerate(keywords):
-            # Count matching fields for this keyword (fields above threshold)
             keyword_matching_fields = (
-                    Case(When(**{f'title_sim_{i}__gte': similarity_threshold}, then=Value(1)),
-                         default=Value(0), output_field=IntegerField()) +
-                    Case(When(**{f'org_sim_{i}__gte': similarity_threshold}, then=Value(1)),
-                         default=Value(0), output_field=IntegerField()) +
-                    Case(When(**{f'doc_type_sim_{i}__gte': similarity_threshold}, then=Value(1)),
-                         default=Value(0), output_field=IntegerField()) +
-                    Case(When(**{f'tag_sim_{i}__gte': similarity_threshold}, then=Value(1)),
-                         default=Value(0), output_field=IntegerField()) +
+                    Case(When(**{f'title_sim_{i}__gte': similarity_threshold}, then=Value(1)), default=Value(0),
+                         output_field=IntegerField()) +
+                    Case(When(**{f'org_sim_{i}__gte': similarity_threshold}, then=Value(1)), default=Value(0),
+                         output_field=IntegerField()) +
+                    Case(When(**{f'doc_type_sim_{i}__gte': similarity_threshold}, then=Value(1)), default=Value(0),
+                         output_field=IntegerField()) +
+                    Case(When(**{f'tag_sim_{i}__gte': similarity_threshold}, then=Value(1)), default=Value(0),
+                         output_field=IntegerField()) +
                     Case(When(**{f'media_type_display_sim_{i}__gte': similarity_threshold}, then=Value(1)),
                          default=Value(0), output_field=IntegerField())
-
             )
 
-            # Calculate weighted relevance score for this keyword
             keyword_relevance = (
-                    2.0 * F(f'title_sim_{i}') +  # Title: highest priority
-                    1.8 * F(f'tag_sim_{i}') +  # Tags: very important
-                    1.6 * F(f'doc_type_sim_{i}') +  # Document Type: important
-                    1.4 * F(f'org_sim_{i}') +  # Organization: moderately important
-                    1.2 * F(f'media_type_display_sim_{i}')  # Media Type: lower priority
+                    2.0 * F(f'title_sim_{i}') +
+                    1.8 * F(f'tag_sim_{i}') +
+                    1.6 * F(f'doc_type_sim_{i}') +
+                    1.4 * F(f'org_sim_{i}') +
+                    1.2 * F(f'media_type_display_sim_{i}')
             )
 
-            # Get max similarity for this keyword across all fields
             keyword_max_sim = Greatest(
                 f'title_sim_{i}', f'org_sim_{i}', f'doc_type_sim_{i}',
                 f'tag_sim_{i}', f'media_type_display_sim_{i}'
             )
 
-            # Check if this keyword has any match above threshold (for keyword coverage)
             keyword_has_match = Case(
                 When(
                     Q(**{f'title_sim_{i}__gte': similarity_threshold}) |
@@ -201,28 +205,77 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                 output_field=IntegerField()
             )
 
-            # Aggregate totals
             total_matching_fields = total_matching_fields + keyword_matching_fields
             total_relevance_score = total_relevance_score + keyword_relevance
             max_similarity_overall = Greatest(max_similarity_overall, keyword_max_sim)
             keyword_coverage_score = keyword_coverage_score + keyword_has_match
 
-        # Final annotations for ranking
+        # Annotate final scores
         queryset = queryset.annotate(
-            keyword_coverage=keyword_coverage_score,  # How many keywords matched
-            total_matching_fields=total_matching_fields,  # Total field matches across all keywords
-            avg_relevance_score=total_relevance_score / len(keywords),  # Average weighted relevance
-            max_similarity=max_similarity_overall  # Best single similarity score
+            keyword_coverage=keyword_coverage_score,
+            total_matching_fields=total_matching_fields,
+            avg_relevance_score=total_relevance_score / len(keywords),
+            max_similarity=max_similarity_overall
         )
 
-        # Filter results that meet minimum threshold and apply 4-level ranking
-        return queryset.filter(
-            max_similarity__gte=similarity_threshold
-        ).order_by(
-            '-keyword_coverage',  # 1st: Files matching more keywords first
-            '-total_matching_fields',  # 2nd: More field matches within keyword groups
-            '-avg_relevance_score',  # 3rd: Higher weighted relevance scores
-            '-max_similarity'  # 4th: Best individual field match
+        # Check for exact title match
+        exact_title_condition = Q(title__iexact=search_text.strip())
+
+        # Check for trigram similarity above threshold
+        trigram_condition = Q(max_similarity__gte=similarity_threshold)
+
+        # icontains fallback - check each field individually to avoid joins
+        icontains_condition = (
+                Q(title__icontains=search_text) |
+                Q(organization_name__icontains=search_text) |
+                Q(doc_type__icontains=search_text) |
+                Q(media_type_display__icontains=search_text)
+        )
+
+        # Add tags icontains check using EXISTS subquery to avoid duplicates
+        tag_icontains_condition = Q(
+            id__in=Subquery(
+                Tag.objects.filter(
+                    medias=OuterRef('pk'),
+                    name__icontains=search_text
+                ).values('medias__id')
+            )
+        )
+
+        icontains_condition |= tag_icontains_condition
+
+        queryset = queryset.annotate(
+            exact_title_match_flag=Case(
+                When(exact_title_condition, then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField()
+            ),
+            trigram_match=Case(
+                When(trigram_condition, then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField()
+            ),
+            icontains_match=Case(
+                When(icontains_condition, then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField()
+            )
+        )
+
+        # Filter results that match any method
+        queryset = queryset.filter(
+            Q(exact_title_match_flag=1) | Q(trigram_match=1) | Q(icontains_match=1)
+        )
+
+        # Order by ranking
+        return queryset.order_by(
+            '-exact_title_match_flag',
+            '-trigram_match',
+            '-icontains_match',
+            '-keyword_coverage',
+            '-total_matching_fields',
+            '-avg_relevance_score',
+            '-max_similarity'
         )
 
     def _apply_custom_filters(self, queryset):
@@ -240,7 +293,15 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
             if tags_list:
                 tag_conditions = Q()
                 for tag in tags_list:
-                    tag_conditions |= Q(tags__name__icontains=tag)
+                    # Use EXISTS subquery to avoid duplicates
+                    tag_conditions |= Q(
+                        id__in=Subquery(
+                            Tag.objects.filter(
+                                medias=OuterRef('pk'),
+                                name__icontains=tag
+                            ).values('medias__id')
+                        )
+                    )
                 filter_conditions &= tag_conditions
 
         if key_values_param:
@@ -251,7 +312,16 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                     kv_pairs[k.strip()] = v.strip()
 
             for key, value in kv_pairs.items():
-                filter_conditions &= Q(key_values__key__iexact=key, key_values__value__icontains=value)
+                # Use EXISTS subquery to avoid duplicates
+                filter_conditions &= Q(
+                    id__in=Subquery(
+                        KeyValue.objects.filter(
+                            media=OuterRef('pk'),
+                            key__iexact=key,
+                            value__icontains=value
+                        ).values('media__id')
+                    )
+                )
 
         if organization:
             organizations_list = [org.strip() for org in organization.split(",") if org.strip()]
@@ -266,9 +336,15 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
             if resource_types_list:
                 rt_conditions = Q()
                 for rt in resource_types_list:
+                    # Use EXISTS subquery to avoid duplicates
                     rt_conditions |= Q(
-                        key_values__key__iregex=r'^document[_\s]type$',
-                        key_values__value__icontains=rt
+                        id__in=Subquery(
+                            KeyValue.objects.filter(
+                                media=OuterRef('pk'),
+                                key__iregex=r'^document[_\s]type$',
+                                value__icontains=rt
+                            ).values('media__id')
+                        )
                     )
                 filter_conditions &= rt_conditions
 
@@ -282,7 +358,7 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
             filter_conditions &= Q(priority=priority)
 
         if filter_conditions:
-            queryset = queryset.filter(filter_conditions).distinct()
+            queryset = queryset.filter(filter_conditions)
 
         return queryset
 

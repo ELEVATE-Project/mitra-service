@@ -107,6 +107,7 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
     total_matching_fields = serializers.IntegerField(read_only=True)
     avg_relevance_score = serializers.FloatField(read_only=True)
     max_similarity = serializers.FloatField(read_only=True)
+    match_reason = serializers.SerializerMethodField()
 
     class Meta:
         model = Media
@@ -115,8 +116,44 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
             'media_type', 'media_type_display', 'created_at', 'updated_at',
             's3_url', 'file', 'tag_names', 'title', 'organization',
             'document_type', 'key_entities', 'file_size', 'organization_url',
-            'keyword_coverage', 'total_matching_fields', 'avg_relevance_score', 'max_similarity'
+            'keyword_coverage', 'total_matching_fields', 'avg_relevance_score', 'max_similarity',
+            'match_reason'
         ]
+
+    def get_match_reason(self, obj):
+        """
+        Return a human-readable explanation of why this record was returned.
+        Uses the annotated match flags from the viewset.
+        """
+        # Get the similarity threshold from the request context
+        request = self.context.get('request')
+        similarity_threshold = 0.3  # default
+        if request:
+            similarity_threshold = float(request.query_params.get('similarity_threshold', 0.3))
+
+        # Check exact title match first (highest priority)
+        if getattr(obj, "exact_title_match_flag", 0) == 1:
+            return "Exact title match found."
+
+        # Check trigram similarity match
+        if getattr(obj, "trigram_match", 0) == 1:
+            max_sim = getattr(obj, "max_similarity", 0)
+            if max_sim >= similarity_threshold:
+                return f"Fuzzy string similarity match found (similarity: {max_sim:.2f}, threshold: {similarity_threshold})."
+
+        # Check icontains match (substring match)
+        if getattr(obj, "icontains_match", 0) == 1:
+            return "Direct text match found in one or more fields."
+
+        # Fallback for legacy code or edge cases
+        if getattr(obj, "keyword_coverage", 0) > 0:
+            return "This result matched your search keywords."
+
+        if getattr(obj, "max_similarity", 0) > 0:
+            max_sim = getattr(obj, "max_similarity", 0)
+            return f"Fuzzy string similarity found (similarity: {max_sim:.2f})."
+
+        return "Match found through search criteria."
 
     def get_s3_url(self, obj):
         return self.resolve_s3_url(obj)

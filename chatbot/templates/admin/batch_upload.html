@@ -1905,6 +1905,21 @@
                 {% endfor %}
             </select>
         </div>
+        <div class="info-message" style="margin-bottom: 20px;">
+            <div style="display: flex; align-items: flex-start; gap: 12px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1976d2" stroke-width="2" style="flex-shrink: 0; margin-top: 2px;">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                <div>
+                    <p style="margin: 0 0 8px 0; font-weight: 600; color: #1976d2;">Template File Handling</p>
+                    <p style="margin: 0; line-height: 1.5; color: #333;">
+                        By default, files containing the keyword "template" in the title will be treated as templatized files that contain user-defined key-value pairs and an embedded link to the solution/asset. You can disable this default behavior by removing the "template" reference from the upload document.
+                    </p>
+                </div>
+            </div>
+        </div>
 
         <div class="upload-area" id="uploadArea">
             <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#417690" stroke-width="2">
