@@ -23,6 +23,22 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
     ordering = ['-created_at']
     search_fields = ['name', 'description', 'extracted_text']
 
+    def filter_queryset(self, queryset):
+        """
+        Override to skip OrderingFilter when search is active to preserve search ranking
+        """
+        search_text = self.request.query_params.get('q', '').strip()
+
+        if search_text and len(search_text) >= 3:
+            # When search is active, apply all filters except OrderingFilter
+            for backend in self.filter_backends:
+                if backend != filters.OrderingFilter:
+                    queryset = backend().filter_queryset(self.request, queryset, self)
+            return queryset
+        else:
+            # Normal filtering when no search - apply all backends
+            return super().filter_queryset(queryset)
+
     def get_queryset(self):
         queryset = Media.objects.all()
 
@@ -51,9 +67,12 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
         similarity_threshold = float(self.request.query_params.get('similarity_threshold', 0.3))
 
         if search_text and len(search_text) >= 3:
+            # SEARCH MODE: Apply search ranking and ignore other ordering
             queryset = self._apply_enhanced_multi_keyword_search(queryset, search_text, similarity_threshold)
+            queryset = self._apply_custom_filters(queryset)
+            # DO NOT apply any other ordering - search method handles it
         else:
-            # Add default score annotations for non-search queries
+            # NON-SEARCH MODE: Apply normal ordering
             queryset = queryset.annotate(
                 keyword_coverage=Value(0, output_field=IntegerField()),
                 total_matching_fields=Value(0, output_field=IntegerField()),
@@ -63,8 +82,8 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                 trigram_match=Value(0, output_field=IntegerField()),
                 icontains_match=Value(0, output_field=IntegerField())
             )
-
-        queryset = self._apply_custom_filters(queryset)
+            queryset = self._apply_custom_filters(queryset)
+            # Normal ordering will be applied by DRF's OrderingFilter
 
         if self.action == 'list':
             queryset = self._apply_content_exclusion_filter(queryset)
@@ -74,7 +93,6 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                 'tags', 'key_values', 'images', 'subdocuments'
             )
 
-        # Apply distinct to remove duplicates caused by joins
         return queryset.distinct()
 
     def _apply_content_exclusion_filter(self, queryset):
@@ -269,13 +287,13 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
 
         # Order by ranking
         return queryset.order_by(
-            '-exact_title_match_flag',
-            '-trigram_match',
-            '-icontains_match',
-            '-keyword_coverage',
-            '-total_matching_fields',
-            '-avg_relevance_score',
-            '-max_similarity'
+            '-exact_title_match_flag',  # Exact title match ALWAYS first
+            '-keyword_coverage',  # Then by keyword coverage
+            '-total_matching_fields',  # Then by matching fields count
+            '-avg_relevance_score',  # Then by relevance score
+            '-max_similarity',  # Then by similarity
+            '-trigram_match',  # Then trigram matches
+            '-icontains_match'  # Finally substring matches
         )
 
     def _apply_custom_filters(self, queryset):
