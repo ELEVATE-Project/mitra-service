@@ -51,9 +51,12 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
         similarity_threshold = float(self.request.query_params.get('similarity_threshold', 0.3))
 
         if search_text and len(search_text) >= 3:
+            # SEARCH MODE: Apply search ranking and ignore other ordering
             queryset = self._apply_enhanced_multi_keyword_search(queryset, search_text, similarity_threshold)
+            queryset = self._apply_custom_filters(queryset)
+            # DO NOT apply any other ordering - search method handles it
         else:
-            # Add default score annotations for non-search queries
+            # NON-SEARCH MODE: Apply normal ordering
             queryset = queryset.annotate(
                 keyword_coverage=Value(0, output_field=IntegerField()),
                 total_matching_fields=Value(0, output_field=IntegerField()),
@@ -63,8 +66,8 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                 trigram_match=Value(0, output_field=IntegerField()),
                 icontains_match=Value(0, output_field=IntegerField())
             )
-
-        queryset = self._apply_custom_filters(queryset)
+            queryset = self._apply_custom_filters(queryset)
+            # Normal ordering will be applied by DRF's OrderingFilter
 
         if self.action == 'list':
             queryset = self._apply_content_exclusion_filter(queryset)
@@ -74,7 +77,6 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                 'tags', 'key_values', 'images', 'subdocuments'
             )
 
-        # Apply distinct to remove duplicates caused by joins
         return queryset.distinct()
 
     def _apply_content_exclusion_filter(self, queryset):
