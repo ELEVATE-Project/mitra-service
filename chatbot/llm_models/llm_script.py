@@ -204,7 +204,7 @@ def handle_bedrock_model(
         # print('Conversation Bedrock request payload: ', request_payload)
         response = bedrock_runtime.converse(**request_payload)
         # logger.info('Bedrock response: %s', response)
-        # print('Bedrock response: ', response)
+        print('Bedrock response: ', response)
 
         content_arr = response['output']['message']['content']
         content = content_arr[0]
@@ -224,6 +224,7 @@ def handle_bedrock_model(
                     json_str = json_str[:-1].strip()
                 try:
                     final_output = json_repair.repair_json(json_str, return_objects=True)
+                    print(f"Loads final_output: {final_output}")
                     logger.info('Loads final_output: %s', final_output)
                 except json.JSONDecodeError as e:
                     # logger.error('Error decoding JSON: %s', e, exc_info=True)

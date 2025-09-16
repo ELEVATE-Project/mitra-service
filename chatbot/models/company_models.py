@@ -1,6 +1,6 @@
 from django.db import models
 from chatbot.models import CompanyBot, EntityTypeChoices, PreProcessType, PreProcessOutputMode, PostProcessType, \
-    PostProcessOutputMode
+    PostProcessOutputMode, TextConversionType
 from simple_history.models import HistoricalRecords
 from django.core.exceptions import ValidationError
 
@@ -20,6 +20,12 @@ class CompanyStateMachine(models.Model):
     type = models.CharField(
         max_length=10, choices=EntityTypeChoices.choices, default=EntityTypeChoices.MANDATORY,
         help_text="Specify whether the state is mandatory or optional."
+    )
+    text_conversion_type = models.CharField(
+        max_length=15, choices=TextConversionType.choices, default=TextConversionType.TRANSLATE,
+        help_text="Choose how to process this field's text: "
+                  "'Translation' converts meaning into another language, "
+                  "'Transliteration' preserves sound using another script."
     )
     bot_question = models.TextField(
         null=True, blank=True, help_text="Provide the first question that the bot will ask when the state is triggered."

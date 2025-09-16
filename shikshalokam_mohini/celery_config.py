@@ -17,6 +17,7 @@ app.autodiscover_tasks([
     'chatbot.celery_tasks.guided_guest_tasks',
     'chatbot.celery_tasks.oneshot_guest_tasks',
     'chatbot.celery_tasks.ptm_report_tasks',
-    'chatbot.celery_tasks.knowledge_service.tag_tasks'
+    'chatbot.celery_tasks.knowledge_service.tag_tasks',
+    'chatbot.celery_tasks.flow_tasks'
 
 ])

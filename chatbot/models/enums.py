@@ -19,6 +19,7 @@ class ChatType(models.TextChoices):
     reflection = 'reflection', _('Reflection')
     creation = 'creation', _('Creation')
     megaPTM = 'megaPTM', _('Mega PTM')
+    listeningActivity = 'listening-activity', _('Listening Activity')
 
 
 class LLMProvider(models.TextChoices):
@@ -272,6 +273,7 @@ class SessionFlowName(models.TextChoices):
     GuestDiscussion = 'guest-discussion', _('guest-discussion')
     LoginDiscussion = 'login-discussion', _('login-discussion')
     GuestMiStory = 'guest-mi-story', _('guest-mi-story')
+    ListeningActivity = 'listening-activity', _('Listening Activity')
     LoginMiStory = 'login', _('login')
     SsoFlow = 'sso', _('sso')
     Reflection = 'reflection', _('reflection')
@@ -300,3 +302,8 @@ class PostProcessType(models.TextChoices):
 class PostProcessOutputMode(models.TextChoices):
     NONE = 'NONE', 'None'
     SKIP = 'SKIP', 'Skip Next Stage'
+
+
+class TextConversionType(models.TextChoices):
+    TRANSLATE = 'TRANSLATE', _('Translation')
+    TRANSLITERATE = 'TRANSLITERATE', _('Transliteration')
