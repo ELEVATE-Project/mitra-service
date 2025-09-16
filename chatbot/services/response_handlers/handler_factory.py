@@ -1,3 +1,4 @@
+from chatbot.services.response_handlers.common_handler import CommonResponseHandler
 from chatbot.services.response_handlers.discussion_guest_handler import GuestDiscussionResponseHandler
 from chatbot.services.response_handlers.guided_guest_handler import GuidedGuestResponseHandler
 from chatbot.services.response_handlers.oneshot_handler import OneShotResponseHandler
@@ -10,6 +11,7 @@ class ResponseHandlerFactory:
         'guided_guest': GuidedGuestResponseHandler,
         'oneshot': OneShotResponseHandler,
         'guest_discussion': GuestDiscussionResponseHandler,
+        'common': CommonResponseHandler,
     }
 
     @classmethod

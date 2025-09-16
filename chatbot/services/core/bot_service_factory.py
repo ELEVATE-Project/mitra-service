@@ -1,3 +1,4 @@
+from chatbot.services.strategies.common_strategy import CommonBotStrategy
 from chatbot.services.strategies.guest_discussion import GuestDiscussionBotStrategy
 from chatbot.services.strategies.guided import GuidedGuestBotStrategy
 from chatbot.services.strategies.oneshot import OneShotBotStrategy
@@ -9,7 +10,8 @@ class BotServiceFactory:
     _strategies = {
         'oneshot': OneShotBotStrategy,
         'guided_guest': GuidedGuestBotStrategy,
-        'guest_discussion': GuestDiscussionBotStrategy
+        'guest_discussion': GuestDiscussionBotStrategy,
+        'common': CommonBotStrategy
     }
 
     @classmethod

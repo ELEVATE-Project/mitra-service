@@ -20,6 +20,14 @@ class CompanyStateMachineAdmin(admin.TabularInline):
     fk_name = 'company_bot'
     extra = 1
     raw_id_fields = ['preprocess_bot', 'postprocess_bot']
+    fields = (
+        'name', 'step', 'use_stage_chats', 'text_conversion_type',
+        'bot_question', 'completion_criteria', 'context',
+        'preprocess_type', 'preprocess_prompt', 'preprocess_bot', 'preprocess_output_mode',
+        'postprocess_type', 'postprocess_prompt', 'postprocess_bot', 'postprocess_output_mode',
+        'skip_to_step',
+    )
+    exclude = ('type',)  # ✅ hide type
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
