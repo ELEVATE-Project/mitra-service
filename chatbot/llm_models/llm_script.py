@@ -144,6 +144,45 @@ def handle_openai_model(
     else:
         return response.choices[0].message.content if response.choices else response
 
+def get_pricing_from_company_bot(company_bot, model_id):
+    """Extract pricing from company_bot.other_params"""
+    try:
+        if not company_bot.other_params:
+            return None
+
+        # Parse other_params
+        if isinstance(company_bot.other_params, str):
+            other_params = json.loads(company_bot.other_params)
+        else:
+            other_params = company_bot.other_params
+
+        # Check if pricing data exists
+        pricing_data = other_params.get('model_pricing')
+        if not pricing_data:
+            logger.info(f"❌ No pricing_data key found in company bot other params.")
+            return None
+
+        logger.info(f"🔍 Searching for model_id: '{model_id}'")
+        logger.info(f"🔍 Available pricing keys: {list(pricing_data.keys())}")
+
+        # Get pricing for current model
+        model_pricing = pricing_data.get(model_id)
+        if not model_pricing:
+            logger.info(f"❌ No exact match found for: '{model_id}'")
+            model_pricing = pricing_data.get('llama3-3-70b')
+
+        if model_pricing and 'input_cost_per_1k' in model_pricing and 'output_cost_per_1k' in model_pricing:
+            return {
+                'input': float(model_pricing['input_cost_per_1k']),
+                'output': float(model_pricing['output_cost_per_1k'])
+            }
+
+        return None
+
+    except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+        logger.error(f"Error parsing pricing from company_bot.other_params: {e}")
+        return None
+
 def retry_if_result_none(result):
     return result is None
 
@@ -206,6 +245,42 @@ def handle_bedrock_model(
         # logger.info('Bedrock response: %s', response)
         print('Bedrock response: ', response)
 
+        usage_metrics = response.get('usage', {})
+        if usage_metrics:
+            logger.info("--------------USAGE METRICS-------------")
+            input_tokens = usage_metrics.get('inputTokens', 0)
+            output_tokens = usage_metrics.get('outputTokens', 0)
+            total_tokens = usage_metrics.get('totalTokens', 0)
+            logger.info(f'💰 Token Usage - Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}')
+            print(f'💰 Token Usage - Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}')
+
+            pricing = get_pricing_from_company_bot(
+                company_bot=company_bot, model_id=model_id
+            )
+            if pricing:
+                input_cost = (input_tokens / 1000) * pricing['input']
+                output_cost = (output_tokens / 1000) * pricing['output']
+                total_cost = input_cost + output_cost
+
+                logger.info(
+                    f'💵 Model Cost - Input: ${input_cost:.6f} (${pricing["input"]}/1K), Output: ${output_cost:.6f} '
+                    f'(${pricing["output"]}/1K), Total: ${total_cost:.6f}')
+                print(
+                    f'💵 Model Cost - Input: ${input_cost:.6f} (${pricing["input"]}/1K), Output: ${output_cost:.6f} '
+                    f'(${pricing["output"]}/1K), Total: ${total_cost:.6f}')
+            else:
+                logger.info('💵 No pricing data configured in company_bot.other_params')
+                print('💵 No pricing data configured in company_bot.other_params')
+
+            # Log additional metrics if available
+            if 'stopReason' in response.get('stopReason', ''):
+                stop_reason = response.get('stopReason')
+                logger.info(f'🛑 Stop Reason: {stop_reason}')
+                print(f'🛑 Stop Reason: {stop_reason}')
+        else:
+            logger.info('⚠️ No usage metrics found in response')
+            print('⚠️ No usage metrics found in response')
+
         content_arr = response['output']['message']['content']
         content = content_arr[0]
         content_tool = content.get('toolUse')
@@ -237,6 +312,10 @@ def handle_bedrock_model(
         return final_output
     except ClientError as e:
             error_response = e.response
+            logger.error("❌ Bedrock ClientError:")
+            logger.error(f"Error Code: {error_response['Error']['Code']}")
+            logger.error(f"Error Message: {error_response['Error']['Message']}")
+            logger.error(f"Request ID: {error_response.get('ResponseMetadata', {}).get('RequestId')}")
             print("❌ ClientError:")
             print("Error Code:", error_response["Error"]["Code"])
             print("Error Message:", error_response["Error"]["Message"])
@@ -244,6 +323,7 @@ def handle_bedrock_model(
             # return None
     except Exception as e:
         logger.error('Error processing request: %s', e, exc_info=True)
+        print(f'❌ Error processing Bedrock request: {e}')
         return None
 
 
