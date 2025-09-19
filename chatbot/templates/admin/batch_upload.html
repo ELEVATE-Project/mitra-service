@@ -3799,6 +3799,10 @@ async function waitForAllTasksToComplete(taskIds) {
 
                                         if (enhanced.description) item.data.description = enhanced.description;
                                         if (enhanced.extracted_text) item.data.extracted_text = enhanced.extracted_text;
+
+                                        if (enhanced.url && Array.isArray(enhanced.url)) {
+                                            item.data.url = enhanced.url;
+                                        }
                                         // Merge enhanced key-values with existing ones
                                         // Merge enhanced key-values with existing ones, but preserve user-selected organization
                                         if (enhanced.enhanced_key_values && enhanced.enhanced_key_values.length > 0) {

@@ -1195,7 +1195,8 @@ class BatchMediaTaskStatusView(View):
             'geography': to_title_case(ai_data.get('geography', '')),
             'document_type': document_type_value,
             'key_entities': ai_data.get('key_entities', []),
-            'structured_content': repaired_structured_content
+            'structured_content': repaired_structured_content,
+            'url': ai_data.get('url', [])
         }
 
         # Process main tags
@@ -1224,7 +1225,7 @@ class BatchMediaTaskStatusView(View):
 
         # Process images
         images = ai_data.get('images', []) if isinstance(ai_data.get('images'), list) else []
-
+        print("ai_data: ", ai_data)
         return {
             'auto_tags': auto_tags,
             'enhanced_data': {
@@ -1235,7 +1236,8 @@ class BatchMediaTaskStatusView(View):
                 'subdocument': subdocuments,
                 'failed_links': failed_links,
                 'images': images,
-                'structured_content': repaired_structured_content
+                'structured_content': repaired_structured_content,
+                'url': ai_data.get('url', [])
             }
         }
 
@@ -1670,6 +1672,42 @@ class BatchMediaSaveView(View):
                         'image_results': []
                     }
 
+            # Step 5.5: Process source documents if no subdocuments but URLs exist
+            source_document_results = []
+            if not item_data.get('subdocument') and item_data.get('url'):
+                print(f"Processing source documents for main document without subdocuments")
+
+                for source_url in item_data.get('url', []):
+                    try:
+                        source_media = self.get_or_create_source_document_media(
+                            source_url,
+                            media,
+                            company_bot_id,
+                            user_profile,
+                            company_slug
+                        )
+                        if source_media:
+                            source_document_results.append({
+                                'success': True,
+                                'source_media_id': source_media.id,
+                                'source_url': source_url,
+                                'title': source_media.name
+                            })
+                            print(f"Saved source document: {source_media.name} (ID: {source_media.id})")
+                        else:
+                            source_document_results.append({
+                                'success': False,
+                                'error': f'Failed to create source document for {source_url}',
+                                'source_url': source_url
+                            })
+                    except Exception as source_error:
+                        print(f"Error creating source document for {source_url}: {source_error}")
+                        source_document_results.append({
+                            'success': False,
+                            'error': str(source_error),
+                            'source_url': source_url
+                        })
+
             # Step 6: Process subdocuments recursively
             subdocument_results = []
             if item_data.get('subdocument'):
@@ -1722,6 +1760,7 @@ class BatchMediaSaveView(View):
                 'vector_wait_time': vector_result.get('wait_time', 0),
                 'vector_task_id': vector_task_id,
                 'subdocument_results': subdocument_results,
+                'source_document_results': source_document_results,
                 'image_results': image_results
             }
 
