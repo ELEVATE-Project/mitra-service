@@ -8,18 +8,28 @@ from chatbot.utils.sql_utils import get_todays_date
 def get_creation_promt(company_bot, profile):
     context = company_bot.context
     address = ProfileAddress.objects.filter(profile=profile)
+
+    state_machines = company_bot.companystatemachine_set.all().order_by('step')
+    master_question = None
+
+    if state_machines.exists():
+        first_state_machine = state_machines.first()
+        if first_state_machine.bot_question and first_state_machine.bot_question.strip():
+            master_question = first_state_machine.bot_question.strip()
+
     context_data = {
         "profile": profile,
-        "address": address if address else [{}]
+        "address": address if address else [{}],
     }
-    template = Template(company_bot.tag_context)
 
+    if master_question:
+        context_data["master_question"] = master_question
+
+    template = Template(company_bot.tag_context)
     tag_context = template.render(context_data)
 
     end_context = company_bot.end_context
-
     project_data = ''
-
     today_date = get_todays_date(company_bot=company_bot)
 
     content_prompt = f"""
@@ -70,11 +80,22 @@ def get_validation_prompt(
 ):
     address = ProfileAddress.objects.filter(profile=profile)
 
+    state_machines = validate_bot.companystatemachine_set.all().order_by('step')
+    master_question = None
+
+    if state_machines.exists():
+        first_state_machine = state_machines.first()
+        if first_state_machine.bot_question and first_state_machine.bot_question.strip():
+            master_question = first_state_machine.bot_question.strip()
+
     validate_context_data = {
         "story_json_output": response_json_story,
         "profile": profile,
         "address": address if address else [{}]
     }
+
+    if master_question:
+        validate_context_data["master_question"] = master_question
 
     validate_template = Template(validate_bot.tag_context)
     validate_tag_context = validate_template.render(validate_context_data)
@@ -94,6 +115,10 @@ def get_validation_prompt(
         "profile": profile,
         "address": address if address else [{}]
     }
+
+    if master_question:
+        validate_context_data["master_question"] = master_question
+
     validate_tag_context = validate_template.render(validate_context_data)
 
     validate_content_prompt = f"""

@@ -7,6 +7,7 @@ from django.core.files.base import ContentFile
 from chatbot.models import StoryMedia, MediaTypeChoices, CompanyChat, Profile, Story, ChatSession, CompanyBot, Voice, \
     VoiceType, SessionFlowName, StoryTranslation
 from chatbot.models.story_vernacular_model import StoryVernacular
+from chatbot.pdf.listening_activity.la_report import get_common_report_html
 from chatbot.pdf.shiksha_chaupal.mom_report import get_mom_report_html
 from chatbot.pdf.story_first_page import get_first_page_html
 from chatbot.pdf.story_images_page import get_story_images_page_html
@@ -222,10 +223,14 @@ def get_story_html(story, profile, flow):
             story=object_to_pass, profile=profile, project=project_to_pass, voice_provider=voice_provider,
             story_vernacular=story_vernacular, flow=flow
         )
-    else:
+    elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
         html_content += get_mom_report_html(
             story=object_to_pass, story_vernacular=story_vernacular, profile=profile,
             voice_provider=voice_provider
+        )
+    else:
+        html_content += get_common_report_html(
+            story=object_to_pass, profile=profile
         )
 
     html_content += f"""
