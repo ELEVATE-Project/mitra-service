@@ -100,13 +100,19 @@ def chunk_qa_with_page_control(question_answers, char_limit, qa_box_height, qa_p
     current_chunk_html = ""
     current_char_count = 0
     current_qa_count = 0
+    display_number = 1  # Separate counter for displayed question numbers
 
     for i, qa in enumerate(question_answers, 1):
-        if isinstance(qa, dict) and qa.get('question') and qa.get('answer'):
+        # Check if QA has both question and non-empty answer
+        if (isinstance(qa, dict) and
+                qa.get('question') and
+                qa.get('answer') and
+                str(qa.get('answer')).strip()):  # Check for non-empty answer
+
             qa_html = f"""
-            <div class="qa-section" style="min-height: {qa_box_height};" data-qa-number="{i}">
+            <div class="qa-section" style="min-height: {qa_box_height};" data-qa-number="{display_number}">
                 <div class="qa-question-wrapper">
-                    <span class="question-number">{i}.</span>
+                    <span class="question-number">{display_number}.</span>
                     <span class="question-text">{clean_escaped_text(qa['question'])}</span>
                 </div>
                 <div class="qa-answer-wrapper">
@@ -137,8 +143,8 @@ def chunk_qa_with_page_control(question_answers, char_limit, qa_box_height, qa_p
                                  current_qa_count >= qa_per_page) and
                                 current_qa_count >= min_qa_per_page)
 
-            # Force page break after specific QA numbers
-            if force_page_break_after and i - 1 in force_page_break_after:
+            # Force page break after specific QA numbers (use display_number for comparison)
+            if force_page_break_after and display_number - 1 in force_page_break_after:
                 should_break = True
 
             # Execute page break if conditions are met and we have content
@@ -151,6 +157,9 @@ def chunk_qa_with_page_control(question_answers, char_limit, qa_box_height, qa_p
                 current_chunk_html += qa_html
                 current_char_count += qa_text_length
                 current_qa_count += 1
+
+            # Increment display number only when we actually display a QA
+            display_number += 1
 
     # Add the last chunk if there's any content
     if current_chunk_html:
@@ -178,12 +187,18 @@ def estimate_content_height(qa_count, qa_box_height, base_height=200):
 def get_optimal_pagination_settings(question_answers, target_pages=None):
     """
     Calculate optimal pagination settings based on content analysis
+    Only counts Q&As that have non-empty answers
     """
-    total_qas = len(question_answers)
-    total_chars = sum(len(qa.get('question', '')) + len(qa.get('answer', ''))
-                      for qa in question_answers if isinstance(qa, dict))
+    # Filter out Q&As with empty answers for calculation
+    valid_qas = [qa for qa in question_answers
+                 if isinstance(qa, dict) and qa.get('question') and
+                 qa.get('answer') and str(qa.get('answer')).strip()]
 
-    if target_pages:
+    total_qas = len(valid_qas)
+    total_chars = sum(len(qa.get('question', '')) + len(qa.get('answer', ''))
+                      for qa in valid_qas)
+
+    if target_pages and total_qas > 0:
         # Calculate settings to fit content into target number of pages
         qa_per_page = max(1, total_qas // target_pages)
         char_limit = max(400, total_chars // target_pages)
@@ -201,7 +216,7 @@ def get_optimal_pagination_settings(question_answers, target_pages=None):
     return {
         'qa_per_page': qa_per_page,
         'qa_char_limit': char_limit,
-        'estimated_pages': (total_qas + qa_per_page - 1) // qa_per_page
+        'estimated_pages': (total_qas + qa_per_page - 1) // qa_per_page if total_qas > 0 else 0
     }
 
 
