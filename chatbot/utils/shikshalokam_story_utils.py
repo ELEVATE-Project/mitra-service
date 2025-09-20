@@ -7,6 +7,7 @@ from django.core.files.base import ContentFile
 from chatbot.models import StoryMedia, MediaTypeChoices, CompanyChat, Profile, Story, ChatSession, CompanyBot, Voice, \
     VoiceType, SessionFlowName, StoryTranslation
 from chatbot.models.story_vernacular_model import StoryVernacular
+from chatbot.pdf.listening_activity.la_report import get_common_report_html
 from chatbot.pdf.shiksha_chaupal.mom_report import get_mom_report_html
 from chatbot.pdf.story_first_page import get_first_page_html
 from chatbot.pdf.story_images_page import get_story_images_page_html
@@ -118,19 +119,24 @@ def get_story_html(story, profile, flow):
     if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
                 SessionFlowName.Reflection]:
         css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/story_pdf.css"))
-    else:
+    elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
         css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/shiksha_chaupal/mom_report_pdf.css"))
-
+    else:
+        css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/listening_activity/la_report_pdf.css"))
     if profile:
         if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/story')
-        else:
+        elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/chaupal-story')
+        else:
+            company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
     else:
         if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
             company_bot = CompanyBot.objects.get(route='/story')
-        else:
+        elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
             company_bot = CompanyBot.objects.get(route='/chaupal-story')
+        else:
+            company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
 
     translation_languages = list(story.translations.values_list('language', flat=True))
     chat_session = ChatSession.objects.filter(session=story.session).first()
@@ -222,10 +228,14 @@ def get_story_html(story, profile, flow):
             story=object_to_pass, profile=profile, project=project_to_pass, voice_provider=voice_provider,
             story_vernacular=story_vernacular, flow=flow
         )
-    else:
+    elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
         html_content += get_mom_report_html(
             story=object_to_pass, story_vernacular=story_vernacular, profile=profile,
             voice_provider=voice_provider
+        )
+    else:
+        html_content += get_common_report_html(
+            story=object_to_pass, profile=profile, story_vernacular=story_vernacular
         )
 
     html_content += f"""
