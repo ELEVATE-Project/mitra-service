@@ -1,9 +1,9 @@
-import traceback
 import logging
 import json
-from chatbot.models import StoryStatusChoices, Story, SessionFlowName, Voice, VoiceType, StoryTranslation
+from chatbot.models import StoryStatusChoices, Story, Voice, VoiceType, StoryTranslation
 from chatbot.models.geo_models import ProfileAddress
-from chatbot.utils.story_llama_utils import translate_field, create_project
+from chatbot.models.story_vernacular_model import StoryVernacular
+from chatbot.utils.story_llama_utils import translate_field
 from chatbot.utils.story_utils.format_utils import clean_escaped_text, get_formatted_story
 from chatbot.utils.transliterate_utils import transliterate_text, get_transliteration_output
 
@@ -39,7 +39,7 @@ def save_generic_story(
                     # Check if string starts and ends with [] or {}
                     stripped_value = value.strip()
                     if ((stripped_value.startswith('[') and stripped_value.endswith(']')) or
-                        (stripped_value.startswith('{') and stripped_value.endswith('}'))):
+                            (stripped_value.startswith('{') and stripped_value.endswith('}'))):
                         try:
                             parsed_data[key] = json.loads(stripped_value)
                         except json.JSONDecodeError:
@@ -57,6 +57,21 @@ def save_generic_story(
 
     # Parse any JSON strings in the response
     response_json_story = parse_json_strings(response_json_story)
+
+    # Get title from StoryVernacular if not present in response_json_story
+    if 'title' not in response_json_story and company_bot:
+        try:
+            story_vernacular = StoryVernacular.objects.filter(
+                company_bot=company_bot, language=language
+            ).first()
+
+            if story_vernacular and story_vernacular.translation_json:
+                vernacular_title = story_vernacular.translation_json.get('title')
+                if vernacular_title:
+                    response_json_story['title'] = vernacular_title
+                    logger.info(f"Used StoryVernacular title for language {language}")
+        except Exception as e:
+            logger.warning(f"Could not get title from StoryVernacular: {e}")
 
     # Define Story model fields that need text cleaning
     CLEANABLE_FIELDS = {'title', 'content', 'blurb', 'objective', 'impact'}
