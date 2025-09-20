@@ -29,7 +29,9 @@ def save_generic_story(
     # Ensure response_json_story is a dictionary
     if not isinstance(response_json_story, dict):
         raise Exception("Response must be a valid JSON object")
+
     print("For saving response_json_story: ", response_json_story)
+
     # Parse JSON strings within the response
     def parse_json_strings(data):
         """Parse JSON strings that are arrays [] or objects {} within the data"""
@@ -97,14 +99,19 @@ def save_generic_story(
         'user_name': user_name,
     }
 
-    # Add other non-translatable fields from JSON
-    NON_TRANSLATABLE_FIELDS = {
-        'duration', 'organization', 'designation', 'location', 'district', 'block'
+    # Define Story model fields that map directly
+    STORY_MODEL_FIELDS = {
+        'title', 'content', 'tweet', 'objective', 'action_steps',
+        'impact', 'micro_improvement', 'blurb', 'language', 'stage',
+        'other_params', 'location', 'validation_logs'
     }
 
+    # Add ALL other fields from JSON to other_params (not just specific ones)
     for key, value in response_json_story.items():
-        if key in NON_TRANSLATABLE_FIELDS:
+        if key not in STORY_MODEL_FIELDS:
             other_params[key] = value
+
+    print(f"Story other_params before save: {other_params}")
 
     # Use fallback location if not provided
     location = response_json_story.get('location', fallback_location)
@@ -140,6 +147,7 @@ def save_generic_story(
         story = Story(**story_fields)
 
     story.save()
+    print(f"Story saved with other_params: {story.other_params}")
 
     # Create translation if language is not English
     if language != 'en':
@@ -159,13 +167,7 @@ def save_generic_story(
             voice_provider=voice_provider,
             flow=flow,
             company_bot=company_bot,
-            other_data={
-                'user_name': user_name,
-                'location': location,
-                'organization': response_json_story.get('organization', ''),
-                'designation': response_json_story.get('designation', ''),
-                'duration': response_json_story.get('duration', '')
-            }
+            response_json_story=response_json_story  # Pass entire JSON instead of selected fields
         )
 
     logger.info(f"Successfully saved generic story for flow {flow}, session {session}")
@@ -174,9 +176,13 @@ def save_generic_story(
     return story, problem_statement
 
 
-def create_generic_story_translation(story, language, english_data, voice_provider, flow, company_bot, other_data):
+def create_generic_story_translation(story, language, english_data, voice_provider, flow, company_bot,
+                                     response_json_story):
     """Create translation for a generic story from English to target language"""
     try:
+        print(f"Creating translation for language: {language}")
+        print(f"Story other_params: {story.other_params}")
+
         # Translate all English content to target language
         translated_data = {}
 
@@ -193,42 +199,55 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                 except Exception as e:
                     logger.warning(f"Could not translate field {field}: {e}")
                     translated_data[field] = english_data[field]
+            else:
+                translated_data[field] = english_data.get(field, '')
 
         # Handle action_steps (can be string or list)
-        action_steps = english_data['action_steps']
+        action_steps = english_data.get('action_steps', [])
         if isinstance(action_steps, str) and action_steps.strip():
-            translated_data['action_steps'] = translate_field(
-                voice_provider=voice_provider,
-                message_body=action_steps,
-                target_language=language
-            )
-        elif isinstance(action_steps, list):
-            translated_data['action_steps'] = [
-                translate_field(
+            try:
+                translated_data['action_steps'] = translate_field(
                     voice_provider=voice_provider,
-                    message_body=str(action_step),
+                    message_body=action_steps,
                     target_language=language
                 )
-                for action_step in action_steps if action_step
-            ]
+            except Exception as e:
+                logger.warning(f"Could not translate action_steps: {e}")
+                translated_data['action_steps'] = action_steps
+        elif isinstance(action_steps, list):
+            translated_action_steps = []
+            for action_step in action_steps:
+                if action_step:
+                    try:
+                        translated_step = translate_field(
+                            voice_provider=voice_provider,
+                            message_body=str(action_step),
+                            target_language=language
+                        )
+                        translated_action_steps.append(translated_step)
+                    except Exception as e:
+                        logger.warning(f"Could not translate action step: {e}")
+                        translated_action_steps.append(str(action_step))
+            translated_data['action_steps'] = translated_action_steps
         else:
             translated_data['action_steps'] = action_steps
 
-        # Prepare other_params for translation
+        # Start with a complete copy of story's other_params
         translated_other_params = story.other_params.copy() if story.other_params else {}
 
+        print(f"Initial translated_other_params: {translated_other_params}")
+
         # Translate duration if it contains text
-        if other_data.get('duration') and ' ' in str(other_data['duration']):
+        duration_value = translated_other_params.get('duration', '')
+        if duration_value and ' ' in str(duration_value):
             try:
                 translated_other_params['duration'] = translate_field(
                     voice_provider=voice_provider,
-                    message_body=str(other_data['duration']),
+                    message_body=str(duration_value),
                     target_language=language
                 )
             except Exception as e:
                 logger.warning(f"Could not translate duration: {e}")
-        elif other_data.get('duration'):
-            translated_other_params['duration'] = other_data['duration']
 
         # Handle transliteration for specific fields
         if company_bot:
@@ -237,10 +256,11 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                     company_bot=company_bot, type=VoiceType.Transliterate, language=language
                 ).first()
 
-                transliterate_fields = ['user_name', 'location', 'organization', 'designation']
+                # Include all fields that might need transliteration
+                transliterate_fields = ['user_name', 'location', 'organization', 'designation', 'district', 'block']
 
                 for field_name in transliterate_fields:
-                    field_value = other_data.get(field_name, '')
+                    field_value = translated_other_params.get(field_name, '')
                     if field_value and str(field_value).strip():
                         try:
                             is_sentence = ' ' in str(field_value)
@@ -252,11 +272,16 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                                 is_sentence=is_sentence
                             )
                             translated_other_params[field_name] = get_transliteration_output(data=transliterated)
+                            print(
+                                f"Transliterated {field_name}: {field_value} -> {translated_other_params[field_name]}")
                         except Exception as e:
                             logger.warning(f"Could not transliterate field {field_name}: {e}")
+                            # Keep original value if transliteration fails
                             translated_other_params[field_name] = str(field_value)
             except Exception as e:
                 logger.warning(f"Could not set up transliteration: {e}")
+
+        print(f"Final translated_other_params: {translated_other_params}")
 
         # Create or update translation
         translation, created = StoryTranslation.objects.get_or_create(
@@ -277,12 +302,15 @@ def create_generic_story_translation(story, language, english_data, voice_provid
         )
 
         if not created:
+            # Update existing translation
             for field in TRANSLATABLE_FIELDS:
                 if field in translated_data:
                     setattr(translation, field, translated_data[field])
             translation.action_steps = translated_data.get('action_steps', translation.action_steps)
             translation.other_params = translated_other_params
             translation.save()
+
+        print(f"Translation saved with other_params: {translation.other_params}")
 
         # Format translation content
         try:
@@ -299,3 +327,35 @@ def create_generic_story_translation(story, language, english_data, voice_provid
     except Exception as e:
         logger.error(f'Error creating generic translation: %s', e, exc_info=True)
         return None
+
+
+def get_generic_story_in_language(story, language='en'):
+    """Get generic story content in specified language"""
+    if language == 'en' or language == story.language:
+        return {
+            'title': story.title,
+            'content': story.content,
+            'tweet': story.tweet,
+            'objective': story.objective,
+            'action_steps': story.action_steps,
+            'impact': story.impact,
+            'micro_improvement': story.micro_improvement,
+            'blurb': story.blurb,
+            'other_params': story.other_params,
+        }
+
+    try:
+        translation = story.translations.get(language=language)
+        return {
+            'title': translation.title,
+            'content': translation.content,
+            'tweet': translation.tweet,
+            'objective': translation.objective,
+            'action_steps': translation.action_steps,
+            'impact': translation.impact,
+            'micro_improvement': translation.micro_improvement,
+            'blurb': translation.blurb,
+            'other_params': translation.other_params,
+        }
+    except StoryTranslation.DoesNotExist:
+        return get_generic_story_in_language(story, 'en')
