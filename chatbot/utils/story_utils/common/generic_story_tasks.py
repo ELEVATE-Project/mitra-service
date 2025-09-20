@@ -249,14 +249,114 @@ def create_generic_story_translation(story, language, english_data, voice_provid
             except Exception as e:
                 logger.warning(f"Could not translate duration: {e}")
 
-        # Handle transliteration for specific fields
+        # Handle translation of complex nested structures (generic approach)
+        def is_translatable_text(value, key=""):
+            """
+            Determine if a value should be translated based on content analysis,
+            not field name dependencies
+            """
+            if not isinstance(value, str) or not value.strip():
+                return False
+
+            value = value.strip()
+
+            # Skip very short strings (likely codes/IDs)
+            if len(value) < 3:
+                return False
+
+            # Skip if it looks like an ID, code, or technical identifier
+            if (value.isdigit() or
+                    value.replace('-', '').replace('_', '').isalnum() and len(value) < 10 or
+                    value.startswith(('http://', 'https://', 'ftp://', 'mailto:')) or
+                    value.count('@') == 1 and '.' in value.split('@')[1]):  # email pattern
+                return False
+
+            # Skip if it's a file extension or path-like
+            if (value.startswith(('.', '/', '\\')) or
+                    value.lower().endswith(('.jpg', '.png', '.pdf', '.doc', '.xls', '.mp4', '.mp3'))):
+                return False
+
+            # Skip if it's mostly numbers or special characters
+            alpha_count = sum(1 for c in value if c.isalpha())
+            if alpha_count < len(value) * 0.5:  # Less than 50% alphabetic characters
+                return False
+
+            # Skip single words that look like codes (all caps, mixed case with numbers)
+            if ' ' not in value:
+                if (value.isupper() and len(value) < 8) or any(c.isdigit() for c in value):
+                    return False
+
+            # If it has multiple words or is a sentence-like structure, it's likely translatable
+            if ' ' in value or len(value) > 20:
+                return True
+
+            # For shorter single words, be more conservative
+            # Allow if it's a common word pattern (lowercase, title case)
+            if value.islower() or value.istitle():
+                return True
+
+            return False
+
+        def translate_nested_structure(data, field_path=""):
+            """Recursively translate nested data structures using intelligent content detection"""
+            if isinstance(data, dict):
+                translated_dict = {}
+                for key, value in data.items():
+                    current_path = f"{field_path}.{key}" if field_path else key
+
+                    if isinstance(value, str) and is_translatable_text(value, key):
+                        try:
+                            translated_value = translate_field(
+                                voice_provider=voice_provider,
+                                message_body=value,
+                                target_language=language
+                            )
+                            translated_dict[key] = translated_value
+                            print(f"Auto-translated {current_path}: {value[:50]}... -> {translated_value[:50]}...")
+                        except Exception as e:
+                            logger.warning(f"Could not translate {current_path}: {e}")
+                            translated_dict[key] = value
+                    elif isinstance(value, (dict, list)):
+                        # Recursively handle nested structures
+                        translated_dict[key] = translate_nested_structure(value, current_path)
+                    else:
+                        # Keep non-text values as-is
+                        translated_dict[key] = value
+                return translated_dict
+            elif isinstance(data, list):
+                return [translate_nested_structure(item, f"{field_path}[{i}]") for i, item in enumerate(data)]
+            else:
+                return data
+
+        # Apply intelligent translation to ALL complex fields in other_params
+        for field_name, field_value in list(translated_other_params.items()):
+            if isinstance(field_value, (dict, list)):
+                try:
+                    original_value = field_value
+                    translated_other_params[field_name] = translate_nested_structure(original_value, field_name)
+                    print(f"Processed nested field: {field_name}")
+                except Exception as e:
+                    logger.warning(f"Could not process nested field {field_name}: {e}")
+            elif isinstance(field_value, str) and is_translatable_text(field_value, field_name):
+                # Handle top-level string fields that need translation
+                try:
+                    translated_other_params[field_name] = translate_field(
+                        voice_provider=voice_provider,
+                        message_body=field_value,
+                        target_language=language
+                    )
+                    print(f"Auto-translated top-level field {field_name}: {field_value[:50]}...")
+                except Exception as e:
+                    logger.warning(f"Could not translate top-level field {field_name}: {e}")
+
+        # Handle transliteration for specific fields (names, places) - these still need explicit handling
         if company_bot:
             try:
                 voice_transliterate_provider = Voice.objects.filter(
                     company_bot=company_bot, type=VoiceType.Transliterate, language=language
                 ).first()
 
-                # Include all fields that might need transliteration
+                # Only transliterate fields that are specifically names/places (these need explicit handling)
                 transliterate_fields = ['user_name', 'location', 'organization', 'designation', 'district', 'block']
 
                 for field_name in transliterate_fields:
