@@ -29,6 +29,35 @@ def save_generic_story(
     if not isinstance(response_json_story, dict):
         raise Exception("Response must be a valid JSON object")
 
+    # Parse JSON strings within the response
+    def parse_json_strings(data):
+        """Parse JSON strings that are arrays [] or objects {} within the data"""
+        if isinstance(data, dict):
+            parsed_data = {}
+            for key, value in data.items():
+                if isinstance(value, str) and value.strip():
+                    # Check if string starts and ends with [] or {}
+                    stripped_value = value.strip()
+                    if ((stripped_value.startswith('[') and stripped_value.endswith(']')) or
+                        (stripped_value.startswith('{') and stripped_value.endswith('}'))):
+                        try:
+                            parsed_data[key] = json.loads(stripped_value)
+                        except json.JSONDecodeError:
+                            # If parsing fails, keep the original string
+                            parsed_data[key] = value
+                    else:
+                        parsed_data[key] = value
+                else:
+                    parsed_data[key] = parse_json_strings(value) if isinstance(value, (dict, list)) else value
+            return parsed_data
+        elif isinstance(data, list):
+            return [parse_json_strings(item) for item in data]
+        else:
+            return data
+
+    # Parse any JSON strings in the response
+    response_json_story = parse_json_strings(response_json_story)
+
     # Define Story model fields that need text cleaning
     CLEANABLE_FIELDS = {'title', 'content', 'blurb', 'objective', 'impact'}
 

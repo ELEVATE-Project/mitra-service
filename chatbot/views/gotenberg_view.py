@@ -24,11 +24,11 @@ def generate_pdf_view(request):
     pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
     print("pdf_content: ", pdf_content)
     print("pdf_content type: ", type(pdf_content))
-    if pdf_generated:
-        http_response = HttpResponse(pdf_generated, content_type="application/pdf")
-        http_response["Content-Disposition"] = 'inline; filename="output.pdf"'
-        return http_response
-    else:
-        return HttpResponse("Error generating pdf!", status=500)
+    # if pdf_generated:
+    #     http_response = HttpResponse(pdf_generated, content_type="application/pdf")
+    #     http_response["Content-Disposition"] = 'inline; filename="output.pdf"'
+    #     return http_response
+    # else:
+    #     return HttpResponse("Error generating pdf!", status=500)
 
-    # return HttpResponse(html_content, content_type="text/html", status=200)
+    return HttpResponse(html_content, content_type="text/html", status=200)

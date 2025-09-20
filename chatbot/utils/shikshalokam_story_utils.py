@@ -119,19 +119,24 @@ def get_story_html(story, profile, flow):
     if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
                 SessionFlowName.Reflection]:
         css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/story_pdf.css"))
-    else:
+    elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
         css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/shiksha_chaupal/mom_report_pdf.css"))
-
+    else:
+        css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/listening_activity/la_report_pdf.css"))
     if profile:
         if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/story')
-        else:
+        elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/chaupal-story')
+        else:
+            company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
     else:
         if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
             company_bot = CompanyBot.objects.get(route='/story')
-        else:
+        elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
             company_bot = CompanyBot.objects.get(route='/chaupal-story')
+        else:
+            company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
 
     translation_languages = list(story.translations.values_list('language', flat=True))
     chat_session = ChatSession.objects.filter(session=story.session).first()
@@ -230,7 +235,7 @@ def get_story_html(story, profile, flow):
         )
     else:
         html_content += get_common_report_html(
-            story=object_to_pass, profile=profile
+            story=object_to_pass, profile=profile, story_vernacular=story_vernacular
         )
 
     html_content += f"""
