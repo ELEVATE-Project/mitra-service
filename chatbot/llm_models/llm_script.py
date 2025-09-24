@@ -237,6 +237,7 @@ def handle_bedrock_model(
         if inference_config:
             request_payload['inferenceConfig'] = inference_config
         if tools:
+            print("tools: ", tools)
             request_payload['toolConfig'] = tools.get('toolConfig')
 
         logger.info('Bedrock request payload: %s', request_payload)
