@@ -16,7 +16,15 @@ class PromptBuilder:
         if state_machine and state_machine.completion_criteria:
             system_parts.append(f"Completion Criteria:\n{state_machine.completion_criteria.strip()}")
 
-        tool_context = company_bot.tool_context.strip() if company_bot.tool_context else ""
+        tool_context = ""
+        if (state_machine and
+                hasattr(state_machine, 'tool_context') and
+                state_machine.tool_context and
+                state_machine.tool_context.strip()):
+            tool_context = state_machine.tool_context.strip()
+        elif company_bot.tool_context and company_bot.tool_context.strip():
+            tool_context = company_bot.tool_context.strip()
+
         if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
             result = [{'text': system_parts[0]}]
             if len(system_parts) > 1:
