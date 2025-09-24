@@ -3,6 +3,8 @@ from chatbot.models.company_models import CompanyStateMachine
 from chatbot.services.response_handlers.base_response_handler import BaseResponseHandler
 from chatbot.utils.shiksha_chaupal.date_utils import handle_date_prompt
 import logging
+import json
+from json_repair import repair_json
 
 logger = logging.getLogger('django')
 
@@ -71,7 +73,7 @@ class CommonResponseHandler(BaseResponseHandler):
     def get_messages_for_llm(self, **kwargs):
         """Use temp_messages if available, otherwise original messages"""
         temp_messages = kwargs.get('temp_messages')
-        messages=kwargs.get('messages')
+        messages = kwargs.get('messages')
         return temp_messages if temp_messages else messages
 
     def process_response(self, response, chat_session, chunks, **kwargs):
@@ -86,13 +88,22 @@ class CommonResponseHandler(BaseResponseHandler):
         if skip_llm_call:
             is_function_call = True
             expected_output_response = None
+            reason_text = None
             print("DEBUG: Skipping LLM call, treating as function call")
         else:
             is_function_call = self.is_function_call(response=response)
             print(f"DEBUG: is_function_call: {is_function_call}")
 
-            expected_output_response = self._extract_expected_output(response)
-            print(f"DEBUG: expected_output_response: '{expected_output_response}'")
+            if is_function_call:
+                # For function calls, don't extract - just store the whole response
+                expected_output_response = None
+                reason_text = None
+                print("DEBUG: Function call detected, not extracting response/reason")
+            else:
+                # Extract both response and reason from the response only for non-function calls
+                expected_output_response, reason_text = self._extract_response_and_reason(response)
+                print(f"DEBUG: expected_output_response: '{expected_output_response}'")
+                print(f"DEBUG: reason_text: '{reason_text}'")
 
         company_bot = kwargs['company_bot']
         session_id = kwargs['session_id']
@@ -103,18 +114,9 @@ class CommonResponseHandler(BaseResponseHandler):
         target_stage = kwargs.get('target_stage', False)
         chat_messages = self.get_messages_for_llm(**kwargs)
 
-        # Check if we have expected_output and should treat as regular response
-        if is_function_call and expected_output_response:
-            print(
-                f"DEBUG: Function call has expected_output: '{expected_output_response}'. Treating as regular response.")
-            logger.info(f"Function call has expected_output: {expected_output_response}. Treating as regular response.")
-            return self._handle_regular_response(
-                response=expected_output_response, chat_session=chat_session, company_bot=company_bot,
-                session_id=session_id, channel_name=channel_name, language=language, profile_id=profile_id,
-                chunks=chunks, current_step=current_step
-            )
-        elif is_function_call:
-            print("DEBUG: Processing as function call (no expected_output or empty expected_output)")
+        # Process based on response type
+        if is_function_call:
+            print("DEBUG: Processing as function call")
             return self._handle_function_call(
                 response=response, chat_session=chat_session, company_bot=company_bot,
                 session_id=session_id, channel_name=channel_name, language=language, profile_id=profile_id,
@@ -122,11 +124,88 @@ class CommonResponseHandler(BaseResponseHandler):
             )
         else:
             print("DEBUG: Processing as regular response")
+            # For non-function calls, use extracted response if available and not empty, otherwise original response
+            final_response = expected_output_response if (
+                        expected_output_response is not None and expected_output_response != "") else response
             return self._handle_regular_response(
-                response=response, chat_session=chat_session, company_bot=company_bot,
+                response=final_response, chat_session=chat_session, company_bot=company_bot,
                 session_id=session_id, channel_name=channel_name, language=language, profile_id=profile_id,
-                chunks=chunks, current_step=current_step
+                chunks=chunks, current_step=current_step, reason=reason_text
             )
+
+    def _extract_response_and_reason(self, response):
+        """Extract both response and reason from the response"""
+        print(f"DEBUG: Extracting response and reason from response type: {type(response)}")
+        print(f"DEBUG: Response content: {response}")
+
+        try:
+            # If response is a string, try to parse it as JSON
+            if isinstance(response, str):
+                print("DEBUG: Response is string, attempting JSON parsing with json_repair")
+                try:
+                    # First try regular json parsing
+                    parsed_response = json.loads(response)
+                except json.JSONDecodeError:
+                    try:
+                        # If that fails, try json_repair
+                        repaired_json = repair_json(response)
+                        parsed_response = json.loads(repaired_json)
+                        print("DEBUG: Successfully repaired and parsed JSON")
+                    except Exception as repair_error:
+                        print(f"DEBUG: JSON repair failed: {repair_error}")
+                        # If all parsing fails, use the string as response
+                        return response, None
+
+                response = parsed_response
+
+            # If response is now a dict, extract parameters or input first
+            if isinstance(response, dict):
+                print("DEBUG: Response is dict, checking for parameters/input keys")
+
+                # Pop parameters or input if they exist
+                extracted_data = response.pop("parameters", response.pop("input", None))
+
+                if extracted_data:
+                    print("DEBUG: Found parameters/input, using extracted data")
+                    response_data = extracted_data
+                else:
+                    print("DEBUG: No parameters/input found, using original response")
+                    response_data = response
+
+                # Now look for response and reason keys
+                if isinstance(response_data, dict):
+                    response_text = response_data.get('response', '')
+                    reason_text = response_data.get('reason', '')
+
+                    print(f"DEBUG: Extracted - response: '{response_text}', reason: '{reason_text}'")
+                    return response_text, reason_text
+                elif isinstance(response_data, str):
+                    print("DEBUG: Response data is string, trying to parse as JSON")
+                    try:
+                        # Try to parse the string as JSON
+                        parsed_data = json.loads(response_data)
+                    except json.JSONDecodeError:
+                        try:
+                            # Try json_repair on the string
+                            repaired_data = repair_json(response_data)
+                            parsed_data = json.loads(repaired_data)
+                            print("DEBUG: Successfully repaired string data")
+                        except Exception as e:
+                            print(f"DEBUG: Failed to parse string data: {e}")
+                            return response_data, None
+
+                    if isinstance(parsed_data, dict):
+                        response_text = parsed_data.get('response', '')
+                        reason_text = parsed_data.get('reason', '')
+                        print(f"DEBUG: Parsed string data - response: '{response_text}', reason: '{reason_text}'")
+                        return response_text, reason_text
+
+        except Exception as e:
+            print(f"DEBUG: Error extracting response and reason: {e}")
+            logger.error(f"Error extracting response and reason: {e}")
+
+        print("DEBUG: Fallback - returning original response as string")
+        return str(response) if not isinstance(response, str) else response, None
 
     def _extract_expected_output(self, response):
         """Extract expected_output from function call response if it exists and is not empty"""
@@ -213,7 +292,6 @@ class CommonResponseHandler(BaseResponseHandler):
         print("DEBUG: No expected_output found, returning None")
         return None
 
-
     def _handle_function_call(self, response, chat_session, company_bot,
                               session_id, channel_name, language, profile_id, chunks, messages, skip_next_stage,
                               target_stage):
@@ -239,16 +317,21 @@ class CommonResponseHandler(BaseResponseHandler):
             language=language, company_bot=company_bot
         )
 
+        # Prepare other_params with the whole function call response
+        other_params = {'function_call_response': response}
+        print(f"DEBUG: Saving whole function call response in other_params: {response}")
+
         self.save_message(
             session_id=session_id, profile_id=profile_id, message=bot_question, chunks=chunks,
-            status=chat_status, translated_message=translated_message, stage=state_machine.name
+            status=chat_status, translated_message=translated_message, stage=state_machine.name,
+            other_params=other_params
         )
 
         return response
 
     def _handle_regular_response(self, response, chat_session, company_bot,
                                  session_id, channel_name, language, profile_id,
-                                 chunks, current_step):
+                                 chunks, current_step, reason=None):
         """Handle regular response for guided guest"""
         state_machine = CompanyStateMachine.objects.get(
             company_bot=company_bot, step=chat_session.current_step
@@ -259,9 +342,16 @@ class CommonResponseHandler(BaseResponseHandler):
             language=language, company_bot=company_bot
         )
 
+        # Prepare other_params with reason if available
+        other_params = {}
+        if reason:
+            other_params['reason'] = reason
+            print(f"DEBUG: Adding reason to other_params: {reason}")
+
         self.save_message(
             session_id=session_id, profile_id=profile_id, message=response, chunks=chunks,
-            status=ChatStatus.IN_PROGRESS, translated_message=translated_message, stage=state_machine.name
+            status=ChatStatus.IN_PROGRESS, translated_message=translated_message, stage=state_machine.name,
+            other_params=other_params if other_params else None
         )
 
         return response
