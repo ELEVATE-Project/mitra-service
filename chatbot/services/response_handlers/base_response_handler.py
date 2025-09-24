@@ -92,6 +92,10 @@ class BaseResponseHandler(ABC):
             response, chat_session, chunks, **kwargs
         )
 
+    def analyze_response_for_postprocessing(self, response):
+        """Analyze if response needs postprocessing - can be overridden by subclasses"""
+        return self.is_function_call(response)
+
     def get_llm_response(self, **kwargs):
         """Get response from LLM provider"""
         company_bot = kwargs['company_bot']

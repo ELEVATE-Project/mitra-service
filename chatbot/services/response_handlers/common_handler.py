@@ -76,6 +76,28 @@ class CommonResponseHandler(BaseResponseHandler):
         messages = kwargs.get('messages')
         return temp_messages if temp_messages else messages
 
+    def _analyze_response(self, response):
+        """
+        Analyze response to determine if it's a function call and extract content.
+        """
+        is_actual_function_call = self.is_function_call(response=response)
+
+        if is_actual_function_call:
+            return True, None, None
+
+        extracted_response, reason_text = self._extract_response_and_reason(response)
+
+        if extracted_response == '':
+            print("DEBUG: Empty response detected after extraction, treating as function call for state transition")
+            return True, extracted_response, reason_text
+
+        return False, extracted_response, reason_text
+
+    def analyze_response_for_postprocessing(self, response):
+        """Override to handle empty responses as function calls for postprocessing"""
+        is_function_call, _, _ = self._analyze_response(response)
+        return is_function_call
+
     def process_response(self, response, chat_session, chunks, **kwargs):
         """Process common response"""
         print(f"DEBUG: Starting process_response with response type: {type(response)}")
@@ -85,32 +107,18 @@ class CommonResponseHandler(BaseResponseHandler):
         print(f"DEBUG: skip_llm_call: {skip_llm_call}")
 
         current_step = chat_session.current_step
+
         if skip_llm_call:
             is_function_call = True
             expected_output_response = None
             reason_text = None
             print("DEBUG: Skipping LLM call, treating as function call")
         else:
-            is_function_call = self.is_function_call(response=response)
-
-            if not is_function_call and isinstance(response, dict):
-                response_text = response.get('response', None)
-                if response_text == '':
-                    is_function_call = True
-                    print("DEBUG: Empty response detected, treating as function call for state transition")
-
-            print(f"DEBUG: is_function_call: {is_function_call}")
-
-            if is_function_call:
-                # For function calls, don't extract - just store the whole response
-                expected_output_response = None
-                reason_text = None
-                print("DEBUG: Function call detected, not extracting response/reason")
-            else:
-                # Extract both response and reason from the response only for non-function calls
-                expected_output_response, reason_text = self._extract_response_and_reason(response)
-                print(f"DEBUG: expected_output_response: '{expected_output_response}'")
-                print(f"DEBUG: reason_text: '{reason_text}'")
+            # Use unified analysis - this handles everything including empty responses
+            is_function_call, expected_output_response, reason_text = self._analyze_response(response)
+            print(f"DEBUG: Analysis result - is_function_call: {is_function_call}")
+            print(f"DEBUG: expected_output_response: '{expected_output_response}'")
+            print(f"DEBUG: reason_text: '{reason_text}'")
 
         company_bot = kwargs['company_bot']
         session_id = kwargs['session_id']
