@@ -154,9 +154,14 @@ class CommonResponseHandler(BaseResponseHandler):
         print(f"DEBUG: Response content: {response}")
 
         try:
-            # If response is a string, try to parse it as JSON
             if isinstance(response, str):
-                print("DEBUG: Response is string, attempting JSON parsing with json_repair")
+                print("DEBUG: Response is string")
+
+                if not (response.strip().startswith('{') and response.strip().endswith('}')):
+                    print("DEBUG: String doesn't look like JSON, treating as plain text response")
+                    return response, None
+
+                print("DEBUG: String looks like JSON, attempting parsing")
                 try:
                     # First try regular json parsing
                     parsed_response = json.loads(response)
@@ -173,7 +178,6 @@ class CommonResponseHandler(BaseResponseHandler):
 
                 response = parsed_response
 
-            # If response is now a dict, extract parameters or input first
             if isinstance(response, dict):
                 print("DEBUG: Response is dict, checking for parameters/input keys")
 
