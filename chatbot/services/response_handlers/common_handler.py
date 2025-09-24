@@ -92,6 +92,13 @@ class CommonResponseHandler(BaseResponseHandler):
             print("DEBUG: Skipping LLM call, treating as function call")
         else:
             is_function_call = self.is_function_call(response=response)
+
+            if not is_function_call and isinstance(response, dict):
+                response_text = response.get('response', None)
+                if response_text == '':
+                    is_function_call = True
+                    print("DEBUG: Empty response detected, treating as function call for state transition")
+
             print(f"DEBUG: is_function_call: {is_function_call}")
 
             if is_function_call:
@@ -126,7 +133,7 @@ class CommonResponseHandler(BaseResponseHandler):
             print("DEBUG: Processing as regular response")
             # For non-function calls, use extracted response if available and not empty, otherwise original response
             final_response = expected_output_response if (
-                        expected_output_response is not None and expected_output_response != "") else response
+                    expected_output_response is not None and expected_output_response != "") else response
             return self._handle_regular_response(
                 response=final_response, chat_session=chat_session, company_bot=company_bot,
                 session_id=session_id, channel_name=channel_name, language=language, profile_id=profile_id,
