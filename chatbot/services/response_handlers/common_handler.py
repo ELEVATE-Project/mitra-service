@@ -76,6 +76,25 @@ class CommonResponseHandler(BaseResponseHandler):
         messages = kwargs.get('messages')
         return temp_messages if temp_messages else messages
 
+    def is_function_call(self, response):
+        """Override to handle empty responses as function calls"""
+        # First check parent logic for actual function calls
+        if super().is_function_call(response):
+            return True
+
+        # If not an actual function call, check for empty responses after extraction
+        try:
+            extracted_response, _ = self._extract_response_and_reason(response)
+            if extracted_response == '':
+                print(
+                    "DEBUG: Empty response detected in is_function_call, treating as function call for postprocessing")
+                return True
+        except Exception as e:
+            print(f"DEBUG: Error in is_function_call extraction: {e}")
+            logger.error(f"Error in is_function_call extraction: {e}")
+
+        return False
+
     def _analyze_response(self, response):
         """
         Analyze response to determine if it's a function call and extract content.
