@@ -92,6 +92,10 @@ class BaseResponseHandler(ABC):
             response, chat_session, chunks, **kwargs
         )
 
+    def analyze_response_for_postprocessing(self, response):
+        """Analyze if response needs postprocessing - can be overridden by subclasses"""
+        return self.is_function_call(response)
+
     def get_llm_response(self, **kwargs):
         """Get response from LLM provider"""
         company_bot = kwargs['company_bot']
@@ -153,13 +157,79 @@ class BaseResponseHandler(ABC):
     def is_function_call(self, response):
         """Check if response is a function call"""
         if isinstance(response, dict):
-            return True
+            # Check for various function call formats
+
+            # Format 1: Direct tool use format (OLD)
+            # {'toolUseId': '...', 'name': 'get_state_information', 'input': {...}}
+            if 'toolUseId' in response and 'name' in response:
+                return response.get('name') == 'get_state_information'
+
+            # Format 2: Simple function call format (NEW)
+            # {'name': 'get_state_information', 'parameters': {...}}
+            elif 'name' in response and 'parameters' in response:
+                return response.get('name') == 'get_state_information'
+
+            # Format 3: OpenAI function_call format
+            # {'function_call': {'name': 'get_state_information', 'arguments': {...}}}
+            elif 'function_call' in response:
+                function_call = response.get('function_call', {})
+                return function_call.get('name') == 'get_state_information'
+
+            # Format 4: OpenAI tool_calls format
+            # {'tool_calls': [{'function': {'name': 'get_state_information', ...}}]}
+            elif 'tool_calls' in response:
+                tool_calls = response.get('tool_calls', [])
+                for tool_call in tool_calls:
+                    if 'function' in tool_call:
+                        function = tool_call.get('function', {})
+                        if function.get('name') == 'get_state_information':
+                            return True
+                return False
+
+            # Format 5: Bedrock response format
+            # {'output': {'message': {'content': [{'toolUse': {'name': 'get_state_information', ...}}]}}}
+            elif 'output' in response and 'message' in response.get('output', {}):
+                content = response['output']['message'].get('content', [])
+                for item in content:
+                    if 'toolUse' in item:
+                        tool_use = item.get('toolUse', {})
+                        if tool_use.get('name') == 'get_state_information':
+                            return True
+                return False
+
+            # Format 6: Just 'parameters' or 'input' without 'name' - check carefully
+            elif 'parameters' in response or 'input' in response:
+                # If it only has parameters/input but no clear function call indicators,
+                # check if the nested data contains function call info
+                nested_data = response.get('parameters') or response.get('input')
+                if isinstance(nested_data, dict):
+                    # Function calls have 'next_state_name' - this is the key differentiator
+                    if 'next_state_name' in nested_data:
+                        return True
+                    # Regular responses have 'response' key - this indicates it's not a function call
+                    elif 'response' in nested_data:
+                        return False
+                    # If neither, fall back to string search
+                    else:
+                        return 'get_state_information' in str(nested_data)
+                # Check if 'get_state_information' appears in the nested data
+                return 'get_state_information' in str(nested_data)
+
+            # Format 7: Check if 'get_state_information' appears anywhere in the dict values
+            # But be more restrictive - only if it appears as a function name, not in text
+            elif any(key in response for key in ['toolUseId', 'tool_calls', 'function_call']):
+                return 'get_state_information' in str(response)
+
+            # If none of the above, it's likely a regular dict response (like {"response": "...", "reason": "..."})
+            return False
+
         elif isinstance(response, str):
             return 'get_state_information' in response
+
         return False
 
     def save_message(self, session_id, profile_id, message, chunks,
-                     status, translated_message, stage=None):
+                     status, translated_message, stage=None, other_params=None):
         """Save message to database"""
         save_in_company_db(
             session_id=session_id,
@@ -169,7 +239,8 @@ class BaseResponseHandler(ABC):
             chunks=chunks,
             status=status,
             translated_message=translated_message,
-            stage=stage
+            stage=stage,
+            other_params=other_params
         )
 
     def translate_message(self, message, channel_name, step_number, language, company_bot):
