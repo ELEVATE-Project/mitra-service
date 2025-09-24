@@ -37,6 +37,7 @@ class CompanyStateMachine(models.Model):
     context = models.TextField(
         null=True, blank=True, help_text="Provide the main prompt or description of the state, explaining its purpose."
     )
+    tool_context = models.TextField(null=True, blank=True)
     preprocess_type = models.CharField(
         max_length=10, choices=PreProcessType.choices, default=PreProcessType.NONE,
         help_text="Choose how this stage should be preprocessed: "
