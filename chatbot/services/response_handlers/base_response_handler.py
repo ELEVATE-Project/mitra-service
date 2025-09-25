@@ -103,6 +103,30 @@ class BaseResponseHandler(ABC):
         response = None
         message_to_send = self.get_messages_for_llm(**kwargs)
 
+        session_id = kwargs['session_id']
+        chat_session = ChatSession.objects.get(session=session_id)
+        state_machine = None
+        try:
+            state_machine = CompanyStateMachine.objects.get(
+                company_bot=company_bot, step=chat_session.current_step
+            )
+        except Exception as e:
+            logger.error(f"Error getting state machine for tools: {e}")
+
+        tools = None
+        if (state_machine and
+            hasattr(state_machine, 'tool_context') and
+            state_machine.tool_context and
+            state_machine.tool_context.strip()):
+            tool_context = state_machine.tool_context.strip()
+            try:
+                import json_repair
+                tools = json_repair.repair_json(tool_context, return_objects=True)
+                logger.info("Using state machine tool_context")
+            except Exception as e:
+                logger.error(f"Failed to parse state machine tool_context: {e}")
+                tools = None
+
         if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
             try:
                 response = handle_bedrock_model(
@@ -111,29 +135,30 @@ class BaseResponseHandler(ABC):
                     model_name=company_bot.llm_model,
                     temperature=company_bot.bot_temperature,
                     max_token=company_bot.max_token,
-                    company_bot=company_bot
+                    company_bot=company_bot,
+                    tools=tools
                 )
             except Exception as e:
                 logger.error(f"Bedrock Error: %s", e)
                 response = None
 
         elif company_bot.provider == LLMProvider.OPENAI:
-            tools = self.get_tools_config()
+            openai_tools = tools if tools else self.get_default_tools_config()
             response = handle_openai_model(
                 system_prompt=system_prompt,
                 messages=message_to_send,
                 model_name=company_bot.llm_model,
                 temperature=company_bot.bot_temperature,
                 max_token=company_bot.max_token,
-                tools=tools,
+                tools=openai_tools,
                 tool_choice='auto',
                 is_json_response=False
             )
 
         return response
 
-    def get_tools_config(self):
-        """Get tools configuration - common for all bots currently"""
+    def get_default_tools_config(self):
+        """Get default tools configuration - fallback for when no tool_context is available"""
         return [
             {
                 "type": "function",
@@ -153,6 +178,11 @@ class BaseResponseHandler(ABC):
                 }
             }
         ]
+
+    def get_tools_config(self):
+        """Deprecated - use get_default_tools_config() or PromptBuilder.get_tools_from_state_machine()"""
+        logger.warning("get_tools_config() is deprecated, use get_default_tools_config() instead")
+        return self.get_default_tools_config()
 
     def is_function_call(self, response):
         """Check if response is a function call"""
