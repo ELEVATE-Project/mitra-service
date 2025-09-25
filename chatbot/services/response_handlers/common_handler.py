@@ -279,10 +279,21 @@ class CommonResponseHandler(BaseResponseHandler):
 
                 logger.info(f"DEBUG: Extracted data type: {type(extracted_data)}")
                 if extracted_data:
-                    logger.info(f"DEBUG: Extracted data keys: {list(extracted_data.keys()) if isinstance(extracted_data, dict) else 'Not a dict'}")
+                    logger.info(
+                        f"DEBUG: Extracted data keys: {list(extracted_data.keys()) if isinstance(extracted_data, dict) else 'Not a dict'}")
 
                 # Now extract response and reason from extracted_data
                 if extracted_data and isinstance(extracted_data, dict):
+                    # Check if we got an empty input/parameters dictionary FIRST (applies to all formats)
+                    if len(extracted_data) == 0:
+                        print(
+                            f"DEBUG: Empty extracted_data detected from LLM (input/parameters) - treating as function call")
+                        logger.info(
+                            f"Empty extracted_data detected from LLM (input/parameters) - treating as function call: {response}")
+                        # Return empty strings to trigger function call behavior
+                        return '', 'LLM returned empty input/parameters - treating as function call to proceed to next state'
+
+                    # If not empty, extract normally
                     response_text = extracted_data.get('response', '')
                     reason_text = extracted_data.get('reason', '')
                     logger.info(
