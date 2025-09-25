@@ -169,38 +169,38 @@ class CommonResponseHandler(BaseResponseHandler):
 
     def _extract_response_and_reason(self, response):
         """Extract both response and reason from the response"""
-        print(f"DEBUG: Extracting response and reason from response type: {type(response)}")
-        print(f"DEBUG: Response content preview: {str(response)[:200]}...")
+        logger.info(f"DEBUG: Extracting response and reason from response type: {type(response)}")
+        logger.info(f"DEBUG: Response content preview: {str(response)[:200]}...")
 
         try:
             if isinstance(response, str):
-                print("DEBUG: Response is string")
+                logger.info("DEBUG: Response is string")
 
                 if not (response.strip().startswith('{') and response.strip().endswith('}')):
-                    print("DEBUG: String doesn't look like JSON, treating as plain text response")
+                    logger.info("DEBUG: String doesn't look like JSON, treating as plain text response")
                     return response, None
 
-                print("DEBUG: String looks like JSON, attempting parsing")
+                logger.info("DEBUG: String looks like JSON, attempting parsing")
                 try:
                     # First try regular json parsing
                     parsed_response = json.loads(response)
-                    print("DEBUG: Successfully parsed JSON from string")
+                    logger.info("DEBUG: Successfully parsed JSON from string")
                 except json.JSONDecodeError:
                     try:
                         # If that fails, try json_repair
                         repaired_json = repair_json(response)
                         parsed_response = json.loads(repaired_json)
-                        print("DEBUG: Successfully repaired and parsed JSON")
+                        logger.info("DEBUG: Successfully repaired and parsed JSON")
                     except Exception as repair_error:
-                        print(f"DEBUG: JSON repair failed: {repair_error}")
+                        logger.info(f"DEBUG: JSON repair failed: {repair_error}")
                         # If all parsing fails, use the string as response
                         return response, None
 
                 response = parsed_response
 
             if isinstance(response, dict):
-                print("DEBUG: Processing dict response")
-                print(f"DEBUG: Dict keys: {list(response.keys())}")
+                logger.info("DEBUG: Processing dict response")
+                logger.info(f"DEBUG: Dict keys: {list(response.keys())}")
 
                 # IMPORTANT: Work on a copy to avoid modifying the original response
                 response_copy = response.copy()
@@ -209,27 +209,27 @@ class CommonResponseHandler(BaseResponseHandler):
                 # Handle different formats - USE GET() NOT POP() to preserve original
                 if 'toolUseId' in response_copy and 'input' in response_copy:
                     # Direct tool use format (Bedrock/Claude)
-                    print("DEBUG: Found direct tool use format (toolUseId + input)")
+                    logger.info("DEBUG: Found direct tool use format (toolUseId + input)")
                     extracted_data = response_copy.get('input')  # Use get() not pop()
 
                 elif 'name' in response_copy and 'parameters' in response_copy:
                     # Simple function call format
-                    print("DEBUG: Found simple function call format (name + parameters)")
+                    logger.info("DEBUG: Found simple function call format (name + parameters)")
                     extracted_data = response_copy.get('parameters')  # Use get() not pop()
 
                 elif 'parameters' in response_copy:
                     # Parameters format
-                    print("DEBUG: Found parameters format")
+                    logger.info("DEBUG: Found parameters format")
                     extracted_data = response_copy.get('parameters')  # Use get() not pop()
 
                 elif 'input' in response_copy:
                     # Input format
-                    print("DEBUG: Found input format")
+                    logger.info("DEBUG: Found input format")
                     extracted_data = response_copy.get('input')  # Use get() not pop()
 
                 elif 'output' in response_copy and 'message' in response_copy['output']:
                     # Bedrock nested response format
-                    print("DEBUG: Found Bedrock nested response format")
+                    logger.info("DEBUG: Found Bedrock nested response format")
                     content = response_copy['output']['message'].get('content', [])
                     for item in content:
                         if 'toolUse' in item:
@@ -238,7 +238,7 @@ class CommonResponseHandler(BaseResponseHandler):
 
                 elif 'function_call' in response_copy:
                     # OpenAI function_call format
-                    print("DEBUG: Found OpenAI function_call format")
+                    logger.info("DEBUG: Found OpenAI function_call format")
                     arguments = response_copy['function_call'].get('arguments', {})
                     if isinstance(arguments, str):
                         try:
@@ -254,7 +254,7 @@ class CommonResponseHandler(BaseResponseHandler):
 
                 elif 'tool_calls' in response_copy:
                     # OpenAI tool_calls format
-                    print("DEBUG: Found OpenAI tool_calls format")
+                    logger.info("DEBUG: Found OpenAI tool_calls format")
                     tool_calls = response_copy['tool_calls']
                     if tool_calls and len(tool_calls) > 0:
                         tool_call = tool_calls[0]  # Take the first tool call
@@ -273,59 +273,58 @@ class CommonResponseHandler(BaseResponseHandler):
                                 extracted_data = arguments
                 else:
                     # Direct format - check if response and reason are directly in the dict
-                    print("DEBUG: Checking if response/reason are directly in dict")
+                    logger.info("DEBUG: Checking if response/reason are directly in dict")
                     if 'response' in response_copy or 'reason' in response_copy:
                         extracted_data = response_copy
 
-                print(f"DEBUG: Extracted data type: {type(extracted_data)}")
+                logger.info(f"DEBUG: Extracted data type: {type(extracted_data)}")
                 if extracted_data:
-                    print(
-                        f"DEBUG: Extracted data keys: {list(extracted_data.keys()) if isinstance(extracted_data, dict) else 'Not a dict'}")
+                    logger.info(f"DEBUG: Extracted data keys: {list(extracted_data.keys()) if isinstance(extracted_data, dict) else 'Not a dict'}")
 
                 # Now extract response and reason from extracted_data
                 if extracted_data and isinstance(extracted_data, dict):
                     response_text = extracted_data.get('response', '')
                     reason_text = extracted_data.get('reason', '')
-                    print(
+                    logger.info(
                         f"DEBUG: Final extraction - response: '{response_text[:100]}...', reason: '{reason_text[:100]}...'")
                     return response_text, reason_text
 
                 elif extracted_data and isinstance(extracted_data, str):
                     # If extracted_data is a string, try to parse it as JSON
-                    print("DEBUG: Extracted data is string, trying to parse as JSON")
+                    logger.info("DEBUG: Extracted data is string, trying to parse as JSON")
                     try:
                         parsed_data = json.loads(extracted_data)
                     except json.JSONDecodeError:
                         try:
                             repaired_data = repair_json(extracted_data)
                             parsed_data = json.loads(repaired_data)
-                            print("DEBUG: Successfully repaired string data")
+                            logger.info("DEBUG: Successfully repaired string data")
                         except Exception as e:
-                            print(f"DEBUG: Failed to parse string data: {e}")
+                            logger.info(f"DEBUG: Failed to parse string data: {e}")
                             return extracted_data, None
 
                     if isinstance(parsed_data, dict):
                         response_text = parsed_data.get('response', '')
                         reason_text = parsed_data.get('reason', '')
-                        print(
+                        logger.info(
                             f"DEBUG: Parsed string data - response: '{response_text[:100]}...', reason: '{reason_text[:100]}...'")
                         return response_text, reason_text
 
                 # If no extraction worked, treat the original dict as the data
-                print("DEBUG: No specific format matched, checking original dict for response/reason")
+                logger.info("DEBUG: No specific format matched, checking original dict for response/reason")
                 response_text = response_copy.get('response', '')
                 reason_text = response_copy.get('reason', '')
                 if response_text or reason_text:
-                    print(
+                    logger.info(
                         f"DEBUG: Found in original dict - response: '{response_text[:100]}...', reason: '{reason_text[:100]}...'")
                     return response_text, reason_text
 
         except Exception as e:
-            print(f"DEBUG: Error extracting response and reason: {e}")
+            logger.info(f"DEBUG: Error extracting response and reason: {e}")
             logger.error(f"Error extracting response and reason: {e}")
 
         # Fallback - return original response as string
-        print("DEBUG: Fallback - returning original response as string")
+        logger.info("DEBUG: Fallback - returning original response as string")
         final_response = str(response) if not isinstance(response, str) else response
         return final_response, None
 
