@@ -21,7 +21,7 @@ class PromptBuilder:
                 hasattr(state_machine, 'tool_context') and
                 state_machine.tool_context and
                 state_machine.tool_context.strip()):
-            tool_context = state_machine.tool_context.strip()
+            tool_context = None
         elif company_bot.tool_context and company_bot.tool_context.strip():
             tool_context = company_bot.tool_context.strip()
 
