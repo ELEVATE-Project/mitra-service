@@ -60,7 +60,7 @@
     top: 0;
     right: 0;
     height: 50px;
-    max-width: 100%;
+    max-width: 250px;
 }
 
 /* Remove all continuation text elements */
@@ -190,15 +190,6 @@
         position: relative;
         height: 60px;
         margin-bottom: 20px;
-    }
-
-    /* Logo positioning in top right for continuation pages */
-    .qa-continuation-logo {
-        position: absolute;
-        top: 0;
-        right: 0;
-        height: 50px;
-        max-width: 150px;
     }
 
     /* Ensure NO text appears on continuation pages */
