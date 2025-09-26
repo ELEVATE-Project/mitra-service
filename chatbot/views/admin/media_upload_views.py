@@ -1519,11 +1519,21 @@ class BatchMediaSaveView(View):
 
         try:
             company_bot = CompanyBot.objects.get(id=company_bot_id)
-            company = user_profile.company if user_profile else None
-            company_name = company.name if company else None
+            selected_company = None
+            if item_data.get('organization_slug'):
+                try:
+                    selected_company = Company.objects.get(slug=item_data['organization_slug'])
+                except Company.DoesNotExist:
+                    pass
 
-            if company:
-                company_slug = company.slug
+            if not selected_company and user_profile:
+                selected_company = user_profile.company
+
+            if not selected_company:
+                selected_company = company_bot.company
+
+            if selected_company:
+                company_slug = selected_company.slug
             else:
                 company_slug = company_bot.company.slug
             extracted_text = item_data.get('extracted_text', '')
@@ -1609,26 +1619,26 @@ class BatchMediaSaveView(View):
                     'vector_db_saved': False
                 }
 
-            # Step 4: Process tags and key-values
+            # Step 4: Process tags and key-values with prioritized company
             try:
                 all_tags = []
 
-                # Process manual tags
+                # Process manual tags with selected company (from dropdown priority)
                 manual_tags = TagProcessor.process_tags_for_media(
                     item_data.get('manual_tags', []),
                     'manual',
                     user_profile,
-                    company,
+                    selected_company,
                     is_manual=True
                 )
                 all_tags.extend(manual_tags)
 
-                # Process auto tags
+                # Process auto tags with selected company (from dropdown priority)
                 auto_tags = TagProcessor.process_tags_for_media(
                     item_data.get('auto_tags', []),
                     'extracted',
                     user_profile,
-                    company,
+                    selected_company,
                     is_manual=False
                 )
                 all_tags.extend(auto_tags)
@@ -2037,38 +2047,46 @@ class BatchMediaSaveView(View):
             # Save the media object
             subdoc_media.save()
 
-            # Process tags if provided
-            company = user_profile.company if user_profile else None
-            if company:
-                all_tags = []
+            selected_company = None
+            if subdoc_data.get('organization_slug'):
+                try:
+                    selected_company = Company.objects.get(slug=subdoc_data['organization_slug'])
+                except Company.DoesNotExist:
+                    pass
 
-                # Process manual tags
-                manual_tags = subdoc_data.get('manual_tags', [])
-                if manual_tags:
-                    manual_tag_objs = TagProcessor.process_tags_for_media(
-                        manual_tags,
-                        'manual',
-                        user_profile,
-                        company,
-                        is_manual=True
-                    )
-                    all_tags.extend(manual_tag_objs)
+            if not selected_company and user_profile:
+                selected_company = user_profile.company
 
-                # Process auto tags
-                auto_tags = subdoc_data.get('auto_tags', [])
-                if auto_tags:
-                    auto_tag_objs = TagProcessor.process_tags_for_media(
-                        auto_tags,
-                        'extracted',
-                        user_profile,
-                        company,
-                        is_manual=False
-                    )
-                    all_tags.extend(auto_tag_objs)
+            if not selected_company:
+                company_bot = CompanyBot.objects.get(id=company_bot_id)
+                selected_company = company_bot.company
 
-                # Set tags if any
-                if all_tags:
-                    subdoc_media.tags.set(all_tags)
+            all_tags = []
+
+            manual_tags = subdoc_data.get('manual_tags', [])
+            if manual_tags:
+                manual_tag_objs = TagProcessor.process_tags_for_media(
+                    manual_tags,
+                    'manual',
+                    user_profile,
+                    selected_company,
+                    is_manual=True
+                )
+                all_tags.extend(manual_tag_objs)
+
+            auto_tags = subdoc_data.get('auto_tags', [])
+            if auto_tags:
+                auto_tag_objs = TagProcessor.process_tags_for_media(
+                    auto_tags,
+                    'extracted',
+                    user_profile,
+                    selected_company,
+                    is_manual=False
+                )
+                all_tags.extend(auto_tag_objs)
+
+            if all_tags:
+                subdoc_media.tags.set(all_tags)
 
             # Key-value pairs - handle organization specially
             for kv in subdoc_data.get('key_values', []):
