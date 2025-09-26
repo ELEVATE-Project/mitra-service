@@ -22,8 +22,9 @@
     position: absolute;
     top: 0;
     right: 0;
-    height: 50px; /* Reduced and consistent with continuation pages */
-    max-width: 150px; /* Consistent with continuation pages */
+    height: 50px;
+    margin-bottom: 15px;
+    max-width: 250px;
 }
 
 .qa-first-page-location {
@@ -224,11 +225,6 @@
     /* First page adjustments for print */
     .first-page .qa-first-page-header {
         margin-bottom: 30px;
-    }
-
-    .qa-first-page-logo {
-        height: 50px;
-        margin-bottom: 15px;
     }
 
     .qa-first-page-location {
