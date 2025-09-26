@@ -1361,6 +1361,11 @@ class BatchMediaSaveView(View):
             elif 'docs.google.com/spreadsheets' in source_doc_url and '/d/' in source_doc_url:
                 sheet_id = source_doc_url.split('/d/')[1].split('/')[0]
                 download_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=xlsx"
+            elif 'drive.google.com/file/d/' in source_doc_url:
+                # FIXED: Handle Google Drive file URLs
+                file_id = source_doc_url.split('/d/')[1].split('/')[0]
+                download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+                print(f"Converting Google Drive URL: {source_doc_url} -> {download_url}")
 
             response = requests.get(download_url, headers=headers, timeout=30, allow_redirects=True)
             response.raise_for_status()
@@ -1381,14 +1386,43 @@ class BatchMediaSaveView(View):
             # Check content type first
             content_type = response.headers.get('content-type', '').lower()
 
-            # Determine media type based on URL or content
-            if 'docs.google.com' in source_doc_url:
+            # FIXED: Determine file type from content-type header (after proper download URL)
+            print(f"Content-Type: {content_type}")
+
+            # Detect file type from content-type header
+            if 'application/pdf' in content_type:
+                media_type = FileTypeChoices.PDF.value
+                filename = f"source_doc_{parent_name_without_ext}_{url_hash}.pdf"
+            elif 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in content_type:
+                media_type = FileTypeChoices.DOCX.value
+                filename = f"source_doc_{parent_name_without_ext}_{url_hash}.docx"
+            elif 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' in content_type:
+                media_type = FileTypeChoices.XLSX.value
+                filename = f"source_doc_{parent_name_without_ext}_{url_hash}.xlsx"
+            elif 'application/msword' in content_type:
+                media_type = FileTypeChoices.DOC.value if hasattr(FileTypeChoices,
+                                                                  'DOC') else FileTypeChoices.DOCX.value
+                filename = f"source_doc_{parent_name_without_ext}_{url_hash}.doc"
+            elif 'application/vnd.ms-excel' in content_type:
+                media_type = FileTypeChoices.XLS.value if hasattr(FileTypeChoices,
+                                                                  'XLS') else FileTypeChoices.XLSX.value
+                filename = f"source_doc_{parent_name_without_ext}_{url_hash}.xls"
+            elif 'text/plain' in content_type:
+                media_type = FileTypeChoices.TXT.value
+                filename = f"source_doc_{parent_name_without_ext}_{url_hash}.txt"
+            elif 'text/csv' in content_type:
+                media_type = FileTypeChoices.CSV.value
+                filename = f"source_doc_{parent_name_without_ext}_{url_hash}.csv"
+            elif 'docs.google.com' in source_doc_url:
+                # Fallback for Google Docs URLs
                 if 'document' in source_doc_url:
                     media_type = FileTypeChoices.DOCX.value
+                    filename = f"source_doc_{parent_name_without_ext}_{url_hash}.docx"
                 elif 'spreadsheets' in source_doc_url:
                     media_type = FileTypeChoices.XLSX.value
+                    filename = f"source_doc_{parent_name_without_ext}_{url_hash}.xlsx"
             else:
-                # Try to get from content-disposition
+                # Try content-disposition header first
                 content_disposition = response.headers.get('content-disposition')
                 if content_disposition:
                     import re
@@ -1397,27 +1431,30 @@ class BatchMediaSaveView(View):
                         filename = matches[0]
                         # Get extension and determine type
                         ext = os.path.splitext(filename)[1].lower().strip('.')
-                        media_type = FileTypeChoices.get_mime_from_extension(ext) or FileTypeChoices.TXT.value
+                        if ext:
+                            media_type = FileTypeChoices.get_mime_from_extension(ext) or FileTypeChoices.TXT.value
+                        else:
+                            # Filename without extension, try content-type
+                            if 'application/pdf' in content_type:
+                                media_type = FileTypeChoices.PDF.value
+                                filename = f"{filename}.pdf"
+                            else:
+                                media_type = FileTypeChoices.TXT.value
+                                filename = f"{filename}.txt"
                 else:
-                    # Try from URL path
-                    path = parsed_url.path
-                    if path:
-                        filename = os.path.basename(unquote(path))
-                        if filename:
-                            ext = os.path.splitext(filename)[1].lower().strip('.')
-                            if ext:
-                                media_type = FileTypeChoices.get_mime_from_extension(ext) or FileTypeChoices.TXT.value
+                    # Fallback: Default to PDF for unknown Google Drive files (most common)
+                    if 'drive.google.com' in source_doc_url:
+                        media_type = FileTypeChoices.PDF.value
+                        filename = f"source_doc_{parent_name_without_ext}_{url_hash}.pdf"
+                    else:
+                        media_type = FileTypeChoices.TXT.value
+                        filename = f"source_doc_{parent_name_without_ext}_{url_hash}.txt"
 
-            # Ensure filename has proper extension
-            extension = extension_mapping.get(media_type, '.txt')
-            if not os.path.splitext(filename)[1]:
-                filename = f"{filename}{extension}"
-            elif os.path.splitext(filename)[0] == '':
-                filename = f"source_document{os.path.splitext(filename)[1]}"
+            print(f"Final filename: {filename}, media_type: {media_type}")
 
             # Create Media object for source document
             source_media = Media(
-                name=f"{filename}",
+                name=filename,
                 media_type=media_type,
                 priority=parent_media.priority,
                 company_bot_id=company_bot_id,
