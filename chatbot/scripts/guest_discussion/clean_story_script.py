@@ -379,6 +379,51 @@ def correct_metadata_for_story(story):
                                 updated = True
                                 logger.info(f"Translated {field} to English in main story")
 
+        # Check if we need to transliterate existing TRANSLITERATE_FIELDS to English
+        if session_language != 'en' and transliterate_provider:
+            # Handle regular transliterate fields
+            for field in TRANSLITERATE_FIELDS:
+                if field in story.other_params and story.other_params[field]:
+                    current_value = story.other_params[field]
+                    # Check if it contains non-ASCII characters (likely non-English)
+                    if not all(ord(c) < 128 for c in str(current_value)):
+                        english_value = transliterate_field(
+                            voice_provider=transliterate_provider,
+                            message_body=str(current_value),
+                            target_language="en",
+                            source_language=session_language
+                        )
+                        story.other_params[field] = english_value
+                        updated = True
+                        logger.info(f"Transliterated {field} to English in main story")
+
+            # Handle nested transliterate fields
+            for field in NESTED_TRANSLITERATE_FIELDS:
+                if field in story.other_params and story.other_params[field]:
+                    current_value = story.other_params[field]
+                    if isinstance(current_value, dict):
+                        needs_update = False
+                        updated_nested = {}
+                        for sub_field in ['name', 'designation']:
+                            sub_value = current_value.get(sub_field, '')
+                            if sub_value and not all(ord(c) < 128 for c in str(sub_value)):
+                                # Contains non-ASCII, needs transliteration
+                                english_sub_value = transliterate_field(
+                                    voice_provider=transliterate_provider,
+                                    message_body=str(sub_value),
+                                    target_language="en",
+                                    source_language=session_language
+                                )
+                                updated_nested[sub_field] = english_sub_value
+                                needs_update = True
+                            else:
+                                updated_nested[sub_field] = sub_value
+
+                        if needs_update:
+                            story.other_params[field] = updated_nested
+                            updated = True
+                            logger.info(f"Transliterated {field} to English in main story")
+
         # Process new fields from LLM result
         for key in all_fields:
             if value := result.get(key):

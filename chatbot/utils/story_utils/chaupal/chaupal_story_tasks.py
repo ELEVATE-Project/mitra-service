@@ -1,5 +1,6 @@
 import traceback
 import logging
+import re
 from chatbot.models import StoryStatusChoices, Story, Voice, VoiceType, StoryTranslation
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.story_llama_utils import translate_field
@@ -11,18 +12,123 @@ import json_repair
 logger = logging.getLogger('django')
 
 
+def is_english_text(text):
+    """Check if text contains only English characters (a-z, A-Z, numbers, punctuation, spaces)"""
+    if not text or text.strip() == '':
+        return True
+
+    # Remove common punctuation and numbers
+    cleaned_text = re.sub(r'[0-9\s\.,\!\?\-\(\)\[\]\{\}\"\'\:\;\@\#\$\%\^\&\*\+\=\_\|\\\/<>~`]', '', str(text))
+
+    # Check if remaining characters are only English letters
+    return bool(re.match(r'^[a-zA-Z]*$', cleaned_text))
+
+
+def translate_to_english_if_needed(text, voice_provider, source_language):
+    """Translate text to English if it's not already in English"""
+    if not text or text.strip() == '':
+        return text
+
+    if is_english_text(text):
+        return text
+
+    try:
+        if voice_provider:
+            translated = translate_field(
+                voice_provider=voice_provider,
+                message_body=text,
+                target_language='en'
+            )
+            return translated
+        else:
+            logger.info(f"No voice provider available for translation. Keeping original text: {text}")
+            return text
+    except Exception as e:
+        logger.error(f"Error translating to English: {e}")
+        return text
+
+
+def transliterate_to_english_if_needed(text, voice_provider, source_language):
+    """Transliterate text to English if it's not already in English"""
+    if not text or text.strip() == '':
+        return text
+
+    if is_english_text(text):
+        return text
+
+    try:
+        if voice_provider:
+            is_sentence = ' ' in text
+            transliterated = transliterate_text(
+                voice_provider=voice_provider,
+                message_body=text,
+                target_language='en',
+                source_language=source_language,
+                is_sentence=is_sentence
+            )
+            return get_transliteration_output(data=transliterated)
+        else:
+            logger.info(f"No voice provider available for transliteration. Keeping original text: {text}")
+            return text
+    except Exception as e:
+        logger.error(f"Error transliterating to English: {e}")
+        return text
+
+
 def save_chaupal_report(
         response_json_story, language, company_bot, voice_provider, profile, session, combined_reason, flow=None,
         messages=[]
 ):
     try:
-        english_title = clean_escaped_text(text=response_json_story['title'])
-        english_challenges_faced = response_json_story['challenges_faced']
-        english_solutions_discussed = response_json_story['solutions_discussed']
+        # Get voice providers for translation/transliteration
+        translation_voice_provider = voice_provider
+        transliteration_voice_provider = None
 
-        user_name = response_json_story.get('user_name', '')
-        user_location = response_json_story.get('location', '')
-        organization = response_json_story.get('organization', '')
+        if company_bot and language != 'en':
+            transliteration_voice_provider = Voice.objects.filter(
+                company_bot=company_bot, type=VoiceType.Transliterate, language=language
+            ).first()
+
+        # Extract and translate fields to English
+        raw_title = response_json_story.get('title', '')
+        english_title = clean_escaped_text(
+            text=translate_to_english_if_needed(raw_title, translation_voice_provider, language)
+        )
+
+        # Handle challenges and solutions (can be arrays)
+        raw_challenges_faced = response_json_story.get('challenges_faced', [])
+        raw_solutions_discussed = response_json_story.get('solutions_discussed', [])
+
+        # Translate challenges and solutions
+        if isinstance(raw_challenges_faced, list):
+            english_challenges_faced = [
+                translate_to_english_if_needed(challenge, translation_voice_provider, language)
+                for challenge in raw_challenges_faced
+            ]
+        else:
+            english_challenges_faced = translate_to_english_if_needed(raw_challenges_faced, translation_voice_provider,
+                                                                      language)
+
+        if isinstance(raw_solutions_discussed, list):
+            english_solutions_discussed = [
+                translate_to_english_if_needed(solution, translation_voice_provider, language)
+                for solution in raw_solutions_discussed
+            ]
+        else:
+            english_solutions_discussed = translate_to_english_if_needed(raw_solutions_discussed,
+                                                                         translation_voice_provider, language)
+
+        # Transliterate personal information fields
+        raw_user_name = response_json_story.get('user_name', '')
+        raw_user_location = response_json_story.get('location', '')
+        raw_organization = response_json_story.get('organization', '')
+        raw_remarks = response_json_story.get('remarks', '')
+
+        user_name = transliterate_to_english_if_needed(raw_user_name, transliteration_voice_provider, language)
+        user_location = transliterate_to_english_if_needed(raw_user_location, transliteration_voice_provider, language)
+        organization = transliterate_to_english_if_needed(raw_organization, transliteration_voice_provider, language)
+        remarks = translate_to_english_if_needed(raw_remarks, translation_voice_provider, language)
+
         participants_count = response_json_story.get('participants_count', {})
         if isinstance(participants_count, str):
             participants_count = {
@@ -34,9 +140,22 @@ def save_chaupal_report(
 
         discussion_date = response_json_story.get('discussion_date', '')
 
-        pri_member = response_json_story.get('pri_member', {'name': '', 'designation': ''})
-        school_representative = response_json_story.get('school_representative', {'name': '', 'designation': ''})
-        remarks = response_json_story.get('remarks', '')
+        # Handle nested objects with transliteration
+        raw_pri_member = response_json_story.get('pri_member', {'name': '', 'designation': ''})
+        pri_member = {
+            'name': transliterate_to_english_if_needed(raw_pri_member.get('name', ''), transliteration_voice_provider,
+                                                       language),
+            'designation': transliterate_to_english_if_needed(raw_pri_member.get('designation', ''),
+                                                              transliteration_voice_provider, language)
+        }
+
+        raw_school_representative = response_json_story.get('school_representative', {'name': '', 'designation': ''})
+        school_representative = {
+            'name': transliterate_to_english_if_needed(raw_school_representative.get('name', ''),
+                                                       transliteration_voice_provider, language),
+            'designation': transliterate_to_english_if_needed(raw_school_representative.get('designation', ''),
+                                                              transliteration_voice_provider, language)
+        }
 
         if english_solutions_discussed and len(english_solutions_discussed) > 0 and english_challenges_faced and len(
                 english_challenges_faced) > 0:
@@ -241,6 +360,7 @@ def create_chaupal_translation(story, language, english_title, english_challenge
             translation.other_params = translated_other_params
             translation.save()
 
+        logger.info(f"Created/Updated chaupal translation for story {story.id} in language {language}")
         return translation
 
     except Exception as e:

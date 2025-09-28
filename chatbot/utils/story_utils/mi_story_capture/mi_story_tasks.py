@@ -1,5 +1,6 @@
 import traceback
 import logging
+import re
 from chatbot.models import StoryStatusChoices, Story, SessionFlowName, Voice, VoiceType, StoryTranslation
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.story_llama_utils import translate_field, create_project
@@ -11,30 +12,141 @@ from shikshalokam.serializer import TaskSerializer
 logger = logging.getLogger('django')
 
 
+def is_english_text(text):
+    """Check if text contains only English characters (a-z, A-Z, numbers, punctuation, spaces)"""
+    if not text or text.strip() == '':
+        return True
+
+    # Remove common punctuation and numbers
+    cleaned_text = re.sub(r'[0-9\s\.,\!\?\-\(\)\[\]\{\}\"\'\:\;\@\#\$\%\^\&\*\+\=\_\|\\\/<>~`]', '', str(text))
+
+    # Check if remaining characters are only English letters
+    return bool(re.match(r'^[a-zA-Z]*$', cleaned_text))
+
+
+def translate_to_english_if_needed(text, voice_provider, source_language):
+    """Translate text to English if it's not already in English"""
+    if not text or text.strip() == '':
+        return text
+
+    if is_english_text(text):
+        return text
+
+    try:
+        if voice_provider:
+            translated = translate_field(
+                voice_provider=voice_provider,
+                message_body=text,
+                target_language='en'
+            )
+            return translated
+        else:
+            logger.info(f"No voice provider available for translation. Keeping original text: {text}")
+            return text
+    except Exception as e:
+        logger.error(f"Error translating to English: {e}")
+        return text
+
+
+def transliterate_to_english_if_needed(text, voice_provider, source_language):
+    """Transliterate text to English if it's not already in English"""
+    if not text or text.strip() == '':
+        return text
+
+    if is_english_text(text):
+        return text
+
+    try:
+        if voice_provider:
+            is_sentence = ' ' in text
+            transliterated = transliterate_text(
+                voice_provider=voice_provider,
+                message_body=text,
+                target_language='en',
+                source_language=source_language,
+                is_sentence=is_sentence
+            )
+            return get_transliteration_output(data=transliterated)
+        else:
+            logger.info(f"No voice provider available for transliteration. Keeping original text: {text}")
+            return text
+    except Exception as e:
+        logger.error(f"Error transliterating to English: {e}")
+        return text
+
+
 def save_story(
         response_json_story, language, voice_provider, profile, session, combined_reason, flow=None, project_id=None,
         company_bot=None
 ):
     try:
-        english_title = clean_escaped_text(text=response_json_story['title'])
-        english_tweet = response_json_story.get('tweet', '')
-        english_objective = clean_escaped_text(text=response_json_story['objective'])
-        english_action_steps = response_json_story['action_steps']
-        english_impact = clean_escaped_text(text=response_json_story.get('impact', ''))
-        english_micro_improvement = response_json_story.get('micro_improvement', '')
-        english_problem_statement = clean_escaped_text(text=response_json_story['problem_statement'])
-        english_content = clean_escaped_text(text=response_json_story['content'])
-        english_blurb = clean_escaped_text(text=response_json_story.get('blurb', ''))
+        # Get voice providers for translation/transliteration
+        translation_voice_provider = voice_provider
+        transliteration_voice_provider = None
 
+        if company_bot and language != 'en':
+            transliteration_voice_provider = Voice.objects.filter(
+                company_bot=company_bot, type=VoiceType.Transliterate, language=language
+            ).first()
+
+        # Extract and translate/transliterate fields to English
+        raw_title = response_json_story.get('title', '')
+        raw_content = response_json_story.get('content', '')
+        raw_objective = response_json_story.get('objective', '')
+        raw_impact = response_json_story.get('impact', '')
+        raw_problem_statement = response_json_story.get('problem_statement', '')
+        raw_blurb = response_json_story.get('blurb', '')
+
+        # Translate main content fields to English
+        english_title = clean_escaped_text(
+            text=translate_to_english_if_needed(raw_title, translation_voice_provider, language)
+        )
+        english_content = clean_escaped_text(
+            text=translate_to_english_if_needed(raw_content, translation_voice_provider, language)
+        )
+        english_objective = clean_escaped_text(
+            text=translate_to_english_if_needed(raw_objective, translation_voice_provider, language)
+        )
+        english_impact = clean_escaped_text(
+            text=translate_to_english_if_needed(raw_impact, translation_voice_provider, language)
+        )
+        english_problem_statement = clean_escaped_text(
+            text=translate_to_english_if_needed(raw_problem_statement, translation_voice_provider, language)
+        )
+        english_blurb = clean_escaped_text(
+            text=translate_to_english_if_needed(raw_blurb, translation_voice_provider, language)
+        )
+
+        # Handle action_steps (can be string or list)
+        raw_action_steps = response_json_story.get('action_steps', [])
+        if isinstance(raw_action_steps, str):
+            english_action_steps = translate_to_english_if_needed(raw_action_steps, translation_voice_provider,
+                                                                  language)
+        else:
+            english_action_steps = [
+                translate_to_english_if_needed(step, translation_voice_provider, language)
+                for step in raw_action_steps
+            ]
+
+        # Fields that don't typically need translation
+        english_tweet = response_json_story.get('tweet', '')
+        english_micro_improvement = response_json_story.get('micro_improvement', '')
         duration = response_json_story.get('duration', '')
 
         if flow and flow in [SessionFlowName.GuestMiStory] and not project_id:
-            user_name = response_json_story.get('user_name', '')
-            location = response_json_story.get('location', '')
-            organization = response_json_story.get('organization', '')
-            designation = response_json_story.get('designation', '')
+            # Transliterate personal information fields for guest stories
+            raw_user_name = response_json_story.get('user_name', '')
+            raw_location = response_json_story.get('location', '')
+            raw_organization = response_json_story.get('organization', '')
+            raw_designation = response_json_story.get('designation', '')
+
+            user_name = transliterate_to_english_if_needed(raw_user_name, transliteration_voice_provider, language)
+            location = transliterate_to_english_if_needed(raw_location, transliteration_voice_provider, language)
+            organization = transliterate_to_english_if_needed(raw_organization, transliteration_voice_provider,
+                                                              language)
+            designation = transliterate_to_english_if_needed(raw_designation, transliteration_voice_provider, language)
         else:
-            user_name=profile.first_name if profile and profile.first_name else ''
+            user_name = profile.first_name if profile and profile.first_name else ''
             organization = response_json_story.get('organization', '')
             designation = response_json_story.get('designation', '')
             location = None
@@ -133,7 +245,8 @@ def save_story(
 
         create_project(
             response_json=response_json_story, title=english_title, objective=english_objective, story=story,
-            profile=profile, problem_statement=english_problem_statement, language=language, voice_provider=voice_provider,
+            profile=profile, problem_statement=english_problem_statement, language=language,
+            voice_provider=voice_provider,
             project_id=project_id
         )
 
