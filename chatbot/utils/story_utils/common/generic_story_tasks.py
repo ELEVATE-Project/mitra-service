@@ -51,15 +51,19 @@ def translate_to_english_if_needed(text, voice_provider, source_language):
 
 def transliterate_to_english_if_needed(text, voice_provider, source_language):
     """Transliterate text to English if it's not already in English"""
+    logger.info(f"Starting Transliteration for {text}.")
     if not text or text.strip() == '':
+        logger.info(f"Text is empty or null so return original text.")
         return text
 
     if is_english_text(text):
+        logger.info(f"Text is english so return so return original text.")
         return text
 
     try:
         if voice_provider:
             is_sentence = ' ' in text
+            logger.info(f"STARTED TRANSLITERATION.")
             transliterated = transliterate_text(
                 voice_provider=voice_provider,
                 message_body=text,
