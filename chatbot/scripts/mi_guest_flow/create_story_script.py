@@ -1,4 +1,4 @@
-from chatbot.models import Story, ChatSession, CompanyBot, ChatStatus
+from chatbot.models import Story, ChatSession, CompanyBot, ChatStatus, SessionFlowName
 from chatbot.models.company_models import CompanyStateMachine
 import logging
 from django.utils.timezone import make_aware
@@ -67,9 +67,21 @@ def create_specific_stories(sessions, access_token):
         try:
             profile_id = session.profile.id if session.profile else None
             session_str = session.session
+            print(f"session.language: {session.language}")
+            language = session.language if session.language else "en"
             flow = session.session_type
-            language = "en"
+            existing_story = Story.objects.filter(session=session_str).first()
+            if existing_story and existing_story.other_params and existing_story.other_params.get('flow'):
+                flow = existing_story.other_params.get('flow')
 
+            valid_flows = [choice[0] for choice in SessionFlowName.choices]
+            if flow not in valid_flows:
+                print(f"❌ Invalid flow '{flow}' for session {session_str}, failing session")
+                failed_sessions.append(session_str)
+                continue
+
+            print(f"Passing, profile_id: {profile_id} & session_str: {session_str} & access_token: {access_token} & "
+                  f"flow: {flow} & language: {language}")
             story_id, content, error_msg = create_story_object(
                 profile_id=profile_id,
                 session=session_str,

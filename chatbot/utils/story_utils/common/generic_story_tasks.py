@@ -1,5 +1,6 @@
 import logging
 import json
+import re
 from chatbot.models import StoryStatusChoices, Story, Voice, VoiceType, StoryTranslation
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.story_vernacular_model import StoryVernacular
@@ -10,6 +11,120 @@ from chatbot.utils.transliterate_utils import transliterate_text, get_transliter
 logger = logging.getLogger('django')
 
 
+def is_english_text(text):
+    """Check if text contains only English characters (a-z, A-Z, numbers, punctuation, spaces)"""
+    if not text or text.strip() == '':
+        return True
+
+    # Remove common punctuation and numbers
+    cleaned_text = re.sub(r'[0-9\s\.,\!\?\-\(\)\[\]\{\}\"\'\:\;\@\#\$\%\^\&\*\+\=\_\|\\\/<>~`]', '', str(text))
+
+    # Check if remaining characters are only English letters
+    return bool(re.match(r'^[a-zA-Z]*$', cleaned_text))
+
+
+def translate_to_english_if_needed(text, voice_provider, source_language):
+    """Translate text to English if it's not already in English"""
+    if not text or text.strip() == '':
+        return text
+
+    if is_english_text(text):
+        return text
+
+    try:
+        if voice_provider:
+            translated = translate_field(
+                voice_provider=voice_provider,
+                message_body=text,
+                target_language='en',
+                source_language=source_language
+
+            )
+            return translated
+        else:
+            logger.info(f"No voice provider available for translation. Keeping original text: {text}")
+            return text
+    except Exception as e:
+        logger.error(f"Error translating to English: {e}")
+        return text
+
+
+def transliterate_to_english_if_needed(text, voice_provider, source_language):
+    """Transliterate text to English if it's not already in English"""
+    logger.info(f"Starting Transliteration for {text}.")
+    if not text or text.strip() == '':
+        logger.info(f"Text is empty or null so return original text.")
+        return text
+
+    if is_english_text(text):
+        logger.info(f"Text is english so return so return original text.")
+        return text
+
+    try:
+        if voice_provider:
+            is_sentence = ' ' in text
+            logger.info(f"STARTED TRANSLITERATION.")
+            transliterated = transliterate_text(
+                voice_provider=voice_provider,
+                message_body=text,
+                target_language='en',
+                source_language=source_language,
+                is_sentence=is_sentence
+            )
+            return get_transliteration_output(data=transliterated)
+        else:
+            logger.info(f"No voice provider available for transliteration. Keeping original text: {text}")
+            return text
+    except Exception as e:
+        logger.error(f"Error transliterating to English: {e}")
+        return text
+
+
+def translate_nested_to_english(data, voice_provider, transliteration_voice_provider, source_language, field_path=""):
+    """Recursively translate nested data structures to English"""
+    if isinstance(data, dict):
+        translated_dict = {}
+        for key, value in data.items():
+            current_path = f"{field_path}.{key}" if field_path else key
+            logger.info(f"DEBUG: Processing {key} = '{value}' (type: {type(value)})")
+
+            if isinstance(value, str) and value.strip():
+                # Determine if this should be translated or transliterated
+                personal_info_fields = ['name', 'user_name', 'location', 'organization', 'designation', 'district',
+                                        'block']
+                if key.lower() in personal_info_fields or any(field in key.lower() for field in personal_info_fields):
+                    # Transliterate personal info
+                    translated_dict[key] = transliterate_to_english_if_needed(value, transliteration_voice_provider,
+                                                                              source_language)
+                else:
+                    # Translate content
+                    translated_dict[key] = translate_to_english_if_needed(value, voice_provider, source_language)
+            elif isinstance(value, (dict, list)):
+                # Recursively handle nested structures
+                translated_dict[key] = translate_nested_to_english(value, voice_provider,
+                                                                   transliteration_voice_provider, source_language,
+                                                                   current_path)
+            else:
+                # Keep non-text values as-is
+                translated_dict[key] = value
+        return translated_dict
+    elif isinstance(data, list):
+        translated_list = []
+        for i, item in enumerate(data):
+            if isinstance(item, str) and item.strip():
+                # For list items, default to translation (most arrays contain content, not personal info)
+                translated_list.append(translate_to_english_if_needed(item, voice_provider, source_language))
+            elif isinstance(item, (dict, list)):
+                translated_list.append(
+                    translate_nested_to_english(item, voice_provider, transliteration_voice_provider, source_language,
+                                                f"{field_path}[{i}]"))
+            else:
+                translated_list.append(item)
+        return translated_list
+    else:
+        return data
+
+
 def save_generic_story(
         response_json_story, language, voice_provider, profile, session, combined_reason, flow=None, project_id=None,
         company_bot=None
@@ -17,8 +132,17 @@ def save_generic_story(
     """
     Generic save story function that saves English content to Story model
     and creates translations for other languages.
-    Assumes response_json_story contains English content.
+    Now detects and converts non-English content to English before saving.
     """
+    # Get voice providers for translation/transliteration
+    translation_voice_provider = voice_provider
+    transliteration_voice_provider = None
+
+    if company_bot and language != 'en':
+        transliteration_voice_provider = Voice.objects.filter(
+            company_bot=company_bot, type=VoiceType.Transliterate, language=language
+        ).first()
+
     # Validate that response_json_story is valid JSON
     if isinstance(response_json_story, str):
         try:
@@ -59,15 +183,44 @@ def save_generic_story(
     # Parse any JSON strings in the response
     response_json_story = parse_json_strings(response_json_story)
 
-    # Extract English content (assuming source is English)
-    english_title = clean_escaped_text(text=response_json_story.get('title', ''))
-    english_content = clean_escaped_text(text=response_json_story.get('content', ''))
+    # Translate main content fields to English
+    raw_title = response_json_story.get('title', '')
+    raw_content = response_json_story.get('content', '')
+    raw_objective = response_json_story.get('objective', '')
+    raw_impact = response_json_story.get('impact', '')
+    raw_blurb = response_json_story.get('blurb', '')
+
+    english_title = clean_escaped_text(
+        text=translate_to_english_if_needed(raw_title, translation_voice_provider, language)
+    )
+    english_content = clean_escaped_text(
+        text=translate_to_english_if_needed(raw_content, translation_voice_provider, language)
+    )
+    english_objective = clean_escaped_text(
+        text=translate_to_english_if_needed(raw_objective, translation_voice_provider, language)
+    )
+    english_impact = clean_escaped_text(
+        text=translate_to_english_if_needed(raw_impact, translation_voice_provider, language)
+    )
+    english_blurb = clean_escaped_text(
+        text=translate_to_english_if_needed(raw_blurb, translation_voice_provider, language)
+    )
+
+    # Handle fields that typically don't need translation
     english_tweet = response_json_story.get('tweet', '')
-    english_objective = clean_escaped_text(text=response_json_story.get('objective', ''))
-    english_impact = clean_escaped_text(text=response_json_story.get('impact', ''))
     english_micro_improvement = response_json_story.get('micro_improvement', '')
-    english_blurb = clean_escaped_text(text=response_json_story.get('blurb', ''))
-    english_action_steps = response_json_story.get('action_steps', [])
+
+    # Handle action_steps (can be string or list)
+    raw_action_steps = response_json_story.get('action_steps', [])
+    if isinstance(raw_action_steps, str):
+        english_action_steps = translate_to_english_if_needed(raw_action_steps, translation_voice_provider, language)
+    elif isinstance(raw_action_steps, list):
+        english_action_steps = [
+            translate_to_english_if_needed(step, translation_voice_provider, language)
+            for step in raw_action_steps
+        ]
+    else:
+        english_action_steps = raw_action_steps
 
     # Get title from StoryVernacular if not present
     if not english_title and company_bot:
@@ -82,7 +235,7 @@ def save_generic_story(
                     english_title = vernacular_title
                     logger.info(f"Used StoryVernacular English title")
         except Exception as e:
-            logger.warning(f"Could not get title from StoryVernacular: {e}")
+            logger.info(f"Could not get title from StoryVernacular: {e}")
 
     # Get basic profile information
     user_name = profile.first_name if profile and profile.first_name else ''
@@ -106,15 +259,43 @@ def save_generic_story(
         'other_params', 'location', 'validation_logs'
     }
 
-    # Add ALL other fields from JSON to other_params (not just specific ones)
+    # Define fields that should never be translated
+    NON_TRANSLATABLE_FIELDS = {'flow', 'id', 'uuid', 'status', 'type', 'mode', 'version'}
+
+    # Define personal info fields that need transliteration
+    PERSONAL_INFO_FIELDS = {'name', 'user_name', 'location', 'organization', 'designation', 'district', 'block'}
+
+    # Add ALL other fields from JSON to other_params, translating them appropriately
     for key, value in response_json_story.items():
         if key not in STORY_MODEL_FIELDS:
-            other_params[key] = value
+            if isinstance(value, dict) or isinstance(value, list):
+                # Handle complex nested structures (like question_answers)
+                other_params[key] = translate_nested_to_english(
+                    value, translation_voice_provider, transliteration_voice_provider, language, key
+                )
+            elif isinstance(value, str) and value.strip():
+                # Handle simple string values
+                if key.lower() in NON_TRANSLATABLE_FIELDS:
+                    # Keep technical fields as-is
+                    other_params[key] = value
+                elif key.lower() in PERSONAL_INFO_FIELDS:
+                    # Transliterate personal info fields
+                    other_params[key] = transliterate_to_english_if_needed(value, transliteration_voice_provider,
+                                                                           language)
+                else:
+                    # Translate content fields
+                    other_params[key] = translate_to_english_if_needed(value, translation_voice_provider, language)
+            else:
+                # Keep non-string values as-is
+                other_params[key] = value
 
     print(f"Story other_params before save: {other_params}")
 
-    # Use fallback location if not provided
-    location = response_json_story.get('location', fallback_location)
+    # Use fallback location if not provided, and translate if needed
+    raw_location = response_json_story.get('location', fallback_location)
+    location = ""
+    if raw_location and raw_location.strip():
+        location = transliterate_to_english_if_needed(raw_location, transliteration_voice_provider, language)
 
     # Prepare Story model fields (all in English)
     story_fields = {
@@ -171,8 +352,11 @@ def save_generic_story(
         )
 
     logger.info(f"Successfully saved generic story for flow {flow}, session {session}")
-    # Return problem_statement from JSON if it exists
-    problem_statement = clean_escaped_text(text=response_json_story.get('problem_statement', ''))
+    # Return problem_statement from JSON if it exists, translating to English
+    raw_problem_statement = response_json_story.get('problem_statement', '')
+    problem_statement = clean_escaped_text(
+        text=translate_to_english_if_needed(raw_problem_statement, translation_voice_provider, language)
+    )
     return story, problem_statement
 
 
@@ -197,7 +381,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                         target_language=language
                     )
                 except Exception as e:
-                    logger.warning(f"Could not translate field {field}: {e}")
+                    logger.info(f"Could not translate field {field}: {e}")
                     translated_data[field] = english_data[field]
             else:
                 translated_data[field] = english_data.get(field, '')
@@ -212,7 +396,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                     target_language=language
                 )
             except Exception as e:
-                logger.warning(f"Could not translate action_steps: {e}")
+                logger.info(f"Could not translate action_steps: {e}")
                 translated_data['action_steps'] = action_steps
         elif isinstance(action_steps, list):
             translated_action_steps = []
@@ -226,7 +410,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                         )
                         translated_action_steps.append(translated_step)
                     except Exception as e:
-                        logger.warning(f"Could not translate action step: {e}")
+                        logger.info(f"Could not translate action step: {e}")
                         translated_action_steps.append(str(action_step))
             translated_data['action_steps'] = translated_action_steps
         else:
@@ -247,7 +431,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                     target_language=language
                 )
             except Exception as e:
-                logger.warning(f"Could not translate duration: {e}")
+                logger.info(f"Could not translate duration: {e}")
 
         # Handle translation of complex nested structures (generic approach)
         def is_translatable_text(value, key=""):
@@ -259,7 +443,9 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                 return False
 
             value = value.strip()
-
+            technical_fields = ['flow', 'id', 'uuid', 'status', 'type', 'mode', 'version']
+            if key.lower() in technical_fields:
+                return False
             # Skip very short strings (likely codes/IDs)
             if len(value) < 3:
                 return False
@@ -314,7 +500,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                             translated_dict[key] = translated_value
                             print(f"Auto-translated {current_path}: {value[:50]}... -> {translated_value[:50]}...")
                         except Exception as e:
-                            logger.warning(f"Could not translate {current_path}: {e}")
+                            logger.info(f"Could not translate {current_path}: {e}")
                             translated_dict[key] = value
                     elif isinstance(value, (dict, list)):
                         # Recursively handle nested structures
@@ -336,7 +522,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                     translated_other_params[field_name] = translate_nested_structure(original_value, field_name)
                     print(f"Processed nested field: {field_name}")
                 except Exception as e:
-                    logger.warning(f"Could not process nested field {field_name}: {e}")
+                    logger.info(f"Could not process nested field {field_name}: {e}")
             elif isinstance(field_value, str) and is_translatable_text(field_value, field_name):
                 # Handle top-level string fields that need translation
                 try:
@@ -347,7 +533,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                     )
                     print(f"Auto-translated top-level field {field_name}: {field_value[:50]}...")
                 except Exception as e:
-                    logger.warning(f"Could not translate top-level field {field_name}: {e}")
+                    logger.info(f"Could not translate top-level field {field_name}: {e}")
 
         # Handle transliteration for specific fields (names, places) - these still need explicit handling
         if company_bot:
@@ -375,11 +561,11 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                             print(
                                 f"Transliterated {field_name}: {field_value} -> {translated_other_params[field_name]}")
                         except Exception as e:
-                            logger.warning(f"Could not transliterate field {field_name}: {e}")
+                            logger.info(f"Could not transliterate field {field_name}: {e}")
                             # Keep original value if transliteration fails
                             translated_other_params[field_name] = str(field_value)
             except Exception as e:
-                logger.warning(f"Could not set up transliteration: {e}")
+                logger.info(f"Could not set up transliteration: {e}")
 
         print(f"Final translated_other_params: {translated_other_params}")
 
@@ -419,7 +605,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                 translation.formatted_content = formatted_translation_content
                 translation.save(update_fields=['formatted_content'])
         except Exception as e:
-            logger.warning(f"Could not format translation content: {e}")
+            logger.info(f"Could not format translation content: {e}")
 
         logger.info(f"Created/Updated generic translation for story {story.id} in language {language}")
         return translation
