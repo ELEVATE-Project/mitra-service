@@ -129,10 +129,18 @@ def save_story(
                 for step in raw_action_steps
             ]
 
-        # Fields that don't typically need translation
-        english_tweet = response_json_story.get('tweet', '')
-        english_micro_improvement = response_json_story.get('micro_improvement', '')
-        duration = response_json_story.get('duration', '')
+        english_tweet = clean_escaped_text(
+            text=translate_to_english_if_needed(response_json_story.get('tweet', ''), translation_voice_provider,
+                                                language)
+        )
+        english_micro_improvement = clean_escaped_text(
+            text=translate_to_english_if_needed(response_json_story.get('micro_improvement', ''),
+                                                translation_voice_provider, language)
+        )
+        duration = clean_escaped_text(
+            text=translate_to_english_if_needed(response_json_story.get('duration', ''), translation_voice_provider,
+                                                language)
+        )
 
         if flow and flow in [SessionFlowName.GuestMiStory] and not project_id:
             # Transliterate personal information fields for guest stories
