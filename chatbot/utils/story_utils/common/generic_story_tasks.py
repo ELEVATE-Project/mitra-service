@@ -86,6 +86,7 @@ def translate_nested_to_english(data, voice_provider, transliteration_voice_prov
         translated_dict = {}
         for key, value in data.items():
             current_path = f"{field_path}.{key}" if field_path else key
+            logger.info(f"DEBUG: Processing {key} = '{value}' (type: {type(value)})")
 
             if isinstance(value, str) and value.strip():
                 # Determine if this should be translated or transliterated
@@ -421,7 +422,9 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                 return False
 
             value = value.strip()
-
+            technical_fields = ['flow', 'id', 'uuid', 'status', 'type', 'mode', 'version']
+            if key.lower() in technical_fields:
+                return False
             # Skip very short strings (likely codes/IDs)
             if len(value) < 3:
                 return False
