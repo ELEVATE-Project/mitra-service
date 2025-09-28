@@ -259,22 +259,43 @@ def save_generic_story(
         'other_params', 'location', 'validation_logs'
     }
 
-    # Add ALL other fields from JSON to other_params, translating them to English
+    # Define fields that should never be translated
+    NON_TRANSLATABLE_FIELDS = {'flow', 'id', 'uuid', 'status', 'type', 'mode', 'version'}
+
+    # Define personal info fields that need transliteration
+    PERSONAL_INFO_FIELDS = {'name', 'user_name', 'location', 'organization', 'designation', 'district', 'block'}
+
+    # Add ALL other fields from JSON to other_params, translating them appropriately
     for key, value in response_json_story.items():
         if key not in STORY_MODEL_FIELDS:
-            if isinstance(value, (dict, list, str)) and value:
-                # Translate nested structures to English
+            if isinstance(value, dict) or isinstance(value, list):
+                # Handle complex nested structures (like question_answers)
                 other_params[key] = translate_nested_to_english(
                     value, translation_voice_provider, transliteration_voice_provider, language, key
                 )
+            elif isinstance(value, str) and value.strip():
+                # Handle simple string values
+                if key.lower() in NON_TRANSLATABLE_FIELDS:
+                    # Keep technical fields as-is
+                    other_params[key] = value
+                elif key.lower() in PERSONAL_INFO_FIELDS:
+                    # Transliterate personal info fields
+                    other_params[key] = transliterate_to_english_if_needed(value, transliteration_voice_provider,
+                                                                           language)
+                else:
+                    # Translate content fields
+                    other_params[key] = translate_to_english_if_needed(value, translation_voice_provider, language)
             else:
+                # Keep non-string values as-is
                 other_params[key] = value
 
     print(f"Story other_params before save: {other_params}")
 
     # Use fallback location if not provided, and translate if needed
     raw_location = response_json_story.get('location', fallback_location)
-    location = transliterate_to_english_if_needed(raw_location, transliteration_voice_provider, language)
+    location = ""
+    if raw_location and raw_location.strip():
+        location = transliterate_to_english_if_needed(raw_location, transliteration_voice_provider, language)
 
     # Prepare Story model fields (all in English)
     story_fields = {
