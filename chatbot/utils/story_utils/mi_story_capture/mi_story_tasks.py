@@ -37,7 +37,8 @@ def translate_to_english_if_needed(text, voice_provider, source_language):
             translated = translate_field(
                 voice_provider=voice_provider,
                 message_body=text,
-                target_language='en'
+                target_language='en',
+                source_language=source_language
             )
             return translated
         else:
