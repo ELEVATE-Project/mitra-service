@@ -447,15 +447,22 @@ def create_generic_story_translation(story, language, english_data, voice_provid
             if key.lower() in technical_fields:
                 return False
 
-            # Skip if it looks like an ID, code, or technical identifier
-            if (value.isdigit() or
-                    value.replace('-', '').replace('_', '').isalnum() and len(value) < 10 or
-                    value.startswith(('http://', 'https://', 'ftp://', 'mailto:')) or
-                    value.count('@') == 1 and '.' in value.split('@')[1]):  # email pattern
+            # Skip pure numbers
+            if value.isdigit():
                 return False
 
-            # Skip if it's a file extension or path-like
-            if (value.startswith(('.', '/', '\\')) or
+            # Skip if it looks like a code/ID (has numbers AND special chars, or is mixed case with numbers)
+            has_digit = any(c.isdigit() for c in value)
+            has_special = any(c in '-_' for c in value)
+            if has_digit and (has_special or (value != value.lower() and value != value.upper())):
+                # Things like "user-123", "test_id", "AbC123"
+                if len(value) < 15:  # IDs are usually short
+                    return False
+
+            # Skip URLs, emails, file paths
+            if (value.startswith(('http://', 'https://', 'ftp://', 'mailto:')) or
+                    value.count('@') == 1 and '.' in value.split('@')[1] or
+                    value.startswith(('.', '/', '\\')) or
                     value.lower().endswith(('.jpg', '.png', '.pdf', '.doc', '.xls', '.mp4', '.mp3'))):
                 return False
 
