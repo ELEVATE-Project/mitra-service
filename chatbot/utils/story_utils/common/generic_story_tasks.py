@@ -446,19 +446,23 @@ def create_generic_story_translation(story, language, english_data, voice_provid
             technical_fields = ['flow', 'id', 'uuid', 'status', 'type', 'mode', 'version']
             if key.lower() in technical_fields:
                 return False
-            # Skip very short strings (likely codes/IDs)
-            if len(value) < 3:
+
+            # Skip pure numbers
+            if value.isdigit():
                 return False
 
-            # Skip if it looks like an ID, code, or technical identifier
-            if (value.isdigit() or
-                    value.replace('-', '').replace('_', '').isalnum() and len(value) < 10 or
-                    value.startswith(('http://', 'https://', 'ftp://', 'mailto:')) or
-                    value.count('@') == 1 and '.' in value.split('@')[1]):  # email pattern
-                return False
+            # Skip if it looks like a code/ID (has numbers AND special chars, or is mixed case with numbers)
+            has_digit = any(c.isdigit() for c in value)
+            has_special = any(c in '-_' for c in value)
+            if has_digit and (has_special or (value != value.lower() and value != value.upper())):
+                # Things like "user-123", "test_id", "AbC123"
+                if len(value) < 15:  # IDs are usually short
+                    return False
 
-            # Skip if it's a file extension or path-like
-            if (value.startswith(('.', '/', '\\')) or
+            # Skip URLs, emails, file paths
+            if (value.startswith(('http://', 'https://', 'ftp://', 'mailto:')) or
+                    value.count('@') == 1 and '.' in value.split('@')[1] or
+                    value.startswith(('.', '/', '\\')) or
                     value.lower().endswith(('.jpg', '.png', '.pdf', '.doc', '.xls', '.mp4', '.mp3'))):
                 return False
 
@@ -467,21 +471,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
             if alpha_count < len(value) * 0.5:  # Less than 50% alphabetic characters
                 return False
 
-            # Skip single words that look like codes (all caps, mixed case with numbers)
-            if ' ' not in value:
-                if (value.isupper() and len(value) < 8) or any(c.isdigit() for c in value):
-                    return False
-
-            # If it has multiple words or is a sentence-like structure, it's likely translatable
-            if ' ' in value or len(value) > 20:
-                return True
-
-            # For shorter single words, be more conservative
-            # Allow if it's a common word pattern (lowercase, title case)
-            if value.islower() or value.istitle():
-                return True
-
-            return False
+            return True
 
         def translate_nested_structure(data, field_path=""):
             """Recursively translate nested data structures using intelligent content detection"""
