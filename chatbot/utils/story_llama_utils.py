@@ -149,6 +149,7 @@ def parse_datetime(date_str):
 
 
 def translate_field(voice_provider, message_body, target_language, source_language="en"):
+    print(f"Trying to translate: {message_body}")
     if not message_body or message_body == '' or source_language == target_language:
         return message_body
 
