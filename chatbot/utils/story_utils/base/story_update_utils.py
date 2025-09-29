@@ -99,7 +99,7 @@ def translate_other_params(current_params, new_params, voice_provider, source_la
 
     for field in translatable_fields:
         if field in new_params:
-            english_params[field] = translate_field_value(
+            english_params[field] = translate_nested_structure(
                 new_params[field], voice_provider, source_language
             )
 
@@ -157,3 +157,29 @@ def get_voice_provider(language, flow):
         type=VoiceType.TextToText,
         language=language
     ).first()
+
+
+def translate_nested_structure(data, voice_provider, source_language):
+    """
+    Generic handler for translating nested data structures (dicts and lists).
+    Recursively processes any combination of dicts, lists, and strings.
+    """
+    if isinstance(data, dict):
+        return {
+            key: translate_nested_structure(value, voice_provider, source_language)
+            for key, value in data.items()
+        }
+    elif isinstance(data, list):
+        return [
+            translate_nested_structure(item, voice_provider, source_language)
+            for item in data
+        ]
+    elif isinstance(data, str) and data.strip():
+        return translate_field(
+            voice_provider=voice_provider,
+            message_body=data,
+            target_language='en',
+            source_language=source_language
+        )
+    else:
+        return data
