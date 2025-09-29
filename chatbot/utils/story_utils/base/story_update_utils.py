@@ -94,7 +94,7 @@ def translate_other_params(current_params, new_params, voice_provider, source_la
     """Translate other_params fields back to English"""
     english_params = current_params.copy()
 
-    translatable_fields = ['challenges_faced', 'solutions_discussed']
+    translatable_fields = ['challenges_faced', 'solutions_discussed', 'question_answers']
     non_translatable_fields = ['participants_count', 'discussion_date', 'flow', 'location']
 
     for field in translatable_fields:

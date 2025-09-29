@@ -115,7 +115,7 @@ class StoryRetrieveUpdateDestroyView(LanguageDetectionMixin, generics.RetrieveUp
         response_data = serializer.data
 
         # Handle PDF update if needed
-        if all([update_data['session'], update_data['access_token'], update_data['flow']]):
+        if update_data.get('session') and update_data.get('flow'):
             update_story_pdf(
                 access_token=update_data['access_token'],
                 session=update_data['session'],
