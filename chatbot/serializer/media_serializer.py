@@ -29,7 +29,7 @@ class S3UrlMixin:
         if doc_type and doc_type != "template":
             return obj.get_s3_url()
 
-        # Rule 3: AI extracted file (subdocument of template’s linked file)
+        # Rule 3: AI extracted file (subdocument of template's linked file)
         if obj.parent:
             parent_kv = obj.parent.key_values.filter(key__iregex=r'^document[_\s]type$').first()
             parent_doc_type = parent_kv.value.lower() if parent_kv and parent_kv.value else None
@@ -98,6 +98,7 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
     title = serializers.SerializerMethodField()
     organization = serializers.SerializerMethodField()
     organization_url = serializers.SerializerMethodField()
+    org_logo = serializers.SerializerMethodField()
     document_type = serializers.SerializerMethodField()
     key_entities = serializers.SerializerMethodField()
     file_size = serializers.SerializerMethodField()
@@ -115,7 +116,7 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
             'id', 'name', 'description', 'priority', 'priority_display',
             'media_type', 'media_type_display', 'created_at', 'updated_at',
             's3_url', 'file', 'tag_names', 'title', 'organization',
-            'document_type', 'key_entities', 'file_size', 'organization_url',
+            'document_type', 'key_entities', 'file_size', 'organization_url', 'org_logo',
             'keyword_coverage', 'total_matching_fields', 'avg_relevance_score', 'max_similarity',
             'match_reason'
         ]
@@ -172,15 +173,19 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
         return self.get_metadata_field(obj, 'TITLE')
 
     def get_organization(self, obj):
-        # Already correct - using direct organization field
         if obj.organization:
             return obj.organization.name
         return None
 
     def get_organization_url(self, obj):
-        # New method for organization URL
         if obj.organization:
             return obj.organization.url
+        return None
+
+    def get_org_logo(self, obj):
+        """Get organization logo S3 URL"""
+        if obj.organization and obj.organization.logo:
+            return obj.organization.get_public_url()
         return None
 
     def get_document_type(self, obj):
@@ -205,9 +210,9 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
     children = serializers.SerializerMethodField()
     media_type_display = serializers.CharField(source='get_media_type_display', read_only=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
-    # company_bot_name = serializers.CharField(source='company_bot.name', read_only=True)
     title = serializers.SerializerMethodField()
     organization = serializers.SerializerMethodField()
+    org_logo = serializers.SerializerMethodField()
     document_type = serializers.SerializerMethodField()
     key_entities = serializers.SerializerMethodField()
     file_size = serializers.SerializerMethodField()
@@ -220,7 +225,7 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
             'media_type', 'media_type_display', 'extracted_text',
             'file', 'url', 'company_bot',
             'parent', 'parent_info', 'created_at', 'updated_at',
-            's3_url', 'tags', 'title', 'organization', 'document_type',
+            's3_url', 'tags', 'title', 'organization', 'org_logo', 'document_type',
             'key_entities', 'key_values', 'images', 'children',
             'file_size', 'size',
         ]
@@ -356,6 +361,12 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
     def get_organization(self, obj):
         if obj.organization:
             return obj.organization.name
+        return None
+
+    def get_org_logo(self, obj):
+        """Get organization logo S3 URL"""
+        if obj.organization and obj.organization.logo:
+            return obj.organization.get_public_url()
         return None
 
     def get_document_type(self, obj):
