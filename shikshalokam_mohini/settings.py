@@ -309,7 +309,7 @@ sentry_sdk.init(
 JAZZMIN_SETTINGS = {
     'site_title': 'Shikshalokam',
     'site_header': 'Shikshalokam',
-    'site_brand': 'Shikshalokam',
+    'site_brand': ' ',
     'site_logo': 'fe-images/PNG/Shikshalokam/shikshalokam-logo.png',
     'login_logo': 'fe-images/PNG/Shikshalokam/shikshalokam-logo.png',
     'site_logo_classes': 'img-fluid',

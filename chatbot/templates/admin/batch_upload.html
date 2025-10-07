@@ -3799,6 +3799,7 @@ async function waitForAllTasksToComplete(taskIds) {
 
                                         if (enhanced.description) item.data.description = enhanced.description;
                                         if (enhanced.extracted_text) item.data.extracted_text = enhanced.extracted_text;
+                                        if (enhanced.media_type) item.data.media_type = enhanced.media_type;
 
                                         if (enhanced.url && Array.isArray(enhanced.url)) {
                                             item.data.url = enhanced.url;
