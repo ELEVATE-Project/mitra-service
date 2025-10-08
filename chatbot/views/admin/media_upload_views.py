@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import traceback
 from pathlib import Path
@@ -10,13 +9,14 @@ from django.utils.decorators import method_decorator
 from django.http import JsonResponse
 from django.views import View
 from chatbot.models import Media, Tag, KeyValue, Profile, FileTypeChoices, CompanyBot, TagSourceChoices, TagChoices, \
-    Company, EntityStatus
+    Company, EntityStatus, FileDisplayMode
 from chatbot.models.media_models import PriorityChoices, MediaImage, MediaTypeChoices
 import json
 import tempfile, os
 import uuid
 from django.core.cache import cache
 from chatbot.celery_tasks.knowledge_service.tag_tasks import get_auto_extracted_data
+from chatbot.utils.knowledge_service.base_task_utils import determine_media_type_from_url
 from chatbot.utils.knowledge_service.duplicate_detector import DuplicateDetector
 from django.core.files.base import ContentFile
 import base64
@@ -1006,6 +1006,42 @@ class BatchMediaTaskStatusView(View):
                 'error': str(e)
             }, status=500)
 
+
+    def get_main_doc_media_type(self, ai_data):
+        """Get the correct document type for main document based on linked file, skipping failed URLs.
+        If only one failed URL exists and it's the same as the only URL, still consider it.
+        """
+        media_type = None
+        file_urls = ai_data.get('url', [])
+        failed_links = ai_data.get('failed_links', [])
+
+        # Collect failed URLs from failed_links
+        failed_urls = set()
+        if failed_links and isinstance(failed_links, list):
+            for item in failed_links:
+                file_url = item.get('file_url')
+                if file_url:
+                    failed_urls.add(file_url)
+
+        # Handle edge case: if only one URL and it’s the same as the single failed URL → allow it
+        if (
+                len(file_urls) == 1
+                and len(failed_urls) == 1
+                and next(iter(failed_urls)) == file_urls[0]
+        ):
+            valid_urls = file_urls
+        else:
+            # Otherwise, filter out failed URLs
+            valid_urls = [url for url in file_urls if url not in failed_urls]
+
+        # Proceed only if we have at least one valid URL
+        if valid_urls:
+            source_doc_url = valid_urls[0]
+            media_type, filename, response = determine_media_type_from_url(source_doc_url, parent_media=None)
+
+        return media_type
+
+
     def validate_tags_against_database(self, tags, company=None):
         """
         Filter tags to only include those that exist in the database.
@@ -1112,6 +1148,7 @@ class BatchMediaTaskStatusView(View):
             except Profile.DoesNotExist:
                 pass
 
+
         def process_subdocument(subdoc_data):
             """Recursively process subdocument data"""
             if not isinstance(subdoc_data, dict):
@@ -1205,6 +1242,7 @@ class BatchMediaTaskStatusView(View):
 
         # Build enhanced key-values for main document
         enhanced_key_values, array_fields_metadata = build_key_values(main_data)
+        media_type_value = self.get_main_doc_media_type(ai_data)
         main_data['array_fields_metadata'] = array_fields_metadata
 
         # Process subdocuments recursively
@@ -1226,7 +1264,7 @@ class BatchMediaTaskStatusView(View):
         # Process images
         images = ai_data.get('images', []) if isinstance(ai_data.get('images'), list) else []
         print("ai_data: ", ai_data)
-        return {
+        data = {
             'auto_tags': auto_tags,
             'enhanced_data': {
                 'description': main_data['summary'],
@@ -1240,6 +1278,12 @@ class BatchMediaTaskStatusView(View):
                 'url': ai_data.get('url', [])
             }
         }
+
+        if media_type_value:
+            data.get('enhanced_data', {})['media_type'] = media_type_value
+
+        print("data: ", data)
+        return data
 
 
 # Helper class for shared tag processing logic
@@ -1332,6 +1376,7 @@ class BatchMediaSaveView(View):
 
         return ' '.join(cleaned_words)
 
+
     def get_or_create_source_document_media(self, source_doc_url, parent_media, company_bot_id, user_profile,
                                             company_slug):
         """
@@ -1347,109 +1392,13 @@ class BatchMediaSaveView(View):
             return self._source_doc_cache[source_doc_url]
 
         try:
-            # Download the source document
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-            }
+            # Use the separated function to determine media type and filename
+            media_type, filename, response = determine_media_type_from_url(source_doc_url, parent_media)
 
-            # Convert Google URLs to downloadable format
-            download_url = source_doc_url
-            if 'docs.google.com/document' in source_doc_url and '/d/' in source_doc_url:
-                doc_id = source_doc_url.split('/d/')[1].split('/')[0]
-                download_url = f"https://docs.google.com/document/d/{doc_id}/export?format=docx"
-            elif 'docs.google.com/spreadsheets' in source_doc_url and '/d/' in source_doc_url:
-                sheet_id = source_doc_url.split('/d/')[1].split('/')[0]
-                download_url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=xlsx"
-            elif 'drive.google.com/file/d/' in source_doc_url:
-                # FIXED: Handle Google Drive file URLs
-                file_id = source_doc_url.split('/d/')[1].split('/')[0]
-                download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-                print(f"Converting Google Drive URL: {source_doc_url} -> {download_url}")
-
-            response = requests.get(download_url, headers=headers, timeout=30, allow_redirects=True)
-            response.raise_for_status()
-
-            # Get extension mapping
-            extension_mapping = FileTypeChoices.get_extension_mapping()
-
-            # Determine filename and media type
-            from urllib.parse import urlparse, unquote
-            parsed_url = urlparse(source_doc_url)
-
-            # Default values
-            parent_name_without_ext = os.path.splitext(parent_media.name)[0]
-            url_hash = hashlib.md5(source_doc_url.encode()).hexdigest()[:6]
-            filename = f"linked_doc_{parent_name_without_ext}_{url_hash}"
-            media_type = FileTypeChoices.TXT.value
-
-            # Check content type first
-            content_type = response.headers.get('content-type', '').lower()
-
-            # FIXED: Determine file type from content-type header (after proper download URL)
-            print(f"Content-Type: {content_type}")
-
-            # Detect file type from content-type header
-            if 'application/pdf' in content_type:
-                media_type = FileTypeChoices.PDF.value
-                filename = f"source_doc_{parent_name_without_ext}_{url_hash}.pdf"
-            elif 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' in content_type:
-                media_type = FileTypeChoices.DOCX.value
-                filename = f"source_doc_{parent_name_without_ext}_{url_hash}.docx"
-            elif 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' in content_type:
-                media_type = FileTypeChoices.XLSX.value
-                filename = f"source_doc_{parent_name_without_ext}_{url_hash}.xlsx"
-            elif 'application/msword' in content_type:
-                media_type = FileTypeChoices.DOC.value if hasattr(FileTypeChoices,
-                                                                  'DOC') else FileTypeChoices.DOCX.value
-                filename = f"source_doc_{parent_name_without_ext}_{url_hash}.doc"
-            elif 'application/vnd.ms-excel' in content_type:
-                media_type = FileTypeChoices.XLS.value if hasattr(FileTypeChoices,
-                                                                  'XLS') else FileTypeChoices.XLSX.value
-                filename = f"source_doc_{parent_name_without_ext}_{url_hash}.xls"
-            elif 'text/plain' in content_type:
-                media_type = FileTypeChoices.TXT.value
-                filename = f"source_doc_{parent_name_without_ext}_{url_hash}.txt"
-            elif 'text/csv' in content_type:
-                media_type = FileTypeChoices.CSV.value
-                filename = f"source_doc_{parent_name_without_ext}_{url_hash}.csv"
-            elif 'docs.google.com' in source_doc_url:
-                # Fallback for Google Docs URLs
-                if 'document' in source_doc_url:
-                    media_type = FileTypeChoices.DOCX.value
-                    filename = f"source_doc_{parent_name_without_ext}_{url_hash}.docx"
-                elif 'spreadsheets' in source_doc_url:
-                    media_type = FileTypeChoices.XLSX.value
-                    filename = f"source_doc_{parent_name_without_ext}_{url_hash}.xlsx"
-            else:
-                # Try content-disposition header first
-                content_disposition = response.headers.get('content-disposition')
-                if content_disposition:
-                    import re
-                    matches = re.findall('filename="?([^"]+)"?', content_disposition)
-                    if matches:
-                        filename = matches[0]
-                        # Get extension and determine type
-                        ext = os.path.splitext(filename)[1].lower().strip('.')
-                        if ext:
-                            media_type = FileTypeChoices.get_mime_from_extension(ext) or FileTypeChoices.TXT.value
-                        else:
-                            # Filename without extension, try content-type
-                            if 'application/pdf' in content_type:
-                                media_type = FileTypeChoices.PDF.value
-                                filename = f"{filename}.pdf"
-                            else:
-                                media_type = FileTypeChoices.TXT.value
-                                filename = f"{filename}.txt"
-                else:
-                    # Fallback: Default to PDF for unknown Google Drive files (most common)
-                    if 'drive.google.com' in source_doc_url:
-                        media_type = FileTypeChoices.PDF.value
-                        filename = f"source_doc_{parent_name_without_ext}_{url_hash}.pdf"
-                    else:
-                        media_type = FileTypeChoices.TXT.value
-                        filename = f"source_doc_{parent_name_without_ext}_{url_hash}.txt"
-
+            if not media_type or not filename:
+                print(f"media_type: {media_type} and filename: {filename}")
+                print(f"Error creating source document media for {source_doc_url}: Media type or file name is null.")
+                return None
             print(f"Final filename: {filename}, media_type: {media_type}")
 
             # Create Media object for source document
@@ -1460,6 +1409,7 @@ class BatchMediaSaveView(View):
                 company_bot_id=company_bot_id,
                 parent=parent_media,
                 organization=parent_media.organization,
+                display_mode=FileDisplayMode.PRIVATE
             )
 
             # Save the file
@@ -1487,9 +1437,8 @@ class BatchMediaSaveView(View):
 
         except Exception as e:
             print(f"Error creating source document media for {source_doc_url}: {e}")
-            # Return None if we couldn't create the source document
-            # The subdocument will fall back to using the main document as parent
             return None
+
 
     def wait_for_vector_db_save_safe(self, task_id, timeout=30):
         """Enhanced waiting with better error handling"""
@@ -2070,6 +2019,7 @@ class BatchMediaSaveView(View):
                 company_bot_id=company_bot_id,
                 parent=actual_parent,
                 organization=organization_instance,
+                display_mode=subdoc_data.get('display_mode', FileDisplayMode.VISIBLE),
             )
 
             # Save the file content - use the original filename

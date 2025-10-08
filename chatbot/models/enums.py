@@ -307,3 +307,9 @@ class PostProcessOutputMode(models.TextChoices):
 class TextConversionType(models.TextChoices):
     TRANSLATE = 'TRANSLATE', _('Translation')
     TRANSLITERATE = 'TRANSLITERATE', _('Transliteration')
+
+
+class FileDisplayMode(models.TextChoices):
+    VISIBLE = "visible", _("Visible to All")
+    AI_ONLY = "ai_only", _("AI Only (Hidden from UI)")
+    PRIVATE = "private", _("Private (Hidden from UI and AI)")

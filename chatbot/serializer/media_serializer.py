@@ -279,18 +279,6 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
         # Serialize filtered key-value pairs
         key_values_data = KeyValueSerializer(filtered_kvs, many=True).data
 
-        # Add Tags for Classification if tags exist and document type is not template
-        if obj.tags.exists():
-            document_type_value = document_type.value.lower() if document_type and document_type.value else ''
-            if document_type_value != 'template':
-                tag_names = list(obj.tags.values_list("name", flat=True))
-                tags_classification_kv = {
-                    'id': None,
-                    'key': 'Tags for Classification',
-                    'value': tag_names
-                }
-                key_values_data.append(tags_classification_kv)
-
         # Add basic information as the first key-value pair if any basic info exists
         if basic_info:
             basic_info_kv = {
@@ -303,13 +291,13 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
         # If no key-value pairs exist after exclusion and no basic info, include the metadata fields
         if not filtered_kvs.exists() and not basic_info:
             metadata_kvs = obj.key_values.filter(
-                Q(key__in=['TITLE', 'KEY ENTITIES', 'GEOGRAPHY']) |  # Removed ORGANIZATION from here
+                Q(key__in=['TITLE', 'KEY ENTITIES', 'GEOGRAPHY']) |
                 Q(key__iregex=r'^document[_\s]type$')
             ).exclude(
                 Q(key__isnull=True, value__isnull=True) |
                 Q(key='', value='')
             )
-            serialized_data = KeyValueSerializer(metadata_kvs, many=True).data
+            key_values_data = KeyValueSerializer(metadata_kvs, many=True).data
 
             # Add organization from direct organization FK if it exists
             if organization_name:
@@ -318,23 +306,16 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
                     'key': 'ORGANIZATION',
                     'value': organization_name
                 }
-                serialized_data.append(org_kv)
+                key_values_data.append(org_kv)
 
-            # Add Tags for Classification in fallback case (if document type is not template)
-            if obj.tags.exists():
-                # Re-check document type for this case
-                fallback_document_type = obj.key_values.filter(key__iregex=r'^document[_\s]type$').first()
-                document_type_value = fallback_document_type.value.lower() if fallback_document_type and fallback_document_type.value else ''
-                if document_type_value != 'template':
-                    tag_names = list(obj.tags.values_list("name", flat=True))
-                    tags_classification_kv = {
-                        'id': None,
-                        'key': 'Tags for Classification',
-                        'value': tag_names
-                    }
-                    serialized_data.append(tags_classification_kv)
-
-            return serialized_data
+        if obj.tags.exists():
+            tag_names = list(obj.tags.values_list("name", flat=True))
+            tags_classification_kv = {
+                'id': None,
+                'key': 'Tags for Classification',
+                'value': tag_names
+            }
+            key_values_data.append(tags_classification_kv)
 
         return key_values_data
 

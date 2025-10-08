@@ -1,8 +1,12 @@
 from django.contrib import admin
+from django.shortcuts import render
+from django.http import HttpResponseRedirect
+from django.contrib.admin.decorators import action
 from .generic_upload_admin import BatchUploadMixin
 from chatbot.form.media.media_form import MediaAdminForm
 from chatbot.models import Tag, Profile, TagChoices, TagSourceChoices
 from chatbot.models.media_models import Media, KeyValue, MediaImage
+from chatbot.models.enums import FileDisplayMode, ProfileType
 from chatbot.views.admin.media_upload_views import (
     BatchMediaUploadView,
     BatchMediaExtractView,
@@ -12,7 +16,6 @@ from chatbot.views.admin.media_upload_views import (
     BatchMediaRetrySaveView, VectorDBTaskStatusView, GetCachedItemView
 )
 from simple_history.admin import SimpleHistoryAdmin
-from chatbot.models.enums import ProfileType
 
 
 class KeyValueInline(admin.TabularInline):
@@ -31,9 +34,10 @@ class MediaImagesInline(admin.TabularInline):
 @admin.register(Media)
 class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
     form = MediaAdminForm
-    list_display = ('file_name', 'get_title', 'media_type', 'parent__name', 'created_at')
+    list_display = ('file_name', 'get_title', 'media_type', 'display_mode', 'parent__name', 'created_at')
+    list_filter = ('created_at', 'display_mode', 'name', 'media_type')
     search_fields = ('name', 'key_values__value')
-    actions = ['export_selected']
+    actions = ['export_selected', 'change_display_mode_action']
     list_export = ('csv', 'xlsx')
     inlines = [KeyValueInline, MediaImagesInline]
     raw_id_fields = ('company_bot', 'parent', 'organization')
@@ -87,11 +91,12 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
             is_moderator = False
 
         if is_moderator:
-            base_fields = ('name', 'organization', 'file', 'url', 'description', 'extracted_text', 'media_type')
+            base_fields = ('name', 'organization', 'file', 'url', 'display_mode', 'description', 'extracted_text',
+                           'media_type')
         else:
             base_fields = (
-                'name', 'organization', 'file', 'url', 'description', 'extracted_text', 'priority', 'media_type',
-                'company_bot', 'parent'
+                'name', 'organization', 'file', 'url', 'display_mode', 'description', 'extracted_text', 'priority',
+                'media_type', 'company_bot', 'parent'
             )
 
         fieldsets = [
@@ -121,11 +126,75 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
         #     del actions['delete_selected']
         return actions
 
+    @action(description="Change display mode")
+    def change_display_mode_action(self, request, queryset):
+        """
+        Custom action to change display_mode for selected Media objects.
+        Redirects to a change form where user can select the new display_mode.
+        """
+        # Store the selected objects in the session for processing
+        selected_ids = queryset.values_list('id', flat=True)
+        request.session['selected_media_ids'] = list(selected_ids)
+
+        # Redirect to the display mode change view
+        return HttpResponseRedirect(f"{request.path}change-display-mode/")
+
+    def change_display_mode(self, request):
+        """
+        View to handle display mode changes for selected media objects.
+        """
+        selected_ids = request.session.get('selected_media_ids', [])
+
+        if not selected_ids:
+            self.message_user(request, "No files selected.", level="error")
+            return HttpResponseRedirect(request.META.get('HTTP_REFERER', '../'))
+
+        if request.method == 'POST':
+            new_display_mode = request.POST.get('display_mode')
+            apply_to = request.POST.get('apply_to', 'selected')
+
+            if not new_display_mode:
+                self.message_user(request, "Please select a display mode.", level="error")
+                return HttpResponseRedirect(request.path)
+
+            # Determine which objects to update
+            if apply_to == 'all':
+                media_objects = Media.objects.all()
+            else:
+                media_objects = Media.objects.filter(id__in=selected_ids)
+
+            # Update display_mode for selected/all objects
+            updated_count = media_objects.update(display_mode=new_display_mode)
+
+            self.message_user(
+                request,
+                f"Successfully updated display mode for {updated_count} file(s) to '{new_display_mode}'."
+            )
+
+            # Clear the session
+            if 'selected_media_ids' in request.session:
+                del request.session['selected_media_ids']
+
+            return HttpResponseRedirect('../')
+
+        # GET request - show the form
+        context = {
+            'title': 'Change Display Mode',
+            'selected_count': len(selected_ids),
+            'display_mode_choices': FileDisplayMode.choices,
+        }
+        return render(request, 'admin/change_display_mode.html', context)
+
     def get_urls(self):
-        """Add custom URLs for batch upload"""
+        """Add custom URLs for batch upload and display mode change"""
         from django.urls import path
         urls = super().get_urls()
         custom_urls = [
+            path(
+                'change-display-mode/',
+                self.admin_site.admin_view(self.change_display_mode),
+                name='chatbot_media_change_display_mode'
+            ),
             path('batch-upload/',
                  self.admin_site.admin_view(BatchMediaUploadView.as_view()),
                  name='chatbot_media_batch_upload'),
