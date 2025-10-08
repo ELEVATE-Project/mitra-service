@@ -341,7 +341,7 @@ LOGGING = {
             'filename': os.path.join(LOGGING_DIR, 'debug.log'),
             'when': 'midnight',  # Rotate daily
             'interval': 1,        # 1 day interval
-            'backupCount': 7,     # Keep 7 backup copies
+            'backupCount': 30,     # Keep 30 backup copies
             'formatter': 'verbose',
         },
         'info_file': {
@@ -350,7 +350,7 @@ LOGGING = {
             'filename': os.path.join(LOGGING_DIR, 'info.log'),
             'when': 'midnight',  # Rotate daily
             'interval': 1,        # 1 day interval
-            'backupCount': 7,     # Keep 7 backup copies
+            'backupCount': 30,     # Keep 30 backup copies
             'formatter': 'verbose',
         },
         'warning_file': {
@@ -359,7 +359,7 @@ LOGGING = {
             'filename': os.path.join(LOGGING_DIR, 'error.log'),
             'when': 'midnight',  # Rotate daily
             'interval': 1,        # 1 day interval
-            'backupCount': 7,     # Keep 7 backup copies
+            'backupCount': 30,     # Keep 30 backup copies
             'formatter': 'verbose',
         },
         'error_file': {
@@ -368,7 +368,7 @@ LOGGING = {
             'filename': os.path.join(LOGGING_DIR, 'error.log'),
             'when': 'midnight',  # Rotate daily
             'interval': 1,        # 1 day interval
-            'backupCount': 7,     # Keep 7 backup copies
+            'backupCount': 30,     # Keep 30 backup copies
             'formatter': 'verbose',
         },
     },
