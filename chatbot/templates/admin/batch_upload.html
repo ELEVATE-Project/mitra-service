@@ -1816,6 +1816,81 @@
     .editable-field input[type="text"]:not([readonly]) {
         padding-right: 35px !important;
     }
+    .subdocument-controls input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: #417690;
+        margin: 0;
+        padding: 0;
+    }
+    .subdocument-controls label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        margin: 0;
+        user-select: none;
+        font-size: 13px;
+        color: #555;
+        transition: all 0.2s ease;
+    }
+
+    .subdocument-controls label:hover {
+        color: #333;
+    }
+
+    .subdocument-controls input[type="checkbox"]:hover {
+        transform: scale(1.1);
+    }
+
+    .subdocument-controls input[type="checkbox"]:checked {
+        background-color: #417690;
+    }
+
+    /* Private mode indicator styling */
+    .subdocument-item[data-display-mode="private"]::before {
+        content: "🔒 ";
+        font-size: 14px;
+    }
+
+    /* Optional: Add visual indicator to the entire subdocument when private */
+    .subdocument-item.private-mode {
+        opacity: 0.8;
+        border-left-color: #ff9800;
+    }
+
+    .subdocument-item.private-mode .subdocument-header {
+        background-color: #fff8e1;
+    }
+
+    /* Checkbox focus state */
+    .subdocument-controls input[type="checkbox"]:focus {
+        outline: 2px solid #417690;
+        outline-offset: 2px;
+        border-radius: 2px;
+    }
+
+    .subdocument-private-info {
+        background-color: #fff8e1;
+        border-left: 4px solid #ff9800;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #856404;
+        margin-top: 10px;
+        display: none;
+    }
+
+    .subdocument-private-info.show {
+        display: block;
+    }
+
+    .subdocument-private-info::before {
+        content: "ℹ️ ";
+        margin-right: 5px;
+    }
+
 </style>
 {% endblock %}
 
@@ -4307,6 +4382,38 @@ document.addEventListener('click', function(event) {
     }
 });
 
+function toggleSubdocumentDisplayMode(path, isChecked) {
+    const subdoc = getSubdocByPath(path);
+    if (subdoc) {
+        // Set display_mode: AI_ONLY if checked, VISIBLE if unchecked
+        subdoc.display_mode = isChecked ? 'ai_only' : 'visible';
+        subdoc.hasUnsavedChanges = true;
+
+        // Update UI to show the state
+        const checkbox = document.getElementById(`displayModeCheckbox_${path}`);
+        const label = document.getElementById(`displayModeLabel_${path}`);
+
+        if (checkbox && label) {
+            if (isChecked) {
+                label.style.opacity = '0.6';
+                label.style.textDecoration = 'none';
+            } else {
+                label.style.opacity = '1';
+                label.style.textDecoration = 'none';
+            }
+        }
+
+        // Reset save button state
+        const saveBtn = document.getElementById(`saveBtn_${path}`);
+        if (saveBtn && saveBtn.classList.contains('saved')) {
+            saveBtn.textContent = 'Save changes';
+            saveBtn.classList.remove('saved');
+        }
+
+        console.log(`Display mode for ${path} set to:`, subdoc.display_mode);
+    }
+}
+
 function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
     const subdocId = `subdoc_${path}`;
 
@@ -4328,6 +4435,11 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
         } else {
             subdoc.auto_tags = [];
         }
+    }
+
+    // Initialize display_mode if not set
+    if (!subdoc.display_mode) {
+        subdoc.display_mode = 'visible';
     }
 
     // Check if subdocument was manually saved
@@ -4427,6 +4539,8 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
         title = `📎 ${subdoc.url[0]}`;
     }
 
+    const isAiOnly = subdoc.display_mode === 'ai_only';
+
     return `
         <div class="subdocument-item" id="${subdocId}" style="margin-left: ${(depth - 1) * 20}px;">
             <div class="subdocument-header" onclick="toggleSubdocumentByPath('${path}')">
@@ -4434,7 +4548,19 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
                     ${subdoc.document_type === 'linked_document' ? '🔗 ' : ''}${title}
                 </div>
                 <div class="subdocument-controls">
-                    <button class="remove-subdoc-btn" onclick="event.stopPropagation(); removeSubdocumentByPath('${path}')">Remove</button>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-right: 10px;">
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; margin: 0; user-select: none; font-size: 13px; color: #555;">
+                            <input type="checkbox"
+                                   id="displayModeCheckbox_${path}"
+                                   ${isAiOnly ? 'checked' : ''}
+                                   onclick="event.stopPropagation(); toggleSubdocumentDisplayMode('${path}', this.checked)"
+                                   style="cursor: pointer;">
+                            <span id="displayModeLabel_${path}" style="">
+                                Do not Display (Use for AI alone)
+                            </span>
+                        </label>
+                    </div>
+                    <button class="remove-subdoc-btn" onclick="event.stopPropagation(); removeSubdocumentByPath('${path}')" style="margin-right: 8px;">Remove</button>
                     <svg class="expand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="m6 9 6 6 6-6"/>
                     </svg>

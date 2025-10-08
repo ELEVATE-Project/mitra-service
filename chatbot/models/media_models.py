@@ -2,7 +2,7 @@ import os
 import base64
 from django.db import models
 from chatbot.models import Profile, CompanyBot, MediaTemplateChoices, PDFStrategyChoices, Tag, \
-    FileTypeChoices, Company, MediaTypeChoices
+    FileTypeChoices, Company, MediaTypeChoices, FileDisplayMode
 from shikshalokam.models.enums import PriorityChoices
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVector, TrigramSimilarity
@@ -107,6 +107,9 @@ class Media(models.Model):
     tags = models.ManyToManyField(Tag, related_name="medias")
     parent = models.ForeignKey(
         'self', on_delete=models.CASCADE, null=True, blank=True, related_name='subdocuments'
+    )
+    display_mode = models.CharField(
+        max_length=20, choices=FileDisplayMode.choices, default=FileDisplayMode.VISIBLE
     )
 
     created_at = models.DateTimeField(auto_now_add=True)

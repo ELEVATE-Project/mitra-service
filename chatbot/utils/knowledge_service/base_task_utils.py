@@ -1,3 +1,4 @@
+import os
 from chatbot.models import FileTypeChoices
 import hashlib
 import requests

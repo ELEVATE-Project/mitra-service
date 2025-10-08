@@ -9,7 +9,7 @@ from django.utils.decorators import method_decorator
 from django.http import JsonResponse
 from django.views import View
 from chatbot.models import Media, Tag, KeyValue, Profile, FileTypeChoices, CompanyBot, TagSourceChoices, TagChoices, \
-    Company, EntityStatus
+    Company, EntityStatus, FileDisplayMode
 from chatbot.models.media_models import PriorityChoices, MediaImage, MediaTypeChoices
 import json
 import tempfile, os
@@ -1396,6 +1396,7 @@ class BatchMediaSaveView(View):
             media_type, filename, response = determine_media_type_from_url(source_doc_url, parent_media)
 
             if not media_type or not filename:
+                print(f"media_type: {media_type} and filename: {filename}")
                 print(f"Error creating source document media for {source_doc_url}: Media type or file name is null.")
                 return None
             print(f"Final filename: {filename}, media_type: {media_type}")
@@ -1408,6 +1409,7 @@ class BatchMediaSaveView(View):
                 company_bot_id=company_bot_id,
                 parent=parent_media,
                 organization=parent_media.organization,
+                display_mode=FileDisplayMode.PRIVATE
             )
 
             # Save the file
@@ -2017,6 +2019,7 @@ class BatchMediaSaveView(View):
                 company_bot_id=company_bot_id,
                 parent=actual_parent,
                 organization=organization_instance,
+                display_mode=subdoc_data.get('display_mode', FileDisplayMode.VISIBLE),
             )
 
             # Save the file content - use the original filename
