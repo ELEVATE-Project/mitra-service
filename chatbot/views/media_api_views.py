@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import models
 
-from chatbot.models import Tag, FileTypeChoices
+from chatbot.models import Tag, FileTypeChoices, FileDisplayMode
 from chatbot.models.media_models import Media, KeyValue
 from chatbot.serializer.media_serializer import (
     MediaListSerializer, MediaDetailSerializer
@@ -40,7 +40,8 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
             return super().filter_queryset(queryset)
 
     def get_queryset(self):
-        queryset = Media.objects.all()
+        # Filter to only show media with display_mode set to VISIBLE
+        queryset = Media.objects.filter(display_mode=FileDisplayMode.VISIBLE)
 
         title_subquery = KeyValue.objects.filter(
             media=OuterRef('pk'),
@@ -559,14 +560,16 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
         siblings = Media.objects.none()
         if media.parent:
             siblings = Media.objects.filter(
-                parent=media.parent
+                parent=media.parent,
+                display_mode=FileDisplayMode.VISIBLE
             ).exclude(id=media.id)
 
         similar_tags = Media.objects.none()
         if media.tags.exists():
             tag_ids = media.tags.values_list('id', flat=True)
             similar_tags = Media.objects.filter(
-                tags__in=tag_ids
+                tags__in=tag_ids,
+                display_mode=FileDisplayMode.VISIBLE
             ).exclude(id=media.id).distinct()
 
         related = (siblings | similar_tags).distinct()[:20]
