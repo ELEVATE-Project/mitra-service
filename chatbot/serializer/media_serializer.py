@@ -9,27 +9,17 @@ import json
 
 class S3UrlMixin:
     def resolve_s3_url(self, obj):
-        # Get document type (case-insensitive)
-        doc_type = None
-        kv = obj.key_values.filter(key__iregex=r'^document[_\s]type$').first()
-        if kv and kv.value:
-            doc_type = kv.value.lower()
+        # Rule 1: Check if this media has a child with document type "source document"
+        linked_file = obj.subdocuments.filter(
+            key_values__key__iregex=r'^document[_\s]type$',
+            key_values__value__icontains="source document"
+        ).first()
 
-        # Rule 1: Template File
-        if doc_type == "template":
-            linked_file = obj.subdocuments.filter(
-                key_values__key__iregex=r'^document[_\s]type$',
-                key_values__value__icontains="source document"
-            ).first()
-            if linked_file:
-                return linked_file.get_s3_url()
-            return obj.get_s3_url()
+        if linked_file:
+            return linked_file.get_s3_url()
 
-        # Rule 2: Non-template file → download directly
-        if doc_type and doc_type != "template":
-            return obj.get_s3_url()
-
-        # Rule 3: AI extracted file (subdocument of template's linked file)
+        # Rule 2: AI extracted file (subdocument of template's linked file)
+        # If this object is a child, check if parent is template or source document
         if obj.parent:
             parent_kv = obj.parent.key_values.filter(key__iregex=r'^document[_\s]type$').first()
             parent_doc_type = parent_kv.value.lower() if parent_kv and parent_kv.value else None
