@@ -19,6 +19,7 @@ class ChatType(models.TextChoices):
     reflection = 'reflection', _('Reflection')
     creation = 'creation', _('Creation')
     megaPTM = 'megaPTM', _('Mega PTM')
+    YLC = 'YLC', _('YLC')
     listeningActivity = 'listening-activity', _('Listening Activity')
 
 
@@ -278,6 +279,7 @@ class SessionFlowName(models.TextChoices):
     SsoFlow = 'sso', _('sso')
     Reflection = 'reflection', _('reflection')
     megaPTM = 'megaPTM', _('Mega PTM')
+    YLC = 'YLC', _('YLC')
 
 
 class PreProcessType(models.TextChoices):

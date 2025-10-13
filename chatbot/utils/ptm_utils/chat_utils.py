@@ -11,6 +11,8 @@ def get_bot_from_flow(flow):
     route = None
     if flow == ChatType.megaPTM:
         route = '/mega_ptm'
+    else:
+        route = '/common_bot'
 
     return route
 
