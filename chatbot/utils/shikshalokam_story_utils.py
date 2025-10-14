@@ -117,21 +117,23 @@ def save_shikshalokam_story(
 def get_story_html(story, profile, flow):
     project = Project.objects.filter(story=story).first()
     if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
-                SessionFlowName.Reflection]:
+                SessionFlowName.Reflection, SessionFlowName.YLC]:
         css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/story_pdf.css"))
     elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
         css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/shiksha_chaupal/mom_report_pdf.css"))
     else:
         css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/listening_activity/la_report_pdf.css"))
     if profile:
-        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
+        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
+                    SessionFlowName.Reflection, SessionFlowName.YLC]:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/story')
         elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/chaupal-story')
         else:
             company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
     else:
-        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
+        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
+                    SessionFlowName.Reflection, SessionFlowName.YLC]:
             company_bot = CompanyBot.objects.get(route='/story')
         elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
             company_bot = CompanyBot.objects.get(route='/chaupal-story')
@@ -215,7 +217,8 @@ def get_story_html(story, profile, flow):
         """
 
     print("Generating for FLOW: ", flow)
-    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory, SessionFlowName.Reflection]:
+    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
+                SessionFlowName.Reflection, SessionFlowName.YLC]:
         html_content += get_first_page_html(
             profile=profile, project=project_to_pass, voice_provider=voice_provider, story=object_to_pass,
             story_vernacular=story_vernacular, flow=flow

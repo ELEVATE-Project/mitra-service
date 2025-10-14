@@ -67,8 +67,8 @@ async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, m
                 )
             )
 
-    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory, SessionFlowName.Reflection,
-        SessionFlowName.megaPTM
+    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
+                SessionFlowName.Reflection, SessionFlowName.megaPTM, SessionFlowName.YLC
     ]:
         response_json_content, response_json_story = await asyncio.gather(func1(), func2())
     else:
@@ -153,8 +153,8 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
                 )
             )
 
-    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory, SessionFlowName.Reflection,
-                SessionFlowName.megaPTM
+    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
+                SessionFlowName.Reflection, SessionFlowName.megaPTM, SessionFlowName.YLC
     ]:
         response_json_content, response_json_story = await asyncio.gather(func1(), func2())
     else:

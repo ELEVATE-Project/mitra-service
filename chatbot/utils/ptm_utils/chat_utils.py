@@ -1,4 +1,4 @@
-from chatbot.models import ChatType, Profile, CompanyBot, ChatSession, CompanyChat, Voice, VoiceType
+from chatbot.models import ChatType, Profile, CompanyBot, ChatSession, CompanyChat, Voice, VoiceType, TextConversionType
 from django.db import transaction
 from chatbot.utils.audio_provider_utils import text_translate_provider
 from chatbot.utils.transliterate_utils import transliterate_text
@@ -11,16 +11,19 @@ def get_bot_from_flow(flow):
     route = None
     if flow == ChatType.megaPTM:
         route = '/mega_ptm'
+    else:
+        route = '/common_bot'
 
     return route
 
 
 def save_question_answer_utils(
     profile_id, flow, session, sequence, status, language, question_id,
-    sent_at, question, translated_message, answer, audio_file, answer_id
-    # , should_transliterate
+    sent_at, question, translated_message, answer, audio_file, answer_id,
+    service
 ):
     try:
+        user_translated_msg=None
         with transaction.atomic():
             logger.info("Started saving Q&A for session %s", session)
             ai_user = Profile.objects.get(id=1)
@@ -32,6 +35,41 @@ def save_question_answer_utils(
                 logger.error("No bots found for route %s", route)
                 return {"error": "No bots found for this flow", "status": 404}
 
+            print("language: ", language)
+            print("service: ", service)
+            if language and language != 'en' and service and answer:
+                if service == TextConversionType.TRANSLITERATE:
+                    transliterate_voice_provider = Voice.objects.filter(
+                        company_bot=company_bot,
+                        type=VoiceType.Transliterate,
+                        language=language
+                    ).first()
+                    is_sentence = ' ' in answer
+                    response = transliterate_text(
+                        voice_provider=transliterate_voice_provider, source_language=language, target_language='en',
+                        message_body=answer, is_sentence=is_sentence
+                    )
+                    print("Trans response: ", response)
+                    if response and response.get('content'):
+                        content = response.get('content')
+                        print("Trans content: ", content)
+                        if content and isinstance(content, list) and len(content) > 0:
+                            content = content[0]
+                        user_translated_msg = content
+                else:
+                    voice_provider = Voice.objects.filter(
+                        company_bot=company_bot,
+                        type=VoiceType.TextToText,
+                        language=language
+                    ).first()
+                    response = text_translate_provider(
+                        voice_provider=voice_provider, message_body=answer,
+                        target_language='en', source_language=language
+                    )
+
+                    if response.get('status') == 200:
+                        user_translated_msg = response.get('content')
+
             chat_session, created = ChatSession.objects.update_or_create(
                 session=session,
                 defaults={
@@ -40,6 +78,7 @@ def save_question_answer_utils(
                     "current_step": sequence,
                     "session_status": status,
                     "session_type": flow,
+                    "language": language,
                 }
             )
             logger.info("Chat session %s %s", "created" if created else "updated", session)
@@ -58,54 +97,16 @@ def save_question_answer_utils(
                 session=session,
                 source_msg_id=question_id,
                 defaults={
-                    "message": question,
+                    "message": translated_message if language and language!='en' else question,
                     "status": status,
                     "sender": ai_user,
                     "receiver": user_profile,
                     "chunks": None,
-                    "translated_message": translated_message,
+                    "translated_message": question if language and language!='en' else translated_message,
                     "other_params": question_params,
                 }
             )
             logger.info("Saved question with ID %s for session %s", question_id, session)
-            user_translated_msg=None
-            # if language != 'en' and answer and answer.strip():
-            #     if should_transliterate:
-            #         voice_provider = Voice.objects.filter(
-            #             company_bot=company_bot, type=VoiceType.Transliterate, language=language
-            #         ).first()
-            #         if not voice_provider:
-            #             logger.error("No transliterate voice provider found for language %s", language)
-            #             return {"error": "No voice provider found for this flow", "status": 404}
-            #
-            #         is_sentence = ' ' in answer.strip()
-            #         user_translated_msg = transliterate_text(
-            #             voice_provider=voice_provider, source_language=language, target_language='en',
-            #             message_body=answer, is_sentence=is_sentence
-            #         )
-            #         if user_translated_msg and isinstance(user_translated_msg, dict) and user_translated_msg.get('content'):
-            #             content = user_translated_msg.get('content')
-            #             if content and isinstance(content, list) and len(content) > 0:
-            #                 content = content[0]
-            #             user_translated_msg = content
-            #         else:
-            #             user_translated_msg=None
-            #     else:
-            #         voice_provider = Voice.objects.filter(
-            #             company_bot=company_bot, type=VoiceType.TextToText, language=language
-            #         ).first()
-            #         if not voice_provider:
-            #             logger.error("No translate voice provider found for language %s", language)
-            #             return {"error": "No voice provider found for this flow", "status": 404}
-            #
-            #         user_translated_msg = text_translate_provider(
-            #             voice_provider=voice_provider, message_body=answer, target_language='en',
-            #             source_language=language
-            #         )
-            #         if isinstance(user_translated_msg, dict) and user_translated_msg.get('status') == 200:
-            #             user_translated_msg = user_translated_msg.get('content')
-            #         else:
-            #             user_translated_msg=None
 
             CompanyChat.objects.update_or_create(
                 session=session,
