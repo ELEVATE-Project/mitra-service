@@ -533,7 +533,10 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                 ).first()
 
                 # Only transliterate fields that are specifically names/places (these need explicit handling)
-                transliterate_fields = ['user_name', 'location', 'organization', 'designation', 'district', 'block']
+                transliterate_fields = [
+                    'user_name', 'location', 'organization', 'designation', 'district', 'block', 'village', 'panchayat',
+                    'social_media'
+                ]
 
                 for field_name in transliterate_fields:
                     field_value = translated_other_params.get(field_name, '')
