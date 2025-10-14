@@ -56,6 +56,10 @@ def get_story_secondpage_html(story, project, story_vernacular):
     else:
         problem_statement = ''
 
+    problem_statement = capitalize_first_letter(problem_statement)
+    story.objective = capitalize_first_letter(story.objective or translation_json.get('no_objective_text', ""))
+    story.impact = capitalize_first_letter(story.impact or translation_json.get('no_impact_text', ""))
+
     page_html = f"""
     <div class="story-second-page-container">
         <h1>{translation_json.get('heading1', "")}</h1>
@@ -79,9 +83,20 @@ def get_story_secondpage_html(story, project, story_vernacular):
     """
     return page_html
 
+
 def clean_escaped_text(text):
     text = text.replace("\\'", "")# \'  →  '
     text = text.replace('\\"', '')# \"  →  "
     text = text.replace("\\\\", "") # \\  →  \
     print("Text: ", text)
     return text
+
+
+def capitalize_first_letter(text):
+    """Capitalize the first alphabetical character in the string, safely."""
+    if not text:
+        return text
+    text = text.lstrip()
+    if not text:
+        return text
+    return text[0].upper() + text[1:]
