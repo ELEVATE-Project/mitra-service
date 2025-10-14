@@ -18,7 +18,12 @@ def get_first_page_html(profile, project, voice_provider, story, story_vernacula
     address_string = story.other_params.get('location', '') if story.other_params else ''
 
     print("current_state: ", current_state)
-    title = project.get('expected_title') or project.get('actual_title') or "mi_story"
+    if project:
+        title = project.get('expected_title') or project.get('actual_title') or "mi_story"
+    elif story:
+        title = story.get('title')
+    else:
+        title = "mi_story"
 
     author = story.other_params.get('user_name', '') if story.other_params else ''
 

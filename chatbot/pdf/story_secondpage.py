@@ -49,7 +49,12 @@ def get_story_secondpage_html(story, project, story_vernacular):
     )
     print("\n\nsteps_html: ", steps_html)
     print("story.objective: ", story.objective)
-    problem_statement = project.get('actual_problem_statement', '')
+    if project:
+        problem_statement = project.get('actual_problem_statement', '')
+    elif story:
+        problem_statement = story.get('problem_statement', '')
+    else:
+        problem_statement = ''
 
     page_html = f"""
     <div class="story-second-page-container">
