@@ -52,7 +52,7 @@ def get_story_secondpage_html(story, project, story_vernacular):
     if project:
         problem_statement = project.get('actual_problem_statement', '')
     elif story:
-        problem_statement = story.get('problem_statement', '')
+        problem_statement = story.other_params.get('problem_statement', '') if story and story.other_params else ''
     else:
         problem_statement = ''
 

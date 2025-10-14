@@ -21,7 +21,7 @@ def get_first_page_html(profile, project, voice_provider, story, story_vernacula
     if project:
         title = project.get('expected_title') or project.get('actual_title') or "mi_story"
     elif story:
-        title = story.get('title')
+        title = story.title if story.title else "mi_story"
     else:
         title = "mi_story"
 
