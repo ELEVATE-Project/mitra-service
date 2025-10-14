@@ -1,10 +1,12 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from chatbot.models import CompanyChat, ChatSession, ChatStatus, Profile, Company
+from chatbot.models import CompanyChat, ChatSession, ChatStatus, Profile, Company, TextConversionType, Voice, VoiceType
 import jwt
 from django.http import JsonResponse
 from chatbot.celery_tasks.ptm_report_tasks import create_ptm_report
+from chatbot.utils.audio_provider_utils import text_translate_provider
 from chatbot.utils.ptm_utils.chat_utils import save_question_answer_utils
+from chatbot.utils.transliterate_utils import transliterate_text
 
 
 @api_view(['POST'])
@@ -135,6 +137,7 @@ def save_ptm_chats(request):
     language = body.get('language')
     sent_at = body.get('sent_at')
     audio_file = body.get('audio_url')
+    service = body.get('service')
     # should_transliterate = body.get('should_transliterate', False)
 
     if not question or not session or not answer:
@@ -144,7 +147,7 @@ def save_ptm_chats(request):
         profile_id=profile_id, flow=flow, session=session, sequence=sequence, status=status,
         language=language, question_id=question_id, sent_at=sent_at, question=question,
         translated_message=translated_message, answer=answer,
-        audio_file=audio_file, answer_id=answer_id,
+        audio_file=audio_file, answer_id=answer_id, service=service
         # should_transliterate=should_transliterate,
     )
 

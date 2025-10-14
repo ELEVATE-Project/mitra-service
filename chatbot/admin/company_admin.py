@@ -148,11 +148,11 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
 
 @admin.register(CompanyChat)
 class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
-    list_display = ('session', 'sender', 'receiver', 'message', 'created_at', 'stage')
+    list_display = ('session', 'sender', 'receiver', 'message', 'translated_message', 'created_at', 'stage')
     list_filter = (
         'created_at', ProfileCompanyChatFilter, ProfileEmailFilter, 'session', CompanyChatCompanyFilter, 'stage'
     )
-    search_fields = ('session', 'message__icontains')
+    search_fields = ('session', 'message__icontains', 'translated_message__icontains')
     actions = ['export_selected']
     list_export = ('csv', 'xlsx')
     list_per_page = 20
