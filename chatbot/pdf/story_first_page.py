@@ -16,6 +16,8 @@ def get_first_page_html(profile, project, voice_provider, story, story_vernacula
     current_state = profile_addresses.state if profile_addresses else ""
 
     address_string = story.other_params.get('location', '') if story.other_params else ''
+    if not address_string:
+        address_string = story.location if story.location else ''
 
     print("current_state: ", current_state)
     if project:
