@@ -200,6 +200,7 @@ class StoryTranslation(models.Model):
     impact = models.TextField(null=True, blank=True)
     micro_improvement = models.TextField(null=True, blank=True)
     formatted_content = models.TextField(null=True, blank=True)
+    location = models.CharField(max_length=1000, null=True, blank=True)
 
     other_params = models.JSONField(null=True, blank=True)
 

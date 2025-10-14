@@ -532,6 +532,9 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                     company_bot=company_bot, type=VoiceType.Transliterate, language=language
                 ).first()
 
+                if story.location:
+                    translated_other_params['location'] = story.location
+
                 # Only transliterate fields that are specifically names/places (these need explicit handling)
                 transliterate_fields = [
                     'user_name', 'location', 'organization', 'designation', 'district', 'block', 'village', 'panchayat',
@@ -575,6 +578,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                 'impact': translated_data.get('impact', ''),
                 'micro_improvement': translated_data.get('micro_improvement', ''),
                 'blurb': translated_data.get('blurb', ''),
+                'location': translated_other_params.get('location', ''),
                 'other_params': translated_other_params,
                 'formatted_content': ''
             }
@@ -586,6 +590,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                 if field in translated_data:
                     setattr(translation, field, translated_data[field])
             translation.action_steps = translated_data.get('action_steps', translation.action_steps)
+            translation.location = translated_other_params.get('location', translation.location)
             translation.other_params = translated_other_params
             translation.save()
 
@@ -620,6 +625,7 @@ def get_generic_story_in_language(story, language='en'):
             'impact': story.impact,
             'micro_improvement': story.micro_improvement,
             'blurb': story.blurb,
+            'location': story.location,
             'other_params': story.other_params,
         }
 
@@ -634,6 +640,7 @@ def get_generic_story_in_language(story, language='en'):
             'impact': translation.impact,
             'micro_improvement': translation.micro_improvement,
             'blurb': translation.blurb,
+            'location': translation.location,
             'other_params': translation.other_params,
         }
     except StoryTranslation.DoesNotExist:
