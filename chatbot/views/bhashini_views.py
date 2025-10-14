@@ -65,6 +65,8 @@ def speech_text(request):
         response = requests.get(s3_url)
         response.raise_for_status()
         company_bot = CompanyBot.objects.filter(route=route).first()
+        if not company_bot:
+            company_bot = CompanyBot.objects.filter(route='/common_bot').first()
         voice_provider = Voice.objects.filter(
             company_bot=company_bot, type=VoiceType.SpeechToText, language=source_language
         ).first()
