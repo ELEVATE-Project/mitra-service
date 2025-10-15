@@ -62,7 +62,9 @@ def get_story_secondpage_html(story, project, story_vernacular):
     problem_statement = capitalize_first_letter(problem_statement)
     story.objective = capitalize_first_letter(story.objective or translation_json.get('no_objective_text', ""))
     story.impact = capitalize_first_letter(story.impact or translation_json.get('no_impact_text', ""))
-    print("problem_statement: ", problem_statement)
+    print("problem_statement:", repr(problem_statement))  # Use repr() to see if it's empty string or None
+    print("Fallback text:", repr(translation_json.get('no_problem_statement_text', "")))
+    print("Final result:", repr(problem_statement or translation_json.get('no_problem_statement_text', "")))
     page_html = f"""
     <div class="story-second-page-container">
         <h1>{translation_json.get('heading1', "")}</h1>
