@@ -125,7 +125,7 @@ def get_story_html(story, profile, flow):
         css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/listening_activity/la_report_pdf.css"))
     if profile:
         if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
-                    SessionFlowName.Reflection, SessionFlowName.YLC]:
+                    SessionFlowName.Reflection]:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/story')
         elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/chaupal-story')
@@ -133,7 +133,7 @@ def get_story_html(story, profile, flow):
             company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
     else:
         if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
-                    SessionFlowName.Reflection, SessionFlowName.YLC]:
+                    SessionFlowName.Reflection]:
             company_bot = CompanyBot.objects.get(route='/story')
         elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
             company_bot = CompanyBot.objects.get(route='/chaupal-story')
@@ -158,7 +158,8 @@ def get_story_html(story, profile, flow):
     story_vernacular = StoryVernacular.objects.filter(
         company_bot=company_bot, language=language_used
     ).first()
-
+    if story_vernacular:
+        print(f"story_vernacular found: {story_vernacular.id} & {story_vernacular.company_bot} & {story_vernacular.language}")
     if language_used == 'en':
         object_to_pass = story
         if project:

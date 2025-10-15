@@ -42,11 +42,14 @@ def get_story_secondpage_html(story, project, story_vernacular):
     else:
         split_steps = [step.strip() for step in action_steps if step.strip()]
     print("\n\nsplit_steps: ", split_steps)
-    steps_html = (
-            f"<ol style='list-style-type: decimal; padding: 0; margin: 0;'>"
-            + ''.join(f"<li>{step}</li>" for step in split_steps)
-            + "</ol>"
-    )
+    if split_steps:
+        steps_html = (
+                f"<ol style='list-style-type: decimal; padding: 0; margin: 0;'>"
+                + ''.join(f"<li>{step}</li>" for step in split_steps)
+                + "</ol>"
+        )
+    else:
+        steps_html = None
     print("\n\nsteps_html: ", steps_html)
     print("story.objective: ", story.objective)
     if project:
@@ -59,13 +62,16 @@ def get_story_secondpage_html(story, project, story_vernacular):
     problem_statement = capitalize_first_letter(problem_statement)
     story.objective = capitalize_first_letter(story.objective or translation_json.get('no_objective_text', ""))
     story.impact = capitalize_first_letter(story.impact or translation_json.get('no_impact_text', ""))
-
+    print("translation_json: ", translation_json)
+    print("problem_statement:", repr(problem_statement))  # Use repr() to see if it's empty string or None
+    print("Fallback text:", repr(translation_json.get('no_problem_statement_text', "")))
+    print("Final result:", repr(problem_statement or translation_json.get('no_problem_statement_text', "")))
     page_html = f"""
     <div class="story-second-page-container">
         <h1>{translation_json.get('heading1', "")}</h1>
         <div class="story-second-page-section">
             <h2>{translation_json.get('heading2', "")}</h2>
-            <p>{problem_statement or ""}</p>
+            <p>{problem_statement or translation_json.get('no_problem_statement_text', "")}</p>
         </div>
         <div class="story-second-page-section">
             <h2>{translation_json.get('heading3', "")}</h2>
