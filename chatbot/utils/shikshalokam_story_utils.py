@@ -158,7 +158,8 @@ def get_story_html(story, profile, flow):
     story_vernacular = StoryVernacular.objects.filter(
         company_bot=company_bot, language=language_used
     ).first()
-
+    if story_vernacular:
+        print(f"story_vernacular found: {story_vernacular.id} & {story_vernacular.company_bot} & {story_vernacular.language}")
     if language_used == 'en':
         object_to_pass = story
         if project:
