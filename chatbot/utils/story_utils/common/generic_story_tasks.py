@@ -237,6 +237,10 @@ def save_generic_story(
         except Exception as e:
             logger.info(f"Could not get title from StoryVernacular: {e}")
 
+    if not english_title or not english_title.strip():
+        english_title = 'mi_story'
+        logger.info("Using default title: mi_story")
+
     # Get basic profile information
     user_name = profile.first_name if profile and profile.first_name else ''
     fallback_location = ""
