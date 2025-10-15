@@ -65,7 +65,7 @@ def get_story_secondpage_html(story, project, story_vernacular):
         <h1>{translation_json.get('heading1', "")}</h1>
         <div class="story-second-page-section">
             <h2>{translation_json.get('heading2', "")}</h2>
-            <p>{problem_statement or ""}</p>
+            <p>{problem_statement or translation_json.get('no_problem_statement_text', "")}</p>
         </div>
         <div class="story-second-page-section">
             <h2>{translation_json.get('heading3', "")}</h2>
