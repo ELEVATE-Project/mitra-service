@@ -47,6 +47,8 @@ def get_story_secondpage_html(story, project, story_vernacular):
             + ''.join(f"<li>{step}</li>" for step in split_steps)
             + "</ol>"
     )
+    if not steps_html:
+        steps_html = None
     print("\n\nsteps_html: ", steps_html)
     print("story.objective: ", story.objective)
     if project:
@@ -59,7 +61,6 @@ def get_story_secondpage_html(story, project, story_vernacular):
     problem_statement = capitalize_first_letter(problem_statement)
     story.objective = capitalize_first_letter(story.objective or translation_json.get('no_objective_text', ""))
     story.impact = capitalize_first_letter(story.impact or translation_json.get('no_impact_text', ""))
-
     page_html = f"""
     <div class="story-second-page-container">
         <h1>{translation_json.get('heading1', "")}</h1>
