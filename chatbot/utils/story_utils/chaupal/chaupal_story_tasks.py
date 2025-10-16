@@ -1,3 +1,4 @@
+import json
 import traceback
 import logging
 import re
@@ -132,12 +133,38 @@ def save_chaupal_report(
 
         participants_count = response_json_story.get('participants_count', {})
         if isinstance(participants_count, str):
-            participants_count = {
-                'total': participants_count,
-                'women': '',
-                'men': '',
-                'children': ''
-            }
+            try:
+                participants_count = json.loads(participants_count)
+            except Exception:
+                participants_count = {
+                    'total': participants_count,
+                    'women': '',
+                    'men': '',
+                    'children': ''
+                }
+
+        # --- Override total participant count if possible ---
+        try:
+            def safe_int(value):
+                """Convert to int if value contains digits, else return 0"""
+                if isinstance(value, (int, float)):
+                    return int(value)
+                if isinstance(value, str):
+                    match = re.search(r'\d+', value)
+                    if match:
+                        return int(match.group())
+                return 0
+
+            men = safe_int(participants_count.get('men'))
+            women = safe_int(participants_count.get('women'))
+            children = safe_int(participants_count.get('children'))
+
+            total = men + women + children
+            # Only override if total is greater than 0
+            if total > 0:
+                participants_count['total'] = total
+        except Exception as e:
+            logger.warning(f"Error overriding total participants count: {e}")
 
         discussion_date = response_json_story.get('discussion_date', '')
 
