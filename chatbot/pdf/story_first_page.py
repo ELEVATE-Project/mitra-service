@@ -51,7 +51,7 @@ def get_first_page_html(profile, project, voice_provider, story, story_vernacula
                     {title}
                 </h2>
                 <div class="nagaland-image-div"> 
-                    <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/pdf_page1_logo_fmt1.png" 
+                    <img src="{translation_json.get('nagaland_logo', '')}"
                         class="story-bg1-fmt1" alt="pdf_bg1">
                     </img>
                     </div>
@@ -87,7 +87,7 @@ def get_first_page_html(profile, project, voice_provider, story, story_vernacula
                     {title}
                 </h2>
                 <div class="nagaland-image-div"> 
-                    <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/pdf_page1_logo_fmt1.png" 
+                    <img src="{translation_json.get('mi_logo', '')}"
                         class="story-bg1-fmt1" alt="pdf_bg1">
                     </img>
                     </div>
