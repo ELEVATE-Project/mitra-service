@@ -21,11 +21,11 @@ def get_first_page_html(profile, project, voice_provider, story, story_vernacula
 
     print("current_state: ", current_state)
     if project:
-        title = project.get('expected_title') or project.get('actual_title') or "mi_story"
+        title = project.get('expected_title') or project.get('actual_title') or "Improvement_story"
     elif story:
-        title = story.title if story.title else "mi_story"
+        title = story.title if story.title else "Improvement_story"
     else:
-        title = "mi_story"
+        title = "Improvement_story"
 
     author = story.other_params.get('user_name', '') if story.other_params else ''
 
