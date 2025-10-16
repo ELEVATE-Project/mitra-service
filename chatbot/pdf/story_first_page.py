@@ -21,11 +21,11 @@ def get_first_page_html(profile, project, voice_provider, story, story_vernacula
 
     print("current_state: ", current_state)
     if project:
-        title = project.get('expected_title') or project.get('actual_title') or "mi_story"
+        title = project.get('expected_title') or project.get('actual_title') or "Improvement_story"
     elif story:
-        title = story.title if story.title else "mi_story"
+        title = story.title if story.title else "Improvement_story"
     else:
-        title = "mi_story"
+        title = "Improvement_story"
 
     author = story.other_params.get('user_name', '') if story.other_params else ''
 
@@ -51,7 +51,7 @@ def get_first_page_html(profile, project, voice_provider, story, story_vernacula
                     {title}
                 </h2>
                 <div class="nagaland-image-div"> 
-                    <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/pdf_page1_logo_fmt1.png" 
+                    <img src="{translation_json.get('nagaland_logo', '')}"
                         class="story-bg1-fmt1" alt="pdf_bg1">
                     </img>
                     </div>
@@ -87,7 +87,7 @@ def get_first_page_html(profile, project, voice_provider, story, story_vernacula
                     {title}
                 </h2>
                 <div class="nagaland-image-div"> 
-                    <img src="https://static-media.gritworks.ai/fe-images/PNG/Shikshalokam/pdf_page1_logo_fmt1.png" 
+                    <img src="{translation_json.get('mi_logo', '')}"
                         class="story-bg1-fmt1" alt="pdf_bg1">
                     </img>
                     </div>

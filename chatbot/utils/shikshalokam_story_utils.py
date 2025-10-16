@@ -35,7 +35,7 @@ def save_shikshalokam_story(
         pdf_generated = generate_pdf_with_gotenberg(html_content)
         pdf_file_name = story.title
         if not pdf_file_name or pdf_file_name == '':
-            pdf_file_name = 'mi_story'
+            pdf_file_name = 'Improvement_story'
         pdf_file_name = f"{pdf_file_name}.pdf"
         pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
         print("pdf_content: ", pdf_content)
@@ -192,9 +192,9 @@ def get_story_html(story, profile, flow):
             project_to_pass = None
 
     if project_to_pass:
-        pdf_file_name = project_to_pass.get('expected_title') or project_to_pass.get('actual_title') or "mi_story"
+        pdf_file_name = project_to_pass.get('expected_title') or project_to_pass.get('actual_title') or "Improvement_story"
     else:
-        pdf_file_name = object_to_pass.title or "mi_story"
+        pdf_file_name = object_to_pass.title or "Improvement_story"
 
     print("Using pdf name: ", pdf_file_name)
     with open(css_path, 'r') as css_file:
@@ -283,7 +283,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         # print("pdf_generated: ", pdf_generated)
         pdf_file_name = story.title
         if not pdf_file_name or pdf_file_name == '':
-            pdf_file_name = 'mi_story'
+            pdf_file_name = 'Improvement_story'
         pdf_file_name = f"{pdf_file_name}.pdf"
         print("pdf_file_name: ", pdf_file_name)
         pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
