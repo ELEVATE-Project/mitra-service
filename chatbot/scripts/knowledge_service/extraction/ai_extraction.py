@@ -1826,7 +1826,9 @@ class DocumentExtractor:
                 temperature=company_bot.bot_temperature,
                 max_token=company_bot.max_token,
                 company_bot=company_bot,
-                tools=tool_context_data
+                tools=tool_context_data,
+                aws_key=os.getenv('SG_REPO_AWS_ACCESS_KEY_ID'),
+                aws_secret_key=os.getenv('SG_REPO_AWS_SECRET_ACCESS_KEY')
             )
             logger.info(f"Bedrock response type: {type(response)}")
             logger.info("Bedrock response:\n%s", json.dumps(response, indent=2))
