@@ -124,17 +124,19 @@ def get_story_html(story, profile, flow):
     else:
         css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/listening_activity/la_report_pdf.css"))
     if profile:
-        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
-                    SessionFlowName.Reflection]:
-            company_bot = CompanyBot.objects.get(company=profile.company, route='/story')
+        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.Reflection]:
+            company_bot = CompanyBot.objects.get(route='/story')
+        elif flow in [SessionFlowName.GuestMiStory]:
+            company_bot = CompanyBot.objects.get(route='/guest-story')
         elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/chaupal-story')
         else:
             company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
     else:
-        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
-                    SessionFlowName.Reflection]:
+        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.Reflection]:
             company_bot = CompanyBot.objects.get(route='/story')
+        elif flow in [SessionFlowName.GuestMiStory]:
+            company_bot = CompanyBot.objects.get(route='/guest-story')
         elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
             company_bot = CompanyBot.objects.get(route='/chaupal-story')
         else:
