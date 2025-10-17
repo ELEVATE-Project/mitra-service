@@ -40,11 +40,12 @@ class StoryMediaInline(admin.TabularInline):
 
 @admin.register(Story)
 class StoryAdmin(admin.ModelAdmin):
-    list_display = ('title', 'user_name_from_other_params', 'author', 'session', 'created_at',)
+    list_display = ('title', 'user_name_from_other_params', 'author', 'session', 'state', 'district', 'created_at',)
     list_filter = (
         'created_at', StoryCompanyFilter, 'author', 'session', StoryStateFilter,
         StoryDistrictFilter, StoryBlockFilter, UserNameFilter, FlowFilter,
     )
+    list_editable = ('state', 'district')
     search_fields = ('title', 'session',)
     readonly_fields = ('created_at',)
     exclude = ('formatted_content', )

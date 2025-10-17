@@ -27,6 +27,9 @@ class Story(models.Model):
     impact = models.TextField(null=True, blank=True)
     micro_improvement = models.TextField(null=True, blank=True)
     location = models.CharField(max_length=1000, null=True, blank=True)
+    district = models.CharField(max_length=1000, null=True, blank=True)
+    state = models.CharField(max_length=1000, null=True, blank=True)
+    block = models.CharField(max_length=1000, null=True, blank=True)
     formatted_content = models.TextField(null=True, blank=True)
     language = models.CharField(max_length=1000, choices=StoryLanguageChoices.choices,
                                 default=StoryLanguageChoices.ENGLISH)
@@ -201,7 +204,9 @@ class StoryTranslation(models.Model):
     micro_improvement = models.TextField(null=True, blank=True)
     formatted_content = models.TextField(null=True, blank=True)
     location = models.CharField(max_length=1000, null=True, blank=True)
-
+    district = models.CharField(max_length=1000, null=True, blank=True)
+    state = models.CharField(max_length=1000, null=True, blank=True)
+    block = models.CharField(max_length=1000, null=True, blank=True)
     other_params = models.JSONField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
