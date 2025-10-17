@@ -190,7 +190,8 @@ def retry_if_result_none(result):
 @retry(stop_max_attempt_number=llm_retry_number, retry_on_result=retry_if_result_none, wrap_exception=True)
 def handle_bedrock_model(
         company_bot, system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
-        model_name=None, region_name='us-west-2', tools=None, is_json_response=False
+        model_name=None, region_name='us-west-2', tools=None, is_json_response=False, aws_key=None,
+        aws_secret_key=None
 ):
     connect_timeout = company_bot.connect_timeout
     read_timeout = company_bot.read_timeout
@@ -204,11 +205,11 @@ def handle_bedrock_model(
     bedrock_runtime = boto3.client(
         service_name='bedrock-runtime',
         region_name=region_name,
-        aws_access_key_id=AWS_KEY,
-        aws_secret_access_key=AWS_SECRET_KEY,
+        aws_access_key_id=aws_key if aws_key else AWS_KEY,
+        aws_secret_access_key=aws_secret_key if aws_secret_key else AWS_SECRET_KEY,
         config=boto_config
     )
-
+    print("aws_key used: ", aws_key if aws_key else AWS_KEY)
     if model_name:
         model_id = model_name
     else:
