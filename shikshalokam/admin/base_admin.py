@@ -2,7 +2,8 @@ from import_export.admin import ExportActionMixin, ImportMixin
 from django.contrib import admin
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from shikshalokam.models import LearningResources
-from shikshalokam.models.base_model import Project, Task, Evidence, ProjectTemplate, Category
+from shikshalokam.models.template_models import ProjectTemplate, Category
+from shikshalokam.models.project_models import Project, Task, Evidence
 from shikshalokam.resource import ExpertProjectResource
 
 

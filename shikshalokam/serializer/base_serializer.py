@@ -3,7 +3,8 @@ import json
 from rest_framework import serializers
 
 from chatbot.serializer.profile_serializer import ProfileSerializer
-from shikshalokam.models.base_model import Project, Task, Category, ProjectTemplate, Evidence, LearningResources
+from shikshalokam.models.project_models import Project, Task, Evidence, LearningResources
+from shikshalokam.models.template_models import Category, ProjectTemplate
 from shikshalokam.models.wishlist_model import ProjectWishlist
 
 
