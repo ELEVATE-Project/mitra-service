@@ -13,6 +13,7 @@ from chatbot.resources.resource import CompanyChatResource
 from chatbot.resources.company_resource import ChatSessionResource
 from django.shortcuts import redirect
 from django.contrib import messages
+from rangefilter.filters import DateRangeFilter, DateTimeRangeFilter
 
 
 class CompanyStateMachineAdmin(admin.TabularInline):
@@ -45,7 +46,12 @@ class VoiceProviderAdmin(admin.TabularInline):
 
 class CompanyAdmin(admin.ModelAdmin):
     list_display = ('name', 'created_at', 'status')
+    list_filter = (
+        ('created_at', DateTimeRangeFilter),
+    )
     search_fields = ('name', )
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -61,8 +67,17 @@ class CompanyAdmin(admin.ModelAdmin):
 
 @admin.register(CompanyBot)
 class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
-    list_display = ('name', 'company',)
-    list_filter = ('company', 'name', 'provider', 'llm_model', 'created_at')
+    list_display = ('name', 'company', 'created_at')
+    list_filter = (
+        'company', 
+        'name', 
+        'provider', 
+        'llm_model', 
+        ('created_at', DateTimeRangeFilter),
+    )
+    search_fields = ('name', 'company__name')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
     inlines = [VoiceProviderAdmin]
     actions = ['duplicate_bot']
 
@@ -150,13 +165,20 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
 class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
     list_display = ('session', 'sender', 'receiver', 'message', 'translated_message', 'created_at', 'stage')
     list_filter = (
-        'created_at', ProfileCompanyChatFilter, ProfileEmailFilter, 'session', CompanyChatCompanyFilter, 'stage'
+        ('created_at', DateTimeRangeFilter),
+        ProfileCompanyChatFilter, 
+        ProfileEmailFilter, 
+        'session', 
+        CompanyChatCompanyFilter, 
+        'stage'
     )
     search_fields = ('session', 'message__icontains', 'translated_message__icontains')
     actions = ['export_selected']
     list_export = ('csv', 'xlsx')
     list_per_page = 20
     raw_id_fields = ('sender', 'receiver')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
 
     resource_class = CompanyChatResource
 
@@ -193,11 +215,11 @@ class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
         if not user.is_superuser and profile and profile.profile_type == ProfileType.MODERATOR:
             company = profile.company
             if company.slug == 'fmch':
-                return CustomAdvanceDateFilter, ProfileCompanyChatFilter, ProfileEmailFilter, 'session', \
-                       ProfileCityFilter, ProfileStateFilter, 'message_type'
+                return (('created_at', DateTimeRangeFilter), CustomAdvanceDateFilter, ProfileCompanyChatFilter, 
+                        ProfileEmailFilter, 'session', ProfileCityFilter, ProfileStateFilter, 'message_type')
             if company.slug == 'tfistaging':
-                return (CustomAdvanceDateFilter, ProfileCompanyChatFilter, ProfileEmailFilter, 'session',
-                        CompanyChatCompanyFilter, 'stage')
+                return (('created_at', DateTimeRangeFilter), CustomAdvanceDateFilter, ProfileCompanyChatFilter, 
+                        ProfileEmailFilter, 'session', CompanyChatCompanyFilter, 'stage')
         return super().get_list_filter(request)
 
 
@@ -207,10 +229,20 @@ class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
         'session', 'get_first_name', 'session_status', 'session_type', 'current_question', 'total_steps',
         'created_at'
     )
-    list_filter = ('session', 'title', ChatSessionFilter, 'project_id', 'session_status', 'session_type')
+    list_filter = (
+        'session', 
+        'title', 
+        ChatSessionFilter, 
+        'project_id', 
+        'session_status', 
+        'session_type',
+        ('created_at', DateTimeRangeFilter),
+    )
     search_fields = ('session', 'title', 'profile__first_name')
     raw_id_fields = ('profile',)
     readonly_fields = ('created_at',)
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
 
     resource_class = ChatSessionResource
 

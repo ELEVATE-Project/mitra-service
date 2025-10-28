@@ -2,14 +2,21 @@ from django.contrib import admin
 from simple_history.admin import SimpleHistoryAdmin
 from chatbot.models import BotVernacular
 from chatbot.models.story_vernacular_model import StoryVernacular
+from rangefilter.filters import DateRangeFilter, DateTimeRangeFilter
 
 
 @admin.register(BotVernacular)
 class BotVernacularAdmin(SimpleHistoryAdmin):
-    list_display = ('company_bot', 'language', 'introductory_message')
-    list_filter = ('company_bot', 'language')
+    list_display = ('company_bot', 'language', 'introductory_message', 'created_at')
+    list_filter = (
+        'company_bot', 
+        'language',
+        ('created_at', DateTimeRangeFilter),
+    )
     inlines = []
     raw_id_fields = ('company_bot', )
+    search_fields = ('company_bot__name', 'language', 'introductory_message')
+    date_hierarchy = 'created_at'
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -18,10 +25,16 @@ class BotVernacularAdmin(SimpleHistoryAdmin):
 
 @admin.register(StoryVernacular)
 class StoryVernacularAdmin(SimpleHistoryAdmin):
-    list_display = ('company_bot', 'language')
-    list_filter = ('company_bot', 'language')
+    list_display = ('company_bot', 'language', 'created_at')
+    list_filter = (
+        'company_bot', 
+        'language',
+        ('created_at', DateTimeRangeFilter),
+    )
     inlines = []
     raw_id_fields = ('company_bot', )
+    search_fields = ('company_bot__name', 'language')
+    date_hierarchy = 'created_at'
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)

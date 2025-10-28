@@ -16,6 +16,7 @@ from chatbot.views.admin.media_upload_views import (
     BatchMediaRetrySaveView, VectorDBTaskStatusView, GetCachedItemView
 )
 from simple_history.admin import SimpleHistoryAdmin
+from rangefilter.filters import DateRangeFilter, DateTimeRangeFilter
 
 
 class KeyValueInline(admin.TabularInline):
@@ -35,12 +36,19 @@ class MediaImagesInline(admin.TabularInline):
 class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
     form = MediaAdminForm
     list_display = ('file_name', 'get_title', 'media_type', 'display_mode', 'parent__name', 'created_at')
-    list_filter = ('created_at', 'display_mode', 'name', 'media_type')
+    list_filter = (
+        ('created_at', DateTimeRangeFilter),
+        'display_mode',
+        'name',
+        'media_type'
+    )
     search_fields = ('name', 'key_values__value')
     actions = ['export_selected', 'change_display_mode_action']
     list_export = ('csv', 'xlsx')
     inlines = [KeyValueInline, MediaImagesInline]
     raw_id_fields = ('company_bot', 'parent', 'organization')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
 
     def file_name(self, obj):
         return obj.name
@@ -226,9 +234,17 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
 @admin.register(Tag)
 class MasterTagAdmin(BatchUploadMixin, admin.ModelAdmin):
     list_display = ('name', 'status', 'source_type', 'created_by', 'created_at')
-    list_filter = ('created_at', 'name', 'created_by', 'source_type')
+    list_filter = (
+        ('created_at', DateTimeRangeFilter),
+        'name',
+        'created_by',
+        'source_type'
+    )
     raw_id_fields = ('created_by',)
     readonly_fields = ('source_type', 'company', 'created_by')
+    search_fields = ('name', 'description')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
 
     enable_batch_upload = True
     batch_upload_fields = ['name', 'status', 'description', 'created_by']

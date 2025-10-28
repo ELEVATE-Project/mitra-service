@@ -8,6 +8,7 @@ from chatbot.models import Profile, ProfileType
 from chatbot.resources.resource import ProfileResource
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.media_models import ProfileMedia
+from rangefilter.filters import DateRangeFilter, DateTimeRangeFilter
 
 
 class ProfileAddressInline(admin.StackedInline):
@@ -39,10 +40,18 @@ class ProfileAdmin(ImportMixin, ExportActionMixin, SimpleHistoryAdmin):
         'org_associated',
         'company_spoc'
     )
-    list_filter = ('created_at', 'email', 'phone', ProfileCompanyFilter, 'profile_type')
+    list_filter = (
+        ('created_at', DateTimeRangeFilter),
+        'email',
+        'phone',
+        ProfileCompanyFilter,
+        'profile_type'
+    )
     actions = ['export_selected']
     inlines = [ProfileAddressInline, ProfileMediaInline]
-    search_fields = ['first_name', 'email']
+    search_fields = ['first_name', 'email', 'phone']
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
