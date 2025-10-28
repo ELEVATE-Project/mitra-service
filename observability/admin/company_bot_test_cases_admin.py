@@ -1,5 +1,6 @@
 from django.contrib import admin
 from observability.models import CompanyBotTestCases, TCBotRunMetrics
+from rangefilter.filters import DateRangeFilter, DateTimeRangeFilter
 
 
 class TCBotRunMetricsAdmin(admin.TabularInline):
@@ -11,6 +12,17 @@ class TCBotRunMetricsAdmin(admin.TabularInline):
 class CompanyBotTestCasesAdmin(admin.ModelAdmin):
     list_display = ('company_bot', 'about', 'created_at')
     raw_id_fields = ('company_bot', )
+    
+    list_filter = (
+        ('company_bot', admin.RelatedFieldListFilter),
+        ('created_at', DateTimeRangeFilter),
+    )
+    
+    # Adds search capability
+    search_fields = ('about', 'company_bot__name', 'test_case_input', 'expected_output')
+    
+    date_hierarchy = 'created_at' 
+    ordering = ('-created_at',)
 
     def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
         # This method is called when the admin change form is rendered.

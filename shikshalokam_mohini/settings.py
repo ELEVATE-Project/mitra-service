@@ -106,6 +106,7 @@ INSTALLED_APPS = [
     'simple_history',
     'storages',
     'django_crontab',
+    'rangefilter',
 ]
 
 MIDDLEWARE = [
