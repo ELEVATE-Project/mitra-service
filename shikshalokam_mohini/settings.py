@@ -85,6 +85,7 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 # Application definition
 
 INSTALLED_APPS = [
+    'rangefilter',
     'observability',
     'daphne',
     'chatbot',
@@ -106,7 +107,6 @@ INSTALLED_APPS = [
     'simple_history',
     'storages',
     'django_crontab',
-    'rangefilter',
 ]
 
 MIDDLEWARE = [
