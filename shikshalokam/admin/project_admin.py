@@ -1,5 +1,6 @@
 from import_export.admin import ExportActionMixin, ImportMixin
 from django.contrib import admin
+from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from shikshalokam.models.project_models import Project, Task, Evidence
 from shikshalokam.resource import ExpertProjectResource
 
@@ -8,7 +9,7 @@ from shikshalokam.resource import ExpertProjectResource
 class ProjectAdmin(ImportMixin, ExportActionMixin, admin.ModelAdmin):
     resource_class = ExpertProjectResource
     list_display = ('project_id', 'actual_title', 'actual_duration', 'generated_by', 'created_at', )
-    list_filter = ('created_at', 'project_id', 'author', 'generated_by', 'actual_title', 'expected_title')
+    list_filter = (CustomAdvanceDateFilter, 'project_id', 'author', 'generated_by', 'actual_title', 'expected_title')
     raw_id_fields = ('author', 'story')
     # inlines = [TaskInline, EvidenceInline]
 
@@ -33,7 +34,7 @@ class ProjectAdmin(ImportMixin, ExportActionMixin, admin.ModelAdmin):
 @admin.register(Task)
 class TaskAdmin(admin.ModelAdmin):
     list_display = ('task_name', 'created_at', 'mandatory_task')
-    list_filter = ('created_at', 'task_id', 'project__project_id')
+    list_filter = (CustomAdvanceDateFilter, 'task_id', 'project__project_id')
     search_fields = ('task_name', )
     raw_id_fields = ('project',)
 
@@ -46,7 +47,7 @@ class TaskAdmin(admin.ModelAdmin):
 @admin.register(Evidence)
 class EvidenceAdmin(admin.ModelAdmin):
     list_display = ('evidence_link', 'created_at')
-    list_filter = ('created_at', 'task__task_name', 'project__project_id',)
+    list_filter = (CustomAdvanceDateFilter, 'task__task_name', 'project__project_id',)
     search_fields = ('evidence_link', )
 
     def save_model(self, request, obj, form, change):
