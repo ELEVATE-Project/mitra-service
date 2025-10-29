@@ -47,7 +47,7 @@ class VoiceProviderAdmin(admin.TabularInline):
 class CompanyAdmin(admin.ModelAdmin):
     list_display = ('name', 'created_at', 'status')
     list_filter = (
-        ('created_at', DateTimeRangeFilter),
+        CustomAdvanceDateFilter,
     )
     search_fields = ('name', )
     date_hierarchy = 'created_at'
@@ -73,7 +73,7 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
         'name', 
         'provider', 
         'llm_model', 
-        ('created_at', DateTimeRangeFilter),
+        CustomAdvanceDateFilter,
     )
     search_fields = ('name', 'company__name')
     date_hierarchy = 'created_at'
@@ -165,7 +165,7 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
 class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
     list_display = ('session', 'sender', 'receiver', 'message', 'translated_message', 'created_at', 'stage')
     list_filter = (
-        ('created_at', DateTimeRangeFilter),
+        CustomAdvanceDateFilter,
         ProfileCompanyChatFilter, 
         ProfileEmailFilter, 
         'session', 
@@ -215,10 +215,10 @@ class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
         if not user.is_superuser and profile and profile.profile_type == ProfileType.MODERATOR:
             company = profile.company
             if company.slug == 'fmch':
-                return (('created_at', DateTimeRangeFilter), CustomAdvanceDateFilter, ProfileCompanyChatFilter, 
+                return (CustomAdvanceDateFilter, ProfileCompanyChatFilter, 
                         ProfileEmailFilter, 'session', ProfileCityFilter, ProfileStateFilter, 'message_type')
             if company.slug == 'tfistaging':
-                return (('created_at', DateTimeRangeFilter), CustomAdvanceDateFilter, ProfileCompanyChatFilter, 
+                return (CustomAdvanceDateFilter, ProfileCompanyChatFilter, 
                         ProfileEmailFilter, 'session', CompanyChatCompanyFilter, 'stage')
         return super().get_list_filter(request)
 
@@ -236,7 +236,7 @@ class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
         'project_id', 
         'session_status', 
         'session_type',
-        ('created_at', DateTimeRangeFilter),
+        CustomAdvanceDateFilter,
     )
     search_fields = ('session', 'title', 'profile__first_name')
     raw_id_fields = ('profile',)

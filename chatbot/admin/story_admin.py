@@ -2,6 +2,7 @@ from django.utils.html import format_html
 from django.contrib import admin
 from django.db.models import Q
 from chatbot.filter.admin_filter import StoryCompanyFilter, StoryStateFilter, StoryDistrictFilter, StoryBlockFilter
+from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.filter.flow_filter import FlowFilter
 from chatbot.filter.story_filter import UserNameFilter
 from chatbot.models import StoryTag, StoryMedia, Story, Profile, ProfileType, MediaTypeChoices, StoryTranslation
@@ -43,7 +44,7 @@ class StoryMediaInline(admin.TabularInline):
 class StoryAdmin(admin.ModelAdmin):
     list_display = ('title', 'user_name_from_other_params', 'author', 'session', 'state', 'district', 'created_at',)
     list_filter = (
-        ('created_at', DateTimeRangeFilter),
+        CustomAdvanceDateFilter,
         StoryCompanyFilter, 
         'author', 
         'session', 
@@ -156,7 +157,7 @@ class StoryAdmin(admin.ModelAdmin):
 class StoryTranslationAdmin(admin.ModelAdmin):
     list_display = ('story', 'language', 'story_session', 'created_at')
     list_filter = (
-        ('created_at', DateTimeRangeFilter),
+        CustomAdvanceDateFilter,
         'language', 
         'story', 
         'story__session'

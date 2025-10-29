@@ -1,5 +1,6 @@
 from django.contrib import admin
 from simple_history.admin import SimpleHistoryAdmin
+from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import Theme, ThemeType
 from rangefilter.filters import DateRangeFilter, DateTimeRangeFilter
 
@@ -8,7 +9,7 @@ from rangefilter.filters import DateRangeFilter, DateTimeRangeFilter
 class ThemeAdmin(SimpleHistoryAdmin):
     list_display = ('bot', 'theme_type', 'created_at', 'updated_at')
     list_filter = (
-        ('created_at', DateTimeRangeFilter),
+        CustomAdvanceDateFilter,
         ('updated_at', DateTimeRangeFilter),
         'bot', 
         'theme_type'

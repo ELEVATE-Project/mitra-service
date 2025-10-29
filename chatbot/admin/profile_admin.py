@@ -41,7 +41,7 @@ class ProfileAdmin(ImportMixin, ExportActionMixin, SimpleHistoryAdmin):
         'company_spoc'
     )
     list_filter = (
-        ('created_at', DateTimeRangeFilter),
+        CustomAdvanceDateFilter,
         'email',
         'phone',
         ProfileCompanyFilter,

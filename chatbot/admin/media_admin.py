@@ -3,6 +3,7 @@ from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from django.contrib.admin.decorators import action
 from .generic_upload_admin import BatchUploadMixin
+from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.form.media.media_form import MediaAdminForm
 from chatbot.models import Tag, Profile, TagChoices, TagSourceChoices
 from chatbot.models.media_models import Media, KeyValue, MediaImage
@@ -37,7 +38,7 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
     form = MediaAdminForm
     list_display = ('file_name', 'get_title', 'media_type', 'display_mode', 'parent__name', 'created_at')
     list_filter = (
-        ('created_at', DateTimeRangeFilter),
+        CustomAdvanceDateFilter,
         'display_mode',
         'name',
         'media_type'
@@ -235,7 +236,7 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
 class MasterTagAdmin(BatchUploadMixin, admin.ModelAdmin):
     list_display = ('name', 'status', 'source_type', 'created_by', 'created_at')
     list_filter = (
-        ('created_at', DateTimeRangeFilter),
+        CustomAdvanceDateFilter,
         'name',
         'created_by',
         'source_type'

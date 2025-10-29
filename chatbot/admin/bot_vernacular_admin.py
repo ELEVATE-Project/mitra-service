@@ -1,5 +1,6 @@
 from django.contrib import admin
 from simple_history.admin import SimpleHistoryAdmin
+from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import BotVernacular
 from chatbot.models.story_vernacular_model import StoryVernacular
 from rangefilter.filters import DateRangeFilter, DateTimeRangeFilter
@@ -11,7 +12,7 @@ class BotVernacularAdmin(SimpleHistoryAdmin):
     list_filter = (
         'company_bot', 
         'language',
-        ('created_at', DateTimeRangeFilter),
+        CustomAdvanceDateFilter,
     )
     inlines = []
     raw_id_fields = ('company_bot', )
@@ -29,7 +30,7 @@ class StoryVernacularAdmin(SimpleHistoryAdmin):
     list_filter = (
         'company_bot', 
         'language',
-        ('created_at', DateTimeRangeFilter),
+        CustomAdvanceDateFilter,
     )
     inlines = []
     raw_id_fields = ('company_bot', )
