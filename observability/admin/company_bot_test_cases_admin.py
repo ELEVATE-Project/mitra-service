@@ -1,4 +1,5 @@
 from django.contrib import admin
+from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from observability.models import CompanyBotTestCases, TCBotRunMetrics
 from rangefilter.filters import DateRangeFilter, DateTimeRangeFilter
 
@@ -15,7 +16,7 @@ class CompanyBotTestCasesAdmin(admin.ModelAdmin):
     
     list_filter = (
         ('company_bot', admin.RelatedFieldListFilter),
-        ('created_at', DateTimeRangeFilter),
+        CustomAdvanceDateFilter,
     )
     
     # Adds search capability
