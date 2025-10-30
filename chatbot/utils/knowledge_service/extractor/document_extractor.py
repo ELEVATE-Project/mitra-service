@@ -2,7 +2,9 @@
 
 import io
 import logging
-from typing import Dict, List, Any, Set, Tuple
+import concurrent.futures
+from threading import Lock
+from typing import Dict, List, Any, Set, Tuple, Generator
 from pathlib import Path
 from urllib.parse import urlparse
 from chatbot.models import FileTypeChoices
@@ -32,7 +34,7 @@ class DocumentExtractor:
             self, max_depth: int = MAX_DEPTH, max_subdocs: int = 10, enable_ocr: bool = True,
             compress_images: bool = True, extract_images: bool = False, main_doc_max_chars: int = 3000,
             subdoc_max_chars: int = 500, excel_max_rows: int = 50, excel_max_cols: int = 20,
-            max_file_size_mb: int = 50
+            max_file_size_mb: int = 50, max_workers: int = 5
     ):
         """Initialize with enhanced features and configurable limits"""
         self.max_depth = max_depth
@@ -54,6 +56,10 @@ class DocumentExtractor:
         self.max_file_size_mb = max_file_size_mb
         self.max_file_size_bytes = self.max_file_size_mb * 1024 * 1024
 
+        # Parallel processing
+        self.max_workers = max_workers
+        self.url_lock = Lock()
+
         # Initialize components
         self.url_extractor = URLExtractor()
         self.url_processor = DocumentURLProcessor(self.url_cache, max_file_size_mb)
@@ -66,6 +72,198 @@ class DocumentExtractor:
         self.excel_extractor = ExcelExtractor(excel_max_rows, excel_max_cols, subdoc_max_chars)
         self.csv_extractor = CSVExtractor(excel_max_rows, excel_max_cols)
         self.txt_extractor = TXTExtractor()
+
+    def process_single_subdocument(self, sub_url: str, main_doc_url: str,
+                                 company_bot, other_data) -> Dict[str, Any]:
+        """Process a single subdocument - used for parallel processing"""
+        try:
+            # Extract content from subdocument URL
+            sub_text, sub_images, sub_media_type, sub_error_info, _ = self.extract_text_from_url(
+                sub_url, is_subdoc=True
+            )
+
+            if sub_error_info:
+                logger.info(f"Subdocument failed: {sub_error_info}")
+
+                # Enhance error message for unsupported formats
+                if sub_error_info.get('error_type') == 'unsupported_format':
+                    sub_error_info['error'] = f"Unsupported file format in linked document: {sub_error_info['error']}"
+
+                return {
+                    'success': False,
+                    'error': {
+                        "file_url": sub_url,
+                        "error": sub_error_info,
+                        "source_document": main_doc_url
+                    }
+                }
+
+            # Successfully accessed - process subdocument with LLM
+            if sub_text and len(sub_text.strip()) > 10:
+                # Get the downloadable URL
+                downloadable_url = convert_google_drive_url(sub_url)
+
+                # Check if media type was determined
+                if sub_media_type is None:
+                    logger.warning(f"Could not determine valid media type for {sub_url}")
+                    return {
+                        'success': False,
+                        'error': {
+                            "file_url": sub_url,
+                            "error": {
+                                'error': 'Could not determine valid file type',
+                                'error_type': 'unknown_format',
+                                'url': sub_url
+                            },
+                            "source_document": main_doc_url
+                        }
+                    }
+
+                # Process subdocument content with Bedrock
+                subdoc_result = self.ai_processor.extract_basic_content(
+                    sub_text,
+                    company_bot,
+                    sub_images,
+                    other_data,
+                    is_subdoc=True
+                )
+
+                # Check for any extraction errors in subdocument
+                if (subdoc_result.get('title_extraction_failed') or
+                        subdoc_result.get('extraction_error') or
+                        subdoc_result.get('error') or
+                        subdoc_result.get('error_type')):
+                    error_message = (subdoc_result.get('error') or
+                                   subdoc_result.get('extraction_error') or
+                                   'LLM failed to extract title from subdocument')
+
+                    error_type = (subdoc_result.get('error_type') or
+                                'title_extraction_failed')
+
+                    logger.error(f"Subdocument extraction failed for {sub_url}: {error_message}")
+                    return {
+                        'success': False,
+                        'error': {
+                            "file_url": sub_url,
+                            "error": {
+                                'error': error_message,
+                                'error_type': error_type,
+                                'url': sub_url
+                            },
+                            "source_document": main_doc_url
+                        }
+                    }
+
+                # Create subdocument entry (without "url" field)
+                subdoc_entry = {
+                    "title": subdoc_result.get(
+                        "title",
+                        f"Document from {Path(urlparse(main_doc_url).path).name or 'linked document'}"
+                    ),
+                    "file_url": downloadable_url,
+                    "media_type": sub_media_type,
+                    "source_document": main_doc_url,
+                    "exact_content": sub_text,
+                    "summary": subdoc_result.get("summary", ""),
+                    "tags": subdoc_result.get("tags", []),
+                    "organization": subdoc_result.get("organization", ""),
+                    "document_type": subdoc_result.get("document_type", ""),
+                    "key_entities": subdoc_result.get("key_entities", []),
+                    "subdocument": [],
+                    "images": sub_images or []
+                }
+
+                return {'success': True, 'data': subdoc_entry}
+            else:
+                logger.warning(f"Subdocument {sub_url} has insufficient content")
+                return {
+                    'success': False,
+                    'error': {
+                        "file_url": sub_url,
+                        "error": {
+                            'error': 'Document has insufficient content (less than 10 characters)',
+                            'error_type': 'insufficient_content',
+                            'url': sub_url
+                        },
+                        "source_document": main_doc_url
+                    }
+                }
+        except Exception as e:
+            logger.error(f"Error processing subdocument {sub_url}: {str(e)}")
+            return {
+                'success': False,
+                'error': {
+                    "file_url": sub_url,
+                    "error": {"error": str(e), "error_type": "processing_error"},
+                    "source_document": main_doc_url
+                }
+            }
+
+    def process_subdocuments_parallel(self, subdoc_urls: List[str], main_doc_url: str,
+                                    company_bot, other_data) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """Process subdocuments in parallel"""
+        subdocuments = []
+        failed_links = []
+
+        # Limit subdocuments to max_subdocs
+        urls_to_process = subdoc_urls[:self.max_subdocs]
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # Submit all subdocument processing tasks
+            future_to_url = {
+                executor.submit(
+                    self.process_single_subdocument,
+                    url, main_doc_url, company_bot, other_data
+                ): url
+                for url in urls_to_process
+            }
+
+            # Collect results as they complete
+            for future in concurrent.futures.as_completed(future_to_url):
+                url = future_to_url[future]
+                try:
+                    result = future.result()
+                    if result['success']:
+                        subdocuments.append(result['data'])
+                    else:
+                        failed_links.append(result['error'])
+                except Exception as e:
+                    logger.error(f"Exception processing subdocument {url}: {str(e)}")
+                    failed_links.append({
+                        "file_url": url,
+                        "error": {"error": str(e), "error_type": "processing_error"},
+                        "source_document": main_doc_url
+                    })
+
+        return subdocuments, failed_links
+
+    def extract_urls_memory_efficient(self, text: str) -> Generator[str, None, None]:
+        """Extract URLs using a memory-efficient generator approach"""
+        # Process text in chunks to avoid memory issues with large documents
+        chunk_size = 10000  # 10k characters per chunk
+
+        for i in range(0, len(text), chunk_size):
+            chunk = text[i:i + chunk_size]
+            # Ensure we don't cut URLs in half - extend to next whitespace
+            if i + chunk_size < len(text):
+                next_space = text.find(' ', i + chunk_size)
+                if next_space != -1:
+                    chunk = text[i:next_space]
+
+            # Extract URLs from this chunk
+            urls = self.url_extractor.extract_urls_from_text(chunk)
+            for url in urls:
+                yield url
+
+    def process_text_sections_generator(self, sections: List[str]) -> Generator[str, None, None]:
+        """Process text sections using a generator to save memory"""
+        for section in sections:
+            # Process section
+            processed = section.strip()
+            if processed:
+                yield processed
+            # Free memory after yielding
+            del section
 
     def extract_text_from_url(self, url: str, is_subdoc: bool = False) -> Tuple[
         str, List[Dict[str, Any]], Any, Dict[str, Any], str]:
@@ -153,7 +351,9 @@ class DocumentExtractor:
                     for para in doc.paragraphs:
                         if para.text.strip():
                             text_parts.append(para.text)
-                    text = '\n'.join(text_parts)
+
+                    # Memory-efficient text joining
+                    text = '\n'.join(self.process_text_sections_generator(text_parts))
                     media_type = FileTypeChoices.DOCX
                     logger.info(f"Assigned media type as: {media_type}")
                 finally:
@@ -174,13 +374,22 @@ class DocumentExtractor:
                 media_type = FileTypeChoices.TXT
                 logger.info(f"Assigned media type as: {media_type}")
 
-            # Combine text-based URLs with hyperlink URLs for ALL formats
-            combined_urls = []
-            combined_urls.extend(extracted_hyperlinks)
-            text_urls = self.url_extractor.extract_urls_from_text(full_text_for_url_extraction)
-            for url_found in text_urls:
-                if url_found not in combined_urls:
-                    combined_urls.append(url_found)
+            # Memory-efficient URL combination
+            combined_urls = list(extracted_hyperlinks)  # Start with hyperlinks
+
+            # Use generator for text URL extraction on large documents
+            if len(full_text_for_url_extraction) > 50000:  # Large document threshold
+                seen_urls = set(combined_urls)
+                for url_found in self.extract_urls_memory_efficient(full_text_for_url_extraction):
+                    if url_found not in seen_urls:
+                        combined_urls.append(url_found)
+                        seen_urls.add(url_found)
+            else:
+                # Standard extraction for smaller documents
+                text_urls = self.url_extractor.extract_urls_from_text(full_text_for_url_extraction)
+                for url_found in text_urls:
+                    if url_found not in combined_urls:
+                        combined_urls.append(url_found)
 
             # Store combined URLs for later use by appending hyperlinks to full text
             if extracted_hyperlinks:
@@ -189,7 +398,6 @@ class DocumentExtractor:
 
             logger.info(f"URL extraction summary for {url}:")
             logger.info(f"  - Hyperlinks extracted: {len(extracted_hyperlinks)}")
-            logger.info(f"  - Text-based URLs found: {len(text_urls)}")
             logger.info(f"  - Total unique URLs for processing: {len(combined_urls)}")
 
             # Apply character limit for subdocuments AFTER storing full text
@@ -369,7 +577,12 @@ class DocumentExtractor:
             logger.info(f"{'  ' * depth}  - Using comprehensive content: {len(url_extraction_text)} chars")
             logger.info(f"{'  ' * depth}  - Limited text for LLM: {len(text)} chars")
 
-            urls = self.url_extractor.extract_urls_from_text(url_extraction_text)  # NOW USING COMPREHENSIVE TEXT
+            # Memory-efficient URL extraction for large documents
+            if len(url_extraction_text) > 50000:
+                urls = list(self.extract_urls_memory_efficient(url_extraction_text))
+            else:
+                urls = self.url_extractor.extract_urls_from_text(url_extraction_text)
+
             main_result["url"] = urls
 
             # Log all extracted URLs
@@ -383,7 +596,8 @@ class DocumentExtractor:
             document_urls = [url for url in urls if self.url_extractor.is_document_url(url, depth)]
             logger.info(f"{'  ' * depth}Found {len(document_urls)} document URLs in main document")
 
-            # Process each document URL from the main document
+            # Process first level of linked documents
+            first_level_results = []
             for main_doc_url in document_urls:
                 # Normalize URL for deduplication
                 normalized_url = normalize_url_for_tracking(main_doc_url)
@@ -427,140 +641,13 @@ class DocumentExtractor:
                         })
                         continue
 
-                    # Extract URLs from the COMPREHENSIVE text for ALL file formats
-                    logger.info(f"{'  ' * depth}Extracting URLs from linked document: {main_doc_url}")
-                    logger.info(f"{'  ' * depth}  - Media type: {linked_media_type}")
-                    logger.info(f"{'  ' * depth}  - Using comprehensive content: {len(full_text_for_urls)} chars")
-
-                    # Extract URLs from the comprehensive content (now includes hyperlinks for all formats)
-                    links_in_subdoc = self.url_extractor.extract_urls_from_text(full_text_for_urls)
-                    logger.info(f"{'  ' * depth}Found {len(links_in_subdoc)} total links inside {main_doc_url}")
-
-                    # Filter for document URLs
-                    subdoc_document_urls = [url for url in links_in_subdoc if
-                                            self.url_extractor.is_document_url(url, depth)]
-                    logger.info(f"{'  ' * depth}Found {len(subdoc_document_urls)} document URLs inside {main_doc_url}")
-
-                    # Process each document URL found within the linked document
-                    subdoc_count = 0
-                    for sub_url in subdoc_document_urls:
-                        if subdoc_count >= self.max_subdocs:
-                            logger.info(f"{'  ' * (depth + 1)}Reached max subdocs limit ({self.max_subdocs})")
-                            break
-
-                        # Normalize URL for deduplication
-                        normalized_sub_url = normalize_url_for_tracking(sub_url)
-
-                        if normalized_sub_url in processed_urls:
-                            logger.info(f"{'  ' * (depth + 1)}Skipping already processed subdocument URL: {sub_url}")
-                            continue
-
-                        logger.info(f"{'  ' * (depth + 1)}Processing subdocument: {sub_url}")
-                        processed_urls.add(normalized_sub_url)
-                        subdoc_count += 1
-
-                        # Extract content from subdocument URL
-                        sub_text, sub_images, sub_media_type, sub_error_info, _ = self.extract_text_from_url(
-                            sub_url, is_subdoc=True
-                        )
-                        logger.info(f"for url: {sub_url}, extracted sub_text is: {sub_text}")
-
-                        if sub_error_info:
-                            logger.info(f"{'  ' * (depth + 1)}Subdocument failed: {sub_error_info}")
-
-                            # Enhance error message for unsupported formats
-                            if sub_error_info.get('error_type') == 'unsupported_format':
-                                sub_error_info[
-                                    'error'] = f"Unsupported file format in linked document: {sub_error_info['error']}"
-
-                            failed_links.append({
-                                "file_url": sub_url,
-                                "error": sub_error_info,
-                                "source_document": main_doc_url
-                            })
-                        else:
-                            # Successfully accessed - process subdocument with LLM
-                            if sub_text and len(sub_text.strip()) > 10:
-                                # Get the downloadable URL
-                                downloadable_url = convert_google_drive_url(sub_url)
-
-                                # Check if media type was determined
-                                if sub_media_type is None:
-                                    logger.warning(f"Could not determine valid media type for {sub_url}")
-                                    failed_links.append({
-                                        "file_url": sub_url,
-                                        "error": {
-                                            'error': 'Could not determine valid file type',
-                                            'error_type': 'unknown_format',
-                                            'url': sub_url
-                                        },
-                                        "source_document": main_doc_url
-                                    })
-                                    continue
-
-                                # Process subdocument content with Bedrock
-                                subdoc_result = self.ai_processor.extract_basic_content(
-                                    sub_text,
-                                    company_bot,
-                                    sub_images,
-                                    other_data,
-                                    is_subdoc=True
-                                )
-
-                                # Check for any extraction errors in subdocument
-                                if (subdoc_result.get('title_extraction_failed') or
-                                        subdoc_result.get('extraction_error') or
-                                        subdoc_result.get('error') or
-                                        subdoc_result.get('error_type')):
-                                    error_message = (subdoc_result.get('error') or
-                                                     subdoc_result.get('extraction_error') or
-                                                     'LLM failed to extract title from subdocument')
-
-                                    error_type = (subdoc_result.get('error_type') or
-                                                  'title_extraction_failed')
-
-                                    logger.error(f"Subdocument extraction failed for {sub_url}: {error_message}")
-                                    failed_links.append({
-                                        "file_url": sub_url,
-                                        "error": {
-                                            'error': error_message,
-                                            'error_type': error_type,
-                                            'url': sub_url
-                                        },
-                                        "source_document": main_doc_url
-                                    })
-                                    continue
-
-                                # Create subdocument entry (without "url" field)
-                                subdoc_entry = {
-                                    "title": subdoc_result.get(
-                                        "title",
-                                        f"Document from {Path(urlparse(main_doc_url).path).name or 'linked document'}"
-                                    ),
-                                    "file_url": downloadable_url,
-                                    "media_type": sub_media_type,
-                                    "source_document": main_doc_url,
-                                    "exact_content": sub_text,
-                                    "summary": subdoc_result.get("summary", ""),
-                                    "tags": subdoc_result.get("tags", []),
-                                    "organization": subdoc_result.get("organization", ""),
-                                    "document_type": subdoc_result.get("document_type", ""),
-                                    "key_entities": subdoc_result.get("key_entities", []),
-                                    "subdocument": [],
-                                    "images": sub_images or []
-                                }
-                                subdocuments.append(subdoc_entry)
-                            else:
-                                logger.warning(f"Subdocument {sub_url} has insufficient content")
-                                failed_links.append({
-                                    "file_url": sub_url,
-                                    "error": {
-                                        'error': 'Document has insufficient content (less than 10 characters)',
-                                        'error_type': 'insufficient_content',
-                                        'url': sub_url
-                                    },
-                                    "source_document": main_doc_url
-                                })
+                    first_level_results.append({
+                        'main_doc_url': main_doc_url,
+                        'linked_text': linked_text,
+                        'linked_images': linked_images,
+                        'linked_media_type': linked_media_type,
+                        'full_text_for_urls': full_text_for_urls
+                    })
                 else:
                     logger.warning(f"Linked document {main_doc_url} has insufficient content: {linked_text}")
                     failed_links.append({
@@ -572,6 +659,46 @@ class DocumentExtractor:
                         },
                         "source_document": "main"
                     })
+
+            # Process subdocuments in parallel for each first-level document
+            for first_level_doc in first_level_results:
+                main_doc_url = first_level_doc['main_doc_url']
+                full_text_for_urls = first_level_doc['full_text_for_urls']
+
+                # Extract URLs from the comprehensive content
+                logger.info(f"{'  ' * depth}Extracting URLs from linked document: {main_doc_url}")
+                logger.info(f"{'  ' * depth}  - Using comprehensive content: {len(full_text_for_urls)} chars")
+
+                # Memory-efficient URL extraction
+                if len(full_text_for_urls) > 50000:
+                    links_in_subdoc = list(self.extract_urls_memory_efficient(full_text_for_urls))
+                else:
+                    links_in_subdoc = self.url_extractor.extract_urls_from_text(full_text_for_urls)
+
+                logger.info(f"{'  ' * depth}Found {len(links_in_subdoc)} total links inside {main_doc_url}")
+
+                # Filter for document URLs
+                subdoc_document_urls = [url for url in links_in_subdoc if self.url_extractor.is_document_url(url, depth)]
+                logger.info(f"{'  ' * depth}Found {len(subdoc_document_urls)} document URLs inside {main_doc_url}")
+
+                # Filter out already processed URLs
+                urls_to_process = []
+                for sub_url in subdoc_document_urls:
+                    normalized_sub_url = normalize_url_for_tracking(sub_url)
+
+                    with self.url_lock:
+                        if normalized_sub_url not in processed_urls:
+                            processed_urls.add(normalized_sub_url)
+                            urls_to_process.append(sub_url)
+
+                # Process subdocuments in parallel
+                if urls_to_process:
+                    logger.info(f"{'  ' * depth}Processing {len(urls_to_process)} subdocuments in parallel...")
+                    subdocs, failed = self.process_subdocuments_parallel(
+                        urls_to_process, main_doc_url, company_bot, other_data
+                    )
+                    subdocuments.extend(subdocs)
+                    failed_links.extend(failed)
 
             main_result["subdocument"] = subdocuments
             main_result["failed_links"] = failed_links
