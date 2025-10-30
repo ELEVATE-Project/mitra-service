@@ -1,8 +1,6 @@
 from celery import shared_task
-
-from chatbot.models import FileTypeChoices
-from chatbot.scripts.knowledge_service.extraction.ai_extraction import get_doc_tags_from_ai
 import os
+from chatbot.utils.knowledge_service.base.main import get_doc_tags_from_ai
 
 
 @shared_task
