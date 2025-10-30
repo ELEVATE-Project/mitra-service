@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from django.http import JsonResponse
 from chatbot.models import CompanyBot, Voice, VoiceType, Profile, BotVernacular, StoryMedia, MediaTypeChoices, SessionFlowName
 from chatbot.serializer.story_serializer import StoryMediaRetrieveSerializer
-from chatbot.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_objective_utils, validate_objective_utils, validate_actions_utils, generate_action_list_utils, generate_title_utils, validate_title_utils
+from shikshalokam.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_objective_utils, validate_objective_utils, validate_actions_utils, generate_action_list_utils, generate_title_utils, validate_title_utils
 from chatbot.utils.story_llama_utils import translate_field
 from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf
