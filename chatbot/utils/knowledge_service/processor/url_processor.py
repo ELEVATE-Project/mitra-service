@@ -80,7 +80,8 @@ class DocumentURLProcessor:
             return error_info
         return None
 
-    def download_document(self, url: str, is_subdoc: bool = False) -> Tuple[Optional[bytes], Optional[Dict[str, Any]]]:
+    def download_document(self, url: str, is_subdoc: bool = False) -> Tuple[
+        Optional[bytes], Optional[Dict[str, Any]], str]:
         """
         Download document from URL with error handling
         """
@@ -91,17 +92,17 @@ class DocumentURLProcessor:
             if url in self.url_cache:
                 cached_result = self.url_cache[url]
                 if isinstance(cached_result, dict) and 'error' in cached_result:
-                    return None, cached_result
+                    return None, cached_result, ""
                 if isinstance(cached_result, str):
                     # Return cached text as bytes
-                    return cached_result.encode('utf-8'), None
-                return cached_result, None
+                    return cached_result.encode('utf-8'), None, ""
+                return cached_result, None, ""
 
             # Convert Google Drive URLs to downloadable format
             download_url = convert_google_drive_url(url)
             if download_url is None:
                 logger.info(f"Skipped non-document URL: {url}")
-                return None, None
+                return None, None, ""
             if download_url != url:
                 logger.info(f"Converted to: {download_url}")
 
@@ -127,7 +128,7 @@ class DocumentURLProcessor:
                             }
                             logger.error(f"File too large from URL {url}: {content_size_mb:.2f} MB")
                             self.url_cache[url] = error_info
-                            return None, error_info
+                            return None, error_info, ""
                     break
 
                 except requests.exceptions.HTTPError as e:
@@ -156,11 +157,15 @@ class DocumentURLProcessor:
             if not response:
                 raise Exception("Failed to get response after retries")
 
+            # Get content type (THIS IS THE KEY LINE)
+            content_type = response.headers.get('content-type', '').lower()
+            logger.info(f"Response content_type: {content_type}")
+
             # Check for Google access denial
             access_error = self.check_google_access_denial(response, download_url)
             if access_error:
                 self.url_cache[url] = access_error
-                return None, access_error
+                return None, access_error, content_type
 
             # Validate file format based on URL extension
             parsed_url = urlparse(url)
@@ -173,18 +178,15 @@ class DocumentURLProcessor:
                 format_error = self.validate_file_format(url, url_extension)
                 if format_error:
                     self.url_cache[url] = format_error
-                    return None, format_error
+                    return None, format_error, content_type
 
             # Validate content type
-            content_type = response.headers.get('content-type', '').lower()
-            logger.info(f"Response content_type: {content_type}")
-
             content_error = self.validate_content_type(content_type, url)
             if content_error:
                 self.url_cache[url] = content_error
-                return None, content_error
+                return None, content_error, content_type
 
-            return response.content, None
+            return response.content, None, content_type
 
         except requests.exceptions.HTTPError as e:
             if e.response.status_code == 403:
@@ -210,7 +212,7 @@ class DocumentURLProcessor:
                 }
             logger.error(f"HTTP error extracting from URL {url}: {e}")
             self.url_cache[url] = error_info
-            return None, error_info
+            return None, error_info, ""
 
         except requests.exceptions.Timeout:
             error_info = {
@@ -220,7 +222,7 @@ class DocumentURLProcessor:
             }
             logger.error(f"Timeout extracting from URL {url}")
             self.url_cache[url] = error_info
-            return None, error_info
+            return None, error_info, ""
 
         except Exception as e:
             error_info = {
@@ -230,7 +232,7 @@ class DocumentURLProcessor:
             }
             logger.error(f"Failed to extract from URL {url}: {e}")
             self.url_cache[url] = error_info
-            return None, error_info
+            return None, error_info, ""
 
     def determine_file_type(self, content_bytes: bytes, content_type: str,
                             url: str) -> Tuple[bool, bool, bool, bool, bool]:

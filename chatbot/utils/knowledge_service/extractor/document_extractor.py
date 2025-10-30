@@ -77,7 +77,7 @@ class DocumentExtractor:
 
         try:
             # Download document
-            content_bytes, error_info = self.url_processor.download_document(url, is_subdoc)
+            content_bytes, error_info, content_type = self.url_processor.download_document(url, is_subdoc)
 
             if error_info:
                 return "", [], None, error_info, ""
@@ -85,8 +85,6 @@ class DocumentExtractor:
             if not content_bytes:
                 return "", [], None, None, ""
 
-            # Determine file type
-            content_type = ""  # We'll need to get this from the response
             is_pdf, is_excel, is_csv, is_docx, is_txt = self.url_processor.determine_file_type(
                 content_bytes, content_type, url
             )
