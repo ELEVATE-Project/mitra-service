@@ -1,8 +1,10 @@
 from chatbot.utils.image_converter import convert_image
+from chatbot.views.Media.extract_views import BatchMediaExtractView, BatchMediaRetryExtractView
+from chatbot.views.Media.save_views import BatchMediaSaveView, BatchMediaRetrySaveView
+from chatbot.views.Media.status_views import BatchMediaTaskStatusView, VectorDBTaskStatusView
+from chatbot.views.Media.upload_views import BatchMediaUploadView
 from chatbot.views.admin.generic_upload_views import GenericBatchUploadView, GenericBatchTemplateView, \
     GenericBatchImportView
-from chatbot.views.admin.media_upload_views import BatchMediaUploadView, BatchMediaExtractView, BatchMediaSaveView, \
-    BatchMediaTaskStatusView, BatchMediaRetryExtractView, BatchMediaRetrySaveView, VectorDBTaskStatusView
 from chatbot.views.aws_views import get_presigned_url
 from chatbot.views.gotenberg_view import generate_pdf_view
 from chatbot.views.kafka_views import sync_user_project_view
