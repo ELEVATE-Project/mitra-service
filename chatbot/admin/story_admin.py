@@ -14,7 +14,6 @@ from chatbot.resources.story_resource import (
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf, save_shikshalokam_story
 from django.urls import path
 from django.shortcuts import render
-from rangefilter.filters import DateRangeFilter, DateTimeRangeFilter
 import tablib
 
 

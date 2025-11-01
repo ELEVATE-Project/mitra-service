@@ -17,7 +17,6 @@ from chatbot.views.admin.media_upload_views import (
     BatchMediaRetrySaveView, VectorDBTaskStatusView, GetCachedItemView
 )
 from simple_history.admin import SimpleHistoryAdmin
-from rangefilter.filters import DateRangeFilter, DateTimeRangeFilter
 
 
 class KeyValueInline(admin.TabularInline):
