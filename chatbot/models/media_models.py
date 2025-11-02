@@ -102,6 +102,7 @@ class Media(models.Model):
     media_type = models.CharField(max_length=100, choices=FileTypeChoices.choices, default=FileTypeChoices.TXT)
     company_bot = models.ForeignKey(CompanyBot, on_delete=models.DO_NOTHING)
     file = models.FileField(upload_to=get_file_upload_path, max_length=1000)
+    markdown_file = models.FileField(upload_to=get_file_upload_path, max_length=1000, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     extracted_text = models.TextField(null=True, blank=True)
     tags = models.ManyToManyField(Tag, related_name="medias")
