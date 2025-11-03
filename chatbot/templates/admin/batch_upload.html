@@ -3873,7 +3873,7 @@ async function waitForAllTasksToComplete(taskIds) {
                                         const enhanced = aiResult.enhanced_data;
 
                                         if (enhanced.description) item.data.description = enhanced.description;
-                                        if (enhanced.extracted_text) item.data.extracted_text = enhanced.extracted_text;
+                                        if (enhanced.hasOwnProperty('extracted_text')) item.data.extracted_text = enhanced.extracted_text;
                                         if (enhanced.media_type) item.data.media_type = enhanced.media_type;
 
                                         if (enhanced.url && Array.isArray(enhanced.url)) {
@@ -4541,6 +4541,26 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
 
     const isAiOnly = subdoc.display_mode === 'ai_only';
 
+    // Check if subdocument is an Excel file by extension or media type
+    const excelMediaTypes = [
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+        'application/vnd.google-apps.spreadsheet'
+    ];
+    const isSubdocExcelByType = subdoc.media_type && excelMediaTypes.includes(subdoc.media_type);
+    const isSubdocExcelByUrl = (subdoc.file_url && (subdoc.file_url.toLowerCase().endsWith('.xlsx') || subdoc.file_url.toLowerCase().endsWith('.xls'))) ||
+                               (subdoc.url && subdoc.url.length > 0 && (subdoc.url[0].toLowerCase().endsWith('.xlsx') || subdoc.url[0].toLowerCase().endsWith('.xls')));
+    const isSubdocExcel = isSubdocExcelByType || isSubdocExcelByUrl;
+    
+    const subdocMarkdownHtml = isSubdocExcel ? `
+                <div class="field-group">
+                    <label>Markdown Content</label>
+                    <textarea class="editable-field" id="extracted_text_${path}"
+                       onchange="saveFieldByPath('${path}', 'extracted_text', this.value)" style="min-height: 150px;">${subdoc.extracted_text || ''}
+                    </textarea>
+                </div>
+    ` : '';
+
     return `
         <div class="subdocument-item" id="${subdocId}" style="margin-left: ${(depth - 1) * 20}px;">
             <div class="subdocument-header" onclick="toggleSubdocumentByPath('${path}')">
@@ -4601,6 +4621,8 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
                        onchange="saveFieldByPath('${path}', 'description', this.value)">${subdoc.description || ''}
                     </textarea>
                 </div>
+
+                ${subdocMarkdownHtml}
 
                 <div class="field-group">
                     <label>Tags</label>
@@ -5648,6 +5670,25 @@ function renderSubdocumentItem(subdoc, parentIndex, subdocIndex) {
         `;
     }
 
+    // Check if subdocument is an Excel file by extension or media type
+    const legacyExcelMediaTypes = [
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+        'application/vnd.google-apps.spreadsheet'
+    ];
+    const isLegacySubdocExcelByType = subdoc.media_type && legacyExcelMediaTypes.includes(subdoc.media_type);
+    const isLegacySubdocExcelByUrl = (subdoc.file_url && (subdoc.file_url.toLowerCase().endsWith('.xlsx') || subdoc.file_url.toLowerCase().endsWith('.xls'))) ||
+                                     (subdoc.url && subdoc.url.length > 0 && (subdoc.url[0].toLowerCase().endsWith('.xlsx') || subdoc.url[0].toLowerCase().endsWith('.xls')));
+    const isLegacySubdocExcel = isLegacySubdocExcelByType || isLegacySubdocExcelByUrl;
+    
+    const legacySubdocMarkdownHtml = isLegacySubdocExcel ? `
+                <div class="field-group">
+                    <label>Markdown Content</label>
+                    <textarea id="extracted_text_subdoc_${parentIndex}_${subdocIndex}"
+                              onchange="saveFieldData(${parentIndex}, 'extracted_text', this.value, true, ${parentIndex}, ${subdocIndex})" style="min-height: 150px;">${subdoc.extracted_text || ''}</textarea>
+                </div>
+    ` : '';
+
     return `
         <div class="subdocument-item" id="${subdocId}">
             <div class="subdocument-header" onclick="toggleSubdocument(${parentIndex}, ${subdocIndex})">
@@ -5676,6 +5717,8 @@ function renderSubdocumentItem(subdoc, parentIndex, subdocIndex) {
                     <textarea id="description_subdoc_${parentIndex}_${subdocIndex}"
                               onchange="saveFieldData(${parentIndex}, 'description', this.value, true, ${parentIndex}, ${subdocIndex})">${subdoc.description || ''}</textarea>
                 </div>
+
+                ${legacySubdocMarkdownHtml}
 
                 <div class="field-group">
                     <label>Sections</label>
@@ -6104,6 +6147,15 @@ function renderExtractedData() {
         // Generate key-values HTML with document type dropdown support for main document
         const keyValuesHtml = updateMainDocumentKeyValueHtml(item, displayIndex);
 
+        // Check if file is Excel to show Markdown Content field
+        const isExcelFile = item.filename && (item.filename.toLowerCase().endsWith('.xlsx') || item.filename.toLowerCase().endsWith('.xls'));
+        const markdownContentHtml = isExcelFile ? `
+            <div class="field-group">
+                <label>Markdown Content</label>
+                <textarea class="editable-field" id="extracted_text_${displayIndex}" onchange="saveFieldData(${displayIndex}, 'extracted_text', this.value)" style="min-height: 150px;">${item.data.extracted_text || ''}</textarea>
+            </div>
+        ` : '';
+
         mediaItem.innerHTML = `
             <div class="media-item-header">
                 <div class="media-item-title">
@@ -6129,6 +6181,8 @@ function renderExtractedData() {
                 <label>Summary</label>
                 <textarea class="editable-field" id="description_${displayIndex}" onchange="saveFieldData(${displayIndex}, 'description', this.value)">${item.data.description || ''}</textarea>
             </div>
+
+            ${markdownContentHtml}
 
             <div class="field-group">
                 <label>Tags</label>

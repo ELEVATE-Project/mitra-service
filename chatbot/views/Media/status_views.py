@@ -106,6 +106,26 @@ class BatchMediaTaskStatusView(View):
             }, status=500)
 
 
+    def is_excel_file(self, url_or_filename, media_type=None):
+        """Check if the file is an Excel file (.xlsx or .xls) by extension or media type"""
+        # Check by media type first (for Google Sheets and other sources)
+        if media_type:
+            excel_media_types = [
+                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',  # .xlsx
+                'application/vnd.ms-excel',  # .xls
+                'application/vnd.google-apps.spreadsheet'  # Google Sheets
+            ]
+            if media_type in excel_media_types:
+                return True
+        
+        # Check by file extension
+        if url_or_filename:
+            url_or_filename_lower = str(url_or_filename).lower()
+            if url_or_filename_lower.endswith('.xlsx') or url_or_filename_lower.endswith('.xls'):
+                return True
+        
+        return False
+
     def get_main_doc_media_type(self, ai_data):
         """Get the correct document type for main document based on linked file, skipping failed URLs.
         If only one failed URL exists and it's the same as the only URL, still consider it.
@@ -122,7 +142,7 @@ class BatchMediaTaskStatusView(View):
                 if file_url:
                     failed_urls.add(file_url)
 
-        # Handle edge case: if only one URL and it’s the same as the single failed URL → allow it
+        # Handle edge case: if only one URL and it's the same as the single failed URL → allow it
         if (
                 len(file_urls) == 1
                 and len(failed_urls) == 1
@@ -274,12 +294,19 @@ class BatchMediaTaskStatusView(View):
             key_values, array_metadata = build_key_values(subdoc_data)
             subdoc_data['array_fields_metadata'] = array_metadata
 
+            # Check if subdocument is Excel file - only set extracted_text for Excel files
+            subdoc_file_url = subdoc_data.get('file_url', '')
+            subdoc_urls = subdoc_data.get('url', [])
+            subdoc_url = subdoc_urls[0] if subdoc_urls else ''
+            subdoc_media_type = subdoc_data.get('media_type')
+            is_subdoc_excel = self.is_excel_file(subdoc_file_url, subdoc_media_type) or self.is_excel_file(subdoc_url, subdoc_media_type)
+            
             processed = {
                 'title': subdoc_data.get('title', ''),
                 'summary': subdoc_data.get('summary', ''),
                 'description': subdoc_data.get('summary', ''),
                 'exact_content': subdoc_data.get('exact_content', ''),
-                'extracted_text': subdoc_data.get('exact_content', ''),
+                'extracted_text': subdoc_data.get('exact_content', '') if is_subdoc_excel else '',
                 'organization': subdoc_data.get('organization', company_name or ''),
                 'geography': to_title_case(subdoc_data.get('geography', '')),
                 'document_type': document_type_value,
@@ -323,10 +350,18 @@ class BatchMediaTaskStatusView(View):
         original_filename = ai_data.get('original_filename')
         repaired_structured_content = repair_structured_content(ai_data.get('structured_content'))
 
+        # Get media type first to check if it's Excel
+        media_type_value = self.get_main_doc_media_type(ai_data)
+        
+        # Check if main document is Excel file - only set extracted_text for Excel files
+        main_urls = ai_data.get('url', [])
+        main_url = main_urls[0] if main_urls else ''
+        is_main_excel = self.is_excel_file(original_filename, media_type_value) or self.is_excel_file(main_url, media_type_value)
+
         main_data = {
             'title': original_filename if (original_filename and not is_template) else ai_data.get('title', ''),
             'summary': ai_data.get('summary', ''),
-            'extracted_text': ai_data.get('exact_content', '') or ai_data.get('summary', ''),
+            'extracted_text': ai_data.get('exact_content', '') if is_main_excel else '',
             'organization': ai_data.get('organization', '') or company_name or '',
             'geography': to_title_case(ai_data.get('geography', '')),
             'document_type': document_type_value,
@@ -341,7 +376,6 @@ class BatchMediaTaskStatusView(View):
 
         # Build enhanced key-values for main document
         enhanced_key_values, array_fields_metadata = build_key_values(main_data)
-        media_type_value = self.get_main_doc_media_type(ai_data)
         main_data['array_fields_metadata'] = array_fields_metadata
 
         # Process subdocuments recursively
