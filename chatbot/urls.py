@@ -9,7 +9,7 @@ from chatbot.views.aws_views import get_presigned_url
 from chatbot.views.gotenberg_view import generate_pdf_view
 from chatbot.views.kafka_views import sync_user_project_view
 from chatbot.views.location_views import get_location_view, get_ip_location_view
-from chatbot.views.media_views import MediaSearchView
+from chatbot.views.Media.media_views import MediaSearchView
 from chatbot.views.profile_views import create_profile_views, read_elevate_profile
 from django.urls import path, include
 from chatbot.views import api_views
@@ -26,7 +26,7 @@ from chatbot.views.recommendation import generate_recommendation
 from chatbot.views.story_views import end_story, StoryListCreateView, StoryBySessionView, \
     StoryRetrieveUpdateDestroyView, StoryMediaListCreateView, StoryMediaRetrieveUpdateDestroyView
 from rest_framework.routers import DefaultRouter
-from chatbot.views.media_api_views import MediaViewSet
+from chatbot.views.Media.media_api_views import MediaViewSet
 
 app_name = "chatbot"
 
