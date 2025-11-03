@@ -8,15 +8,12 @@ from chatbot.form.media.media_form import MediaAdminForm
 from chatbot.models import Tag, Profile, TagChoices, TagSourceChoices
 from chatbot.models.media_models import Media, KeyValue, MediaImage
 from chatbot.models.enums import FileDisplayMode, ProfileType
-from chatbot.views.admin.media_upload_views import (
-    BatchMediaUploadView,
-    BatchMediaExtractView,
-    BatchMediaSaveView,
-    BatchMediaTaskStatusView,
-    BatchMediaRetryExtractView,
-    BatchMediaRetrySaveView, VectorDBTaskStatusView, GetCachedItemView
-)
 from simple_history.admin import SimpleHistoryAdmin
+from chatbot.utils.knowledge_service.cache_manager import GetCachedItemView
+from chatbot.views.Media.extract_views import BatchMediaExtractView, BatchMediaRetryExtractView
+from chatbot.views.Media.save_views import BatchMediaSaveView, BatchMediaRetrySaveView
+from chatbot.views.Media.status_views import BatchMediaTaskStatusView, VectorDBTaskStatusView
+from chatbot.views.Media.upload_views import BatchMediaUploadView
 
 
 class KeyValueInline(admin.TabularInline):
