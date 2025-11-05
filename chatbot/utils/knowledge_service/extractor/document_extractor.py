@@ -543,9 +543,9 @@ class DocumentExtractor:
             raise Exception(f"Error reading document: {str(e)}")
 
     def process_document_with_links(
-            self, text: str, company_bot, comprehensive_text: str = None, processed_urls=None,
-            depth=0, max_depth=MAX_DEPTH, extracted_images: List[Dict[str, Any]] = None, other_data=None
-    ) -> Dict[str, Any]:
+        self, text: str, company_bot, comprehensive_text: str = None, processed_urls=None,
+        depth=0, max_depth=MAX_DEPTH, extracted_images: List[Dict[str, Any]] = None, other_data=None
+) -> Dict[str, Any]:
         """Process document and extract links from linked documents with enhanced URL extraction for ALL formats"""
         if processed_urls is None:
             processed_urls = set()
@@ -577,6 +577,7 @@ class DocumentExtractor:
             # Step 3: Process links
             subdocuments = []
             failed_links = []
+            source_documents = []  # NEW: List for source documents
 
             # Filter for document URLs
             document_urls = [url for url in urls if self.url_extractor.is_document_url(url, depth)]
@@ -626,6 +627,12 @@ class DocumentExtractor:
                             "source_document": "main"
                         })
                         continue
+
+                    # NEW: Add source document entry with URL and exact content
+                    source_documents.append({
+                        "url": main_doc_url,
+                        "exact_content": full_text_for_urls  # Markdown content for Excel/CSV, full text for others
+                    })
 
                     first_level_results.append({
                         'main_doc_url': main_doc_url,
@@ -688,11 +695,13 @@ class DocumentExtractor:
 
             main_result["subdocument"] = subdocuments
             main_result["failed_links"] = failed_links
+            main_result["source_document"] = source_documents  # NEW: Add source documents to result
 
             # Log summary
             logger.info(f"{'  ' * depth}Processing complete:")
             logger.info(f"{'  ' * depth}  - URLs in main document: {len(urls)}")
             logger.info(f"{'  ' * depth}  - Document URLs in main: {len(document_urls)}")
+            logger.info(f"{'  ' * depth}  - Source documents: {len(source_documents)}")  # NEW
             logger.info(f"{'  ' * depth}  - Successfully processed subdocuments: {len(subdocuments)}")
             logger.info(f"{'  ' * depth}  - Failed: {len(failed_links)}")
             logger.info(f"{'  ' * depth}  - Total URLs processed: {len(processed_urls)}")
@@ -717,13 +726,13 @@ class DocumentExtractor:
                 "url": [],
                 "subdocument": [],
                 "failed_links": [],
+                "source_document": [],  # NEW
                 "images": extracted_images or []
             }
 
     def extract_with_bedrock(self, document_text, company_bot,
-                             extracted_images: List[Dict[str, Any]] = None,
-                             other_data=None) -> Dict[str, Any]:
-        """Main entry point - processes document with recursive link extraction"""
+                         extracted_images: List[Dict[str, Any]] = None,
+                         other_data=None) -> Dict[str, Any]:
         try:
             logger.info("Starting document processing with recursive link extraction...")
 
@@ -755,6 +764,7 @@ class DocumentExtractor:
                 "key_entities": [],
                 "url": [],
                 "subdocument": [],
+                "source_document": [],  # NEW
                 "images": extracted_images or []
             }
 

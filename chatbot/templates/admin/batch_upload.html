@@ -3936,6 +3936,10 @@ async function waitForAllTasksToComplete(taskIds) {
                                         if (enhanced.failed_links && Array.isArray(enhanced.failed_links)) {
                                             item.data.failed_links = enhanced.failed_links;
                                         }
+                                        // Update source_documents if available
+                                        if (enhanced.source_documents && Array.isArray(enhanced.source_documents)) {
+                                            item.data.source_documents = enhanced.source_documents;
+                                        }
                                     }
 
                                     console.log(`AI extraction completed for ${item.filename}:`, aiResult);
@@ -4551,7 +4555,7 @@ function renderSubdocumentItemRecursive(subdoc, path, baseParentIndex) {
     const isSubdocExcelByUrl = (subdoc.file_url && (subdoc.file_url.toLowerCase().endsWith('.xlsx') || subdoc.file_url.toLowerCase().endsWith('.xls'))) ||
                                (subdoc.url && subdoc.url.length > 0 && (subdoc.url[0].toLowerCase().endsWith('.xlsx') || subdoc.url[0].toLowerCase().endsWith('.xls')));
     const isSubdocExcel = isSubdocExcelByType || isSubdocExcelByUrl;
-    
+
     const subdocMarkdownHtml = isSubdocExcel ? `
                 <div class="field-group">
                     <label>Markdown Content</label>
@@ -5680,7 +5684,7 @@ function renderSubdocumentItem(subdoc, parentIndex, subdocIndex) {
     const isLegacySubdocExcelByUrl = (subdoc.file_url && (subdoc.file_url.toLowerCase().endsWith('.xlsx') || subdoc.file_url.toLowerCase().endsWith('.xls'))) ||
                                      (subdoc.url && subdoc.url.length > 0 && (subdoc.url[0].toLowerCase().endsWith('.xlsx') || subdoc.url[0].toLowerCase().endsWith('.xls')));
     const isLegacySubdocExcel = isLegacySubdocExcelByType || isLegacySubdocExcelByUrl;
-    
+
     const legacySubdocMarkdownHtml = isLegacySubdocExcel ? `
                 <div class="field-group">
                     <label>Markdown Content</label>
@@ -6537,6 +6541,7 @@ async function saveToDatabase(data) {
         file_key: item.data.file_key,
         session_id: item.data.session_id || sessionId,
         subdocument: item.data.subdocument || [],
+        source_documents: item.data.source_documents || [],
         images: item.data.images || []
     }));
 
@@ -6615,6 +6620,7 @@ async function retrySave(resultIndex) {
                 file_key: originalItem.data.file_key,
                 session_id: originalItem.data.session_id || sessionId,
                 subdocument: originalItem.data.subdocument || [],
+                source_documents: originalItem.data.source_documents || [],
                 images: originalItem.data.images || []
             };
         }

@@ -117,13 +117,13 @@ class BatchMediaTaskStatusView(View):
             ]
             if media_type in excel_media_types:
                 return True
-        
+
         # Check by file extension
         if url_or_filename:
             url_or_filename_lower = str(url_or_filename).lower()
             if url_or_filename_lower.endswith('.xlsx') or url_or_filename_lower.endswith('.xls'):
                 return True
-        
+
         return False
 
     def get_main_doc_media_type(self, ai_data):
@@ -300,7 +300,7 @@ class BatchMediaTaskStatusView(View):
             subdoc_url = subdoc_urls[0] if subdoc_urls else ''
             subdoc_media_type = subdoc_data.get('media_type')
             is_subdoc_excel = self.is_excel_file(subdoc_file_url, subdoc_media_type) or self.is_excel_file(subdoc_url, subdoc_media_type)
-            
+
             processed = {
                 'title': subdoc_data.get('title', ''),
                 'summary': subdoc_data.get('summary', ''),
@@ -352,12 +352,12 @@ class BatchMediaTaskStatusView(View):
 
         # Get media type first to check if it's Excel
         media_type_value = self.get_main_doc_media_type(ai_data)
-        
+
         # Check if main document is Excel file - only set extracted_text for Excel files
         main_urls = ai_data.get('url', [])
         main_url = main_urls[0] if main_urls else ''
         is_main_excel = self.is_excel_file(original_filename, media_type_value) or self.is_excel_file(main_url, media_type_value)
-
+        print("AI DATA ------->", ai_data)
         main_data = {
             'title': original_filename if (original_filename and not is_template) else ai_data.get('title', ''),
             'summary': ai_data.get('summary', ''),
@@ -367,7 +367,8 @@ class BatchMediaTaskStatusView(View):
             'document_type': document_type_value,
             'key_entities': ai_data.get('key_entities', []),
             'structured_content': repaired_structured_content,
-            'url': ai_data.get('url', [])
+            'url': ai_data.get('url', []),
+            'source_documents': ai_data.get('source_document', []),
         }
 
         # Process main tags
@@ -408,7 +409,8 @@ class BatchMediaTaskStatusView(View):
                 'failed_links': failed_links,
                 'images': images,
                 'structured_content': repaired_structured_content,
-                'url': ai_data.get('url', [])
+                'url': ai_data.get('url', []),
+                'source_documents': ai_data.get('source_document', []),
             }
         }
 
