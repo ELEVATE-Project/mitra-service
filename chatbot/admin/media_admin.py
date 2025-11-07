@@ -32,7 +32,7 @@ class MediaImagesInline(admin.TabularInline):
 @admin.register(Media)
 class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
     form = MediaAdminForm
-    list_display = ('file_name', 'get_title', 'media_type', 'display_mode', 'parent__name', 'created_at')
+    list_display = ('file_name', 'get_title', 'media_type', 'display_mode', 'parent__name', 'updated_at', 'created_at')
     list_filter = (
         CustomAdvanceDateFilter,
         'display_mode',
