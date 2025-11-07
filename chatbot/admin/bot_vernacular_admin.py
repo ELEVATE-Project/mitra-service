@@ -3,7 +3,6 @@ from simple_history.admin import SimpleHistoryAdmin
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import BotVernacular
 from chatbot.models.story_vernacular_model import StoryVernacular
-from rangefilter.filters import DateRangeFilter, DateTimeRangeFilter
 
 
 @admin.register(BotVernacular)

@@ -13,7 +13,6 @@ from chatbot.resources.resource import CompanyChatResource
 from chatbot.resources.company_resource import ChatSessionResource
 from django.shortcuts import redirect
 from django.contrib import messages
-from rangefilter.filters import DateRangeFilter, DateTimeRangeFilter
 
 
 class CompanyStateMachineAdmin(admin.TabularInline):

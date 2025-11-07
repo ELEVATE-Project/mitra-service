@@ -8,7 +8,6 @@ from chatbot.models import Profile, ProfileType
 from chatbot.resources.resource import ProfileResource
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.media_models import ProfileMedia
-from rangefilter.filters import DateRangeFilter, DateTimeRangeFilter
 
 
 class ProfileAddressInline(admin.StackedInline):

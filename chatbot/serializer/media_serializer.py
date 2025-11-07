@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.db.models import TextField, Value, Q
 from django.db.models.functions import Lower, Replace
-from chatbot.models import Media, KeyValue, Tag
+from chatbot.models import Media, KeyValue, Tag, FileDisplayMode
 from chatbot.models.media_models import MediaImage
 import ast
 import json
@@ -307,7 +307,59 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
             }
             key_values_data.append(tags_classification_kv)
 
+        references_html = self._get_references_and_associated_documents(obj)
+        if references_html:
+            references_kv = {
+                'id': None,
+                'key': 'References and Associated Documents',
+                'value': references_html
+            }
+            key_values_data.append(references_kv)
+
         return key_values_data
+
+    def _get_references_and_associated_documents(self, obj):
+        """
+        Get references and associated documents for a media object.
+        """
+        references_html = []
+        children = obj.subdocuments.all()
+
+        for child in children:
+            # Check if child is a "source document"
+            child_doc_type_kv = child.key_values.filter(key__iregex=r'^document[_\s]type$').first()
+            is_source_doc = False
+
+            if child_doc_type_kv and child_doc_type_kv.value:
+                is_source_doc = 'source document' in child_doc_type_kv.value.lower()
+
+            # If it's a source document
+            if is_source_doc:
+                # Only process if it has VISIBLE children
+                if child.subdocuments.filter(display_mode=FileDisplayMode.VISIBLE).exists():
+                    grandchildren = child.subdocuments.filter(display_mode=FileDisplayMode.VISIBLE)
+                    for grandchild in grandchildren:
+                        # Get title for grandchild
+                        grandchild_title_kv = grandchild.key_values.filter(key__iexact='TITLE').first()
+                        grandchild_title = grandchild_title_kv.value if grandchild_title_kv and grandchild_title_kv.value else grandchild.name
+
+                        references_html.append(
+                            f'<div><a class="text-blue-600 underline underline-offset-2" '
+                            f'href="/{grandchild.id}" target="_blank" '
+                            f'rel="noopener noreferrer">{grandchild_title}</a></div>'
+                        )
+            else:
+                child_title_kv = child.key_values.filter(key__iexact='TITLE').first()
+                child_title = child_title_kv.value if child_title_kv and child_title_kv.value else child.name
+
+                # Create HTML link for child
+                references_html.append(
+                    f'<div><a class="text-blue-600 underline underline-offset-2" '
+                    f'href="/{child.id}" target="_blank" '
+                    f'rel="noopener noreferrer">{child_title}</a></div>'
+                )
+
+        return references_html
 
     def get_parent_info(self, obj):
         if obj.parent:
