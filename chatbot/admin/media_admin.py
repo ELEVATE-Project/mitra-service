@@ -9,7 +9,6 @@ from chatbot.models import Tag, Profile, TagChoices, TagSourceChoices
 from chatbot.models.media_models import Media, KeyValue, MediaImage
 from chatbot.models.enums import FileDisplayMode, ProfileType
 from simple_history.admin import SimpleHistoryAdmin
-from rangefilter.filters import DateRangeFilter, DateTimeRangeFilter
 from chatbot.utils.knowledge_service.cache_manager import GetCachedItemView
 from chatbot.views.Media.extract_views import BatchMediaExtractView, BatchMediaRetryExtractView
 from chatbot.views.Media.save_views import BatchMediaSaveView, BatchMediaRetrySaveView
