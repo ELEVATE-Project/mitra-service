@@ -315,3 +315,10 @@ class FileDisplayMode(models.TextChoices):
     VISIBLE = "visible", _("Visible to All")
     AI_ONLY = "ai_only", _("AI Only (Hidden from UI)")
     PRIVATE = "private", _("Private (Hidden from UI and AI)")
+
+
+class UserTypeChoices(models.TextChoices):
+    GUEST = 'guest', _('Guest')
+    AUTH = 'auth', _('Authenticated')
+    ALL = 'all', _('All')
+

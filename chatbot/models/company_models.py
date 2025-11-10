@@ -8,7 +8,8 @@ from chatbot.models.enums import (
     EntityStatus, LLMModel, GenderChoices, ChatStatus,
     FeedbackChoices, CompanyBotTypeChoices, CompanyBotDynamicContextType, CompanyChatSourceChoices,
     VoiceProvider, VoiceType, LLMProvider, EntityTypeChoices, TextConversionType,
-    PreProcessType, PreProcessOutputMode, PostProcessType, PostProcessOutputMode
+    PreProcessType, PreProcessOutputMode, PostProcessType, PostProcessOutputMode,
+    UserTypeChoices
 )
 
 S3_BASE_URL = os.getenv('S3_BASE_URL')
@@ -358,3 +359,148 @@ class CompanyStateMachine(models.Model):
 
     def __str__(self):
         return f"{self.company_bot.name} - {self.name}"
+
+
+class ImageConfiguration(models.Model):
+    """
+    Configuration for image handling in flows and bots.
+    Defines constraints like max images, size limits, and naming.
+    """
+    name = models.CharField(
+        max_length=100,
+        help_text="Name for this image configuration."
+    )
+    max_images = models.IntegerField(
+        default=1,
+        validators=[MinValueValidator(0)],
+        help_text="Maximum number of images allowed."
+    )
+    image_size = models.IntegerField(
+        default=5242880,  # 5MB in bytes
+        validators=[MinValueValidator(1)],
+        help_text="Maximum image size in bytes (default: 5MB)."
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.name} (Max: {self.max_images}, Size: {self.image_size} bytes)"
+
+    class Meta:
+        verbose_name = "Image Configuration"
+        verbose_name_plural = "Image Configurations"
+        indexes = [
+            models.Index(fields=['name']),
+        ]
+
+
+class Flow(models.Model):
+    """
+    Flow model representing a conversation flow configuration.
+    Links to CompanyBot, can have associated State Machines, Voice configurations, and Image settings.
+    """
+    flow_name = models.CharField(
+        max_length=255,
+        help_text="Name of the flow."
+    )
+    flow_route = models.CharField(
+        max_length=255,
+        help_text="Route/path for accessing this flow."
+    )
+    languages = models.JSONField(
+        default=list,
+        help_text="List of supported language codes (e.g., ['en', 'hi', 'kn'])."
+    )
+    hidden = models.BooleanField(
+        default=False,
+        help_text="If True, this flow will be hidden from public listing."
+    )
+    active = models.BooleanField(
+        default=True,
+        help_text="If False, this flow will be disabled and not accessible."
+    )
+    bot_id = models.ForeignKey(
+        CompanyBot,
+        on_delete=models.CASCADE,
+        related_name='flows',
+        help_text="The main bot associated with this flow."
+    )
+    story_bot_id = models.ForeignKey(
+        CompanyBot,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='story_flows',
+        help_text="Optional secondary bot for story-related functionality."
+    )
+    allow_image_upload = models.BooleanField(
+        default=False,
+        help_text="Allow users to upload images in this flow."
+    )
+    websocket_url = models.URLField(
+        max_length=500,
+        null=True,
+        blank=True,
+        help_text="WebSocket URL for real-time communication (optional)."
+    )
+    parent_flow_id = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='child_flows',
+        help_text="Parent flow if this is a sub-flow."
+    )
+    user_type = models.CharField(
+        max_length=20,
+        choices=UserTypeChoices.choices,
+        default=UserTypeChoices.ALL,
+        help_text="User types allowed to access this flow (guest, auth, or all)."
+    )
+    image_config_id = models.ForeignKey(
+        ImageConfiguration,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='flows',
+        help_text="Image configuration settings for this flow."
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
+
+    def __str__(self):
+        return f"{self.flow_name} ({self.flow_route})"
+
+    class Meta:
+        verbose_name = "Flow"
+        verbose_name_plural = "Flows"
+        indexes = [
+            models.Index(fields=['flow_route']),
+            models.Index(fields=['bot_id']),
+            models.Index(fields=['active']),
+            models.Index(fields=['hidden']),
+        ]
+        unique_together = [['flow_route', 'bot_id']]
+
+    def clean(self):
+        """Validate flow configuration."""
+        super().clean()
+        
+        # Validate that languages is a list
+        if not isinstance(self.languages, list):
+            raise ValidationError({
+                'languages': "Languages must be a list of language codes."
+            })
+        
+        # Validate image upload configuration
+        if self.allow_image_upload and not self.image_config_id:
+            raise ValidationError({
+                'image_config_id': "Image configuration is required when image upload is enabled."
+            })
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
