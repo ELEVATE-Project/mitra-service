@@ -10,7 +10,7 @@ from chatbot.views.gotenberg_view import generate_pdf_view
 from chatbot.views.kafka_views import sync_user_project_view
 from chatbot.views.location_views import get_location_view, get_ip_location_view
 from chatbot.views.Media.media_views import MediaSearchView
-from chatbot.views.profile_views import create_profile_views, read_elevate_profile
+from chatbot.views.profile_views import create_profile_views
 from django.urls import path, include
 from chatbot.views import api_views
 from chatbot.views.bhashini_views import text_speech_view, speech_text, text_translation_view, text_transliterate_view
@@ -19,9 +19,8 @@ from chatbot.views.drf_views import CompanyChatListCreateView, CompanyChatRetrie
     CompanyBotListCreateView, CompanyBotRetrieveUpdateDestroyView, ProfileListCreateView, \
     ProfileRetrieveUpdateDestroyView, ChatSessionListCreateView, ChatSessionRetrieveUpdateDestroyView, \
     ChatSessionRetrieveUpdateDestroyViewSession, BotVernacularListCreateView, BotVernacularRetrieveUpdateDestroyView
-from chatbot.views.mitra_views import paraphrase_view, generate_objectives_view, generate_action_list_view, \
-    generate_title_view, create_project_view, update_project_status_view, validate_actions_view, \
-    validate_objectives_view, validate_title_view
+from chatbot.views.mitra_views import \
+    create_project_view
 from chatbot.views.recommendation import generate_recommendation
 from chatbot.views.story_views import end_story, StoryListCreateView, StoryBySessionView, \
     StoryRetrieveUpdateDestroyView, StoryMediaListCreateView, StoryMediaRetrieveUpdateDestroyView
@@ -81,26 +80,17 @@ urlpatterns = [
     path('api/chatsession/<str:session>/', ChatSessionRetrieveUpdateDestroyViewSession.as_view(),
          name='chatsession-retrieve-update-destroy'),
 
-    path('api/paraphrase/', paraphrase_view, name="paraphrase"),
-    path('api/generate-objective/', generate_objectives_view, name="generate-objectives"),
-    path('api/validate-objective/', validate_objectives_view, name="validate-objectives"),
-    path('api/validate-actions/', validate_actions_view, name="validate-actions"),
-    path('api/generate-action-list/', generate_action_list_view, name="generate-action-list"),
-    path('api/generate-title/', generate_title_view, name="generate-title"),
-    path('api/validate-title/', validate_title_view, name="validate-title"),
     path('api/save-company-chat/', save_chats_view, name="save-company-chat"),
     path('api/create-chatsession/', create_chatsession, name="create-chatsession"),
     path('api/create-profile/', create_profile_views, name="create-profile"),
     path('api/create-project/', create_project_view, name="create-project"),
     path('api/generate-pdf/', generate_pdf_view, name='generate_pdf'),
     path('api/generate-recommendation/', generate_recommendation, name='generate-recommendation'),
-    path('api/update-project-status/', update_project_status_view, name='update-project-status'),
     path('api/sync-user-project/', sync_user_project_view, name='sync-user-project'),
     path('api/get-location/', get_location_view, name='get-location'),
     path('api/get-ip-location/', get_ip_location_view, name='get-ip-location'),
     path("api/get-presigned-url/", get_presigned_url,  name='get-presigned-url'),
     path("api/image-converter/", convert_image, name='image-converter'),
-    path("api/read-elevate-profile/", read_elevate_profile, name='read-elevate-profile'),
     path('api/questions/save/', save_ptm_chats, name="save_ptm_chats"),
 
     path("api/search/", MediaSearchView.as_view(), name="media-search"),

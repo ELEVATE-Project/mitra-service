@@ -3,6 +3,7 @@ from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from django.contrib.admin.decorators import action
 from .generic_upload_admin import BatchUploadMixin
+from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.form.media.media_form import MediaAdminForm
 from chatbot.models import Tag, Profile, TagChoices, TagSourceChoices
 from chatbot.models.media_models import Media, KeyValue, MediaImage
@@ -32,12 +33,19 @@ class MediaImagesInline(admin.TabularInline):
 class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
     form = MediaAdminForm
     list_display = ('file_name', 'get_title', 'media_type', 'display_mode', 'parent__name', 'updated_at', 'created_at')
-    list_filter = ('created_at', 'display_mode', 'name', 'media_type')
+    list_filter = (
+        CustomAdvanceDateFilter,
+        'display_mode',
+        'name',
+        'media_type'
+    )
     search_fields = ('name', 'key_values__value')
     actions = ['export_selected', 'change_display_mode_action']
     list_export = ('csv', 'xlsx')
     inlines = [KeyValueInline, MediaImagesInline]
     raw_id_fields = ('company_bot', 'parent', 'organization')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
 
     def file_name(self, obj):
         return obj.name
@@ -223,9 +231,17 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
 @admin.register(Tag)
 class MasterTagAdmin(BatchUploadMixin, admin.ModelAdmin):
     list_display = ('name', 'status', 'source_type', 'created_by', 'created_at')
-    list_filter = ('created_at', 'name', 'created_by', 'source_type')
+    list_filter = (
+        CustomAdvanceDateFilter,
+        'name',
+        'created_by',
+        'source_type'
+    )
     raw_id_fields = ('created_by',)
     readonly_fields = ('source_type', 'company', 'created_by')
+    search_fields = ('name', 'description')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
 
     enable_batch_upload = True
     batch_upload_fields = ['name', 'status', 'description', 'created_by']

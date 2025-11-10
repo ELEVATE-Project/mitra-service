@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from chatbot.models.media_models import ProfileMedia
-from chatbot.models.base_models import Profile, CompanyChat
+from chatbot.models.profile_models import Profile
+from chatbot.models.company_models import CompanyChat
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.serializer.company_serializer import CompanySerializer
 

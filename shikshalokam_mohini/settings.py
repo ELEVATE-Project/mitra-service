@@ -85,6 +85,7 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 # Application definition
 
 INSTALLED_APPS = [
+    'rangefilter',
     'observability',
     'daphne',
     'chatbot',

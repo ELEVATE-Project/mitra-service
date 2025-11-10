@@ -2,6 +2,7 @@ from django.utils.html import format_html
 from django.contrib import admin
 from django.db.models import Q
 from chatbot.filter.admin_filter import StoryCompanyFilter, StoryStateFilter, StoryDistrictFilter, StoryBlockFilter
+from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.filter.flow_filter import FlowFilter
 from chatbot.filter.story_filter import UserNameFilter
 from chatbot.models import StoryTag, StoryMedia, Story, Profile, ProfileType, MediaTypeChoices, StoryTranslation
@@ -42,8 +43,15 @@ class StoryMediaInline(admin.TabularInline):
 class StoryAdmin(admin.ModelAdmin):
     list_display = ('title', 'user_name_from_other_params', 'author', 'session', 'state', 'district', 'created_at',)
     list_filter = (
-        'created_at', StoryCompanyFilter, 'author', 'session', StoryStateFilter,
-        StoryDistrictFilter, StoryBlockFilter, UserNameFilter, FlowFilter,
+        CustomAdvanceDateFilter,
+        StoryCompanyFilter, 
+        'author', 
+        'session', 
+        StoryStateFilter,
+        StoryDistrictFilter, 
+        StoryBlockFilter, 
+        UserNameFilter, 
+        FlowFilter,
     )
     list_editable = ('state', 'district')
     search_fields = ('title', 'session',)
@@ -51,6 +59,8 @@ class StoryAdmin(admin.ModelAdmin):
     exclude = ('formatted_content', )
     inlines = [StoryTagInline, StoryMediaInline]
     list_per_page = 20
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
 
     def user_name_from_other_params(self, obj):
         return obj.other_params.get('user_name') if obj.other_params else ''
@@ -145,13 +155,19 @@ class StoryAdmin(admin.ModelAdmin):
 @admin.register(StoryTranslation)
 class StoryTranslationAdmin(admin.ModelAdmin):
     list_display = ('story', 'language', 'story_session', 'created_at')
-    list_filter = ('language', 'created_at', 'story', 'story__session')
+    list_filter = (
+        CustomAdvanceDateFilter,
+        'language', 
+        'story', 
+        'story__session'
+    )
     search_fields = ('story__title', 'story__session', 'title')
     readonly_fields = ('created_at',)
     ordering = ('-created_at', 'story__session', 'language')
     exclude = ('formatted_content', )
     raw_id_fields = ('story',)
     list_per_page = 20
+    date_hierarchy = 'created_at'
 
     def story_session(self, obj):
         """Display session from related story"""

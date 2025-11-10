@@ -4,7 +4,8 @@ from django.db import transaction, IntegrityError
 from chatbot.models import Profile, Company
 from chatbot.models.geo_models import ProfileAddress
 from shikshalokam.models import ProjectStatus, TaskMandatoryStatus
-from shikshalokam.models.base_model import (Project, Task, Evidence, Category, ProjectTemplate)
+from shikshalokam.models.project_models import (Project, Task, Evidence)
+from shikshalokam.models.template_models import (Category, ProjectTemplate)
 from import_export.results import Result
 from import_export.fields import Field
 from shikshalokam.scripts.template_ingestion import process_project_ingestion

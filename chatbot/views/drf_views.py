@@ -2,7 +2,8 @@ import django_filters
 from rest_framework import generics
 from chatbot.filter.drf_filter import ChatSessionProfileFilter
 from chatbot.models import ChatSession, BotVernacular, SessionFlowName, ChatType
-from chatbot.models.base_models import CompanyChat, CompanyBot, Profile
+from chatbot.models.company_models import CompanyChat, CompanyBot
+from chatbot.models.profile_models import Profile
 from chatbot.serializer.base_serializer import ChatSessionSerializer
 from chatbot.serializer.company_serializer import CompanyBotSerializer, BotVernacularSerializer
 from chatbot.serializer.profile_serializer import ProfileSerializer, CompanyChatSerializer

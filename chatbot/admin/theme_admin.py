@@ -1,14 +1,23 @@
 from django.contrib import admin
 from simple_history.admin import SimpleHistoryAdmin
+from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import Theme, ThemeType
+# from rangefilter.filters import DateTimeRangeFilter
 
 
 @admin.register(Theme)
 class ThemeAdmin(SimpleHistoryAdmin):
     list_display = ('bot', 'theme_type', 'created_at', 'updated_at')
-    list_filter = ('bot', 'theme_type')
+    list_filter = (
+        CustomAdvanceDateFilter,
+        # ('updated_at', DateTimeRangeFilter),
+        'bot', 
+        'theme_type'
+    )
     search_fields = ('bot__name', 'themes')
     raw_id_fields = ('bot', 'master_theme')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
