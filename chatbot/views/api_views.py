@@ -6,7 +6,8 @@ from rest_framework.decorators import api_view, authentication_classes
 from chatbot.models import ProfileType
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.auth_models import BlacklistedToken
-from chatbot.models.base_models import Profile, Company, CompanyBot
+from chatbot.models.company_models import Company, CompanyBot
+from chatbot.models.profile_models import Profile
 from chatbot.serializer.profile_serializer import ProfileSerializer
 from django.http import JsonResponse
 from django.contrib.sessions.backends.db import SessionStore

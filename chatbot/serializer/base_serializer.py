@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from chatbot.models import ChatSession
-from chatbot.models.base_models import Profile, Voice
+from chatbot.models.profile_models import Profile
+from chatbot.models.company_models import Voice
 
 
 class VoiceSerializer(serializers.ModelSerializer):
