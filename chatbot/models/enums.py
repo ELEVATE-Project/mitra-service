@@ -322,3 +322,13 @@ class UserTypeChoices(models.TextChoices):
     AUTH = 'auth', _('Authenticated')
     ALL = 'all', _('All')
 
+
+class LanguageOperationChoices(models.TextChoices):
+    TRANSLATE = 'translate', _('Translate')
+    TRANSLITERATE = 'transliterate', _('Transliterate')
+
+
+class OperationTypeChoices(models.TextChoices):
+    LLM = 'llm', _('LLM')
+    NON_LLM = 'non_llm', _('Non-LLM')
+

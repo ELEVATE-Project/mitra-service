@@ -23,6 +23,7 @@ class CompanyStateMachineAdmin(admin.TabularInline):
     fields = (
         'name', 'step', 'use_stage_chats', 'text_conversion_type',
         'bot_question', 'completion_criteria', 'context', 'tool_context',
+        'language_operation', 'operation_type', 'skip_if_authenticated',
         'preprocess_type', 'preprocess_prompt', 'preprocess_bot', 'preprocess_output_mode',
         'postprocess_type', 'postprocess_prompt', 'postprocess_bot', 'postprocess_output_mode',
         'skip_to_step',

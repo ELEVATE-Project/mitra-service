@@ -9,7 +9,7 @@ from chatbot.models.enums import (
     FeedbackChoices, CompanyBotTypeChoices, CompanyBotDynamicContextType, CompanyChatSourceChoices,
     VoiceProvider, VoiceType, LLMProvider, EntityTypeChoices, TextConversionType,
     PreProcessType, PreProcessOutputMode, PostProcessType, PostProcessOutputMode,
-    UserTypeChoices
+    UserTypeChoices, LanguageOperationChoices, OperationTypeChoices
 )
 
 S3_BASE_URL = os.getenv('S3_BASE_URL')
@@ -108,6 +108,10 @@ class CompanyBot(models.Model):
     )
     bot_type = models.CharField(max_length=30, choices=CompanyBotTypeChoices.choices,
                                 default=CompanyBotTypeChoices.SIMPLE)
+    strategy = models.CharField(
+        max_length=100, null=True, blank=True,
+        help_text="Define the strategy or approach this bot uses for conversations."
+    )
     llm_key = models.CharField(max_length=255, null=True, blank=True)
     dynamic_context = models.TextField(
         null=True, blank=True,
@@ -297,6 +301,25 @@ class CompanyStateMachine(models.Model):
     skip_to_step = models.IntegerField(
         null=True, blank=True,
         help_text="If set, the flow will skip directly to this step number when skip conditions are met."
+    )
+    
+    language_operation = models.CharField(
+        max_length=20, 
+        choices=LanguageOperationChoices.choices,
+        default=LanguageOperationChoices.TRANSLATE,
+        help_text="Choose the language operation: Translate (convert meaning) or Transliterate (convert script)."
+    )
+    
+    operation_type = models.CharField(
+        max_length=20,
+        choices=OperationTypeChoices.choices,
+        default=OperationTypeChoices.LLM,
+        help_text="Choose whether this state uses LLM or non-LLM processing."
+    )
+    
+    skip_if_authenticated = models.BooleanField(
+        default=False,
+        help_text="If True, this state will be skipped for authenticated users."
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
