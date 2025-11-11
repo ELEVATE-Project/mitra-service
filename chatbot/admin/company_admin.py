@@ -7,7 +7,7 @@ from chatbot.filter.admin_filter import (CompanyChatCompanyFilter, ChatSessionFi
                                          ProfileStateFilter, ProfileCompanyChatFilter, ProfileEmailFilter)
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import Company, Profile, ProfileType, CompanyBot, CompanyChat, ChatSession, \
-    CompanyBotTypeChoices, Voice, VoiceProvider
+    CompanyBotTypeChoices, Voice, VoiceProvider, ImageConfiguration, Flow
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.resources.resource import CompanyChatResource
 from chatbot.resources.company_resource import ChatSessionResource
@@ -293,3 +293,120 @@ class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
 
 
 admin.site.register(Company, CompanyAdmin)
+
+
+@admin.register(ImageConfiguration)
+class ImageConfigurationAdmin(admin.ModelAdmin):
+    """Admin interface for Image Configuration model."""
+    list_display = ('name', 'max_images', 'get_image_size_mb', 'created_at')
+    list_filter = ('created_at', 'max_images')
+    search_fields = ('name',)
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name',)
+        }),
+        ('Image Constraints', {
+            'fields': ('max_images', 'image_size'),
+            'description': 'Configure image upload limits for this configuration.'
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ('created_at', 'updated_at')
+
+    def get_image_size_mb(self, obj):
+        """Display image size in MB."""
+        return f"{obj.image_size / 1048576:.2f} MB"
+    get_image_size_mb.short_description = 'Max Image Size'
+
+
+@admin.register(Flow)
+class FlowAdmin(SimpleHistoryAdmin):
+    """Admin interface for Flow model."""
+    list_display = (
+        'flow_name', 'flow_route', 'bot_id', 'active', 'hidden', 
+        'allow_image_upload', 'user_type', 'created_at'
+    )
+    list_filter = (
+        'active', 'hidden', 'allow_image_upload', 'user_type',
+        'bot_id__company', CustomAdvanceDateFilter
+    )
+    search_fields = ('flow_name', 'flow_route', 'bot_id__name')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
+    raw_id_fields = ('bot_id', 'story_bot_id', 'parent_flow_id', 'image_config_id')
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('flow_name', 'flow_route', 'languages')
+        }),
+        ('Bot Configuration', {
+            'fields': ('bot_id', 'story_bot_id'),
+            'description': 'Configure the bots associated with this flow.'
+        }),
+        ('Flow Settings', {
+            'fields': ('active', 'hidden', 'user_type', 'parent_flow_id'),
+        }),
+        ('Image Upload', {
+            'fields': ('allow_image_upload', 'image_config_id'),
+            'description': 'Configure image upload capabilities for this flow.'
+        }),
+        ('Advanced Settings', {
+            'fields': ('websocket_url',),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ('created_at', 'updated_at')
+    
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        user_email = request.user.email
+        profile = Profile.objects.filter(email=user_email).first()
+        
+        if request.user.is_superuser:
+            return qs.select_related('bot_id', 'story_bot_id', 'image_config_id', 'parent_flow_id')
+        elif profile and profile.profile_type == ProfileType.MODERATOR:
+            return qs.filter(
+                bot_id__company=profile.company
+            ).select_related('bot_id', 'story_bot_id', 'image_config_id', 'parent_flow_id')
+        else:
+            return qs.none()
+
+    def get_form(self, request, obj=None, **kwargs):
+        form = super().get_form(request, obj, **kwargs)
+        user_email = request.user.email
+        profile = Profile.objects.filter(email=user_email).first()
+        
+        if not request.user.is_superuser and profile and profile.profile_type == ProfileType.MODERATOR:
+            # Restrict bot selections to the moderator's company
+            if 'bot_id' in form.base_fields:
+                form.base_fields['bot_id'].queryset = CompanyBot.objects.filter(
+                    company=profile.company
+                )
+            if 'story_bot_id' in form.base_fields:
+                form.base_fields['story_bot_id'].queryset = CompanyBot.objects.filter(
+                    company=profile.company
+                )
+            if 'parent_flow_id' in form.base_fields:
+                form.base_fields['parent_flow_id'].queryset = Flow.objects.filter(
+                    bot_id__company=profile.company
+                )
+        
+        return form
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        """Customize form field for languages JSONField."""
+        if db_field.name == 'languages':
+            kwargs['help_text'] = 'Enter languages as JSON array, e.g., ["en", "hi", "kn"]'
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
