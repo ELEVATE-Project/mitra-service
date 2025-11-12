@@ -4,7 +4,7 @@ from chatbot.models import CompanyBot
 
 
 class BotVernacular(models.Model):
-    company_bot = models.ForeignKey(CompanyBot, on_delete=models.CASCADE, related_name='bot_vernacular')
+    company_bot = models.ForeignKey(CompanyBot, on_delete=models.SET_NULL, related_name='bot_vernacular', null=True)
 
     language = models.CharField(max_length=250, help_text="Language code, Example for English use en.")
     introductory_message = models.TextField(
@@ -26,7 +26,6 @@ class BotVernacular(models.Model):
 
     class Meta:
         db_table = 'shikshalokam"."bot_vernacular'
-        unique_together = ('company_bot', 'language')
         indexes = [
             models.Index(fields=['language']),
             models.Index(fields=['created_at']),
