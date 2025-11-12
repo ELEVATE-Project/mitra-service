@@ -117,8 +117,8 @@ urlpatterns = [
     path('admin/<str:app_label>/<str:model_name>/batch-import/', GenericBatchImportView.as_view(),
          name='generic_batch_import'),
 
-    path('admin/chatbot/companybot/export/', export_bots, name='companybot_export'),
-    path('admin/chatbot/companybot/import/', import_bots, name='companybot_import'),
+    # path('admin/chatbot/companybot/export/', export_bots, name='companybot_export'),
+    # path('admin/chatbot/companybot/import/', import_bots, name='companybot_import'),
 
     # Media API endpoints
     path('api/v1/', include(router.urls)),
