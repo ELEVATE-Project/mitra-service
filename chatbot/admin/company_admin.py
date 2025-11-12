@@ -23,7 +23,7 @@ class CompanyStateMachineAdmin(admin.TabularInline):
     fields = (
         'name', 'step', 'use_stage_chats', 'text_conversion_type',
         'bot_question', 'completion_criteria', 'context', 'tool_context',
-        'language_operation', 'operation_type', 'skip_if_authenticated',
+        'operation_type', 'skip_if_authenticated',
         'preprocess_type', 'preprocess_prompt', 'preprocess_bot', 'preprocess_output_mode',
         'postprocess_type', 'postprocess_prompt', 'postprocess_bot', 'postprocess_output_mode',
         'skip_to_step',
@@ -332,10 +332,10 @@ class FlowAdmin(SimpleHistoryAdmin):
     """Admin interface for Flow model."""
     list_display = (
         'flow_name', 'flow_route', 'bot_id', 'active', 'hidden', 
-        'allow_image_upload', 'user_type', 'created_at'
+        'user_type', 'created_at'
     )
     list_filter = (
-        'active', 'hidden', 'allow_image_upload', 'user_type',
+        'active', 'hidden', 'user_type',
         'bot_id__company', CustomAdvanceDateFilter
     )
     search_fields = ('flow_name', 'flow_route', 'bot_id__name')
@@ -352,11 +352,7 @@ class FlowAdmin(SimpleHistoryAdmin):
             'description': 'Configure the bots associated with this flow.'
         }),
         ('Flow Settings', {
-            'fields': ('active', 'hidden', 'user_type', 'parent_flow_id'),
-        }),
-        ('Image Upload', {
-            'fields': ('allow_image_upload', 'image_config_id'),
-            'description': 'Configure image upload capabilities for this flow.'
+            'fields': ('active', 'hidden', 'user_type', 'parent_flow_id', 'image_config_id'),
         }),
         ('Advanced Settings', {
             'fields': ('websocket_url',),

@@ -303,13 +303,6 @@ class CompanyStateMachine(models.Model):
         help_text="If set, the flow will skip directly to this step number when skip conditions are met."
     )
     
-    language_operation = models.CharField(
-        max_length=20, 
-        choices=LanguageOperationChoices.choices,
-        default=LanguageOperationChoices.TRANSLATE,
-        help_text="Choose the language operation: Translate (convert meaning) or Transliterate (convert script)."
-    )
-    
     operation_type = models.CharField(
         max_length=20,
         choices=OperationTypeChoices.choices,
@@ -456,10 +449,6 @@ class Flow(models.Model):
         blank=True,
         related_name='story_flows',
         help_text="Optional secondary bot for story-related functionality."
-    )
-    allow_image_upload = models.BooleanField(
-        default=False,
-        help_text="Allow users to upload images in this flow."
     )
     websocket_url = models.URLField(
         max_length=500,
