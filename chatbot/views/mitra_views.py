@@ -21,41 +21,50 @@ def create_project_view(request):
     print("project_title: ", project_title)
     print("profile_id: ", profile_id)
 
-    if not chunks:
-        return Response({
-            'status': 'error',
-            'message': 'Project source cant be empty',
-        }, status=500)
+    # if not access_token and profile_id:
+    #     return Response({
+    #         'status': 'ok',
+    #         'message': 'Skipping api call',
+    #     }, status=200)
 
-    response = create_project_utils(
-        access_token=access_token, user_problem_statement=user_problem_statement,
-        user_action_steps=user_action_steps, project_title=project_title,
-        project_duration_weeks=project_duration, chunks=chunks, session=session,
-        project_objective=project_objective, status='started'
-    )
 
-    project_id = response.get('projectId')
-    program_id = response.get('programId')
-    profile = Profile.objects.get(id=profile_id)
+    project_id = None
+    program_id = None
+    response = ""
+    if access_token:
+        if not chunks:
+            return Response({
+                'status': 'error',
+                'message': 'Project source cant be empty',
+            }, status=500)
 
-    result = ''
-    if project_id and program_id and profile:
-
-        result = create_mitra_project_utils(
-            profile=profile,
-            actual_problem_statement=user_problem_statement,
-            project_title=project_title,
-            project_duration=project_duration,
-            project_objective=project_objective,
-            user_action_steps=user_action_steps,
-            project_id=project_id,
-            program_id=program_id,
-            chunks=chunks,
-            language=language,
-            session=session
+        response = create_project_utils(
+            access_token=access_token, user_problem_statement=user_problem_statement,
+            user_action_steps=user_action_steps, project_title=project_title,
+            project_duration_weeks=project_duration, chunks=chunks, session=session,
+            project_objective=project_objective, status='started'
         )
 
-        print("Result: ", result)
+        project_id = response.get('projectId')
+        program_id = response.get('programId')
+
+    profile = Profile.objects.filter(id=profile_id).first()
+
+    result = create_mitra_project_utils(
+        profile=profile,
+        actual_problem_statement=user_problem_statement,
+        project_title=project_title,
+        project_duration=project_duration,
+        project_objective=project_objective,
+        user_action_steps=user_action_steps,
+        project_id=project_id,
+        program_id=program_id,
+        chunks=chunks,
+        language=language,
+        session=session
+    )
+
+    print("Result: ", result)
 
     return Response({
         'status': 'ok',

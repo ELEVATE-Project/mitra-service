@@ -6,6 +6,8 @@ from pydantic_core._pydantic_core import ValidationError
 from django.utils.timezone import now
 from chatbot.models import Profile, CompanyChat, ChatSession
 import json
+
+from chatbot.utils.story_llama_utils import generate_random_hex
 from shikshalokam.models import Project, Task
 import ast
 
@@ -144,6 +146,10 @@ def create_mitra_project_utils(
         if not isinstance(user_action_steps, list):
             user_action_steps = []
 
+        if not project_id:
+            project_id = generate_random_hex()
+            print(f"Generated new project_id: {project_id}")
+
         project = Project.objects.create(
             author=profile,
             expected_duration=project_duration,
@@ -154,7 +160,7 @@ def create_mitra_project_utils(
             program_id=program_id,
             project_source=chunks,
             program_source={
-                "model": "llama3.1",
+                "model": "llama3.3",
                 "provider": "Bedrock"
             },
             project_language=language
@@ -165,12 +171,12 @@ def create_mitra_project_utils(
                 project=project,
                 task_name=action,
                 source={
-                    "model": "llama3.1",
+                    "model": "llama3.3",
                     "provider": "Bedrock"
                 }
             )
 
-        chat_session = ChatSession.objects.filter(session=session)
+        chat_session = ChatSession.objects.filter(session=session).first()
         if chat_session:
             chat_session.project_id = project_id
             chat_session.save()
