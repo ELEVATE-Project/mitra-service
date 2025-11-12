@@ -1,4 +1,4 @@
-from chatbot.models import Profile
+from chatbot.models import Profile, MediaTypeChoices
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_mitra_project_utils
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -69,5 +69,9 @@ def create_project_view(request):
     return Response({
         'status': 'ok',
         'result': response,
-        'mitra_result': result
+        'mitra_result': result,
+        'media': [{
+            'media_type': MediaTypeChoices.PDF,
+            'url': 'https://qa-mohini-static.shikshalokam.org/chatbot/storymedia/1215/Ground_Realities_Education_Challenges_and_Community_Responses.pdf'
+        }]
     }, status=200)
