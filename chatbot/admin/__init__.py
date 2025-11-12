@@ -5,3 +5,4 @@ from .media_admin import *
 from .bot_vernacular_admin import *
 from .theme_admin import *
 from .pdf_template_admin import *
+from .i18n_admin import *
