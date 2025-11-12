@@ -213,6 +213,13 @@ class CompanyBotTypeChoices(models.TextChoices):
     INTERVIEW_STATE_MACHINE = 'INTERVIEW_STATE_MACHINE', _('INTERVIEW_STATE_MACHINE')
 
 
+class BotStrategyChoices(models.TextChoices):
+    ONESHOT = 'oneshot', _('One Shot')
+    GUIDED_GUEST = 'guided_guest', _('Guided Guest')
+    GUEST_DISCUSSION = 'guest_discussion', _('Guest Discussion')
+    COMMON = 'common', _('Common')
+
+
 class CompanyBotDynamicContextType(models.TextChoices):
     SQL_QUERY = 'SQL_QUERY', _('SQL_QUERY')
     PYTHON_SCRIPT = 'PYTHON_SCRIPT', _('PYTHON_SCRIPT')

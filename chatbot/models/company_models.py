@@ -9,7 +9,7 @@ from chatbot.models.enums import (
     FeedbackChoices, CompanyBotTypeChoices, CompanyBotDynamicContextType, CompanyChatSourceChoices,
     VoiceProvider, VoiceType, LLMProvider, EntityTypeChoices, TextConversionType,
     PreProcessType, PreProcessOutputMode, PostProcessType, PostProcessOutputMode,
-    UserTypeChoices, LanguageOperationChoices, OperationTypeChoices
+    UserTypeChoices, LanguageOperationChoices, OperationTypeChoices, BotStrategyChoices
 )
 
 S3_BASE_URL = os.getenv('S3_BASE_URL')
@@ -109,8 +109,11 @@ class CompanyBot(models.Model):
     bot_type = models.CharField(max_length=30, choices=CompanyBotTypeChoices.choices,
                                 default=CompanyBotTypeChoices.SIMPLE)
     strategy = models.CharField(
-        max_length=100, null=True, blank=True,
-        help_text="Define the strategy or approach this bot uses for conversations."
+        max_length=100,
+        choices=BotStrategyChoices.choices,
+        null=True,
+        blank=True,
+        help_text="Select the strategy or approach this bot uses for conversations."
     )
     llm_key = models.CharField(max_length=255, null=True, blank=True)
     dynamic_context = models.TextField(
