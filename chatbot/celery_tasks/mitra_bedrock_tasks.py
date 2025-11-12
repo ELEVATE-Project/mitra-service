@@ -14,9 +14,7 @@ def get_mitra_bedrock_response(channel_name, session_id, profile_id, route):
     print(session_id)
     try:
         company_chats = CompanyChat.objects.filter(session=session_id).order_by('created_at')
-        profile = Profile.objects.filter(id=profile_id)
-        if profile:
-            profile = profile.first()
+        profile = Profile.objects.filter(id=profile_id).first()
         ai_user = Profile.objects.get(id=1)
         company_bot = CompanyBot.objects.get(route='/mitra-create')
         system_context = company_bot.context

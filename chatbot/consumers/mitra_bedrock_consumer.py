@@ -46,9 +46,7 @@ class MitraBedrockConsumer(BaseConsumer):
                     self.profile_id = text_data_json.get('profileid')
                     self.access_token = text_data_json.get('access_token')
                     self.route = text_data_json.get('route')
-                    profile = Profile.objects.filter(id=self.profile_id)
-                    if profile:
-                        profile = profile.first()
+                    profile = Profile.objects.filter(id=self.profile_id).first()
                     print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
                           f"route: {self.route}")
                     print(f"Received access_token: {self.access_token}")

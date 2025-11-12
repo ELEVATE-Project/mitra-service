@@ -30,9 +30,8 @@ class BaseConsumer(WebsocketConsumer):
             return None
         chat_session = ChatSession.objects.filter(session=session_id).first()
 
-        profile = Profile.objects.filter(id=self.profile_id)
+        profile = Profile.objects.filter(id=self.profile_id).first()
         if profile:
-            profile = profile.first()
             company_bot = CompanyBot.objects.get(company=profile.company, route=route)
         else:
             company_bot = CompanyBot.objects.get(route=route)
