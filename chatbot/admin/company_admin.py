@@ -341,7 +341,7 @@ class FlowAdmin(SimpleHistoryAdmin):
     search_fields = ('flow_name', 'flow_route', 'bot_id__name')
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
-    raw_id_fields = ('bot_id', 'story_bot_id', 'parent_flow_id', 'image_config_id')
+    raw_id_fields = ('bot_id', 'story_bot_id', 'parent_flow_id', 'image_config_id', 'template_id')
     
     fieldsets = (
         ('Basic Information', {
@@ -352,7 +352,7 @@ class FlowAdmin(SimpleHistoryAdmin):
             'description': 'Configure the bots associated with this flow.'
         }),
         ('Flow Settings', {
-            'fields': ('active', 'hidden', 'user_type', 'parent_flow_id', 'image_config_id'),
+            'fields': ('active', 'hidden', 'user_type', 'parent_flow_id', 'image_config_id', 'template_id'),
         }),
         ('Advanced Settings', {
             'fields': ('websocket_url',),
@@ -372,11 +372,11 @@ class FlowAdmin(SimpleHistoryAdmin):
         profile = Profile.objects.filter(email=user_email).first()
         
         if request.user.is_superuser:
-            return qs.select_related('bot_id', 'story_bot_id', 'image_config_id', 'parent_flow_id')
+            return qs.select_related('bot_id', 'story_bot_id', 'image_config_id', 'parent_flow_id', 'template_id')
         elif profile and profile.profile_type == ProfileType.MODERATOR:
             return qs.filter(
                 bot_id__company=profile.company
-            ).select_related('bot_id', 'story_bot_id', 'image_config_id', 'parent_flow_id')
+            ).select_related('bot_id', 'story_bot_id', 'image_config_id', 'parent_flow_id', 'template_id')
         else:
             return qs.none()
 

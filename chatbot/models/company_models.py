@@ -411,6 +411,47 @@ class ImageConfiguration(models.Model):
         ]
 
 
+class PDFTemplates(models.Model):
+    """
+    Model for storing PDF templates used in flows.
+    Contains template configurations for generating PDFs with dynamic content.
+    """
+    template = models.TextField(
+        help_text="Template content for PDF generation (e.g., HTML, EJS template)."
+    )
+    template_name = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="Unique name identifier for this template."
+    )
+    user_type = models.CharField(
+        max_length=20,
+        choices=UserTypeChoices.choices,
+        default=UserTypeChoices.ALL,
+        help_text="User types that can use this template (guest, auth, or all)."
+    )
+    constants_json = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="JSON object containing constants/variables used in the template."
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
+
+    def __str__(self):
+        return f"{self.template_name} ({self.user_type})"
+
+    class Meta:
+        verbose_name = "PDF Template"
+        verbose_name_plural = "PDF Templates"
+        indexes = [
+            models.Index(fields=['template_name']),
+            models.Index(fields=['user_type']),
+        ]
+
+
 class Flow(models.Model):
     """
     Flow model representing a conversation flow configuration.
@@ -478,6 +519,14 @@ class Flow(models.Model):
         related_name='flows',
         help_text="Image configuration settings for this flow."
     )
+    template_id = models.ForeignKey(
+        PDFTemplates,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='flows',
+        help_text="PDF template for generating documents in this flow."
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -505,12 +554,6 @@ class Flow(models.Model):
         if not isinstance(self.languages, list):
             raise ValidationError({
                 'languages': "Languages must be a list of language codes."
-            })
-        
-        # Validate image upload configuration
-        if self.allow_image_upload and not self.image_config_id:
-            raise ValidationError({
-                'image_config_id': "Image configuration is required when image upload is enabled."
             })
 
     def save(self, *args, **kwargs):
