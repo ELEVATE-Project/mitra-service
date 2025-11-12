@@ -5,6 +5,7 @@ def get_common_report_html(story, profile, story_vernacular=None):
     # Get data from other_params
     other_params = story.other_params or {}
     question_answers = other_params.get('question_answers', [])
+    state = other_params.get('state', '')
     block = other_params.get('block', '')
     district = other_params.get('district', '')
     company_logo = other_params.get('company_logo', '')
@@ -38,7 +39,7 @@ def get_common_report_html(story, profile, story_vernacular=None):
         page_break_strategy = 'mixed'
 
     # Build location string
-    location_parts = [part for part in [block, district] if part]
+    location_parts = [part for part in [block, district, state] if part]
     location_string = ", ".join(location_parts)
 
     # Process QA pairs with enhanced pagination control

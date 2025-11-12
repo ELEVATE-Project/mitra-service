@@ -54,6 +54,7 @@ dill==0.3.8
 dirtyjson==1.0.8
 distro==1.9.0
 Django==5.1.2
+django-admin-rangefilter==0.13.3
 django-cors-headers==4.5.0
 django-countries==7.6.1
 django-crontab==0.7.1
