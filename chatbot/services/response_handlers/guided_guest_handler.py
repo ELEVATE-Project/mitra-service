@@ -18,8 +18,13 @@ class GuidedGuestResponseHandler(BaseResponseHandler):
 
     def process_response(self, response, chat_session, chunks, **kwargs):
         """Process guided guest response"""
+        skip_llm_call = kwargs.get('skip_llm', False)
+        
         current_step = chat_session.current_step
-        is_func_call = self.is_function_call(response=response)
+        if skip_llm_call:
+            is_func_call = True
+        else:
+            is_func_call = self.is_function_call(response=response)
 
         company_bot = kwargs['company_bot']
         session_id = kwargs['session_id']

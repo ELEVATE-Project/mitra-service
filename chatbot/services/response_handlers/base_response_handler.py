@@ -49,6 +49,13 @@ class BaseResponseHandler(ABC):
             logger.error(f"Error getting state machine: {e}")
             state_machine = None
 
+        # Check operation_type - if non_llm, automatically skip LLM and move to next step
+        if state_machine and hasattr(state_machine, 'operation_type'):
+            from chatbot.models.enums import OperationTypeChoices
+            if state_machine.operation_type == OperationTypeChoices.NON_LLM:
+                kwargs['skip_llm'] = True
+                kwargs['skip_reason'] = 'non_llm_operation_type'
+
         # Prepare original prompt
         original_prompt = kwargs.get('system_prompt', [])
 
