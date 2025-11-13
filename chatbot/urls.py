@@ -3,6 +3,7 @@ from chatbot.views.Media.extract_views import BatchMediaExtractView, BatchMediaR
 from chatbot.views.Media.save_views import BatchMediaSaveView, BatchMediaRetrySaveView
 from chatbot.views.Media.status_views import BatchMediaTaskStatusView, VectorDBTaskStatusView
 from chatbot.views.Media.upload_views import BatchMediaUploadView
+from chatbot.views.admin.bot_admin_views import export_bots, import_bots
 from chatbot.views.admin.generic_upload_views import GenericBatchUploadView, GenericBatchTemplateView, \
     GenericBatchImportView
 from chatbot.views.aws_views import get_presigned_url
@@ -115,6 +116,7 @@ urlpatterns = [
          name='generic_batch_template'),
     path('admin/<str:app_label>/<str:model_name>/batch-import/', GenericBatchImportView.as_view(),
          name='generic_batch_import'),
+
 
     # Media API endpoints
     path('api/v1/', include(router.urls)),

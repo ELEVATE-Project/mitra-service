@@ -29,7 +29,8 @@ class BaseConsumer(WebsocketConsumer):
         if not session_id:
             return None
         chat_session = ChatSession.objects.filter(session=session_id).first()
-        profile = Profile.objects.filter(id=profile_id).first()
+
+        profile = Profile.objects.filter(id=self.profile_id).first()
         if profile:
             company_bot = CompanyBot.objects.get(company=profile.company, route=route)
         else:

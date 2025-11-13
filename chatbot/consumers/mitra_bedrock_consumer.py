@@ -46,7 +46,7 @@ class MitraBedrockConsumer(BaseConsumer):
                     self.profile_id = text_data_json.get('profileid')
                     self.access_token = text_data_json.get('access_token')
                     self.route = text_data_json.get('route')
-                    profile = Profile.objects.get(id=self.profile_id)
+                    profile = Profile.objects.filter(id=self.profile_id).first()
                     print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
                           f"route: {self.route}")
                     print(f"Received access_token: {self.access_token}")
@@ -68,7 +68,7 @@ class MitraBedrockConsumer(BaseConsumer):
                             'profile': profile,
                             'current_step': 1,
                             'language': self.route,
-                            'company_bot': CompanyBot.objects.get(company=profile.company, route='/mitra-create'),
+                            'company_bot': CompanyBot.objects.get(route='/mitra-create'),
                             'session_status': ChatStatus.IN_PROGRESS,
                             'user_id': user_id,
                             'session_type': ChatType.creation
@@ -92,8 +92,7 @@ class MitraBedrockConsumer(BaseConsumer):
                     )
 
                     if self.route != 'en':
-                        profile = Profile.objects.get(id=self.profile_id)
-                        company_bot = CompanyBot.objects.filter(company=profile.company, route='/mitra-create').first()
+                        company_bot = CompanyBot.objects.filter(route='/mitra-create').first()
                         voice_provider = Voice.objects.filter(
                             company_bot=company_bot, type=VoiceType.TextToText, language=self.route
                         ).first()

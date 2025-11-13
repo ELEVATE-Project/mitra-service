@@ -1,4 +1,4 @@
-from import_export.admin import ExportActionMixin
+from import_export.admin import ExportActionMixin, ImportExportModelAdmin
 from django.contrib import admin
 from django.db.models import Q
 from simple_history.admin import SimpleHistoryAdmin
@@ -11,9 +11,12 @@ from chatbot.models import Company, Profile, ProfileType, CompanyBot, CompanyCha
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.resources.resource import CompanyChatResource
 from chatbot.resources.company_resource import ChatSessionResource
+from chatbot.resources.bot_resource import CompanyBotResource
 from django.shortcuts import redirect
 from django.contrib import messages
-
+from django.urls import path
+from django.http import HttpResponseRedirect
+from django.urls import reverse
 
 class CompanyStateMachineAdmin(admin.TabularInline):
     model = CompanyStateMachine
@@ -49,7 +52,7 @@ class CompanyAdmin(admin.ModelAdmin):
     list_filter = (
         CustomAdvanceDateFilter,
     )
-    search_fields = ('name', )
+    search_fields = ('name',)
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
 
@@ -67,23 +70,71 @@ class CompanyAdmin(admin.ModelAdmin):
 
 @admin.register(CompanyBot)
 class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
+
     list_display = ('name', 'company', 'created_at')
     list_filter = (
-        'company', 
-        'name', 
-        'provider', 
-        'llm_model', 
+        'company',
+        'name',
+        'provider',
+        'llm_model',
         CustomAdvanceDateFilter,
     )
     search_fields = ('name', 'company__name')
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
     inlines = [VoiceProviderAdmin]
-    actions = ['duplicate_bot']
+    actions = ['duplicate_bot', 'export_selected_bots']
 
     enable_batch_upload = True
     batch_load_foreign_keys = True
     batch_upload_fields = ['name', 'company', 'provider', 'llm_model', 'context', 'max_token', 'route']
+
+    import_template_name = 'admin/import_export/import.html'
+    export_template_name = 'admin/import_export/export.html'
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                'export/',
+                self.admin_site.admin_view(self.export_view),
+                name='chatbot_companybot_export',
+            ),
+            path(
+                'import/',
+                self.admin_site.admin_view(self.import_view),
+                name='chatbot_companybot_import',
+            ),
+        ]
+        # Important: custom URLs must come before the default admin URLs
+        return custom_urls + urls
+
+    def export_view(self, request):
+        """Handle export requests"""
+        from chatbot.views.admin.bot_admin_views import export_bots
+        return export_bots(request)
+
+    def import_view(self, request):
+        """Handle import requests"""
+        from chatbot.views.admin.bot_admin_views import import_bots
+        return import_bots(request)
+
+    def get_import_formats(self):
+        """Define allowed import formats"""
+        from import_export.formats import base_formats
+        return [base_formats.CSV, base_formats.XLSX, base_formats.JSON]
+
+    def get_export_formats(self):
+        """Define allowed export formats"""
+        from import_export.formats import base_formats
+        return [base_formats.CSV, base_formats.XLSX, base_formats.JSON]
+
+    def get_export_filename(self, request, queryset, file_format):
+        """Generate filename for exports"""
+        import datetime
+        date_str = datetime.datetime.now().strftime('%Y-%m-%d')
+        filename = f"company_bots_{date_str}"
+        return f"{filename}.{file_format.get_extension()}"
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -149,14 +200,32 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
 
         # Duplicate StateMachine if present
         if original.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
-            original_state_machines = CompanyStateMachine.objects.filter(company_bot=queryset.first())
+            original_state_machines = CompanyStateMachine.objects.filter(company_bot=original)
             for sm in original_state_machines:
                 sm.pk = None
                 sm.company_bot = new_bot
                 sm.save()
 
         self.message_user(request, "Bot duplicated successfully!", level=messages.SUCCESS)
-        return redirect(f"/admin/chatbot/companybot/{new_bot.id}/change/")  # Update app label accordingly
+        return redirect(f"/admin/chatbot/companybot/{new_bot.id}/change/")
+
+    def export_selected_bots(self, request, queryset):
+        """Custom export action"""
+        selected_ids = queryset.values_list('id', flat=True)
+        ids_str = ','.join(str(id) for id in selected_ids)
+
+        # Use admin URL reverse with the app label and model name
+        info = self.model._meta.app_label, self.model._meta.model_name
+        url = reverse('admin:%s_%s_export' % info) + f'?ids={ids_str}'
+        return HttpResponseRedirect(url)
+
+    export_selected_bots.short_description = "Export selected bots"
+
+    def changelist_view(self, request, extra_context=None):
+        """Add custom buttons to the changelist view"""
+        extra_context = extra_context or {}
+        extra_context['custom_buttons'] = True
+        return super().changelist_view(request, extra_context=extra_context)
 
     duplicate_bot.short_description = "Duplicate selected bot"
 
@@ -166,10 +235,10 @@ class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
     list_display = ('session', 'sender', 'receiver', 'message', 'translated_message', 'created_at', 'stage')
     list_filter = (
         CustomAdvanceDateFilter,
-        ProfileCompanyChatFilter, 
-        ProfileEmailFilter, 
-        'session', 
-        CompanyChatCompanyFilter, 
+        ProfileCompanyChatFilter,
+        ProfileEmailFilter,
+        'session',
+        CompanyChatCompanyFilter,
         'stage'
     )
     search_fields = ('session', 'message__icontains', 'translated_message__icontains')
@@ -181,7 +250,6 @@ class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
     ordering = ('-created_at',)
 
     resource_class = CompanyChatResource
-
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -205,7 +273,7 @@ class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
             if profile.company:
                 queryset = queryset.filter(
                     Q(sender__company=profile.company) | Q(receiver__company=profile.company)
-            ).prefetch_related('sender__company', 'receiver__company')
+                ).prefetch_related('sender__company', 'receiver__company')
         return queryset, use_distinct
 
     def get_list_filter(self, request):
@@ -215,10 +283,10 @@ class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
         if not user.is_superuser and profile and profile.profile_type == ProfileType.MODERATOR:
             company = profile.company
             if company.slug == 'fmch':
-                return (CustomAdvanceDateFilter, ProfileCompanyChatFilter, 
+                return (CustomAdvanceDateFilter, ProfileCompanyChatFilter,
                         ProfileEmailFilter, 'session', ProfileCityFilter, ProfileStateFilter, 'message_type')
             if company.slug == 'tfistaging':
-                return (CustomAdvanceDateFilter, ProfileCompanyChatFilter, 
+                return (CustomAdvanceDateFilter, ProfileCompanyChatFilter,
                         ProfileEmailFilter, 'session', CompanyChatCompanyFilter, 'stage')
         return super().get_list_filter(request)
 
@@ -230,11 +298,11 @@ class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
         'created_at'
     )
     list_filter = (
-        'session', 
-        'title', 
-        ChatSessionFilter, 
-        'project_id', 
-        'session_status', 
+        'session',
+        'title',
+        ChatSessionFilter,
+        'project_id',
+        'session_status',
         'session_type',
         CustomAdvanceDateFilter,
     )
@@ -255,6 +323,7 @@ class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
         if obj.company_bot and CompanyStateMachine.objects.filter(company_bot=obj.company_bot).exists():
             return CompanyStateMachine.objects.filter(company_bot=obj.company_bot).count()
         return 0
+
     total_steps.short_description = 'Total Questions'
 
     def get_queryset(self, request):
@@ -278,6 +347,7 @@ class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
 
     def get_first_name(self, obj):
         return obj.profile.first_name if obj.profile else None
+
     get_first_name.short_description = 'First Name'
 
     def get_form(self, request, obj=None, **kwargs):
