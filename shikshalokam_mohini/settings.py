@@ -207,6 +207,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 ASGI_APPLICATION = 'shikshalokam_mohini.asgi.application'
 
+REDIS_HOST = os.environ.get('REDIS_HOST', "127.0.0.1")
+REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
