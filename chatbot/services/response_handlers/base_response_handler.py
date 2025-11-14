@@ -55,6 +55,9 @@ class BaseResponseHandler(ABC):
             if state_machine.operation_type == OperationTypeChoices.NON_LLM:
                 kwargs['skip_llm'] = True
                 kwargs['skip_reason'] = 'non_llm_operation_type'
+                # Flag to send bot_question directly from database
+                kwargs['send_bot_question'] = True
+                kwargs['bot_question_from_db'] = state_machine.bot_question if state_machine.bot_question else None
 
         # Prepare original prompt
         original_prompt = kwargs.get('system_prompt', [])
