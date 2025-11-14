@@ -55,9 +55,24 @@ class BaseResponseHandler(ABC):
             if state_machine.operation_type == OperationTypeChoices.NON_LLM:
                 kwargs['skip_llm'] = True
                 kwargs['skip_reason'] = 'non_llm_operation_type'
-                # Flag to send bot_question directly from database
-                kwargs['send_bot_question'] = True
-                kwargs['bot_question_from_db'] = state_machine.bot_question if state_machine.bot_question else None
+                
+                # Only send bot_question if we haven't received user input for this state yet
+                # Check if there are any user messages for the current state
+                from chatbot.models import CompanyChat
+                user_messages_for_state = CompanyChat.objects.filter(
+                    session=session_id,
+                    stage=state_machine.name
+                ).exclude(message=state_machine.bot_question).exists()
+                
+                if not user_messages_for_state:
+                    # First time in this state - send the bot question
+                    kwargs['send_bot_question'] = True
+                    kwargs['bot_question_from_db'] = state_machine.bot_question if state_machine.bot_question else None
+                    logger.info(f"NON_LLM state {state_machine.name}: Sending initial bot question")
+                else:
+                    # User has already answered - proceed to next state
+                    kwargs['send_bot_question'] = False
+                    logger.info(f"NON_LLM state {state_machine.name}: User answered, will advance to next step")
 
         # Prepare original prompt
         original_prompt = kwargs.get('system_prompt', [])
