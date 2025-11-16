@@ -12,7 +12,7 @@ base_url = os.getenv('VECTOR_DB_BASE_URL')
 
 def upsert_single_file(filename, file, metadata, media):
     url = f"{base_url}/api/documents"
-
+    print("url: ", url)
     if isinstance(metadata, dict):
         metadata_json = json.dumps(metadata)
     else:
