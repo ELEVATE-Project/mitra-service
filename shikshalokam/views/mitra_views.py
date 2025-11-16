@@ -62,7 +62,11 @@ def generate_objectives_view(request):
     print("language: ", language)
 
     profile = Profile.objects.filter(id=profile_id).first()
-    company_bot = CompanyBot.objects.get(company=profile.company, route='/objective')
+    if profile:
+        company_bot = CompanyBot.objects.get(company=profile.company, route='/objective')
+    else:
+        company_bot = CompanyBot.objects.get(route='/objective')
+
     voice_provider = Voice.objects.filter(
         company_bot=company_bot, type=VoiceType.TextToText, language=language
     ).first()
@@ -108,7 +112,10 @@ def validate_objectives_view(request):
     print("User Input: ", user_input)
 
     profile = Profile.objects.filter(id=profile_id).first()
-    company_bot = CompanyBot.objects.get(company=profile.company, route='/objective')
+    if profile:
+        company_bot = CompanyBot.objects.get(company=profile.company, route='/objective')
+    else:
+        company_bot = CompanyBot.objects.get(route='/objective')
     bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
     error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
     if language !='en':
@@ -139,7 +146,10 @@ def validate_actions_view(request):
     profile_id = body.get('profile_id')
 
     profile = Profile.objects.filter(id=profile_id).first()
-    company_bot = CompanyBot.objects.get(company=profile.company, route='/action_list')
+    if profile:
+        company_bot = CompanyBot.objects.get(company=profile.company, route='/action_list')
+    else:
+        company_bot = CompanyBot.objects.get(route='/action_list')
     bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
     error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
     if language !='en':
@@ -192,7 +202,10 @@ def generate_action_list_view(request):
     profile_id = body.get('profile_id')
 
     profile = Profile.objects.filter(id=profile_id).first()
-    company_bot = CompanyBot.objects.get(company=profile.company, route='/action_list')
+    if profile:
+        company_bot = CompanyBot.objects.get(company=profile.company, route='/action_list')
+    else:
+        company_bot = CompanyBot.objects.get(route='/action_list')
     voice_provider = Voice.objects.filter(
         company_bot=company_bot, type=VoiceType.TextToText, language=language
     ).first()
@@ -255,7 +268,10 @@ def generate_title_view(request):
     profile_id = body.get('profile_id')
 
     profile = Profile.objects.filter(id=profile_id).first()
-    company_bot = CompanyBot.objects.get(company=profile.company, route='/title')
+    if profile:
+        company_bot = CompanyBot.objects.get(company=profile.company, route='/title')
+    else:
+        company_bot = CompanyBot.objects.get(route='/title')
     voice_provider = Voice.objects.filter(
         company_bot=company_bot, type=VoiceType.TextToText, language=language
     ).first()
@@ -322,7 +338,10 @@ def validate_title_view(request):
     profile_id = body.get('profile_id')
 
     profile = Profile.objects.filter(id=profile_id).first()
-    company_bot = CompanyBot.objects.get(company=profile.company, route='/title')
+    if profile:
+        company_bot = CompanyBot.objects.get(company=profile.company, route='/title')
+    else:
+        company_bot = CompanyBot.objects.get(route='/title')
     bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
     error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
     if language != 'en':
