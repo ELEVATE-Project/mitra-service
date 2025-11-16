@@ -3,6 +3,7 @@ from chatbot.views.Media.extract_views import BatchMediaExtractView, BatchMediaR
 from chatbot.views.Media.save_views import BatchMediaSaveView, BatchMediaRetrySaveView
 from chatbot.views.Media.status_views import BatchMediaTaskStatusView, VectorDBTaskStatusView
 from chatbot.views.Media.upload_views import BatchMediaUploadView
+from chatbot.views.Media.document_upload_view import DocumentUploadView
 from chatbot.views.admin.generic_upload_views import GenericBatchUploadView, GenericBatchTemplateView, \
     GenericBatchImportView
 from chatbot.views.aws_views import get_presigned_url
@@ -118,5 +119,6 @@ urlpatterns = [
 
     # Media API endpoints
     path('api/v1/', include(router.urls)),
+    path('api/v1/documents', DocumentUploadView.as_view(), name='document-upload'),
 
 ]
