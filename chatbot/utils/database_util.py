@@ -11,7 +11,7 @@ base_url = os.getenv('VECTOR_DB_BASE_URL')
 
 
 def upsert_single_file(filename, file, metadata, media):
-    url = f"http://{base_url}/api/documents"
+    url = f"{base_url}/api/documents"
 
     if isinstance(metadata, dict):
         metadata_json = json.dumps(metadata)
@@ -66,7 +66,7 @@ def upsert_single_file(filename, file, metadata, media):
 
 
 def delete_single_file(media_id, company_slug=None):
-    url = f"http://{base_url}/api/documents/{media_id}"
+    url = f"{base_url}/api/documents/{media_id}"
 
     params = {'company_id': company_slug} if company_slug else {}
 
@@ -80,7 +80,7 @@ def delete_single_file(media_id, company_slug=None):
 
 def update_single_file(media_id, filename, file, metadata, media):
     """Update a file in the vector database by deleting and re-uploading"""
-    url = f"http://{base_url}/api/documents/{media_id}"
+    url = f"{base_url}/api/documents/{media_id}"
 
     if isinstance(metadata, dict):
         metadata_json = json.dumps(metadata)
