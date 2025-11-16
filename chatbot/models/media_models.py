@@ -7,6 +7,7 @@ from shikshalokam.models.enums import PriorityChoices
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVector, TrigramSimilarity
 from simple_history.models import HistoricalRecords
+from chatbot.celery_tasks.knowledge_service.media_tasks import save_in_vector_db, update_in_vector_db
 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 
@@ -45,12 +46,12 @@ class Media(models.Model):
     def save(self, *args, company_slug=None, **kwargs):
         is_new = self.pk is None
         super().save(*args, **kwargs)
-        # if is_new:
-        #     task = save_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
-        #     return task.id
-        # else:
-        #     task = update_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
-        #     return task.id
+        if is_new:
+            task = save_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
+            return task.id
+        else:
+            task = update_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
+            return task.id
 
     def delete(self, *args, **kwargs):
         status_code = 200#delete_from_vector_db(self.id)

@@ -10,17 +10,18 @@ def query_database(query_prompt: str, priority_filter: str, limit: int):
     """
     Query vector database to retrieve chunk with user's input questions.
     """
-    url = f"https://{base_url}/api/query/"
+    url = f"http://{base_url}/api/documents/search"
+    print("URL: ", url)
     headers = {
         "Content-Type": "application/json",
         "accept": "application/json",
     }
     data = {
         "query": query_prompt,
-        "search_limit": limit,
+        "top_k": limit,
     }
-    if priority_filter:
-        data["priority_filter"] = priority_filter
+    # if priority_filter:
+    #     data["priority_filter"] = priority_filter
     print("DATA: ", data)
     response = requests.post(url, json=data, headers=headers)
     if response.status_code == 200:
