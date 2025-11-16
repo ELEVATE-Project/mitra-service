@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from django.http import JsonResponse
 from chatbot.models import CompanyBot, Voice, VoiceType, Profile, BotVernacular, StoryMedia, MediaTypeChoices, SessionFlowName
 from chatbot.serializer.story_serializer import StoryMediaRetrieveSerializer
-from shikshalokam.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_objective_utils, validate_objective_utils, validate_actions_utils, generate_action_list_utils, generate_title_utils, validate_title_utils, post_process_objectives_with_source
+from shikshalokam.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_objective_utils, validate_objective_utils, validate_actions_utils, generate_action_list_utils, generate_title_utils, validate_title_utils, post_process_objectives_with_source, post_process_actions_with_source
 from chatbot.utils.story_llama_utils import translate_field
 from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf
@@ -54,57 +54,100 @@ def paraphrase_view(request):
 
 @api_view(['POST'])
 def generate_objectives_view(request):
-    body = request.data
-    user_input = body.get('user_input')
-    language = body.get('language')
-    profile_id = body.get('profile_id')
-    print("User Input: ", user_input)
-    print("language: ", language)
+    try:
+        body = request.data
+        user_input = body.get('user_input')
+        language = body.get('language')
+        profile_id = body.get('profile_id')
+        print("User Input: ", user_input)
+        print("language: ", language)
 
-    profile = Profile.objects.filter(id=profile_id).first()
-    if profile:
-        company_bot = CompanyBot.objects.get(company=profile.company, route='/objective')
-    else:
-        company_bot = CompanyBot.objects.get(route='/objective')
+        profile = Profile.objects.filter(id=profile_id).first()
+        if profile:
+            company_bot = CompanyBot.objects.get(company=profile.company, route='/objective')
+        else:
+            company_bot = CompanyBot.objects.get(route='/objective')
 
-    voice_provider = Voice.objects.filter(
-        company_bot=company_bot, type=VoiceType.TextToText, language=language
-    ).first()
-    if language != 'en':
-        user_input = translate_field(
-            voice_provider=voice_provider, message_body=user_input, source_language=language,
-            target_language='en'
+        voice_provider = Voice.objects.filter(
+            company_bot=company_bot, type=VoiceType.TextToText, language=language
+        ).first()
+        if language != 'en':
+            user_input = translate_field(
+                voice_provider=voice_provider, message_body=user_input, source_language=language,
+                target_language='en'
+            )
+            print("user_translated_message: ", user_input)
+
+        # Call generate_objective_utils - now returns a dict with status, status_code, etc.
+        gen_result = generate_objective_utils(
+            user_problem_statement=user_input, company_bot=company_bot
         )
-        print("user_translated_message: ", user_input)
-
-    objective_list, chunk_response = generate_objective_utils(
-        user_problem_statement=user_input, company_bot=company_bot
-    )
+        
+        # Check if generation was successful
+        if gen_result['status'] != 'ok':
+            return Response({
+                'status': gen_result['status'],
+                'message': gen_result['message'],
+                'objective_list': [],
+                'chunks': None
+            }, status=gen_result['status_code'])
+        
+        objective_list = gen_result['objective_list']
+        chunk_response = gen_result.get('chunks_response', None)  # Use .get() to handle missing key
+        
+        # If no objectives were generated (filtered out), return early
+        if not objective_list:
+            return Response({
+                'status': 'ok',
+                'message': gen_result.get('message', 'No objectives generated'),
+                'objective_list': []
+            }, status=200)
+        
+        # Post-process objectives to add source information (chunk, description, title, url, organization)
+        post_result = post_process_objectives_with_source(objective_list, chunk_response)
+        
+        # Check if post-processing was successful
+        if post_result['status'] != 'ok':
+            return Response({
+                'status': post_result['status'],
+                'message': post_result['message'],
+                'objective_list': [],
+                'chunks': chunk_response
+            }, status=post_result['status_code'])
+        
+        objective_list = post_result['objective_list']
+        
+        translated_list = None
+        if language !='en':
+            translated_list = translate_field(
+                voice_provider=voice_provider, message_body=json.dumps(objective_list), target_language=language,
+                source_language='en'
+            )
+            if isinstance(translated_list, str):
+                try:
+                    translated_list = json_repair.repair_json(translated_list, return_objects=True)
+                except Exception as e:
+                    print(e)
+            print("llm_translated_message: ", translated_list)
+        if translated_list:
+            objective_list = translated_list
+        print("type of: ", type(objective_list))
+        print("type of: ", type(translated_list))
+        return Response({
+            'status': 'ok',
+            'objective_list': objective_list,
+            'chunks': chunk_response
+        }, status=200)
     
-    # Post-process objectives to add source information (chunk, description, title)
-    objective_list = post_process_objectives_with_source(objective_list, chunk_response)
-    
-    translated_list = None
-    if language !='en':
-        translated_list = translate_field(
-            voice_provider=voice_provider, message_body=json.dumps(objective_list), target_language=language,
-            source_language='en'
-        )
-        if isinstance(translated_list, str):
-            try:
-                translated_list = json_repair.repair_json(translated_list, return_objects=True)
-            except Exception as e:
-                print(e)
-        print("llm_translated_message: ", translated_list)
-    if translated_list:
-        objective_list = translated_list
-    print("type of: ", type(objective_list))
-    print("type of: ", type(translated_list))
-    return Response({
-        'status': 'ok',
-        'objective_list': objective_list,
-        'chunks': chunk_response
-    }, status=200)
+    except Exception as e:
+        print(f"Error in generate_objectives_view: {str(e)}")
+        traceback.print_exc()
+        return Response({
+            'status': 'error',
+            'message': f'Internal server error: {str(e)}',
+            'objective_list': [],
+            'chunks': None
+        }, status=500)
 
 
 @api_view(['POST'])
@@ -199,67 +242,110 @@ def validate_actions_view(request):
 
 @api_view(['POST'])
 def generate_action_list_view(request):
-    body = request.data
-    user_problem_statement = body.get('user_problem_statement')
-    user_objective = body.get('user_objective')
-    language = body.get('language')
-    profile_id = body.get('profile_id')
+    try:
+        body = request.data
+        user_problem_statement = body.get('user_problem_statement')
+        user_objective = body.get('user_objective')
+        language = body.get('language')
+        profile_id = body.get('profile_id')
 
-    profile = Profile.objects.filter(id=profile_id).first()
-    if profile:
-        company_bot = CompanyBot.objects.get(company=profile.company, route='/action_list')
-    else:
-        company_bot = CompanyBot.objects.get(route='/action_list')
-    voice_provider = Voice.objects.filter(
-        company_bot=company_bot, type=VoiceType.TextToText, language=language
-    ).first()
-    if language != 'en':
-        user_problem_statement = translate_field(
-            voice_provider=voice_provider, message_body=user_problem_statement, source_language=language,
-            target_language='en'
+        profile = Profile.objects.filter(id=profile_id).first()
+        if profile:
+            company_bot = CompanyBot.objects.get(company=profile.company, route='/action_list')
+        else:
+            company_bot = CompanyBot.objects.get(route='/action_list')
+        
+        voice_provider = Voice.objects.filter(
+            company_bot=company_bot, type=VoiceType.TextToText, language=language
+        ).first()
+        
+        if language != 'en':
+            user_problem_statement = translate_field(
+                voice_provider=voice_provider, message_body=user_problem_statement, source_language=language,
+                target_language='en'
+            )
+            user_objective = translate_field(
+                voice_provider=voice_provider, message_body=user_objective, source_language=language,
+                target_language='en'
+            )
+            print("user_problem_statement: ", user_problem_statement)
+            print("user_objective: ", user_objective)
+
+        # Call generate_action_list_utils with new signature
+        gen_result = generate_action_list_utils(
+            query=user_problem_statement,
+            objective_text=user_objective,
+            company_bot=company_bot
         )
-        user_objective = translate_field(
-            voice_provider=voice_provider, message_body=user_objective, source_language=language,
-            target_language='en'
-        )
-        print("user_problem_statement: ", user_problem_statement)
-        print("user_objective: ", user_objective)
+        
+        # Check if generation was successful
+        if gen_result['status'] != 'ok':
+            return Response({
+                'status': gen_result['status'],
+                'message': gen_result['message'],
+                'action_list': []
+            }, status=gen_result['status_code'])
+        
+        action_list = gen_result['action_list']
+        chunk_response = gen_result.get('chunks_response', None)
+        
+        # If no actions were generated (filtered out), return early
+        if not action_list:
+            return Response({
+                'status': 'ok',
+                'message': gen_result.get('message', 'No actions generated'),
+                'action_list': []
+            }, status=200)
+        
+        # Post-process actions to add source information
+        post_result = post_process_actions_with_source(action_list, chunk_response)
+        
+        # Check if post-processing was successful
+        if post_result['status'] != 'ok':
+            return Response({
+                'status': post_result['status'],
+                'message': post_result['message'],
+                'action_list': []
+            }, status=post_result['status_code'])
+        
+        action_list = post_result['action_list']
 
-    input_data = {
-        "user_problem_statement": user_problem_statement,
-        "user_objective": user_objective
-    }
+        # Translate if needed
+        if language != 'en':
+            for action_item in action_list:
+                action_steps = action_item.get('actionSteps', [])
+                if action_steps:
+                    translated_steps = translate_field(
+                        voice_provider=voice_provider, message_body=json.dumps(action_steps), target_language=language,
+                        source_language='en'
+                    )
 
-    action_list = generate_action_list_utils(
-        input_data=input_data, company_bot=company_bot
-    )
+                    if isinstance(translated_steps, str):
+                        try:
+                            translated_steps = json_repair.repair_json(translated_steps, return_objects=True)
+                        except Exception as e:
+                            print("Error parsing translated steps: ", e)
+                            translated_steps = action_steps
 
-    if language != 'en':
-        for action_item in action_list:
-            action_steps = action_item.get('actionSteps', [])
-            if action_steps:
-                translated_steps =translate_field(
-                    voice_provider=voice_provider, message_body=json.dumps(action_steps), target_language=language,
-                    source_language='en'
-                )
+                    action_item['actionSteps'] = translated_steps
 
-                if isinstance(translated_steps, str):
-                    try:
-                        translated_steps = json_repair.repair_json(translated_steps, return_objects=True)
-                    except Exception as e:
-                        print("Error parsing translated steps: ", e)
-                        translated_steps = action_steps
+            print("Translated action list: ", action_list)
 
-                action_item['actionSteps'] = translated_steps
+        print("type of action_list: ", type(action_list))
 
-        print("Translated action list: ", action_list)
-
-    print("type of action_list: ", type(action_list))
-
-    return Response({
-        'status': 'ok',
-        'action_list': action_list
-    }, status=200)
+        return Response({
+            'status': 'ok',
+            'action_list': action_list
+        }, status=200)
+    
+    except Exception as e:
+        print(f"Error in generate_action_list_view: {str(e)}")
+        traceback.print_exc()
+        return Response({
+            'status': 'error',
+            'message': f'Internal server error: {str(e)}',
+            'action_list': []
+        }, status=500)
 
 
 @api_view(['POST'])
