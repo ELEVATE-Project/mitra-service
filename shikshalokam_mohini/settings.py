@@ -12,7 +12,6 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 import json
 import os
 import re
-from pathlib import Path
 from datetime import timedelta
 import sentry_sdk
 from dotenv import load_dotenv
