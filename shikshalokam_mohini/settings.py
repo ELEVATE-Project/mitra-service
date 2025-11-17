@@ -20,14 +20,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-LOGGING_DIR = BASE_DIR + '/shikshalokam-mohini-service/logs'
+CODE_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-# BASE_DIR = Path(__file__).resolve().parent.parent
+LOGGING_DIR = CODE_BASE_DIR + '/logs'
 
 def load_secrets():
     alt_path = os.getcwd() + "/config/secrets.json"
-    secrets_path = os.path.join(BASE_DIR, "shikshalokam-mohini-service/config/secrets.json")
+    secrets_path = os.path.join(CODE_BASE_DIR, "config/secrets.json")
 
     try:
         with open(secrets_path, 'r') as f:
