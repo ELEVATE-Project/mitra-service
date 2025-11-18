@@ -10,7 +10,7 @@ def query_database(query_prompt: str, priority_filter: str, limit: int):
     """
     Query vector database to retrieve chunk with user's input questions.
     """
-    url = f"http://{base_url}/api/documents/search"
+    url = f"{base_url}/api/documents/search"
     print("URL: ", url)
     headers = {
         "Content-Type": "application/json",
