@@ -1,15 +1,17 @@
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import models
 
 from chatbot.models import Tag, FileTypeChoices, FileDisplayMode
 from chatbot.models.media_models import Media, KeyValue
 from chatbot.serializer.media_serializer import (
-    MediaListSerializer, MediaDetailSerializer
+    MediaListSerializer, MediaDetailSerializer, MediaSearchResultSerializer
 )
 from chatbot.filter.media_filters import MediaFilter
+from chatbot.utils.chat_query_handler import query_database_with_metadata
 from django.contrib.postgres.search import TrigramSimilarity
 from django.db.models import Count, Q, Value, FloatField, OuterRef, Subquery, TextField, CharField, IntegerField, Case, \
     When, F
@@ -580,3 +582,153 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
             'related_count': related.count(),
             'related_media': serializer.data
         })
+
+
+class MediaSearchV2View(APIView):
+    """
+    Version 2 of Media Search API that uses vector database search.
+    
+    GET /api/v2/media/?q=education classroom&limit=12&offset=0&ordering=-created_at
+    
+    Query Parameters:
+        - q (required): Search query string
+        - limit (optional): Number of results per page (default: 20)
+        - offset (optional): Pagination offset (default: 0)
+        - ordering (optional): Sort order (not used in v2, kept for compatibility)
+        - categories (optional): Comma-separated list of categories/tags
+        - organizations (optional): Comma-separated list of organizations
+        - resource_type (optional): Comma-separated list of resource types
+        - file_type (optional): Comma-separated list of file types (MIME types)
+    """
+    
+    def get(self, request, format=None):
+        # Extract query parameters
+        query = request.query_params.get('q', '').strip()
+        
+        if not query:
+            return Response({
+                "error": "Query parameter 'q' is required",
+                "count": 0,
+                "next": None,
+                "previous": None,
+                "results": []
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Pagination parameters
+        try:
+            limit = int(request.query_params.get('limit', 20))
+            offset = int(request.query_params.get('offset', 0))
+        except ValueError:
+            return Response({
+                "error": "Invalid limit or offset parameter",
+                "count": 0,
+                "next": None,
+                "previous": None,
+                "results": []
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Filter parameters (convert comma-separated strings to lists)
+        categories = self._parse_list_param(request.query_params.get('categories', ''))
+        organizations = self._parse_list_param(request.query_params.get('organizations', ''))
+        resource_type = self._parse_list_param(request.query_params.get('resource_type', ''))
+        file_type = self._parse_list_param(request.query_params.get('file_type', ''))
+        
+        # Calculate top_k for vector DB (offset + limit to get enough results)
+        top_k = offset + limit
+        
+        print(f"[MediaSearchV2View] Query: {query}, top_k: {top_k}, offset: {offset}, limit: {limit}")
+        print(f"[MediaSearchV2View] Filters - categories: {categories}, organizations: {organizations}, "
+              f"resource_type: {resource_type}, file_type: {file_type}")
+        
+        # Call vector database search
+        vector_response = query_database_with_metadata(
+            query=query,
+            top_k=top_k,
+            categories=categories if categories else None,
+            organizations=organizations if organizations else None,
+            resource_type=resource_type if resource_type else None,
+            file_type=file_type if file_type else None
+        )
+        
+        # Handle error response from vector DB
+        if vector_response.get('error'):
+            error_status = vector_response.get('status_code', 500)
+            return Response({
+                "error": vector_response.get('message', 'Vector database error'),
+                "count": 0,
+                "next": None,
+                "previous": None,
+                "results": [],
+                "search_metadata": {
+                    "query": query,
+                    "vector_db_error": True
+                }
+            }, status=error_status)
+        
+        # Extract results from vector DB response
+        all_results = vector_response.get('results', [])
+        total_results = vector_response.get('total_results', len(all_results))
+        
+        # Apply pagination (slice results based on offset and limit)
+        paginated_results = all_results[offset:offset + limit] if offset < len(all_results) else []
+        
+        # Serialize results
+        serializer = MediaSearchResultSerializer(paginated_results, many=True)
+        
+        # Build pagination URLs
+        base_url = request.build_absolute_uri(request.path)
+        next_url = None
+        previous_url = None
+        
+        if offset + limit < total_results:
+            next_offset = offset + limit
+            next_url = f"{base_url}?q={query}&limit={limit}&offset={next_offset}"
+            if categories:
+                next_url += f"&categories={','.join(categories)}"
+            if organizations:
+                next_url += f"&organizations={','.join(organizations)}"
+            if resource_type:
+                next_url += f"&resource_type={','.join(resource_type)}"
+            if file_type:
+                next_url += f"&file_type={','.join(file_type)}"
+        
+        if offset > 0:
+            previous_offset = max(0, offset - limit)
+            previous_url = f"{base_url}?q={query}&limit={limit}&offset={previous_offset}"
+            if categories:
+                previous_url += f"&categories={','.join(categories)}"
+            if organizations:
+                previous_url += f"&organizations={','.join(organizations)}"
+            if resource_type:
+                previous_url += f"&resource_type={','.join(resource_type)}"
+            if file_type:
+                previous_url += f"&file_type={','.join(file_type)}"
+        
+        # Build response in DRF pagination format
+        response_data = {
+            "count": total_results,
+            "next": next_url,
+            "previous": previous_url,
+            "results": serializer.data,
+            "search_metadata": {
+                "query": query,
+                "top_k": top_k,
+                "offset": offset,
+                "limit": limit,
+                "returned_results": len(serializer.data),
+                "search_config": vector_response.get('search_config', {})
+            }
+        }
+        
+        print(f"[MediaSearchV2View] Returning {len(serializer.data)} results out of {total_results} total")
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+    
+    def _parse_list_param(self, param_value):
+        """
+        Parse comma-separated string parameter into a list.
+        Returns empty list if param is empty.
+        """
+        if not param_value or not param_value.strip():
+            return []
+        return [item.strip() for item in param_value.split(',') if item.strip()]

@@ -10,7 +10,7 @@ def query_database(query_prompt: str, priority_filter: str, limit: int):
     """
     Query vector database to retrieve chunk with user's input questions.
     """
-    url = f"{base_url}/api/documents/search"
+    url = f"http://{base_url}/api/documents/search"
     print("URL: ", url)
     headers = {
         "Content-Type": "application/json",
@@ -31,6 +31,120 @@ def query_database(query_prompt: str, priority_filter: str, limit: int):
         return result
     else:
         print(f"Error: {response.status_code} : {response.content}")
+
+
+def query_database_with_metadata(
+    query: str,
+    top_k: int = 20,
+    categories: List[str] = None,
+    organizations: List[str] = None,
+    resource_type: List[str] = None,
+    file_type: List[str] = None
+):
+    """
+    Query vector database with metadata filters for media search v2.
+    
+    Args:
+        query: Search query string
+        top_k: Number of results to return
+        categories: List of category filters (tags)
+        organizations: List of organization filters
+        resource_type: List of resource type filters (document types)
+        file_type: List of file type filters (MIME types)
+    
+    Returns:
+        dict: Response from vector database API or error dict
+    """
+    url = f"http://{base_url}/api/documents/search"
+    print(f"[query_database_with_metadata] URL: {url}")
+    
+    headers = {
+        "Content-Type": "application/json",
+        "accept": "application/json",
+    }
+    
+    # Build request payload
+    data = {
+        "query": query,
+        "top_k": top_k,
+    }
+    
+    # Add optional filters if provided
+    if categories:
+        data["categories"] = categories
+    if organizations:
+        data["organizations"] = organizations
+    if resource_type:
+        data["resource_type"] = resource_type
+    if file_type:
+        data["file_type"] = file_type
+    
+    print(f"[query_database_with_metadata] Request Data: {data}")
+    
+    try:
+        response = requests.post(url, json=data, headers=headers, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            print(f"[query_database_with_metadata] Success: Retrieved {len(result.get('results', []))} results")
+            return result
+        else:
+            error_msg = f"Error: {response.status_code}"
+            try:
+                error_detail = response.json()
+                error_msg += f" - {error_detail}"
+            except:
+                error_msg += f" - {response.text}"
+            
+            print(f"[query_database_with_metadata] {error_msg}")
+            return {
+                "error": True,
+                "status_code": response.status_code,
+                "message": error_msg,
+                "query": query,
+                "total_results": 0,
+                "top_k": top_k,
+                "results": []
+            }
+    
+    except requests.exceptions.Timeout:
+        error_msg = "Request timeout - Vector database took too long to respond"
+        print(f"[query_database_with_metadata] {error_msg}")
+        return {
+            "error": True,
+            "status_code": 504,
+            "message": error_msg,
+            "query": query,
+            "total_results": 0,
+            "top_k": top_k,
+            "results": []
+        }
+    
+    except requests.exceptions.ConnectionError:
+        error_msg = "Connection error - Unable to reach vector database"
+        print(f"[query_database_with_metadata] {error_msg}")
+        return {
+            "error": True,
+            "status_code": 503,
+            "message": error_msg,
+            "query": query,
+            "total_results": 0,
+            "top_k": top_k,
+            "results": []
+        }
+    
+    except Exception as e:
+        error_msg = f"Unexpected error: {str(e)}"
+        print(f"[query_database_with_metadata] {error_msg}")
+        return {
+            "error": True,
+            "status_code": 500,
+            "message": error_msg,
+            "query": query,
+            "total_results": 0,
+            "top_k": top_k,
+            "results": []
+        }
 
 
 def apply_prompt_template(question: str) -> str:

@@ -12,6 +12,7 @@ from chatbot.views.gotenberg_view import generate_pdf_view
 from chatbot.views.kafka_views import sync_user_project_view
 from chatbot.views.location_views import get_location_view, get_ip_location_view
 from chatbot.views.Media.media_views import MediaSearchView
+from chatbot.views.Media.media_api_views import MediaSearchV2View
 from chatbot.views.profile_views import create_profile_views
 from django.urls import path, include
 from chatbot.views import api_views
@@ -122,5 +123,8 @@ urlpatterns = [
     # Media API endpoints
     path('api/v1/', include(router.urls)),
     path('api/v1/documents', DocumentUploadView.as_view(), name='document-upload'),
+    
+    # Media Search V2 - Vector Database powered search
+    path('api/v2/media/', MediaSearchV2View.as_view(), name='media-search-v2'),
 
 ]
