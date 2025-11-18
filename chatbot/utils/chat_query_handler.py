@@ -55,7 +55,7 @@ def query_database_with_metadata(
     Returns:
         dict: Response from vector database API or error dict
     """
-    url = f"http://{base_url}/api/documents/search"
+    url = f"{base_url}/api/documents/search"
     print(f"[query_database_with_metadata] URL: {url}")
     
     headers = {
