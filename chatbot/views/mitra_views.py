@@ -1,4 +1,7 @@
+import traceback
+
 from chatbot.models import Profile, MediaTypeChoices
+from chatbot.pdf.knowledge_service.project_report_pdf import generate_project_pdf
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_mitra_project_utils
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -65,6 +68,32 @@ def create_project_view(request):
     )
 
     print("Result: ", result)
+
+    try:
+        # Get author info from profile
+        author_name = profile.first_name if profile else ""
+        location = profile.location if profile and hasattr(profile, '') else ""
+
+        timeline = f"{project_duration}" if project_duration else ""
+
+        # Generate the PDF
+        pdf_content = generate_project_pdf(
+            project_title=project_title,
+            author_name=author_name,
+            location=location,
+            problem_statement=user_problem_statement,
+            objective=project_objective,
+            timeline=timeline,
+            action_steps=user_action_steps,
+            sources=None
+        )
+
+        print("PDF report is generated successfully")
+
+
+    except Exception as e:
+        print(f"Error generating PDF: {str(e)}")
+        traceback.print_exc()
 
     return Response({
         'status': 'ok',
