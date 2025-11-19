@@ -589,9 +589,10 @@ class MediaSearchV2View(APIView):
     Version 2 of Media Search API that uses vector database search.
     
     GET /api/v2/media/?q=education classroom&limit=12&offset=0&ordering=-created_at
+    GET /ai/documents/search?q=education classroom&limit=12&offset=0
     
     Query Parameters:
-        - q (required): Search query string
+        - q (optional): Search query string. If not provided, returns all documents with filters applied
         - limit (optional): Number of results per page (default: 20)
         - offset (optional): Pagination offset (default: 0)
         - ordering (optional): Sort order (not used in v2, kept for compatibility)
@@ -604,15 +605,6 @@ class MediaSearchV2View(APIView):
     def get(self, request, format=None):
         # Extract query parameters
         query = request.query_params.get('q', '').strip()
-        
-        if not query:
-            return Response({
-                "error": "Query parameter 'q' is required",
-                "count": 0,
-                "next": None,
-                "previous": None,
-                "results": []
-            }, status=status.HTTP_400_BAD_REQUEST)
         
         # Pagination parameters
         try:
@@ -636,13 +628,14 @@ class MediaSearchV2View(APIView):
         # Calculate top_k for vector DB (offset + limit to get enough results)
         top_k = offset + limit
         
-        print(f"[MediaSearchV2View] Query: {query}, top_k: {top_k}, offset: {offset}, limit: {limit}")
+        print(f"[MediaSearchV2View] Query: '{query}', top_k: {top_k}, offset: {offset}, limit: {limit}")
         print(f"[MediaSearchV2View] Filters - categories: {categories}, organizations: {organizations}, "
               f"resource_type: {resource_type}, file_type: {file_type}")
         
         # Call vector database search
+        # If query is empty, pass None or empty string to get all documents with filters
         vector_response = query_database_with_metadata(
-            query=query,
+            query=query if query else None,
             top_k=top_k,
             categories=categories if categories else None,
             organizations=organizations if organizations else None,

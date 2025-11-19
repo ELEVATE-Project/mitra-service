@@ -126,5 +126,8 @@ urlpatterns = [
     
     # Media Search V2 - Vector Database powered search
     path('api/v2/media/', MediaSearchV2View.as_view(), name='media-search-v2'),
+    
+    # AI Documents Search - Alternative endpoint for the same functionality
+    path('ai/documents/search', MediaSearchV2View.as_view(), name='ai-documents-search'),
 
 ]

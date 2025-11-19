@@ -34,7 +34,7 @@ def query_database(query_prompt: str, priority_filter: str, limit: int):
 
 
 def query_database_with_metadata(
-    query: str,
+    query: str = None,
     top_k: int = 20,
     categories: List[str] = None,
     organizations: List[str] = None,
@@ -45,7 +45,7 @@ def query_database_with_metadata(
     Query vector database with metadata filters for media search v2.
     
     Args:
-        query: Search query string
+        query: Search query string (optional - if not provided, returns all documents with filters)
         top_k: Number of results to return
         categories: List of category filters (tags)
         organizations: List of organization filters
@@ -65,9 +65,12 @@ def query_database_with_metadata(
     
     # Build request payload
     data = {
-        "query": query,
         "top_k": top_k,
     }
+    
+    # Add query only if provided
+    if query:
+        data["query"] = query
     
     # Add optional filters if provided
     if categories:
