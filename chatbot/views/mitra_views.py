@@ -41,9 +41,11 @@ def get_s3_presigned_url_and_upload(file_name, file_content, file_type, project_
             ExpiresIn=3600,
         )
 
+        print("Upload URL: ", upload_url)
         # Public URL for accessing the uploaded file
         public_url = f"https://{os.getenv('S3_BUCKET_NAME')}/{key}"
 
+        print("public_url: ", public_url)
         # Upload file to S3 using presigned URL
         upload_response = requests.put(
             upload_url,
@@ -53,7 +55,7 @@ def get_s3_presigned_url_and_upload(file_name, file_content, file_type, project_
                 'ACL': 'public-read'
             }
         )
-
+        print("upload_response: ", upload_response)
         if upload_response.status_code == 200:
             print(f"File uploaded successfully to S3: {public_url}")
             return public_url
