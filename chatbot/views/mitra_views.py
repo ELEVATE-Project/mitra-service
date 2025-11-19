@@ -5,6 +5,65 @@ from chatbot.pdf.knowledge_service.project_report_pdf import generate_project_pd
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_mitra_project_utils
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+import boto3
+import os
+import time
+
+
+def get_s3_presigned_url_and_upload(file_name, file_content, file_type, project_id, folder_structure):
+    """Generate presigned URL and upload file to S3"""
+    try:
+        # Prepare S3 key
+        if project_id:
+            id_to_use = f'{project_id}/'
+        else:
+            id_to_use = ''
+
+        key = f"{folder_structure}{id_to_use}{int(time.time())}-{file_name}"
+
+        # Initialize S3 client
+        s3_client = boto3.client(
+            "s3",
+            region_name=os.getenv('AWS_REGION'),
+            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
+            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
+        )
+
+        # Generate pre-signed URL for upload
+        upload_url = s3_client.generate_presigned_url(
+            "put_object",
+            Params={
+                "Bucket": os.getenv('S3_BUCKET_NAME'),
+                "Key": key,
+                "ContentType": file_type,
+                "ACL": "public-read",
+            },
+            ExpiresIn=3600,
+        )
+
+        # Public URL for accessing the uploaded file
+        public_url = f"https://{os.getenv('S3_BUCKET_NAME')}/{key}"
+
+        # Upload file to S3 using presigned URL
+        upload_response = requests.put(
+            upload_url,
+            data=file_content,
+            headers={
+                'Content-Type': file_type,
+                'ACL': 'public-read'
+            }
+        )
+
+        if upload_response.status_code == 200:
+            print(f"File uploaded successfully to S3: {public_url}")
+            return public_url
+        else:
+            print(f"Failed to upload file to S3: {upload_response.status_code}")
+            return None
+
+    except Exception as e:
+        print(f"Error in S3 upload: {str(e)}")
+        return None
 
 
 @api_view(['POST'])
@@ -92,53 +151,31 @@ def create_project_view(request):
         print("PDF report is generated successfully")
 
         if pdf_content and result.get('project_id'):
+            # Prepare file name for S3
             pdf_filename = f"{project_title}.pdf" if project_title else "Project_Report.pdf"
+            # Clean filename for S3 (remove special characters)
             pdf_filename = "".join(c for c in pdf_filename if c.isalnum() or c in (' ', '-', '_', '.')).rstrip()
             pdf_filename = pdf_filename.replace(' ', '_')
 
-            presigned_url_data = {
-                "fileName": pdf_filename,
-                "fileType": "application/pdf",
-                "storyId": result.get('project_id'),
-                "folder_structure": "shikshagraha_commons/"
-            }
-
-            base_url = request.build_absolute_uri('/').rstrip('/')
-            presigned_url_response = requests.post(
-                f"{base_url}/api/get-presigned-url/",
-                json=presigned_url_data,
-                headers={'Content-Type': 'application/json'}
+            # Upload to S3 and get public URL
+            pdf_url = get_s3_presigned_url_and_upload(
+                file_name=pdf_filename,
+                file_content=pdf_content.read(),
+                file_type="application/pdf",
+                project_id=result.get('project_id'),
+                folder_structure="shikshagraha_commons/"
             )
 
-            if presigned_url_response.status_code == 200:
-                presigned_data = presigned_url_response.json()
-                upload_url = presigned_data.get('uploadUrl')
-                pdf_url = presigned_data.get('s3Url')
-
-                # Upload PDF to S3 using presigned URL
-                upload_response = requests.put(
-                    upload_url,
-                    data=pdf_content.read(),
-                    headers={
-                        'Content-Type': 'application/pdf',
-                        'ACL': 'public-read'
-                    }
-                )
-
-                if upload_response.status_code == 200:
-                    print(f"PDF uploaded successfully to S3: {pdf_url}")
-                else:
-                    print(f"Failed to upload PDF to S3: {upload_response.status_code}")
-                    pdf_url = None
+            if pdf_url:
+                print(f"PDF successfully uploaded to: {pdf_url}")
             else:
-                print(f"Failed to get presigned URL: {presigned_url_response.status_code}")
-                pdf_url = None
-
+                print("Failed to upload PDF to S3")
 
     except Exception as e:
-        print(f"Error generating PDF: {str(e)}")
+        print(f"Error generating/uploading PDF: {str(e)}")
         traceback.print_exc()
 
+        # Prepare media response
     media_response = []
     if pdf_url:
         media_response.append({
@@ -146,6 +183,7 @@ def create_project_view(request):
             'url': pdf_url
         })
     else:
+        # Fallback to default URL if upload failed
         media_response.append({
             'media_type': MediaTypeChoices.PDF,
             'url': ''
