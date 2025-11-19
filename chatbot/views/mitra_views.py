@@ -35,15 +35,15 @@ def get_s3_presigned_url_and_upload(file_name, file_content, file_type, project_
             Params={
                 "Bucket": os.getenv('S3_BUCKET_NAME'),
                 "Key": key,
-                "ContentType": file_type,
-                "ACL": "public-read",
             },
             ExpiresIn=3600,
         )
 
         print("Upload URL: ", upload_url)
         # Public URL for accessing the uploaded file
-        public_url = f"https://{os.getenv('S3_BUCKET_NAME')}/{key}"
+        public_url = (
+            f"https://{os.getenv('S3_BUCKET_NAME')}.s3.{os.getenv('AWS_REGION')}.amazonaws.com/{key}"
+        )
 
         print("public_url: ", public_url)
         # Upload file to S3 using presigned URL
@@ -52,7 +52,6 @@ def get_s3_presigned_url_and_upload(file_name, file_content, file_type, project_
             data=file_content,
             headers={
                 'Content-Type': file_type,
-                'ACL': 'public-read'
             }
         )
         print("upload_response: ", upload_response)
