@@ -61,10 +61,6 @@ def get_project_report_html(
             <div class="project-report-container">
                 <div class="project-header">
                     <h1 class="project-title">{project_title}</h1>
-                    <div class="project-author">
-                        by<br>
-                        {author_name}, {location}
-                    </div>
                 </div>
 
                 <div class="project-section">
