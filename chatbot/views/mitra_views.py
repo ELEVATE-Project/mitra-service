@@ -1,5 +1,5 @@
 import traceback
-
+import requests
 from chatbot.models import Profile, MediaTypeChoices
 from chatbot.pdf.knowledge_service.project_report_pdf import generate_project_pdf
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_mitra_project_utils
@@ -68,6 +68,7 @@ def create_project_view(request):
     )
 
     print("Result: ", result)
+    pdf_url = None
 
     try:
         # Get author info from profile
@@ -90,17 +91,69 @@ def create_project_view(request):
 
         print("PDF report is generated successfully")
 
+        if pdf_content and result.get('project_id'):
+            pdf_filename = f"{project_title}.pdf" if project_title else "Project_Report.pdf"
+            pdf_filename = "".join(c for c in pdf_filename if c.isalnum() or c in (' ', '-', '_', '.')).rstrip()
+            pdf_filename = pdf_filename.replace(' ', '_')
+
+            presigned_url_data = {
+                "fileName": pdf_filename,
+                "fileType": "application/pdf",
+                "storyId": result.get('project_id'),
+                "folder_structure": "shikshagraha_commons/"
+            }
+
+            base_url = request.build_absolute_uri('/').rstrip('/')
+            presigned_url_response = requests.post(
+                f"{base_url}/api/get-presigned-url/",
+                json=presigned_url_data,
+                headers={'Content-Type': 'application/json'}
+            )
+
+            if presigned_url_response.status_code == 200:
+                presigned_data = presigned_url_response.json()
+                upload_url = presigned_data.get('uploadUrl')
+                pdf_url = presigned_data.get('s3Url')
+
+                # Upload PDF to S3 using presigned URL
+                upload_response = requests.put(
+                    upload_url,
+                    data=pdf_content.read(),
+                    headers={
+                        'Content-Type': 'application/pdf',
+                        'ACL': 'public-read'
+                    }
+                )
+
+                if upload_response.status_code == 200:
+                    print(f"PDF uploaded successfully to S3: {pdf_url}")
+                else:
+                    print(f"Failed to upload PDF to S3: {upload_response.status_code}")
+                    pdf_url = None
+            else:
+                print(f"Failed to get presigned URL: {presigned_url_response.status_code}")
+                pdf_url = None
+
 
     except Exception as e:
         print(f"Error generating PDF: {str(e)}")
         traceback.print_exc()
 
+    media_response = []
+    if pdf_url:
+        media_response.append({
+            'media_type': MediaTypeChoices.PDF,
+            'url': pdf_url
+        })
+    else:
+        media_response.append({
+            'media_type': MediaTypeChoices.PDF,
+            'url': ''
+        })
+
     return Response({
         'status': 'ok',
         'result': response,
         'mitra_result': result,
-        'media': [{
-            'media_type': MediaTypeChoices.PDF,
-            'url': 'https://qa-mohini-static.shikshalokam.org/chatbot/storymedia/1215/Ground_Realities_Education_Challenges_and_Community_Responses.pdf'
-        }]
+        'media': media_response
     }, status=200)
