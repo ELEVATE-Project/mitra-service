@@ -11,6 +11,7 @@ from chatbot.models import FileTypeChoices
 from chatbot.utils.knowledge_service.base.extraction_config import MAX_DEPTH
 from .docx_extractor import DOCXExtractor
 from .excel_extractor import ExcelExtractor
+from .markdown_extractor import MarkdownExtractor
 from .pdf_extractor import PDFExtractor
 from .text_extractor import CSVExtractor, TXTExtractor
 from .url_extractor import URLExtractor
@@ -69,8 +70,9 @@ class DocumentExtractor:
         # Initialize file extractors
         self.pdf_extractor = PDFExtractor(self.image_processor)
         self.docx_extractor = DOCXExtractor(self.image_processor)
-        self.excel_extractor = ExcelExtractor(excel_max_rows, excel_max_cols, subdoc_max_chars)
-        self.csv_extractor = CSVExtractor(excel_max_rows, excel_max_cols)
+        self.excel_extractor = ExcelExtractor(excel_max_rows, excel_max_cols, subdoc_max_chars)  # Legacy, kept for compatibility
+        self.markdown_extractor = MarkdownExtractor(subdoc_max_chars)  # Used for Excel/CSV to Markdown conversion
+        self.csv_extractor = CSVExtractor(excel_max_rows, excel_max_cols)  # Legacy, kept for compatibility
         self.txt_extractor = TXTExtractor()
 
     def process_single_subdocument(self, sub_url: str, main_doc_url: str,
@@ -338,36 +340,44 @@ class DocumentExtractor:
             media_type = FileTypeChoices.DOCX
 
         elif file_extension in ['xls', 'xlsx']:
+            # Excel files are converted to Markdown format using MarkdownExtractor
+            # This provides better structured output for LLM processing compared to CSV or pandas string format
+            # The MarkdownExtractor uses tabulate library to create clean Markdown tables
+            filename = f"spreadsheet.{file_extension}"
+
             if not skip_urls:
-                comprehensive_text, hyperlinks = self.excel_extractor.extract_comprehensive_content_for_urls(
-                    content_bytes)
+                # Extract comprehensive content for URL extraction (no character limits)
+                # Also extracts hyperlinks embedded in Excel cells using openpyxl
+                # Called when: extract_mode = "full" or "urls_only"
+                comprehensive_text, hyperlinks = self.markdown_extractor.extract_comprehensive_content_for_urls(
+                    content_bytes, filename)
 
             if not skip_text:
+                # Extract limited content for LLM processing (with character limits)
+                # Converts Excel sheets to Markdown tables with proper formatting
+                # Called when: extract_mode = "full" or "limited" (subdocuments)
                 max_chars = self.subdoc_max_chars if extract_mode == "limited" else self.main_doc_max_chars
-                text = self.excel_extractor.extract_limited_content(content_bytes, max_chars)
+                text = self.markdown_extractor.extract_limited_content(content_bytes, max_chars, filename)
 
             media_type = FileTypeChoices.XLSX
 
         elif file_extension == 'csv':
+            # Use MarkdownExtractor for better CSV to Markdown conversion
+            filename = "spreadsheet.csv"
+
             if not skip_urls:
-                comprehensive_text, hyperlinks = self.csv_extractor.extract_comprehensive_content_for_urls(
-                    content_bytes)
+                # Extract comprehensive content for URL extraction (no character limits)
+                # Converts entire CSV to Markdown format for URL scanning
+                # Called when: extract_mode = "full" or "urls_only"
+                comprehensive_text, hyperlinks = self.markdown_extractor.extract_comprehensive_content_for_urls(
+                    content_bytes, filename)
 
             if not skip_text:
-                try:
-                    import pandas as pd
-                    df = pd.read_csv(io.BytesIO(content_bytes), nrows=self.excel_max_rows)
-                    if len(df.columns) > self.excel_max_cols:
-                        df = df.iloc[:, :self.excel_max_cols]
-                    text = df.to_string(max_rows=self.excel_max_rows, max_cols=self.excel_max_cols)
-
-                    max_chars = self.subdoc_max_chars if extract_mode == "limited" else self.main_doc_max_chars
-                    if len(text) > max_chars:
-                        text = text[:max_chars] + "\n...[Content truncated]"
-                except Exception as e:
-                    logger.error(f"Error processing CSV: {e}")
-                    max_chars = self.subdoc_max_chars if extract_mode == "limited" else self.main_doc_max_chars
-                    text = content_bytes.decode('utf-8', errors='ignore')[:max_chars]
+                # Extract limited content for LLM processing (with character limits)
+                # Converts CSV to Markdown table with proper formatting
+                # Called when: extract_mode = "full" or "limited" (subdocuments)
+                max_chars = self.subdoc_max_chars if extract_mode == "limited" else self.main_doc_max_chars
+                text = self.markdown_extractor.extract_limited_content(content_bytes, max_chars, filename)
 
             media_type = FileTypeChoices.CSV
 
@@ -533,9 +543,9 @@ class DocumentExtractor:
             raise Exception(f"Error reading document: {str(e)}")
 
     def process_document_with_links(
-            self, text: str, company_bot, comprehensive_text: str = None, processed_urls=None,
-            depth=0, max_depth=MAX_DEPTH, extracted_images: List[Dict[str, Any]] = None, other_data=None
-    ) -> Dict[str, Any]:
+        self, text: str, company_bot, comprehensive_text: str = None, processed_urls=None,
+        depth=0, max_depth=MAX_DEPTH, extracted_images: List[Dict[str, Any]] = None, other_data=None
+) -> Dict[str, Any]:
         """Process document and extract links from linked documents with enhanced URL extraction for ALL formats"""
         if processed_urls is None:
             processed_urls = set()
@@ -567,6 +577,7 @@ class DocumentExtractor:
             # Step 3: Process links
             subdocuments = []
             failed_links = []
+            source_documents = []  # NEW: List for source documents
 
             # Filter for document URLs
             document_urls = [url for url in urls if self.url_extractor.is_document_url(url, depth)]
@@ -616,6 +627,12 @@ class DocumentExtractor:
                             "source_document": "main"
                         })
                         continue
+
+                    # NEW: Add source document entry with URL and exact content
+                    source_documents.append({
+                        "url": main_doc_url,
+                        "exact_content": full_text_for_urls  # Markdown content for Excel/CSV, full text for others
+                    })
 
                     first_level_results.append({
                         'main_doc_url': main_doc_url,
@@ -678,11 +695,13 @@ class DocumentExtractor:
 
             main_result["subdocument"] = subdocuments
             main_result["failed_links"] = failed_links
+            main_result["source_document"] = source_documents  # NEW: Add source documents to result
 
             # Log summary
             logger.info(f"{'  ' * depth}Processing complete:")
             logger.info(f"{'  ' * depth}  - URLs in main document: {len(urls)}")
             logger.info(f"{'  ' * depth}  - Document URLs in main: {len(document_urls)}")
+            logger.info(f"{'  ' * depth}  - Source documents: {len(source_documents)}")  # NEW
             logger.info(f"{'  ' * depth}  - Successfully processed subdocuments: {len(subdocuments)}")
             logger.info(f"{'  ' * depth}  - Failed: {len(failed_links)}")
             logger.info(f"{'  ' * depth}  - Total URLs processed: {len(processed_urls)}")
@@ -707,13 +726,13 @@ class DocumentExtractor:
                 "url": [],
                 "subdocument": [],
                 "failed_links": [],
+                "source_document": [],  # NEW
                 "images": extracted_images or []
             }
 
     def extract_with_bedrock(self, document_text, company_bot,
-                             extracted_images: List[Dict[str, Any]] = None,
-                             other_data=None) -> Dict[str, Any]:
-        """Main entry point - processes document with recursive link extraction"""
+                         extracted_images: List[Dict[str, Any]] = None,
+                         other_data=None) -> Dict[str, Any]:
         try:
             logger.info("Starting document processing with recursive link extraction...")
 
@@ -745,6 +764,7 @@ class DocumentExtractor:
                 "key_entities": [],
                 "url": [],
                 "subdocument": [],
+                "source_document": [],  # NEW
                 "images": extracted_images or []
             }
 
