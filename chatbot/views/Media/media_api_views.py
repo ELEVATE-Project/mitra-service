@@ -705,7 +705,10 @@ class MediaSearchV2View(APIView):
         
         # Extract results from vector DB response
         all_results = vector_response.get('results', [])
-        total_results = vector_response.get('total_results', len(all_results))
+        
+        # Apply content exclusion filter (exclude "Source Document" media)
+        all_results = self._apply_content_exclusion_filter_v2(all_results)
+        total_results = len(all_results)
         
         # Log results BEFORE ordering
         if all_results and len(all_results) > 0:
@@ -785,6 +788,51 @@ class MediaSearchV2View(APIView):
         print(f"[MediaSearchV2View] Returning {len(serializer.data)} results out of {total_results} total")
         
         return Response(response_data, status=status.HTTP_200_OK)
+    
+    def _apply_content_exclusion_filter_v2(self, results):
+        """
+        Exclude media where document_type is "Source Document" from v2 API results.
+        This filters the vector DB results by checking metadata for document_type.
+        
+        Args:
+            results: List of result dictionaries from vector DB
+            
+        Returns:
+            Filtered list of results excluding "Source Document" media
+        """
+        # Get all media IDs that have document_type = "Source Document"
+        source_document_media_ids = set(
+            KeyValue.objects.annotate(
+                norm_key=Lower('key', output_field=TextField())
+            ).filter(
+                norm_key__iregex=r'^document[_\s]type$',
+                value__icontains='source document'
+            ).values_list('media_id', flat=True)
+        )
+        
+        # Filter out results where source_id matches excluded media IDs
+        filtered_results = []
+        excluded_count = 0
+        
+        for result in results:
+            source_id = result.get('source_id')
+            # Try to convert source_id to int for comparison
+            try:
+                source_id_int = int(source_id) if source_id else None
+            except (ValueError, TypeError):
+                source_id_int = None
+            
+            # Exclude if source_id matches any source document media ID
+            if source_id_int and source_id_int in source_document_media_ids:
+                excluded_count += 1
+                continue
+            
+            filtered_results.append(result)
+        
+        if excluded_count > 0:
+            print(f"[MediaSearchV2View] Content exclusion filter: Excluded {excluded_count} 'Source Document' media from results")
+        
+        return filtered_results
     
     def _parse_list_param(self, param_value):
         """
