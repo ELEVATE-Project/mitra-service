@@ -193,7 +193,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
-STATIC_ROOT = "/var/www/shikshalokam/static/"
+STATIC_ROOT = os.getenv('STATIC_ROOT', '/var/www/shikshalokam/static/')
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static')
 ]
@@ -307,6 +307,11 @@ if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
             },
         }
     else:
+        # For cloud storage (AWS/GCP/Azure), still set MEDIA_ROOT and MEDIA_URL
+        # These are needed for our storage handler to work correctly
+        MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+        MEDIA_URL = '/media/'
+        
         STORAGES = {
             "default": {
                 "BACKEND": config['backend'],

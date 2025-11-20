@@ -111,19 +111,19 @@ class BaseStorageHandler(ABC):
 
     def _generate_object_key(self, upload_config: UploadConfig) -> str:
         """
-        Generate a unique object key for the file
+        Generate a unique object key for the file with millisecond timestamp
         
         Args:
             upload_config: Upload configuration
             
         Returns:
-            Generated object key
+            Generated object key with format: folder/entity_id/timestamp_millisecond-filename
         """
         import time
         
         folder = upload_config.folder_structure or ''
         entity_part = f"{upload_config.entity_id}/" if upload_config.entity_id else ''
-        timestamp = int(time.time())
+        timestamp_ms = int(time.time() * 1000)  # Millisecond timestamp
         
-        return f"{folder}{entity_part}{timestamp}-{upload_config.file_name}"
+        return f"{folder}{entity_part}{timestamp_ms}-{upload_config.file_name}"
 

@@ -30,40 +30,42 @@ class LocalStorageHandler(BaseStorageHandler):
         super().__init__(config)
         self.location = config.get('location', os.path.join(settings.BASE_DIR, 'media'))
         self.base_url = config.get('base_url', '/media/')
+        self.server_url = config.get('server_url') or os.getenv('BASE_URL', 'http://localhost:8000')
         
         # Ensure storage directory exists
         Path(self.location).mkdir(parents=True, exist_ok=True)
 
     def generate_presigned_url(self, upload_config: UploadConfig) -> UploadResult:
         """
-        For local storage, return a direct URL (no presigned URL needed)
+        For local storage, return our server's upload endpoint URL.
+        This maintains the same flow as AWS where client makes a second request.
         
         Args:
             upload_config: Configuration for the upload operation
             
         Returns:
-            UploadResult with file path and URL
+            UploadResult with our server's upload URL (mimics presigned URL behavior)
         """
         try:
             object_key = self._generate_object_key(upload_config)
-            file_path = os.path.join(self.location, object_key)
             
-            # Ensure directory exists
-            os.makedirs(os.path.dirname(file_path), exist_ok=True)
+            # For local storage, the "presigned URL" is our server's upload endpoint
+            # The client will PUT the file to this URL
+            upload_url = f"{self.server_url}/api/storage/upload-local/{object_key}"
             
             public_url = self.get_public_url(object_key)
             
-            logger.info(f"Generated local file path: {object_key}")
+            logger.info(f"Generated local upload URL for: {object_key}")
             
             return UploadResult(
-                upload_url=file_path,  # For local, upload_url is the file path
+                upload_url=upload_url,
                 object_key=object_key,
                 public_url=public_url,
                 success=True
             )
             
         except Exception as e:
-            error_msg = f"Failed to generate local file path: {str(e)}"
+            error_msg = f"Failed to generate local upload URL: {str(e)}"
             logger.error(error_msg)
             return UploadResult(
                 upload_url='',
@@ -151,11 +153,11 @@ class LocalStorageHandler(BaseStorageHandler):
             object_key: File path
             
         Returns:
-            Public URL string
+            Public URL string (e.g., http://localhost:9000/media/uploads/file.jpg)
         """
         # Normalize path separators for URL
         url_path = object_key.replace(os.sep, '/')
-        return f"{self.base_url.rstrip('/')}/{url_path}"
+        return f"{self.server_url}{self.base_url.rstrip('/')}/{url_path}"
 
     def file_exists(self, object_key: str) -> bool:
         """
