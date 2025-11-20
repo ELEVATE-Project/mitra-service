@@ -14,9 +14,7 @@ def prepare_vector_db_data(media_id, include_updated_at=False, company_slug=None
     company_obj = None
     if company_slug:
         company_obj = Company.objects.filter(slug=company_slug).first()
-    company_obj = company_obj or media.company_bot.company
-
-    company_obj = company_obj or media.company_bot.company
+    company_obj = company_obj or media.organization
 
     metadata = {
         'source': 'file',
