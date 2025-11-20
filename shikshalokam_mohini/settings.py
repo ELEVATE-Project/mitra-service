@@ -251,25 +251,77 @@ INTERNAL_IPS = [
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
-CSRF_TRUSTED_ORIGINS = ['https://*.shikshalokam.org', 'https://*.127.0.0.1',
-                        'https://*.gritworks.ai', 'http://localhost:3000']
+CSRF_TRUSTED_ORIGINS = ['https://*.shikshalokam.org', 'https://*.127.0.0.1', 'https://*.gritworks.ai', 'http://localhost:3000']
 
-STORAGES = {
-    "default": {
-        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
-        "OPTIONS": {
-            "bucket_name": os.getenv('S3_BUCKET_NAME'),
-            "region_name": os.getenv('AWS_REGION'),
+STORAGE_CLOUD_PROVIDER = os.environ.get('STORAGE_CLOUD_PROVIDER', 'AWS').upper()
+
+# Storage backend configurations
+STORAGE_BACKENDS = {
+    'AWS': {
+        'backend': 'storages.backends.s3boto3.S3Boto3Storage',
+        'options': {
+            'bucket_name': os.getenv('S3_BUCKET_NAME'),
+            'region_name': os.getenv('AWS_REGION'),
         },
     },
-    "staticfiles": {
-        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
-        "OPTIONS": {
-            "bucket_name": os.getenv('S3_BUCKET_NAME'),
-            "region_name": os.getenv('AWS_REGION'),
+    'GCP': {
+        'backend': 'storages.backends.gcloud.GoogleCloudStorage',
+        'options': {
+            'bucket_name': os.getenv('GCS_BUCKET_NAME'),
+            'project_id': os.getenv('GCP_PROJECT_ID'),
+            'credentials': os.getenv('GCP_CREDENTIALS_PATH'),
+        },
+    },
+    'AZURE': {
+        'backend': 'storages.backends.azure_storage.AzureStorage',
+        'options': {
+            'account_name': os.getenv('AZURE_ACCOUNT_NAME'),
+            'account_key': os.getenv('AZURE_ACCOUNT_KEY'),
+            'azure_container': os.getenv('AZURE_CONTAINER_NAME'),
+        },
+    },
+    'LOCAL': {
+        'backend': 'django.core.files.storage.FileSystemStorage',
+        'options': {
+            'location': os.path.join(BASE_DIR, 'media'),
+            'base_url': '/media/',
         },
     },
 }
+
+# Configure storage based on provider
+if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
+    config = STORAGE_BACKENDS[STORAGE_CLOUD_PROVIDER]
+    
+    if STORAGE_CLOUD_PROVIDER == 'LOCAL':
+        MEDIA_ROOT = config['options']['location']
+        MEDIA_URL = config['options']['base_url']
+        
+        STORAGES = {
+            "default": {
+                "BACKEND": config['backend'],
+                "OPTIONS": config['options'],
+            },
+            "staticfiles": {
+                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+            },
+        }
+    else:
+        STORAGES = {
+            "default": {
+                "BACKEND": config['backend'],
+                "OPTIONS": config['options'],
+            },
+            "staticfiles": {
+                "BACKEND": config['backend'],
+                "OPTIONS": config['options'],
+            },
+        }
+else:
+    raise ValueError(
+        f"Unsupported STORAGE_CLOUD_PROVIDER: {STORAGE_CLOUD_PROVIDER}. "
+        f"Supported values: {', '.join(STORAGE_BACKENDS.keys())}"
+    )
 
 
 # AWS Configurations
