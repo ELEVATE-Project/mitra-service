@@ -117,10 +117,41 @@ class MediaSearchResultSerializer(serializers.Serializer):
         
         # Get document_type from metadata
         document_type = None
-        for key in ['DOCUMENT_TYPE', 'document_type', 'Document Type']:
+        for key in ['DOCUMENT_TYPE', 'document_type', 'Document Type','DOCUMENT TYPE']:
             if key in metadata:
                 document_type = metadata[key]
                 break
+        
+        # Fetch file_size, organization_url, and org_logo from database
+        # These fields are NOT reliable in vector DB metadata, so we query the Media model directly
+        file_size = None
+        organization_url = None
+        org_logo = None
+        
+        if media_id:
+            try:
+                from chatbot.models.media_models import Media
+                media_obj = Media.objects.select_related('organization').only(
+                    'id', 'file', 'organization__url', 'organization__logo'
+                ).get(id=media_id)
+                
+                # Get file_size from Django FileField (same as V1 API)
+                if media_obj.file:
+                    file_size = getattr(media_obj.file, "size", None)
+                
+                # Get organization_url from related Company model (same as V1 API)
+                if media_obj.organization:
+                    organization_url = media_obj.organization.url
+                    
+                    # Get org_logo from related Company model (same as V1 API)
+                    if media_obj.organization.logo:
+                        org_logo = media_obj.organization.get_public_url()
+                        
+            except Exception as e:
+                # If database query fails, fall back to metadata (which may be None)
+                print(f"[MediaSearchResultSerializer] Error fetching DB fields for media_id {media_id}: {str(e)}")
+                file_size = metadata.get('file_size', None)
+                organization_url = metadata.get('organization_url', None)
         
         # Build response matching V1 format exactly
         return {
@@ -140,9 +171,9 @@ class MediaSearchResultSerializer(serializers.Serializer):
             'organization': company,
             'document_type': document_type,
             'key_entities': metadata.get('KEY ENTITIES', metadata.get('key_entities', None)),
-            'file_size': metadata.get('file_size', None),
-            'organization_url': None,
-            'org_logo': None,
+            'file_size': file_size,
+            'organization_url': organization_url,
+            'org_logo': org_logo,
             # V2 specific fields (additional metadata)
             'vector_id': instance.get('id'),
             'score': instance.get('score', 0),
