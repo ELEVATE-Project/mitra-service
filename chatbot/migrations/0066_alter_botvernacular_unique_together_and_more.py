@@ -11,10 +11,10 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AlterUniqueTogether(
-            name='botvernacular',
-            unique_together=set(),
-        ),
+        # migrations.AlterUniqueTogether(
+        #     name='botvernacular',
+        #     unique_together=set(),
+        # ),
         migrations.AlterUniqueTogether(
             name='storyvernacular',
             unique_together=set(),

@@ -62,7 +62,7 @@ class Migration(migrations.Migration):
             options={
                 'db_table': 'shikshalokam"."bot_vernacular',
                 'indexes': [models.Index(fields=['language'], name='bot_vernacu_languag_52e6c8_idx'), models.Index(fields=['created_at'], name='bot_vernacu_created_d1c395_idx'), models.Index(fields=['company_bot'], name='bot_vernacu_company_483975_idx')],
-                'unique_together': {('company_bot', 'language')},
+                # 'unique_together': {('company_bot', 'language')},
             },
         ),
     ]
