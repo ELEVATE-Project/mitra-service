@@ -465,18 +465,28 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
         queryset = self.filter_queryset(self.get_queryset())
 
         # Already correct - using direct organization field
+        # organizations = (
+        #     queryset
+        #     .exclude(organization__name__isnull=True)
+        #     .exclude(organization__name='')
+        #     .annotate(
+        #         lower_name=Lower('organization__name')
+        #     )
+        #     .values_list('lower_name', flat=True)
+        #     .distinct()
+        # )
+        # Convert to set to remove any remaining duplicates, then sort
+        # organizations = sorted(list(set([org.title() for org in organizations if org])))
+
         organizations = (
             queryset
-            .exclude(organization__name__isnull=True)
-            .exclude(organization__name='')
-            .annotate(
-                lower_name=Lower('organization__name')
-            )
-            .values_list('lower_name', flat=True)
+            .exclude(organization__slug__isnull=True)
+            .exclude(organization__slug='')
+            .values_list('organization__slug', flat=True)
             .distinct()
         )
-        # Convert to set to remove any remaining duplicates, then sort
-        organizations = sorted(list(set([org.title() for org in organizations if org])))
+
+        organizations = sorted(list(set(organizations)))
 
         media_types = []
         media_type_counts = dict(
