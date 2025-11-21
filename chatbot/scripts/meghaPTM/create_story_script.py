@@ -30,11 +30,8 @@ import json
 import os
 from django.core.validators import URLValidator
 from langfuse.decorators import observe
-import boto3
 import json_repair
 from retrying import retry
-from botocore.client import Config as BotoConfig
-from botocore.exceptions import ClientError
 
 
 logger = logging.getLogger('django')
@@ -845,92 +842,99 @@ def handle_bedrock_model(
         company_bot, system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
         model_name=None, region_name='us-west-2', tools=None, is_json_response=False
 ):
-    connect_timeout = company_bot.connect_timeout
-    read_timeout = company_bot.read_timeout
-
-    boto_config = BotoConfig(
-        connect_timeout=connect_timeout,
-        read_timeout=read_timeout,
-        retries={"mode": "adaptive"}
-    )
-
-    bedrock_runtime = boto3.client(
-        service_name='bedrock-runtime',
-        region_name=region_name,
-        aws_access_key_id=AWS_KEY,
-        aws_secret_access_key=AWS_SECRET_KEY,
-        config=boto_config
-    )
-
+    from litellm import completion
+    from chatbot.models.enums import LLMProvider
+    
     if model_name:
         model_id = model_name
     else:
         model_id = 'meta.llama3-1-8b-instruct-v1:0'
 
-        # 'meta.llama3-1-70b-instruct-v1:0'
-
-    inference_config = {}
-    additional_model_fields = {}
-
-    if max_token:
-        inference_config['maxTokens'] = max_token
-    if temperature is not None:
-        inference_config['temperature'] = temperature
-    if top_p:
-        inference_config['topP'] = top_p
+    # Get timeout configuration from company_bot
+    connect_timeout = company_bot.connect_timeout if hasattr(company_bot, 'connect_timeout') else 300
+    read_timeout = company_bot.read_timeout if hasattr(company_bot, 'read_timeout') else 300
+    
+    # Clean up messages - remove last assistant message if present
     if messages and messages[-1]['role'] == 'assistant':
         messages.pop()
+    
+    # Add system prompt to messages if provided (liteLLM expects system in messages)
+    formatted_messages = []
+    if system_prompt:
+        if isinstance(system_prompt, list):
+            formatted_messages.extend(system_prompt)
+        else:
+            formatted_messages.append({"role": "system", "content": system_prompt})
+    formatted_messages.extend(messages)
 
     try:
-        request_payload = {
-            'modelId': model_id,
-            'messages': messages,
-            'system': system_prompt,
-        }
-        if inference_config:
-            request_payload['inferenceConfig'] = inference_config
+        # Prepare tools in LiteLLM format if provided
+        litellm_tools = None
         if tools:
-            request_payload['toolConfig'] = tools.get('toolConfig')
+            # LiteLLM expects tools in OpenAI format, convert if necessary
+            litellm_tools = tools.get('toolConfig', {}).get('tools', []) if isinstance(tools, dict) else tools
+        
+        logger.info('LiteLLM Bedrock request - Model: %s, Messages count: %d', model_id, len(formatted_messages))
+        
+        # Make the LLM call using LiteLLM with timeout
+        response = completion(
+            model=f"bedrock/{model_id}",
+            messages=formatted_messages,
+            max_tokens=max_token,
+            temperature=temperature,
+            top_p=top_p,
+            tools=litellm_tools,
+            aws_region_name=region_name,
+            aws_access_key_id=AWS_KEY,
+            aws_secret_access_key=AWS_SECRET_KEY,
+            timeout=read_timeout  # liteLLM uses timeout parameter for read timeout
+        )
 
-        logger.info('Bedrock request payload: %s', request_payload)
-        response = bedrock_runtime.converse(**request_payload)
-        logger.info('Bedrock response: %s', response)
-
-        content_arr = response['output']['message']['content']
-        content = content_arr[0]
-        content_tool = content.get('toolUse')
-        if content_tool:
-            if isinstance(content_tool, str):
-                final_output = json_repair.repair_json(content_tool, return_objects=True)
-            else:
-                final_output = content_tool
-        else:
-            content_text = content.get('text')
-            json_start = content_text.find('{')
-            if json_start != -1:
-                json_str = content_text[json_start:]
-                json_str = json_str.replace('\n', '').replace('\r', '').strip()
-                while json_str and (json_str.endswith("'") or json_str.endswith('"') or json_str.endswith(',')):
-                    json_str = json_str[:-1].strip()
-                try:
-                    final_output = json_repair.repair_json(json_str, return_objects=True)
-                    logger.info('Loads final_output: %s', final_output)
-                except json.JSONDecodeError as e:
-                    logger.error('Error decoding JSON: %s', e, exc_info=True)
-                    return None
-            elif is_json_response:
-                return None
-            else:
-                return content_text
-
-        return final_output
-    except ClientError as e:
-            error_response = e.response
-            print("❌ ClientError:")
-            print("Error Code:", error_response["Error"]["Code"])
-            print("Error Message:", error_response["Error"]["Message"])
-            print("Request ID:", error_response.get("ResponseMetadata", {}).get("RequestId"))
+        # Extract content from LiteLLM response (OpenAI format)
+        if not response.choices or len(response.choices) == 0:
+            logger.error('No choices in response')
             return None
+            
+        message = response.choices[0].message
+        
+        # Check for tool calls first
+        tool_calls = getattr(message, 'tool_calls', None)
+        if tool_calls and len(tool_calls) > 0:
+            tool_call = tool_calls[0]
+            if hasattr(tool_call, 'function'):
+                function_args = tool_call.function.arguments
+                if isinstance(function_args, str):
+                    final_output = json_repair.repair_json(function_args, return_objects=True)
+                else:
+                    final_output = function_args
+                return final_output
+        
+        # Extract text content
+        content_text = message.content
+        if not content_text:
+            return None
+            
+        # Try to extract JSON from content
+        json_start = content_text.find('{')
+        if json_start != -1:
+            json_str = content_text[json_start:]
+            json_str = json_str.replace('\n', '').replace('\r', '').strip()
+            while json_str and (json_str.endswith("'") or json_str.endswith('"') or json_str.endswith(',')):
+                json_str = json_str[:-1].strip()
+            try:
+                final_output = json_repair.repair_json(json_str, return_objects=True)
+                logger.info('Loads final_output: %s', final_output)
+                return final_output
+            except json.JSONDecodeError as e:
+                if is_json_response:
+                    return None
+                return content_text
+        elif is_json_response:
+            return None
+        else:
+            return content_text
+
     except Exception as e:
-        logger.error('Error processing request: %s', e, exc_info=True)
+        logger.error('Error processing LiteLLM request: %s', e, exc_info=True)
         return None
+
