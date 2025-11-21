@@ -7,18 +7,15 @@ import json_repair
 import logging
 from django.utils.timezone import make_aware
 from datetime import datetime
-import boto3
 from retrying import retry
-from botocore.client import Config as BotoConfig
-from botocore.exceptions import ClientError
+from chatbot.utils.llm import LLM
+from chatbot.models.enums import LLMProvider
 
 from chatbot.utils.chat_utils import format_message_as_per_bedrock_format
 from chatbot.utils.transliterate_utils import get_transliteration_output
 
 logger = logging.getLogger('django')
 llm_retry_number = int(os.getenv('LLM_RETRY_NUMBER', 3))
-AWS_KEY = os.getenv('AWS_ACCESS_KEY_ID')
-AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 
 # Constants for field categorization
 TRANSLITERATE_FIELDS = ["user_name", "organization", "location", "district", "village", "block"]
@@ -626,61 +623,50 @@ def handle_bedrock_model(
         model_name=None, region_name='us-west-2', tools=None, is_json_response=False
 ):
     """Handle Bedrock model calls with retry logic"""
-    connect_timeout = company_bot.connect_timeout
-    read_timeout = company_bot.read_timeout
-
-    boto_config = BotoConfig(
-        connect_timeout=connect_timeout,
-        read_timeout=read_timeout,
-        retries={"mode": "adaptive"}
-    )
-
-    bedrock_runtime = boto3.client(
-        service_name='bedrock-runtime',
-        region_name=region_name,
-        aws_access_key_id=AWS_KEY,
-        aws_secret_access_key=AWS_SECRET_KEY,
-        config=boto_config
-    )
-
+    # use default model if not provided
     if model_name:
         model_id = model_name
     else:
         model_id = 'meta.llama3-1-8b-instruct-v1:0'
 
-    inference_config = {}
-
-    if max_token:
-        inference_config['maxTokens'] = max_token
-    if temperature is not None:
-        inference_config['temperature'] = temperature
-    if top_p:
-        inference_config['topP'] = top_p
+    # remove last assistant message if exists
     if messages and messages[-1]['role'] == 'assistant':
         messages.pop()
 
-    try:
-        request_payload = {
-            'modelId': model_id,
-            'messages': messages,
-            'system': system_prompt,
-        }
-        if inference_config:
-            request_payload['inferenceConfig'] = inference_config
-        if tools:
-            request_payload['toolConfig'] = tools.get('toolConfig', tools)
+    # Prepare system message if system_prompt provided
+    if system_prompt:
+        # Convert system_prompt format to messages format
+        if isinstance(system_prompt, list) and len(system_prompt) > 0:
+            system_text = system_prompt[0].get('text', '')
+            if system_text:
+                messages = [{'role': 'system', 'content': system_text}] + messages
 
-        response = bedrock_runtime.converse(**request_payload)
-        content_arr = response['output']['message']['content']
-        content = content_arr[0]
-        content_tool = content.get('toolUse')
-        if content_tool:
-            if isinstance(content_tool, str):
-                final_output = json_repair.repair_json(content_tool, return_objects=True)
+    try:
+        # Initialize LLM with liteLLM
+        llm = LLM(
+            model=model_id,
+            provider=LLMProvider.BEDROCK,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_token
+        )
+
+        # Call LLM
+        response = llm.prompt(messages=messages, tools=tools)
+
+        # extract content from response
+        content_arr = response.choices[0].message.content
+        
+        # Check for tool calls
+        if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
+            tool_call = response.choices[0].message.tool_calls[0]
+            if isinstance(tool_call.function.arguments, str):
+                final_output = json_repair.repair_json(tool_call.function.arguments, return_objects=True)
             else:
-                final_output = content_tool
+                final_output = tool_call.function.arguments
         else:
-            content_text = content.get('text')
+            # extract JSON from text content
+            content_text = content_arr if isinstance(content_arr, str) else str(content_arr)
             json_start = content_text.find('{')
             if json_start != -1:
                 json_str = content_text[json_start:]
@@ -698,14 +684,6 @@ def handle_bedrock_model(
                 return content_text
 
         return final_output
-
-    except ClientError as e:
-        error_response = e.response
-        print("❌ ClientError:")
-        print("Error Code:", error_response["Error"]["Code"])
-        print("Error Message:", error_response["Error"]["Message"])
-        print("Request ID:", error_response.get("ResponseMetadata", {}).get("RequestId"))
-        return None
 
     except Exception as e:
         print(f"Error processing request: {e}")

@@ -7,10 +7,9 @@ import json_repair
 import logging
 from django.utils.timezone import make_aware
 from datetime import datetime
-import boto3
 from retrying import retry
-from botocore.client import Config as BotoConfig
-from botocore.exceptions import ClientError
+from chatbot.utils.llm import LLM
+from chatbot.models.enums import LLMProvider
 
 from chatbot.utils.chat_utils import format_message_as_per_bedrock_format
 
@@ -374,61 +373,61 @@ def handle_bedrock_model(
         model_name=None, region_name='us-west-2', tools=None, is_json_response=False, aws_key=None,
         aws_secret_key=None
 ):
-    connect_timeout = company_bot.connect_timeout
-    read_timeout = company_bot.read_timeout
-
-    boto_config = BotoConfig(
-        connect_timeout=connect_timeout,
-        read_timeout=read_timeout,
-        retries={"mode": "adaptive"}
-    )
-
-    bedrock_runtime = boto3.client(
-        service_name='bedrock-runtime',
-        region_name=region_name,
-        aws_access_key_id=aws_key if aws_key else AWS_KEY,
-        aws_secret_access_key=aws_secret_key if aws_secret_key else AWS_SECRET_KEY,
-        config=boto_config
-    )
-    print("aws_key used: ", aws_key if aws_key else AWS_KEY)
+    print("aws_key used: ", aws_key if aws_key else os.getenv('AWS_ACCESS_KEY_ID'))
+    
+    # use default model if not provided
     if model_name:
         model_id = model_name
     else:
         model_id = 'meta.llama3-1-8b-instruct-v1:0'
-
         # 'meta.llama3-1-70b-instruct-v1:0'
 
-    inference_config = {}
-    additional_model_fields = {}
-
-    if max_token:
-        inference_config['maxTokens'] = max_token
-    if temperature is not None:
-        inference_config['temperature'] = temperature
-    if top_p:
-        inference_config['topP'] = top_p
+    # remove last assistant message if exists
     if messages and messages[-1]['role'] == 'assistant':
         messages.pop()
 
+    # Prepare system message if system_prompt provided
+    if system_prompt:
+        # Convert system_prompt format to messages format
+        if isinstance(system_prompt, list) and len(system_prompt) > 0:
+            system_text = system_prompt[0].get('text', '')
+            if system_text:
+                messages = [{'role': 'system', 'content': system_text}] + messages
+
     try:
-        request_payload = {
-            'modelId': model_id,
+        # Initialize LLM with liteLLM
+        llm = LLM(
+            model=model_id,
+            provider=LLMProvider.BEDROCK,
+            temperature=temperature,
+            top_p=top_p,
+            max_tokens=max_token
+        )
+
+        logger.info('Bedrock request payload: %s', {
+            'model': model_id,
             'messages': messages,
-            'system': system_prompt,
-        }
-        if inference_config:
-            request_payload['inferenceConfig'] = inference_config
+            'temperature': temperature,
+            'top_p': top_p,
+            'max_tokens': max_token,
+            'tools': tools
+        })
+
         if tools:
             print("tools: ", tools)
-            request_payload['toolConfig'] = tools.get('toolConfig')
 
-        logger.info('Bedrock request payload: %s', request_payload)
-        # print('Conversation Bedrock request payload: ', request_payload)
-        response = bedrock_runtime.converse(**request_payload)
-        # logger.info('Bedrock response: %s', response)
-        # print('Bedrock response: ', response)
+        # Call LLM
+        response = llm.prompt(messages=messages, tools=tools)
 
-        usage_metrics = response.get('usage', {})
+        # extract usage metrics from response
+        usage_metrics = None
+        if hasattr(response, 'usage') and response.usage:
+            usage_metrics = {
+                'inputTokens': response.usage.prompt_tokens,
+                'outputTokens': response.usage.completion_tokens,
+                'totalTokens': response.usage.total_tokens
+            }
+        
         if usage_metrics:
             logger.info("--------------USAGE METRICS-------------")
             input_tokens = usage_metrics.get('inputTokens', 0)
@@ -455,25 +454,28 @@ def handle_bedrock_model(
                 logger.info('💵 No pricing data configured in company_bot.other_params')
                 print('💵 No pricing data configured in company_bot.other_params')
 
-            # Log additional metrics if available
-            if 'stopReason' in response.get('stopReason', ''):
-                stop_reason = response.get('stopReason')
+            # Log stop reason if available
+            if hasattr(response.choices[0], 'finish_reason') and response.choices[0].finish_reason:
+                stop_reason = response.choices[0].finish_reason
                 logger.info(f'🛑 Stop Reason: {stop_reason}')
                 print(f'🛑 Stop Reason: {stop_reason}')
         else:
             logger.info('⚠️ No usage metrics found in response')
             print('⚠️ No usage metrics found in response')
 
-        content_arr = response['output']['message']['content']
-        content = content_arr[0]
-        content_tool = content.get('toolUse')
-        if content_tool:
-            if isinstance(content_tool, str):
-                final_output = json_repair.repair_json(content_tool, return_objects=True)
+        # extract content from response
+        content_arr = response.choices[0].message.content
+        
+        # Check for tool calls
+        if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
+            tool_call = response.choices[0].message.tool_calls[0]
+            if isinstance(tool_call.function.arguments, str):
+                final_output = json_repair.repair_json(tool_call.function.arguments, return_objects=True)
             else:
-                final_output = content_tool
+                final_output = tool_call.function.arguments
         else:
-            content_text = content.get('text')
+            # extract JSON from text content
+            content_text = content_arr if isinstance(content_arr, str) else str(content_arr)
             json_start = content_text.find('{')
             if json_start != -1:
                 json_str = content_text[json_start:]
@@ -493,17 +495,6 @@ def handle_bedrock_model(
                 return content_text
 
         return final_output
-    except ClientError as e:
-            error_response = e.response
-            logger.error("❌ Bedrock ClientError:")
-            logger.error(f"Error Code: {error_response['Error']['Code']}")
-            logger.error(f"Error Message: {error_response['Error']['Message']}")
-            logger.error(f"Request ID: {error_response.get('ResponseMetadata', {}).get('RequestId')}")
-            print("❌ ClientError:")
-            print("Error Code:", error_response["Error"]["Code"])
-            print("Error Message:", error_response["Error"]["Message"])
-            print("Request ID:", error_response.get("ResponseMetadata", {}).get("RequestId"))
-            # return None
     except Exception as e:
         logger.error('Error processing request: %s', e, exc_info=True)
         print(f'❌ Error processing Bedrock request: {e}')
