@@ -20,12 +20,11 @@ class StorageFactory:
     
     # Registry of available storage handlers
     _handlers = {
-        'aws': AWSS3StorageHandler,
-        's3': AWSS3StorageHandler,  # Alias for AWS
-        'local': LocalStorageHandler,
+        'AWS': AWSS3StorageHandler,
+        'LOCAL': LocalStorageHandler,
         # Add more providers here in the future:
-        # 'gcp': GCPStorageHandler,
-        # 'azure': AzureStorageHandler,
+        # 'GCP': GCPStorageHandler,
+        # 'AZURE': AzureStorageHandler,
     }
     
     @classmethod
@@ -47,9 +46,9 @@ class StorageFactory:
         """
         # Get provider from parameter or environment
         if provider is None:
-            provider = os.getenv('STORAGE_CLOUD_PROVIDER', '').lower()
+            provider = os.getenv('STORAGE_CLOUD_PROVIDER', '').upper()
         else:
-            provider = provider.lower()
+            provider = provider.upper()
         
         if not provider:
             raise ValueError(
@@ -90,7 +89,7 @@ class StorageFactory:
         if not issubclass(handler_class, BaseStorageHandler):
             raise ValueError(f"Handler class must extend BaseStorageHandler")
         
-        cls._handlers[provider.lower()] = handler_class
+        cls._handlers[provider.upper()] = handler_class
         logger.info(f"Registered storage handler for provider: {provider}")
     
     @classmethod
