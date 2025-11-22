@@ -464,29 +464,29 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
 
         queryset = self.filter_queryset(self.get_queryset())
 
-        # Already correct - using direct organization field
-        # organizations = (
-        #     queryset
-        #     .exclude(organization__name__isnull=True)
-        #     .exclude(organization__name='')
-        #     .annotate(
-        #         lower_name=Lower('organization__name')
-        #     )
-        #     .values_list('lower_name', flat=True)
-        #     .distinct()
-        # )
-        # Convert to set to remove any remaining duplicates, then sort
-        # organizations = sorted(list(set([org.title() for org in organizations if org])))
-
-        organizations = (
+        organizations_data = (
             queryset
             .exclude(organization__slug__isnull=True)
             .exclude(organization__slug='')
-            .values_list('organization__slug', flat=True)
+            .values('organization__name', 'organization__slug')
+            .annotate(
+                name=F('organization__name'),
+                slug=F('organization__slug')
+            )
             .distinct()
         )
 
-        organizations = sorted(list(set(organizations)))
+        organizations = []
+        seen_slugs = set()
+        for org in organizations_data:
+            if org['slug'] and org['slug'] not in seen_slugs:
+                organizations.append({
+                    'name': org['name'] if org['name'] else org['slug'].title(),
+                    'slug': org['slug']
+                })
+                seen_slugs.add(org['slug'])
+
+        organizations = sorted(organizations, key=lambda x: x['name'].lower())
 
         media_types = []
         media_type_counts = dict(
@@ -558,7 +558,7 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
 
         return Response({
             'total_count': queryset.count(),
-            'organizations': list(organizations),
+            'organizations': organizations,  # Now returns list of {name, slug} objects
             'media_types': media_types,
             'resource_types': resource_types,
             'priorities': priorities,
