@@ -1,70 +1,9 @@
 import traceback
-import requests
 from chatbot.models import Profile, MediaTypeChoices
 from chatbot.pdf.knowledge_service.project_report_pdf import generate_project_pdf
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_mitra_project_utils
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-import boto3
-import os
-import time
-
-
-def get_s3_presigned_url_and_upload(file_name, file_content, file_type, project_id, folder_structure):
-    """Generate presigned URL and upload file to S3"""
-    try:
-        # Prepare S3 key
-        if project_id:
-            id_to_use = f'{project_id}/'
-        else:
-            id_to_use = ''
-
-        key = f"{folder_structure}{id_to_use}{int(time.time())}-{file_name}"
-
-        # Initialize S3 client
-        s3_client = boto3.client(
-            "s3",
-            region_name=os.getenv('AWS_REGION'),
-            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-        )
-
-        # Generate pre-signed URL for upload
-        upload_url = s3_client.generate_presigned_url(
-            "put_object",
-            Params={
-                "Bucket": os.getenv('S3_BUCKET_NAME'),
-                "Key": key,
-            },
-            ExpiresIn=3600,
-        )
-
-        print("Upload URL: ", upload_url)
-        # Public URL for accessing the uploaded file
-        public_url = (
-            f"https://{os.getenv('S3_BUCKET_NAME')}.s3.{os.getenv('AWS_REGION')}.amazonaws.com/{key}"
-        )
-
-        print("public_url: ", public_url)
-        # Upload file to S3 using presigned URL
-        upload_response = requests.put(
-            upload_url,
-            data=file_content,
-            headers={
-                'Content-Type': file_type,
-            }
-        )
-        print("upload_response: ", upload_response)
-        if upload_response.status_code == 200:
-            print(f"File uploaded successfully to S3: {public_url}")
-            return public_url
-        else:
-            print(f"Failed to upload file to S3: {upload_response.status_code}")
-            return None
-
-    except Exception as e:
-        print(f"Error in S3 upload: {str(e)}")
-        return None
 
 
 @api_view(['POST'])

@@ -10,6 +10,7 @@ from datetime import datetime
 from retrying import retry
 from chatbot.utils.llm import LLM
 from chatbot.models.enums import LLMProvider
+from chatbot.llm_models.llm_script import handle_bedrock_model
 
 from chatbot.utils.chat_utils import format_message_as_per_bedrock_format
 
@@ -366,140 +367,6 @@ def get_pricing_from_company_bot(company_bot, model_id):
     except (json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
         logger.error(f"Error parsing pricing from company_bot.other_params: {e}")
         return None
-
-@retry(stop_max_attempt_number=llm_retry_number, retry_on_result=retry_if_result_none, wrap_exception=True)
-def handle_bedrock_model(
-        company_bot, system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
-        model_name=None, region_name='us-west-2', tools=None, is_json_response=False, aws_key=None,
-        aws_secret_key=None
-):
-    print("aws_key used: ", aws_key if aws_key else os.getenv('AWS_ACCESS_KEY_ID'))
-    
-    # use default model if not provided
-    if model_name:
-        model_id = model_name
-    else:
-        model_id = 'meta.llama3-1-8b-instruct-v1:0'
-        # 'meta.llama3-1-70b-instruct-v1:0'
-
-    # remove last assistant message if exists
-    if messages and messages[-1]['role'] == 'assistant':
-        messages.pop()
-
-    # Prepare system message if system_prompt provided
-    if system_prompt:
-        # Convert system_prompt format to messages format
-        if isinstance(system_prompt, list) and len(system_prompt) > 0:
-            system_text = system_prompt[0].get('text', '')
-            if system_text:
-                messages = [{'role': 'system', 'content': system_text}] + messages
-
-    try:
-        # Initialize LLM with liteLLM
-        llm = LLM(
-            model=model_id,
-            provider=LLMProvider.BEDROCK,
-            temperature=temperature,
-            top_p=top_p,
-            max_tokens=max_token
-        )
-
-        logger.info('Bedrock request payload: %s', {
-            'model': model_id,
-            'messages': messages,
-            'temperature': temperature,
-            'top_p': top_p,
-            'max_tokens': max_token,
-            'tools': tools
-        })
-
-        if tools:
-            print("tools: ", tools)
-
-        # Call LLM
-        response = llm.prompt(messages=messages, tools=tools)
-
-        # extract usage metrics from response
-        usage_metrics = None
-        if hasattr(response, 'usage') and response.usage:
-            usage_metrics = {
-                'inputTokens': response.usage.prompt_tokens,
-                'outputTokens': response.usage.completion_tokens,
-                'totalTokens': response.usage.total_tokens
-            }
-        
-        if usage_metrics:
-            logger.info("--------------USAGE METRICS-------------")
-            input_tokens = usage_metrics.get('inputTokens', 0)
-            output_tokens = usage_metrics.get('outputTokens', 0)
-            total_tokens = usage_metrics.get('totalTokens', 0)
-            logger.info(f'💰 Token Usage - Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}')
-            print(f'💰 Token Usage - Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}')
-
-            pricing = get_pricing_from_company_bot(
-                company_bot=company_bot, model_id=model_id
-            )
-            if pricing:
-                input_cost = (input_tokens / 1000) * pricing['input']
-                output_cost = (output_tokens / 1000) * pricing['output']
-                total_cost = input_cost + output_cost
-
-                logger.info(
-                    f'💵 Model Cost - Input: ${input_cost:.6f} (${pricing["input"]}/1K), Output: ${output_cost:.6f} '
-                    f'(${pricing["output"]}/1K), Total: ${total_cost:.6f}')
-                print(
-                    f'💵 Model Cost - Input: ${input_cost:.6f} (${pricing["input"]}/1K), Output: ${output_cost:.6f} '
-                    f'(${pricing["output"]}/1K), Total: ${total_cost:.6f}')
-            else:
-                logger.info('💵 No pricing data configured in company_bot.other_params')
-                print('💵 No pricing data configured in company_bot.other_params')
-
-            # Log stop reason if available
-            if hasattr(response.choices[0], 'finish_reason') and response.choices[0].finish_reason:
-                stop_reason = response.choices[0].finish_reason
-                logger.info(f'🛑 Stop Reason: {stop_reason}')
-                print(f'🛑 Stop Reason: {stop_reason}')
-        else:
-            logger.info('⚠️ No usage metrics found in response')
-            print('⚠️ No usage metrics found in response')
-
-        # extract content from response
-        content_arr = response.choices[0].message.content
-        
-        # Check for tool calls
-        if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
-            tool_call = response.choices[0].message.tool_calls[0]
-            if isinstance(tool_call.function.arguments, str):
-                final_output = json_repair.repair_json(tool_call.function.arguments, return_objects=True)
-            else:
-                final_output = tool_call.function.arguments
-        else:
-            # extract JSON from text content
-            content_text = content_arr if isinstance(content_arr, str) else str(content_arr)
-            json_start = content_text.find('{')
-            if json_start != -1:
-                json_str = content_text[json_start:]
-                json_str = json_str.replace('\n', '').replace('\r', '').strip()
-                while json_str and (json_str.endswith("'") or json_str.endswith('"') or json_str.endswith(',')):
-                    json_str = json_str[:-1].strip()
-                try:
-                    final_output = json_repair.repair_json(json_str, return_objects=True)
-                    print(f"Loads final_output: {final_output}")
-                    logger.info('Loads final_output: %s', final_output)
-                except json.JSONDecodeError as e:
-                    # logger.error('Error decoding JSON: %s', e, exc_info=True)
-                    return None
-            elif is_json_response:
-                return None
-            else:
-                return content_text
-
-        return final_output
-    except Exception as e:
-        logger.error('Error processing request: %s', e, exc_info=True)
-        print(f'❌ Error processing Bedrock request: {e}')
-        return None
-
 
 def get_clean_output(response):
     """

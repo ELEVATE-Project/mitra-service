@@ -8,6 +8,7 @@ from retrying import retry
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from chatbot.utils.llm import LLM
 from chatbot.models.enums import LLMProvider
+from chatbot.llm_models.llm_script import handle_bedrock_model
 
 
 # -------------- CONFIG ------------------
@@ -120,91 +121,6 @@ def run_story_matcher(input_file: str = INPUT_FILE):
 
 def retry_if_result_none(result):
     return result is None
-
-@retry(stop_max_attempt_number=llm_retry_number, retry_on_result=retry_if_result_none, wrap_exception=True)
-def handle_bedrock_model(
-        company_bot, system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
-        model_name=None, region_name='us-west-2', tools=None, is_json_response=False
-):
-    # use default model if not provided
-    if model_name:
-        model_id = model_name
-    else:
-        model_id = 'meta.llama3-1-8b-instruct-v1:0'
-        # 'meta.llama3-1-70b-instruct-v1:0'
-
-    # remove last assistant message if exists
-    if messages and messages[-1]['role'] == 'assistant':
-        messages.pop()
-
-    # Prepare system message if system_prompt provided
-    if system_prompt:
-        # Convert system_prompt format to messages format
-        if isinstance(system_prompt, list) and len(system_prompt) > 0:
-            system_text = system_prompt[0].get('text', '')
-            if system_text:
-                messages = [{'role': 'system', 'content': system_text}] + messages
-
-    try:
-        # Initialize LLM with liteLLM
-        llm = LLM(
-            model=model_id,
-            provider=LLMProvider.BEDROCK,
-            temperature=temperature,
-            top_p=top_p,
-            max_tokens=max_token
-        )
-
-        # print("request_payload: ", {
-        #     'model': model_id,
-        #     'messages': messages,
-        #     'temperature': temperature,
-        #     'top_p': top_p,
-        #     'max_tokens': max_token,
-        #     'tools': tools
-        # })
-
-        # Call LLM
-        response = llm.prompt(messages=messages, tools=tools)
-        # print("Response: ", response)
-
-        # extract content from response
-        content_arr = response.choices[0].message.content
-        
-        # Check for tool calls
-        if hasattr(response.choices[0].message, 'tool_calls') and response.choices[0].message.tool_calls:
-            tool_call = response.choices[0].message.tool_calls[0]
-            if isinstance(tool_call.function.arguments, str):
-                final_output = json_repair.repair_json(tool_call.function.arguments, return_objects=True)
-            else:
-                final_output = tool_call.function.arguments
-        else:
-            # extract JSON from text content
-            content_text = content_arr if isinstance(content_arr, str) else str(content_arr)
-            json_start = content_text.find('{')
-            if json_start != -1:
-                json_str = content_text[json_start:]
-                json_str = json_str.replace('\n', '').replace('\r', '').strip()
-                while json_str and (json_str.endswith("'") or json_str.endswith('"') or json_str.endswith(',')):
-                    json_str = json_str[:-1].strip()
-                try:
-                    final_output = json_repair.repair_json(json_str, return_objects=True)
-                    # print(f"Loads final_output: {final_output}")
-
-                except json.JSONDecodeError as e:
-                    print('Error decoding JSON: ', e)
-                    return None
-            elif is_json_response:
-                return None
-            else:
-                return content_text
-
-        return final_output
-
-    except Exception as e:
-        print(f"Error processing request: {e}")
-        return None
-
 
 def get_clean_output(response):
     if response and isinstance(response, dict):

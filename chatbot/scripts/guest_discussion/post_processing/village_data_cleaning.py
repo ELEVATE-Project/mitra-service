@@ -1,13 +1,13 @@
-from typing import List, Dict, Any
-from tqdm import tqdm
+from chatbot.llm_models.llm_script import handle_bedrock_model
 from chatbot.models import CompanyBot, Story, StoryTranslation, ChatSession
-import json
-import os
-import json_repair
-from retrying import retry
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from django.db import transaction
+from tqdm import tqdm
+from typing import List, Dict, Any
+import json
+import json_repair
 import logging
+import os
 
 # -------------- CONFIG ------------------
 MASTER_VILLAGES_FILE = 'chatbot/scripts/guest_discussion/master_villages.json'
@@ -360,118 +360,6 @@ def run_village_mapper(story_queryset=None) -> Dict[str, List[int]]:
 
 def retry_if_result_none(result):
     return result is None
-
-
-@retry(stop_max_attempt_number=llm_retry_number, retry_on_result=retry_if_result_none, wrap_exception=True)
-def handle_bedrock_model(
-        company_bot, system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
-        model_name=None, region_name='us-west-2', tools=None, is_json_response=False
-):
-    """Handle Bedrock model calls using LiteLLM"""
-    from chatbot.utils.llm import LLM
-    from chatbot.models.enums import LLMProvider
-    
-    if model_name:
-        model_id = model_name
-    else:
-        model_id = 'meta.llama3-1-8b-instruct-v1:0'
-
-    # Prepare LLM environment configuration
-    llm_env_conf = {
-        "AWS_REGION": region_name,
-        "AWS_ACCESS_KEY_ID": AWS_KEY,
-        "AWS_SECRET_ACCESS_KEY": AWS_SECRET_KEY
-    }
-    
-    # Clean up messages - remove last assistant message if present
-    if messages and messages[-1]['role'] == 'assistant':
-        messages.pop()
-    
-    # Add system prompt to messages if provided
-    formatted_messages = []
-    if system_prompt:
-        if isinstance(system_prompt, list):
-            formatted_messages.extend(system_prompt)
-        else:
-            formatted_messages.append({"role": "system", "content": system_prompt})
-    formatted_messages.extend(messages)
-
-    try:
-        # Initialize LLM client with LiteLLM
-        llm = LLM(
-            model=model_id,
-            provider=LLMProvider.BEDROCK,
-            temperature=temperature,
-            top_p=top_p,
-            max_tokens=max_token,
-            llm_env_conf=llm_env_conf
-        )
-        
-        # Prepare tools in LiteLLM format if provided
-        litellm_tools = None
-        if tools:
-            print("tools: ", tools)
-            # LiteLLM expects tools in OpenAI format, convert if necessary
-            litellm_tools = tools.get('toolConfig', {}).get('tools', []) if isinstance(tools, dict) else tools
-        
-        logger.info('LiteLLM Bedrock request - Model: %s, Messages count: %d', model_id, len(formatted_messages))
-        print(f'LiteLLM Bedrock request - Model: {model_id}, Messages count: {len(formatted_messages)}')
-        
-        # Make the LLM call using LiteLLM
-        response = llm.prompt(messages=formatted_messages, tools=litellm_tools)
-        
-        print('LiteLLM Bedrock response: ', response)
-
-        # Extract content from LiteLLM response (OpenAI format)
-        if not response.choices or len(response.choices) == 0:
-            logger.error('No choices in response')
-            return None
-            
-        message = response.choices[0].message
-        
-        # Check for tool calls first
-        tool_calls = getattr(message, 'tool_calls', None)
-        if tool_calls and len(tool_calls) > 0:
-            tool_call = tool_calls[0]
-            if hasattr(tool_call, 'function'):
-                function_args = tool_call.function.arguments
-                if isinstance(function_args, str):
-                    final_output = json_repair.repair_json(function_args, return_objects=True)
-                else:
-                    final_output = function_args
-                return final_output
-        
-        # Extract text content
-        content_text = message.content
-        if not content_text:
-            return None
-            
-        # Try to extract JSON from content
-        json_start = content_text.find('{')
-        if json_start != -1:
-            json_str = content_text[json_start:]
-            json_str = json_str.replace('\n', '').replace('\r', '').strip()
-            while json_str and (json_str.endswith("'") or json_str.endswith('"') or json_str.endswith(',')):
-                json_str = json_str[:-1].strip()
-            try:
-                final_output = json_repair.repair_json(json_str, return_objects=True)
-                print(f"Loads final_output: {final_output}")
-                logger.info('Loads final_output: %s', final_output)
-                return final_output
-            except json.JSONDecodeError as e:
-                print('Error decoding JSON: ', e)
-                if is_json_response:
-                    return None
-                return content_text
-        elif is_json_response:
-            return None
-        else:
-            return content_text
-
-    except Exception as e:
-        logger.error('Error processing LiteLLM request: %s', e, exc_info=True)
-        print(f'❌ Error processing LiteLLM Bedrock request: {e}')
-        return None
 
 
 def get_clean_output(response):
