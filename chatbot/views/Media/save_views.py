@@ -101,14 +101,31 @@ class BatchMediaSaveView(View):
                 display_mode=FileDisplayMode.PRIVATE
             )
 
-            # Save the file
-            source_media.file.save(filename, ContentFile(response.content), save=False)
-            source_media.save()
+            file_content = response.content
 
-            # Save the markdown file
-            base_filename = os.path.splitext(filename)[0]  # Remove extension
+            # Save the main file
+            if file_content:
+                # Create a fresh ContentFile for the main file
+                file_content_file = ContentFile(file_content)
+                source_media.file.save(filename, file_content_file, save=False)
+                print(f"Saved main file: {filename} ({len(file_content)} bytes)")
 
-            source_media.markdown_file.save(f"Markdown_{base_filename}.md", ContentFile(markdown_content), save=False)
+            # Save the markdown file if content exists
+            if markdown_content:
+                base_filename = os.path.splitext(filename)[0]  # Remove extension
+                markdown_filename = f"Markdown_{base_filename}.md"
+
+                # Ensure markdown content is properly encoded
+                if isinstance(markdown_content, str):
+                    markdown_content_bytes = markdown_content.encode('utf-8')
+                else:
+                    markdown_content_bytes = markdown_content
+
+                # Create a fresh ContentFile for the markdown
+                markdown_content_file = ContentFile(markdown_content_bytes)
+                source_media.markdown_file.save(markdown_filename, markdown_content_file, save=False)
+                print(f"Saved markdown file: {markdown_filename} ({len(markdown_content_bytes)} bytes)")
+
             source_media.save()
 
             # Add reference to original URL
@@ -132,8 +149,8 @@ class BatchMediaSaveView(View):
 
         except Exception as e:
             print(f"Error creating source document media for {source_doc_url}: {e}")
+            traceback.print_exc()
             return None
-
 
     def wait_for_vector_db_save_safe(self, task_id, timeout=30):
         """Enhanced waiting with better error handling"""
@@ -564,10 +581,10 @@ class BatchMediaSaveView(View):
             source_doc_url = subdoc_data.get('source_document')
             actual_parent = parent_media
 
-            print("="*50)
+            print("=" * 50)
             print("source_doc_url: ", source_doc_url)
             print("source_doc: ", source_doc)
-            print("="*50)
+            print("=" * 50)
 
             if source_doc_url:
                 source_documents = source_doc.get('source_documents', [])
