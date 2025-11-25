@@ -179,16 +179,19 @@ def create_project_view(request):
 
         # Prepare media response
     media_response = []
+    pdf_filename = "Project_Report.pdf"
     if pdf_url:
         media_response.append({
             'media_type': MediaTypeChoices.PDF,
-            'url': pdf_url
+            'url': pdf_url,
+            'file_name': pdf_filename
         })
     else:
         # Fallback to default URL if upload failed
         media_response.append({
             'media_type': MediaTypeChoices.PDF,
-            'url': ''
+            'url': '',
+            'file_name': pdf_filename
         })
 
     return Response({
