@@ -60,9 +60,35 @@ def upsert_single_file(filename, file, metadata, media):
         'accept': 'application/json',
     }
     print("payload: ", payload)
-    response = requests.request("POST", url, headers=headers, data=payload, files=files)
-    print("upserted: ", response.json())
-    return response.status_code, response.text
+
+    try:
+        response = requests.request(
+            "POST",  url, headers=headers, data=payload,
+            files=files, timeout=60
+        )
+
+        print(f"Response status code: {response.status_code}")
+
+        try:
+            response_json = response.json()
+            print("upserted: ", response_json)
+            return response.status_code, json.dumps(response_json)
+        except requests.exceptions.JSONDecodeError:
+            print(f"Non-JSON response received. Status: {response.status_code}")
+            print(f"Response headers: {response.headers}")
+            print(f"Response content preview: {response.text[:500] if response.text else 'Empty'}")
+
+            return response.status_code, response.text
+
+    except requests.exceptions.Timeout:
+        print(f"Request timeout after 60 seconds for media ID: {media.id}")
+        return 504, "Request timeout"
+    except requests.exceptions.ConnectionError as e:
+        print(f"Connection error for media ID {media.id}: {str(e)}")
+        return 503, f"Connection error: {str(e)}"
+    except Exception as e:
+        print(f"Unexpected error for media ID {media.id}: {str(e)}")
+        return 500, f"Unexpected error: {str(e)}"
 
 
 def delete_single_file(media_id, company_slug=None):
