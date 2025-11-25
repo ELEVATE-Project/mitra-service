@@ -23,6 +23,7 @@ def extract_tags_from_document_url(url: str, company_bot) -> Dict[str, Any]:
         "key_entities": [],
         "url": [],
         "subdocument": [],
+        "source_document": [],
         "images": []
     }
 
@@ -56,6 +57,7 @@ def extract_tags_from_document_file(file, company_bot, file_extension, other_dat
         "key_entities": [],
         "url": [],
         "subdocument": [],
+        "source_document": [],
         "images": []
     }
 
@@ -122,6 +124,7 @@ def extract_tags_from_document_file(file, company_bot, file_extension, other_dat
             "key_entities": [],
             "url": [],
             "subdocument": [],
+            "source_document": [],
             "images": []
         }
 
@@ -142,7 +145,7 @@ def extract_tags_from_document_file(file, company_bot, file_extension, other_dat
             # Generic validation error
             error_response["error_type"] = "validation_error"
 
-        return error_response  # NOW RETURNS ERROR INSTEAD OF DEFAULT
+        return error_response
 
     except Exception as e:
         # Handle any other unexpected errors
@@ -160,6 +163,7 @@ def extract_tags_from_document_file(file, company_bot, file_extension, other_dat
             "key_entities": [],
             "url": [],
             "subdocument": [],
+            "source_document": [],
             "images": []
         }
 
@@ -195,6 +199,7 @@ def get_doc_tags_from_ai(file, company_bot, file_extension, other_data):
                 "key_entities": [],
                 "url": [],
                 "subdocument": [],
+                "source_document": [],
                 "images": []
             }
         elif "file size" in error_message.lower() or "exceeds the maximum allowed size" in error_message.lower():
@@ -211,6 +216,7 @@ def get_doc_tags_from_ai(file, company_bot, file_extension, other_data):
                 "key_entities": [],
                 "url": [],
                 "subdocument": [],
+                "source_document": [],
                 "images": []
             }
         else:
@@ -227,6 +233,7 @@ def get_doc_tags_from_ai(file, company_bot, file_extension, other_data):
                 "key_entities": [],
                 "url": [],
                 "subdocument": [],
+                "source_document": [],
                 "images": []
             }
 
@@ -246,5 +253,6 @@ def get_doc_tags_from_ai(file, company_bot, file_extension, other_data):
             "key_entities": [],
             "url": [],
             "subdocument": [],
+            "source_document": [],
             "images": []
         }

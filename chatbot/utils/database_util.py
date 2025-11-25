@@ -11,18 +11,48 @@ base_url = os.getenv('VECTOR_DB_BASE_URL')
 
 
 def upsert_single_file(filename, file, metadata, media):
-    url = f"https://{base_url}/api/documents"
-
+    url = f"{base_url}/api/documents"
+    print("url: ", url)
     if isinstance(metadata, dict):
         metadata_json = json.dumps(metadata)
     else:
         metadata_json = metadata
 
+    # Build payload with new format
     payload = {
         'metadata': metadata_json,
         'source_id': str(media.id),
         'priority': media.priority
     }
+    
+    # Add company_id if available
+    if hasattr(media, 'company_bot') and media.company_bot and media.company_bot.company:
+        payload['company_id'] = media.company_bot.company.slug
+    elif hasattr(media, 'organization') and media.organization:
+        payload['company_id'] = media.organization.slug
+    
+    # Add title if available (from KeyValue or media name)
+    title = None
+    if hasattr(media, 'key_values'):
+        from chatbot.models import KeyValue
+        title_kv = KeyValue.objects.filter(media=media, key__iexact='TITLE').first()
+        if title_kv:
+            title = title_kv.value
+    if not title:
+        title = media.name
+    if title:
+        payload['title'] = title
+    
+    # Add summary if available (from description)
+    if hasattr(media, 'description') and media.description:
+        payload['summary'] = media.description
+    
+    # Add tags if available
+    if hasattr(media, 'tags'):
+        tags_list = list(media.tags.values_list('name', flat=True))
+        if tags_list:
+            payload['tags'] = json.dumps(tags_list)
+    
     files = [
         ('file', (filename, file, media.media_type))
     ]
@@ -36,7 +66,7 @@ def upsert_single_file(filename, file, metadata, media):
 
 
 def delete_single_file(media_id, company_slug=None):
-    url = f"https://{base_url}/api/documents/{media_id}"
+    url = f"{base_url}/api/documents/{media_id}"
 
     params = {'company_id': company_slug} if company_slug else {}
 
@@ -50,7 +80,7 @@ def delete_single_file(media_id, company_slug=None):
 
 def update_single_file(media_id, filename, file, metadata, media):
     """Update a file in the vector database by deleting and re-uploading"""
-    url = f"https://{base_url}/api/documents/{media_id}"
+    url = f"{base_url}/api/documents/{media_id}"
 
     if isinstance(metadata, dict):
         metadata_json = json.dumps(metadata)
@@ -70,6 +100,30 @@ def update_single_file(media_id, filename, file, metadata, media):
     # Add company_id for safety verification if available
     if hasattr(media, 'company_bot') and media.company_bot and media.company_bot.company:
         payload['company_id'] = media.company_bot.company.slug
+    elif hasattr(media, 'organization') and media.organization:
+        payload['company_id'] = media.organization.slug
+    
+    # Add title if available (from KeyValue or media name)
+    title = None
+    if hasattr(media, 'key_values'):
+        from chatbot.models import KeyValue
+        title_kv = KeyValue.objects.filter(media=media, key__iexact='TITLE').first()
+        if title_kv:
+            title = title_kv.value
+    if not title:
+        title = media.name
+    if title:
+        payload['title'] = title
+    
+    # Add summary if available (from description)
+    if hasattr(media, 'description') and media.description:
+        payload['summary'] = media.description
+    
+    # Add tags if available
+    if hasattr(media, 'tags'):
+        tags_list = list(media.tags.values_list('name', flat=True))
+        if tags_list:
+            payload['tags'] = json.dumps(tags_list)
 
     files = [
         ('file', (filename, file, media.media_type))
