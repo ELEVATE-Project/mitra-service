@@ -15,6 +15,8 @@ import re
 from datetime import timedelta
 import sentry_sdk
 from dotenv import load_dotenv
+from socket import gethostbyname
+from socket import gethostname
 
 load_dotenv()
 
@@ -78,6 +80,8 @@ CORS_ALLOWED_METHODS = [
 ]
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
+
+ALLOWED_HOSTS.append(gethostbyname(gethostname()))
 
 
 # Application definition
@@ -251,8 +255,7 @@ INTERNAL_IPS = [
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
-CSRF_TRUSTED_ORIGINS = ['https://*.shikshagraha.org', 'https://*.shikshalokam.org', 'https://*.127.0.0.1',
-                        'https://*.gritworks.ai', 'http://localhost:3000']
+CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "https://*.shikshalokam.org,https://*.127.0.0.1,https://*.gritworks.ai,http://localhost:3000").split(',')
 
 STORAGES = {
     "default": {
