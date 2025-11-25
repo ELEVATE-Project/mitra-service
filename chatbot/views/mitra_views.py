@@ -129,6 +129,7 @@ def create_project_view(request):
 
     print("Result: ", result)
     pdf_url = None
+    pdf_filename = "Project_Report.pdf"
 
     try:
         # Get author info from profile
@@ -179,7 +180,6 @@ def create_project_view(request):
 
         # Prepare media response
     media_response = []
-    pdf_filename = pdf_filename if pdf_filename else "Project_Report.pdf"
     if pdf_url:
         media_response.append({
             'media_type': MediaTypeChoices.PDF,
