@@ -115,7 +115,7 @@ def generate_objective_utils(user_problem_statement, company_bot):
                         print(f"Skipping invalid result: {result}")
                         continue
                     
-                    relevance_score = result.get('field_scores', {}).get('text', 0)
+                    relevance_score = result.get('score', 0)
                     print(f"relevance_score: {relevance_score}, filter_score: {company_bot.filter_score}")
                     
                     # Filter based on filter_score - only include chunks with score >= filter_score
@@ -160,7 +160,7 @@ def generate_objective_utils(user_problem_statement, company_bot):
         if not filtered_chunks:
             # If no chunks found, provide detailed message
             total_chunks = len(chunks_response.get("results", []))
-            max_score = max([r.get('field_scores', {}).get('text', 0) for r in chunks_response.get("results", [])], default=0)
+            max_score = max([r.get('score', 0) for r in chunks_response.get("results", [])], default=0)
             
             warning_message = (
                 f'No chunks met the filter criteria. '
@@ -556,7 +556,7 @@ def generate_action_list_utils(query, objective_text, company_bot):
                         print(f"Skipping invalid result: {result}")
                         continue
                     
-                    relevance_score = result.get('field_scores', {}).get('text', 0)
+                    relevance_score = result.get('score', 0)
                     print(f"relevance_score: {relevance_score}, filter_score: {company_bot.filter_score}")
                     
                     # Filter based on filter_score
@@ -600,7 +600,7 @@ def generate_action_list_utils(query, objective_text, company_bot):
         if not filtered_chunks:
             # If no chunks found, provide detailed message
             total_chunks = len(chunks_response.get("results", []))
-            max_score = max([r.get('field_scores', {}).get('text', 0) for r in chunks_response.get("results", [])], default=0)
+            max_score = max([r.get('score', 0) for r in chunks_response.get("results", [])], default=0)
             
             warning_message = (
                 f'No chunks met the filter criteria. '

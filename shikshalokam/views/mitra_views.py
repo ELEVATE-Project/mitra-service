@@ -54,6 +54,7 @@ def paraphrase_view(request):
 
 @api_view(['POST'])
 def generate_objectives_view(request):
+    error_message = ""
     try:
         body = request.data
         user_input = body.get('user_input')
@@ -82,12 +83,20 @@ def generate_objectives_view(request):
         gen_result = generate_objective_utils(
             user_problem_statement=user_input, company_bot=company_bot
         )
+        if gen_result['objective_list'] == [] or not gen_result['objective_list']:
+            bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
+            error_message = bot_vernacular.error_message if bot_vernacular and bot_vernacular.error_message \
+                else "Please try again!"
+            if voice_provider and language != 'en':
+                error_message = translate_field(
+                    voice_provider=voice_provider, message_body=error_message, target_language=language
+                )
         
         # Check if generation was successful
         if gen_result['status'] != 'ok':
             return Response({
                 'status': gen_result['status'],
-                'message': gen_result['message'],
+                'message': error_message,
                 'objective_list': [],
                 'chunks': None
             }, status=gen_result['status_code'])
@@ -99,7 +108,7 @@ def generate_objectives_view(request):
         if not objective_list:
             return Response({
                 'status': 'ok',
-                'message': gen_result.get('message', 'No objectives generated'),
+                'message': error_message,
                 'objective_list': []
             }, status=200)
         
@@ -110,7 +119,7 @@ def generate_objectives_view(request):
         if post_result['status'] != 'ok':
             return Response({
                 'status': post_result['status'],
-                'message': post_result['message'],
+                'message': error_message,
                 'objective_list': [],
                 'chunks': chunk_response
             }, status=post_result['status_code'])
@@ -135,6 +144,7 @@ def generate_objectives_view(request):
         print("type of: ", type(translated_list))
         return Response({
             'status': 'ok',
+            'message': error_message,
             'objective_list': objective_list,
             'chunks': chunk_response
         }, status=200)
@@ -144,7 +154,7 @@ def generate_objectives_view(request):
         traceback.print_exc()
         return Response({
             'status': 'error',
-            'message': f'Internal server error: {str(e)}',
+            'message': error_message if error_message else "Please try again!",
             'objective_list': [],
             'chunks': None
         }, status=500)
@@ -242,6 +252,7 @@ def validate_actions_view(request):
 
 @api_view(['POST'])
 def generate_action_list_view(request):
+    error_message = ""
     try:
         body = request.data
         user_problem_statement = body.get('user_problem_statement')
@@ -277,12 +288,21 @@ def generate_action_list_view(request):
             objective_text=user_objective,
             company_bot=company_bot
         )
+
+        if gen_result['action_list'] == [] or not gen_result['action_list']:
+            bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
+            error_message = bot_vernacular.error_message if bot_vernacular and bot_vernacular.error_message \
+                else "Please try again!"
+            if voice_provider and language != 'en':
+                error_message = translate_field(
+                    voice_provider=voice_provider, message_body=error_message, target_language=language
+                )
         
         # Check if generation was successful
         if gen_result['status'] != 'ok':
             return Response({
                 'status': gen_result['status'],
-                'message': gen_result['message'],
+                'message': error_message,
                 'action_list': []
             }, status=gen_result['status_code'])
         
@@ -293,7 +313,7 @@ def generate_action_list_view(request):
         if not action_list:
             return Response({
                 'status': 'ok',
-                'message': gen_result.get('message', 'No actions generated'),
+                'message': error_message,
                 'action_list': []
             }, status=200)
         
@@ -304,7 +324,7 @@ def generate_action_list_view(request):
         if post_result['status'] != 'ok':
             return Response({
                 'status': post_result['status'],
-                'message': post_result['message'],
+                'message': error_message,
                 'action_list': []
             }, status=post_result['status_code'])
         
@@ -335,6 +355,7 @@ def generate_action_list_view(request):
 
         return Response({
             'status': 'ok',
+            'message': error_message,
             'action_list': action_list
         }, status=200)
     
@@ -343,7 +364,7 @@ def generate_action_list_view(request):
         traceback.print_exc()
         return Response({
             'status': 'error',
-            'message': f'Internal server error: {str(e)}',
+            'message': error_message if error_message else "",
             'action_list': []
         }, status=500)
 
