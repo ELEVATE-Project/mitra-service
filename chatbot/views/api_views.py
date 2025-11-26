@@ -109,10 +109,11 @@ def login(request):
             print("Login User Password: ", password)
 
             host = request.get_host()
+
             subdomain = host.split('.')[0]
             if subdomain in [
                 'demo', 'demous', 'localhost:9000', 'interview', 'voicedemo', 'mohini', 'devqa-mohini', 'qa-mohini',
-                'uat-mohini'
+                'uat-mohini', 'apimitra', 'mitra'
             ]:
                 print("In here 1")
                 p = Profile.objects.filter(email=email)
