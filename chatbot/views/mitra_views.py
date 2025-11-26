@@ -56,8 +56,8 @@ def get_s3_presigned_url_and_upload(file_name, file_content, file_type, project_
         )
         print("upload_response: ", upload_response)
         if upload_response.status_code == 200:
-            print(f"File uploaded successfully to S3: {public_url}")
-            return public_url
+            print(f"File uploaded successfully to S3: {key}")
+            return key
         else:
             print(f"Failed to upload file to S3: {upload_response.status_code}")
             return None
@@ -129,6 +129,7 @@ def create_project_view(request):
 
     print("Result: ", result)
     pdf_url = None
+    pdf_filename = "Project_Report.pdf"
 
     try:
         # Get author info from profile
@@ -159,7 +160,7 @@ def create_project_view(request):
             pdf_filename = pdf_filename.replace(' ', '_')
 
             # Upload to S3 and get public URL
-            pdf_url = get_s3_presigned_url_and_upload(
+            key = get_s3_presigned_url_and_upload(
                 file_name=pdf_filename,
                 file_content=pdf_content.read(),
                 file_type="application/pdf",
@@ -167,8 +168,9 @@ def create_project_view(request):
                 folder_structure="shikshagraha_commons/"
             )
 
-            if pdf_url:
-                print(f"PDF successfully uploaded to: {pdf_url}")
+            if key:
+                base = os.getenv("S3_MEDIA_URL")
+                pdf_url = f"{base}{key}"
             else:
                 print("Failed to upload PDF to S3")
 
@@ -181,13 +183,15 @@ def create_project_view(request):
     if pdf_url:
         media_response.append({
             'media_type': MediaTypeChoices.PDF,
-            'url': pdf_url
+            'url': pdf_url,
+            'file_name': pdf_filename
         })
     else:
         # Fallback to default URL if upload failed
         media_response.append({
             'media_type': MediaTypeChoices.PDF,
-            'url': ''
+            'url': '',
+            'file_name': pdf_filename
         })
 
     return Response({
