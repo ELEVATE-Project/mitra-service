@@ -464,19 +464,29 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
 
         queryset = self.filter_queryset(self.get_queryset())
 
-        # Already correct - using direct organization field
-        organizations = (
+        organizations_data = (
             queryset
-            .exclude(organization__name__isnull=True)
-            .exclude(organization__name='')
+            .exclude(organization__slug__isnull=True)
+            .exclude(organization__slug='')
+            .values('organization__name', 'organization__slug')
             .annotate(
-                lower_name=Lower('organization__name')
+                name=F('organization__name'),
+                slug=F('organization__slug')
             )
-            .values_list('lower_name', flat=True)
             .distinct()
         )
-        # Convert to set to remove any remaining duplicates, then sort
-        organizations = sorted(list(set([org.title() for org in organizations if org])))
+
+        organizations = []
+        seen_slugs = set()
+        for org in organizations_data:
+            if org['slug'] and org['slug'] not in seen_slugs:
+                organizations.append({
+                    'name': org['name'] if org['name'] else org['slug'].title(),
+                    'slug': org['slug']
+                })
+                seen_slugs.add(org['slug'])
+
+        organizations = sorted(organizations, key=lambda x: x['name'].lower())
 
         media_types = []
         media_type_counts = dict(
@@ -548,7 +558,7 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
 
         return Response({
             'total_count': queryset.count(),
-            'organizations': list(organizations),
+            'organizations': organizations,  # Now returns list of {name, slug} objects
             'media_types': media_types,
             'resource_types': resource_types,
             'priorities': priorities,
@@ -793,14 +803,39 @@ class MediaSearchV2View(APIView):
         """
         Exclude media where document_type is "Source Document" from v2 API results.
         This filters the vector DB results by checking metadata for document_type.
+        Also applies filter_score to exclude results below relevance threshold.
         
         Args:
             results: List of result dictionaries from vector DB
             
         Returns:
-            Filtered list of results excluding "Source Document" media
+            Filtered list of results excluding "Source Document" media and low relevance scores
         """
-        # Get all media IDs that have document_type = "Source Document"
+        from chatbot.models import CompanyBot
+        company_bot = CompanyBot.objects.get(route='/sg_search_bot')
+        
+        # Step 1: Apply filter_score to exclude results below relevance threshold
+        score_filtered_results = []
+        score_excluded_count = 0
+        
+        for result in results:
+            if not isinstance(result, dict):
+                print(f"[MediaSearchV2View] Skipping invalid result: {result}")
+                continue
+            
+            relevance_score = result.get('score', 0)
+            print(f"[MediaSearchV2View] relevance_score: {relevance_score}, filter_score: {company_bot.filter_score}")
+            
+            # Filter based on filter_score - only include results with score >= filter_score
+            if relevance_score >= company_bot.filter_score:
+                score_filtered_results.append(result)
+            else:
+                score_excluded_count += 1
+        
+        if score_excluded_count > 0:
+            print(f"[MediaSearchV2View] Filter score: Excluded {score_excluded_count} results below threshold {company_bot.filter_score}")
+        
+        # Step 2: Get all media IDs that have document_type = "Source Document"
         source_document_media_ids = set(
             KeyValue.objects.annotate(
                 norm_key=Lower('key', output_field=TextField())
@@ -810,11 +845,11 @@ class MediaSearchV2View(APIView):
             ).values_list('media_id', flat=True)
         )
         
-        # Filter out results where source_id matches excluded media IDs
+        # Step 3: Filter out results where source_id matches excluded media IDs
         filtered_results = []
         excluded_count = 0
         
-        for result in results:
+        for result in score_filtered_results:
             source_id = result.get('source_id')
             # Try to convert source_id to int for comparison
             try:
