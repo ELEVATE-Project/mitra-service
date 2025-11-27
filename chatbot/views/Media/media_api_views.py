@@ -607,9 +607,9 @@ class MediaSearchV2View(APIView):
         - offset (optional): Pagination offset (default: 0)
         - ordering (optional): Sort order field. Prefix with '-' for descending order.
                              Supported fields: id, name, created_at, updated_at, priority, media_type, organization, title, score
-                             NOTE: When query or filters are present, ordering is ALWAYS 'score' (relevance-based).
-                                   The ordering parameter is only used when browsing all content without query/filters.
-                             Default: 'score' when query/filters present, '-created_at' otherwise
+                             NOTE: When search query (q) is present, ordering is ALWAYS 'score' (relevance-based).
+                                   When only filters are applied (no query), the ordering parameter is respected.
+                             Default: 'score' when query present, '-created_at' otherwise
         - categories (optional): Comma-separated list of categories/tags
         - organizations (optional): Comma-separated list of organizations
         - resource_type (optional): Comma-separated list of resource types
@@ -626,7 +626,7 @@ class MediaSearchV2View(APIView):
         
         # Pagination parameters
         try:
-            limit = int(request.query_params.get('limit', 20))
+            limit = int(request.query_params.get('limit', 1000000000))
             offset = int(request.query_params.get('offset', 0))
         except ValueError:
             return Response({
@@ -646,36 +646,37 @@ class MediaSearchV2View(APIView):
         if not media_types:
             media_types = self._parse_list_param(request.query_params.get('file_type', ''))
         
-        # Ordering parameter (smart defaults based on query/filters)
-        # IMPORTANT: When query/filters are present, ALWAYS use score-based ordering
-        # The ordering parameter is IGNORED when there's a query/filter
-        has_query_or_filters = bool(query or categories or organizations or resource_type or media_types)
+        # Ordering parameter (smart defaults based on query)
+        # IMPORTANT: When search query is present, ALWAYS use score-based ordering
+        # When only filters are present (no query), respect user's ordering choice
         
         ordering_param = request.query_params.get('ordering', '').strip()
         
         # Smart ordering logic:
-        # 1. If query/filters present -> ALWAYS use 'score' (ignore ordering parameter)
-        # 2. If no query/filters and NO explicit ordering -> use '-created_at'
-        # 3. If no query/filters and explicit ordering -> respect user choice
+        # 1. If search query present -> ALWAYS use 'score' (ignore ordering parameter)
+        # 2. If no query but filters present -> respect user's ordering choice or default to '-created_at'
+        # 3. If no query/filters and NO explicit ordering -> use '-created_at'
+        # 4. If no query/filters and explicit ordering -> respect user choice
         
-        if has_query_or_filters:
-            # ALWAYS use score when query/filters are present
+        if query:
+            # ALWAYS use score when search query is present
             ordering = 'score'
             if ordering_param:
-                print(f"[MediaSearchV2View] Query/filters present - FORCING 'score' ordering (ignoring user's '{ordering_param}')")
+                print(f"[MediaSearchV2View] Search query present - FORCING 'score' ordering (ignoring user's '{ordering_param}')")
             else:
-                print(f"[MediaSearchV2View] Query/filters present - using 'score' ordering")
+                print(f"[MediaSearchV2View] Search query present - using 'score' ordering")
         else:
-            # No query/filters - use created_at or user's choice
+            # No search query - respect user's ordering choice or use default
             if not ordering_param:
                 ordering = '-created_at'  # Sort by newest first
-                print(f"[MediaSearchV2View] No query/filters - using default '-created_at' ordering")
+                print(f"[MediaSearchV2View] No search query - using default '-created_at' ordering")
             else:
                 ordering = ordering_param
-                print(f"[MediaSearchV2View] No query/filters - using explicit ordering: '{ordering_param}'")
+                print(f"[MediaSearchV2View] No search query - using explicit ordering: '{ordering_param}'")
         
         ordering_field, ordering_reverse = self._parse_ordering(ordering)
         print(f"[MediaSearchV2View] Parsed ordering: ordering_param='{ordering}' -> field='{ordering_field}', reverse={ordering_reverse}")
+        print(f"[MediaSearchV2View] Raw request ordering parameter: '{ordering_param}'")
         
         # Calculate top_k for vector DB
         # When ordering is applied, we need to fetch ALL results (or a large batch) to sort properly
@@ -723,7 +724,11 @@ class MediaSearchV2View(APIView):
         # Log results BEFORE ordering
         if all_results and len(all_results) > 0:
             first_result = all_results[0]
-            print(f"[MediaSearchV2View] BEFORE ordering - First result: score={first_result.get('score', 0)}, created_at={first_result.get('metadata', {}).get('created_at')}")
+            first_id = first_result.get('source_id') or first_result.get('id')
+            print(f"[MediaSearchV2View] BEFORE ordering - First result: id={first_id}, score={first_result.get('score', 0)}, created_at={first_result.get('metadata', {}).get('created_at')}")
+            # Show first 5 IDs before sorting
+            ids_before = [r.get('source_id') or r.get('id') for r in all_results[:5]]
+            print(f"[MediaSearchV2View] BEFORE ordering - First 5 IDs: {ids_before}")
         
         # Apply ordering if specified (sort results by the ordering field)
         if ordering_field and all_results:
@@ -733,7 +738,11 @@ class MediaSearchV2View(APIView):
             if all_results and len(all_results) > 0:
                 first_result = all_results[0]
                 metadata = first_result.get('metadata', {})
-                print(f"[MediaSearchV2View] AFTER ordering - First result: score={first_result.get('score', 0)}, created_at={metadata.get('created_at')}, title={metadata.get('title', '')[:50]}")
+                first_id = first_result.get('source_id') or first_result.get('id')
+                print(f"[MediaSearchV2View] AFTER ordering - First result: id={first_id}, score={first_result.get('score', 0)}, created_at={metadata.get('created_at')}, title={metadata.get('title', '')[:50]}")
+                # Show first 5 IDs after sorting
+                ids_after = [r.get('source_id') or r.get('id') for r in all_results[:5]]
+                print(f"[MediaSearchV2View] AFTER ordering - First 5 IDs: {ids_after}")
         else:
             print(f"[MediaSearchV2View] WARNING: Ordering NOT applied! ordering_field={ordering_field}, all_results count={len(all_results)}")
         
@@ -937,9 +946,21 @@ class MediaSearchV2View(APIView):
                     return 0.0
             elif field == 'id':
                 # Try to get source_id and convert to int for proper numeric sorting
+                # Check both top-level and metadata for id/source_id
+                source_id = item.get('source_id') or item.get('id') or metadata.get('id') or metadata.get('source_id')
+                if source_id is None:
+                    return 0
                 try:
-                    return int(item.get('source_id', 0) or 0)
-                except (ValueError, TypeError):
+                    # Handle string IDs that might have been converted
+                    if isinstance(source_id, str):
+                        id_value = int(source_id)
+                    elif isinstance(source_id, (int, float)):
+                        id_value = int(source_id)
+                    else:
+                        id_value = 0
+                    return id_value
+                except (ValueError, TypeError) as e:
+                    print(f"[MediaSearchV2View] Warning: Could not convert source_id '{source_id}' (type: {type(source_id)}) to int: {e}")
                     return 0
             elif field == 'name' or field == 'title':
                 # Title can be in metadata or top-level
@@ -977,6 +998,9 @@ class MediaSearchV2View(APIView):
                     metadata = result.get('metadata', {})
                     if field == 'score':
                         print(f"  Result {i+1}: score={result.get('score', 0)}")
+                    elif field == 'id':
+                        source_id = result.get('source_id') or result.get('id') or metadata.get('id') or metadata.get('source_id')
+                        print(f"  Result {i+1}: id={source_id}, title={metadata.get('title', '')[:30]}")
                     elif field == 'created_at':
                         print(f"  Result {i+1}: created_at={metadata.get('created_at')}")
                     elif field == 'title' or field == 'name':

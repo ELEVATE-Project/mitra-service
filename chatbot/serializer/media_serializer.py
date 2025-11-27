@@ -92,6 +92,9 @@ class MediaSearchResultSerializer(serializers.Serializer):
         """
         metadata = instance.get('metadata', {})
         
+        # Debug: Print all metadata keys to see what's available
+        print(f"[MediaSearchResultSerializer] Available metadata keys: {list(metadata.keys())}")
+        
         # Extract key fields from metadata
         url = metadata.get('url', '')
         company = metadata.get('company', '')
@@ -122,16 +125,17 @@ class MediaSearchResultSerializer(serializers.Serializer):
                 document_type = metadata[key]
                 break
         
-        # Fetch file_size, organization_url, and org_logo from database
+        # Fetch file_size, organization_url, org_logo, and key_entities from database
         # These fields are NOT reliable in vector DB metadata, so we query the Media model directly
         file_size = None
         organization_url = None
         org_logo = None
+        key_entities = None
         
         if media_id:
             try:
                 from chatbot.models.media_models import Media
-                media_obj = Media.objects.select_related('organization').only(
+                media_obj = Media.objects.select_related('organization').prefetch_related('key_values').only(
                     'id', 'file', 'organization__url', 'organization__logo'
                 ).get(id=media_id)
                 
@@ -146,12 +150,33 @@ class MediaSearchResultSerializer(serializers.Serializer):
                     # Get org_logo from related Company model (same as V1 API)
                     if media_obj.organization.logo:
                         org_logo = media_obj.organization.get_public_url()
+                
+                # Get key_entities from KeyValue model (fallback if not in metadata)
+                key_entities_kv = media_obj.key_values.filter(key__iexact='KEY ENTITIES').first()
+                if key_entities_kv:
+                    key_entities = key_entities_kv.value
+                
+                # Debug logging
+                print(f"[MediaSearchResultSerializer] Media ID {media_id}: key_entities from DB = {key_entities}")
                         
             except Exception as e:
                 # If database query fails, fall back to metadata (which may be None)
                 print(f"[MediaSearchResultSerializer] Error fetching DB fields for media_id {media_id}: {str(e)}")
                 file_size = metadata.get('file_size', None)
                 organization_url = metadata.get('organization_url', None)
+        
+        # Try to get key_entities from metadata if not found in database
+        # Priority: Database value > Metadata value
+        # Check multiple possible key variations
+        if key_entities is None:
+            for key in ['KEY ENTITIES', 'key_entities', 'Key Entities', 'KEY_ENTITIES', 'keyEntities']:
+                if key in metadata:
+                    key_entities = metadata[key]
+                    print(f"[MediaSearchResultSerializer] Media ID {media_id}: key_entities from metadata (key='{key}') = {key_entities}")
+                    break
+            
+            if key_entities is None:
+                print(f"[MediaSearchResultSerializer] Media ID {media_id}: key_entities NOT FOUND in metadata or database")
         
         # Build response matching V1 format exactly
         return {
@@ -170,7 +195,7 @@ class MediaSearchResultSerializer(serializers.Serializer):
             'title': title,
             'organization': company,
             'document_type': document_type,
-            'key_entities': metadata.get('KEY ENTITIES', metadata.get('key_entities', None)),
+            'key_entities': key_entities,
             'file_size': file_size,
             'organization_url': organization_url,
             'org_logo': org_logo,
