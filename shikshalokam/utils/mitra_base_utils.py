@@ -46,7 +46,7 @@ def generate_objective_utils(user_problem_statement, company_bot):
         }
     """
     try:
-        from chatbot.utils.chat_query_handler import query_database
+        from chatbot.utils.chat_query_handler import query_text_search
         
         # Validate inputs
         if not user_problem_statement or not isinstance(user_problem_statement, str):
@@ -77,13 +77,24 @@ def generate_objective_utils(user_problem_statement, company_bot):
                 'message': 'Invalid company_bot: missing required attributes (top_k, filter_score)'
             }
         
-        # Step 1: Search Qdrant for relevant chunks based on user question
+        # Step 1: Call text-search API for relevant chunks
         try:
-            chunks_response = query_database(
-                query_prompt=user_problem_statement, 
-                priority_filter="p1", 
+            chunks_response = query_text_search(
+                query=user_problem_statement,
+                priority="P1",
                 limit=company_bot.top_k
             )
+            
+            # Check for API errors
+            if chunks_response.get('error'):
+                return {
+                    'status': 'error',
+                    'status_code': chunks_response.get('status_code', 500),
+                    'objective_list': [],
+                    'chunks_response': None,
+                    'message': chunks_response.get('message', 'API request failed')
+                }
+                
         except Exception as db_error:
             print(f"Database query error: {str(db_error)}")
             return {
@@ -94,7 +105,7 @@ def generate_objective_utils(user_problem_statement, company_bot):
                 'message': f'Database query failed: {str(db_error)}'
             }
         
-        print("chunks_response from Qdrant:", chunks_response)
+        print("chunks_response from API:", chunks_response)
         
         # Validate chunks_response
         if not chunks_response:
@@ -102,8 +113,12 @@ def generate_objective_utils(user_problem_statement, company_bot):
                 'status': 'ok',
                 'status_code': 200,
                 'objective_list': [],
+                'total_objectives': 0,
+                'total_chunks_used': 0,
+                'total_chunks_found': 0,
+                'total_results': 0,
                 'chunks_response': chunks_response,
-                'message': 'No chunks found in database for the given query'
+                'message': 'No response received from text-search API'
             }
     
         # Step 2: Filter and order chunks based on relevance score
@@ -120,15 +135,12 @@ def generate_objective_utils(user_problem_statement, company_bot):
                     
                     # Filter based on filter_score - only include chunks with score >= filter_score
                     if relevance_score >= company_bot.filter_score:
-                        chunk_text = None
-                        if "text" in result and result["text"] is not None and len(result["text"]) > 20:
-                            chunk_text = result["text"]
-                        elif "translated_text" in result and result["translated_text"] is not None and len(result["translated_text"]) > 20:
-                            chunk_text = result["translated_text"]
+                        # Get text from the result (new API format)
+                        chunk_text = result.get('text', '')
                         
-                        if chunk_text:
-                            # Extract source_id from metadata as per JSON structure
-                            source_id = result.get('metadata', {}).get('source_id', '') or str(result.get('id', ''))
+                        if chunk_text and len(chunk_text) > 20:
+                            # Extract source_id from the result (new API format)
+                            source_id = result.get('source_id', '') or result.get('metadata', {}).get('source_id', '')
                             filtered_chunks.append({
                                 'chunk_text': chunk_text,
                                 'source_id': source_id,
@@ -141,8 +153,12 @@ def generate_objective_utils(user_problem_statement, company_bot):
                     'status': 'error',
                     'status_code': 500,
                     'objective_list': [],
+                    'total_objectives': 0,
+                    'total_chunks_used': 0,
+                    'total_chunks_found': chunks_response.get('total_results', 0),
+                    'total_results': chunks_response.get('total_results', 0),
                     'chunks_response': chunks_response,
-                    'message': f'Error processing chunks: {str(filter_error)}'
+                    'message': f'Error processing chunks from API response: {str(filter_error)}'
                 }
     
         # Sort chunks by relevance_score in descending order
@@ -174,6 +190,10 @@ def generate_objective_utils(user_problem_statement, company_bot):
                 'status': 'ok',
                 'status_code': 200,
                 'objective_list': [],
+                'total_objectives': 0,
+                'total_chunks_used': 0,
+                'total_chunks_found': total_chunks,
+                'total_results': total_chunks,
                 'chunks_response': chunks_response,
                 'message': warning_message
             }
@@ -250,12 +270,13 @@ Generate exactly ONE objective based on this chunk. The objective should be rele
                     objectives_from_response = [objectives_from_response] if objectives_from_response else []
                 
                 # Create objective entries for each objective in the response
-                # All objectives from this chunk share the same source_id
+                # All objectives from this chunk share the same source_id and score
                 for objective_text in objectives_from_response:
                     if objective_text and isinstance(objective_text, str) and objective_text.strip():
                         objective_entry = {
                             'text': objective_text.strip(),
-                            'source_id': chunk_data['source_id']
+                            'source_id': chunk_data['source_id'],
+                            'score': chunk_data['relevance_score']
                         }
                         objective_list.append(objective_entry)
             
@@ -264,19 +285,24 @@ Generate exactly ONE objective based on this chunk. The objective should be rele
                 # Continue with next chunk
                 continue
     
-        # Step 4: Return objective_list with source_ids
+        # Step 4: Return objective_list with source_ids, scores, and counts
         # Post-processing step (Step 5 from image) should:
         # - Map each source_id with the chunk
         # - Fetch appropriate description and title from the database
         # - Transform to final format with source object containing:
         #   {source_id, chunk, description, title, url, organization}
         
+        total_results = chunks_response.get('total_results', 0)
         return {
             'status': 'ok',
             'status_code': 200,
             'objective_list': objective_list,
+            'total_objectives': len(objective_list),
+            'total_chunks_used': len(filtered_chunks),
+            'total_chunks_found': total_results,
+            'total_results': total_results,
             'chunks_response': chunks_response,
-            'message': f'Successfully generated {len(objective_list)} objectives from {len(filtered_chunks)} chunks'
+            'message': f'Successfully generated {len(objective_list)} objectives from {len(filtered_chunks)} chunks out of {total_results} total results'
         }
     
     except Exception as e:
@@ -287,8 +313,12 @@ Generate exactly ONE objective based on this chunk. The objective should be rele
             'status': 'error',
             'status_code': 500,
             'objective_list': [],
+            'total_objectives': 0,
+            'total_chunks_used': 0,
+            'total_chunks_found': 0,
+            'total_results': 0,
             'chunks_response': None,
-            'message': f'Internal server error: {str(e)}'
+            'message': f'Internal server error while generating objectives: {str(e)}'
         }
 
 
@@ -347,28 +377,24 @@ def post_process_objectives_with_source(objective_list, chunks_response):
                         print(f"Skipping invalid result in post_process: {result}")
                         continue
                     
-                    # Extract source_id from metadata as per JSON structure
-                    source_id = result.get('metadata', {}).get('source_id', '') or str(result.get('id', ''))
+                    # Extract source_id from the result (new API format)
+                    source_id = result.get('source_id', '') or result.get('metadata', {}).get('source_id', '')
                     
                     if not source_id:
                         print(f"Skipping result without source_id: {result}")
                         continue
                     
-                    # Get chunk text
-                    chunk_text = ''
-                    if "text" in result and result["text"]:
-                        chunk_text = result["text"]
-                    elif "translated_text" in result and result["translated_text"]:
-                        chunk_text = result["translated_text"]
+                    # Get chunk text (new API format)
+                    chunk_text = result.get('text', '')
                     
-                    # Get description (from summary field), title, url, and organization from the result
-                    # These fields should be present in the Qdrant response
+                    # Get metadata fields from the result
                     metadata = result.get('metadata', {})
-                    # Note: description comes from 'summary' field in the response
-                    description = result.get('summary', '') or metadata.get('summary', '')
-                    title = result.get('title', '') or metadata.get('title', '')
-                    url = result.get('url', '') or metadata.get('url', '')
-                    organization_slug = result.get('organization', '') or metadata.get('organization', '') or metadata.get('company', '')
+                    
+                    # Extract fields - new API format has them in metadata
+                    description = metadata.get('summary', '')
+                    title = metadata.get('title', '') or metadata.get('TITLE', '')
+                    url = metadata.get('url', '')
+                    organization_slug = metadata.get('company', '')
                     
                     # Fetch Company object to get name and slug
                     organization_dict = {}
@@ -431,6 +457,7 @@ def post_process_objectives_with_source(objective_list, chunks_response):
                 
                 processed_objective = {
                     'text': objective.get('text', ''),
+                    'score': objective.get('score', 0),
                     'source': source_info
                 }
                 processed_objectives.append(processed_objective)
@@ -478,7 +505,7 @@ def generate_action_list_utils(query, objective_text, company_bot):
         }
     """
     try:
-        from chatbot.utils.chat_query_handler import query_database
+        from chatbot.utils.chat_query_handler import query_text_search
         
         # Validate inputs
         if not query or not isinstance(query, str):
@@ -518,24 +545,43 @@ def generate_action_list_utils(query, objective_text, company_bot):
                 'message': 'Invalid company_bot: missing required attributes (top_k, filter_score)'
             }
         
-        # Step 1: Search Qdrant for relevant chunks based on objective_text
+        # Step 1: Call text-search API for relevant chunks
         try:
-            chunks_response = query_database(
-                query_prompt=objective_text,  # Search using objective_text
-                priority_filter="p1", 
+            chunks_response = query_text_search(
+                query=objective_text,  # Search using objective_text
+                priority="P1",
                 limit=company_bot.top_k
             )
+            
+            # Check for API errors
+            if chunks_response.get('error'):
+                return {
+                    'status': 'error',
+                    'status_code': chunks_response.get('status_code', 500),
+                    'action_list': [],
+                    'total_actions': 0,
+                    'total_chunks_used': 0,
+                    'total_chunks_found': 0,
+                    'total_results': 0,
+                    'chunks_response': None,
+                    'message': chunks_response.get('message', 'Text-search API request failed')
+                }
+                
         except Exception as db_error:
             print(f"Database query error: {str(db_error)}")
             return {
                 'status': 'error',
                 'status_code': 500,
                 'action_list': [],
+                'total_actions': 0,
+                'total_chunks_used': 0,
+                'total_chunks_found': 0,
+                'total_results': 0,
                 'chunks_response': None,
-                'message': f'Database query failed: {str(db_error)}'
+                'message': f'Text-search API query failed: {str(db_error)}'
             }
         
-        print("chunks_response from Qdrant for action_list:", chunks_response)
+        print("chunks_response from API for action_list:", chunks_response)
         
         # Validate chunks_response
         if not chunks_response:
@@ -543,8 +589,12 @@ def generate_action_list_utils(query, objective_text, company_bot):
                 'status': 'ok',
                 'status_code': 200,
                 'action_list': [],
+                'total_actions': 0,
+                'total_chunks_used': 0,
+                'total_chunks_found': 0,
+                'total_results': 0,
                 'chunks_response': chunks_response,
-                'message': 'No chunks found in database for the given objective'
+                'message': 'No response received from text-search API for the given objective'
             }
         
         # Step 2: Filter and order chunks based on relevance score
@@ -561,15 +611,12 @@ def generate_action_list_utils(query, objective_text, company_bot):
                     
                     # Filter based on filter_score
                     if relevance_score >= company_bot.filter_score:
-                        chunk_text = None
-                        if "text" in result and result["text"] is not None and len(result["text"]) > 20:
-                            chunk_text = result["text"]
-                        elif "translated_text" in result and result["translated_text"] is not None and len(result["translated_text"]) > 20:
-                            chunk_text = result["translated_text"]
+                        # Get text from the result (new API format)
+                        chunk_text = result.get('text', '')
                         
-                        if chunk_text:
-                            # Extract source_id from metadata
-                            source_id = result.get('metadata', {}).get('source_id', '') or str(result.get('id', ''))
+                        if chunk_text and len(chunk_text) > 20:
+                            # Extract source_id from the result (new API format)
+                            source_id = result.get('source_id', '') or result.get('metadata', {}).get('source_id', '')
                             filtered_chunks.append({
                                 'chunk_text': chunk_text,
                                 'source_id': source_id,
@@ -582,8 +629,12 @@ def generate_action_list_utils(query, objective_text, company_bot):
                     'status': 'error',
                     'status_code': 500,
                     'action_list': [],
+                    'total_actions': 0,
+                    'total_chunks_used': 0,
+                    'total_chunks_found': chunks_response.get('total_results', 0),
+                    'total_results': chunks_response.get('total_results', 0),
                     'chunks_response': chunks_response,
-                    'message': f'Error processing chunks: {str(filter_error)}'
+                    'message': f'Error processing chunks from API response: {str(filter_error)}'
                 }
         
         # Sort chunks by relevance_score
@@ -614,6 +665,10 @@ def generate_action_list_utils(query, objective_text, company_bot):
                 'status': 'ok',
                 'status_code': 200,
                 'action_list': [],
+                'total_actions': 0,
+                'total_chunks_used': 0,
+                'total_chunks_found': total_chunks,
+                'total_results': total_chunks,
                 'chunks_response': chunks_response,
                 'message': warning_message
             }
@@ -720,7 +775,8 @@ Generate the action plan now."""
                                         action_entry = {
                                             'duration': str(duration),
                                             'actionSteps': action_steps,
-                                            'source_id': chunk_data['source_id']
+                                            'source_id': chunk_data['source_id'],
+                                            'score': chunk_data['relevance_score']
                                         }
                                         action_list.append(action_entry)
                                         print(f"✅ Added action plan {idx+1} for chunk {chunk_data['source_id']}: {len(action_steps)} steps")
@@ -737,7 +793,8 @@ Generate the action plan now."""
                                 action_entry = {
                                     'duration': str(duration),
                                     'actionSteps': action_steps,
-                                    'source_id': chunk_data['source_id']
+                                    'source_id': chunk_data['source_id'],
+                                    'score': chunk_data['relevance_score']
                                 }
                                 action_list.append(action_entry)
                                 print(f"✅ Added action plan for chunk {chunk_data['source_id']}: {len(action_steps)} steps")
@@ -754,7 +811,8 @@ Generate the action plan now."""
                             action_entry = {
                                 'duration': str(duration),
                                 'actionSteps': action_steps,
-                                'source_id': chunk_data['source_id']
+                                'source_id': chunk_data['source_id'],
+                                'score': chunk_data['relevance_score']
                             }
                             action_list.append(action_entry)
                             print(f"✅ Added action plan for chunk {chunk_data['source_id']}: {len(action_steps)} steps")
@@ -767,13 +825,18 @@ Generate the action plan now."""
                 print(f"Error processing chunk {chunk_data.get('source_id', 'unknown')}: {str(chunk_error)}")
                 continue
         
-        # Step 4: Return action_list with source_ids
+        # Step 4: Return action_list with source_ids, scores, and counts
+        total_results = chunks_response.get('total_results', 0)
         return {
             'status': 'ok',
             'status_code': 200,
             'action_list': action_list,
+            'total_actions': len(action_list),
+            'total_chunks_used': len(filtered_chunks),
+            'total_chunks_found': total_results,
+            'total_results': total_results,
             'chunks_response': chunks_response,
-            'message': f'Successfully generated {len(action_list)} action plans from {len(filtered_chunks)} chunks'
+            'message': f'Successfully generated {len(action_list)} action plans from {len(filtered_chunks)} chunks out of {total_results} total results'
         }
     
     except Exception as e:
@@ -784,8 +847,12 @@ Generate the action plan now."""
             'status': 'error',
             'status_code': 500,
             'action_list': [],
+            'total_actions': 0,
+            'total_chunks_used': 0,
+            'total_chunks_found': 0,
+            'total_results': 0,
             'chunks_response': None,
-            'message': f'Internal server error: {str(e)}'
+            'message': f'Internal server error while generating action plans: {str(e)}'
         }
 
 
@@ -844,26 +911,24 @@ def post_process_actions_with_source(action_list, chunks_response):
                         print(f"Skipping invalid result in post_process: {result}")
                         continue
                     
-                    # Extract source_id from metadata
-                    source_id = result.get('metadata', {}).get('source_id', '') or str(result.get('id', ''))
+                    # Extract source_id from the result (new API format)
+                    source_id = result.get('source_id', '') or result.get('metadata', {}).get('source_id', '')
                     
                     if not source_id:
                         print(f"Skipping result without source_id: {result}")
                         continue
                     
-                    # Get chunk text
-                    chunk_text = ''
-                    if "text" in result and result["text"]:
-                        chunk_text = result["text"]
-                    elif "translated_text" in result and result["translated_text"]:
-                        chunk_text = result["translated_text"]
+                    # Get chunk text (new API format)
+                    chunk_text = result.get('text', '')
                     
-                    # Get description (from summary field), title, url, and organization
+                    # Get metadata fields from the result
                     metadata = result.get('metadata', {})
-                    description = result.get('summary', '') or metadata.get('summary', '')
-                    title = result.get('title', '') or metadata.get('title', '')
-                    url = result.get('url', '') or metadata.get('url', '')
-                    organization_slug = result.get('organization', '') or metadata.get('organization', '') or metadata.get('company', '')
+                    
+                    # Extract fields - new API format has them in metadata
+                    description = metadata.get('summary', '')
+                    title = metadata.get('title', '') or metadata.get('TITLE', '')
+                    url = metadata.get('url', '')
+                    organization_slug = metadata.get('company', '')
                     
                     # Fetch Company object to get name and slug
                     organization_dict = {}
@@ -927,6 +992,7 @@ def post_process_actions_with_source(action_list, chunks_response):
                 processed_action = {
                     'duration': action.get('duration', '3'),
                     'actionSteps': action.get('actionSteps', []),
+                    'score': action.get('score', 0),
                     'source': source_info
                 }
                 processed_actions.append(processed_action)
