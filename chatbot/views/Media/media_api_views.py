@@ -813,12 +813,13 @@ class MediaSearchV2View(APIView):
         Exclude media where document_type is "Source Document" from v2 API results.
         This filters the vector DB results by checking metadata for document_type.
         Also applies filter_score to exclude results below relevance threshold.
+        Also filters by display_mode to only show "visible" media.
         
         Args:
             results: List of result dictionaries from vector DB
             
         Returns:
-            Filtered list of results excluding "Source Document" media and low relevance scores
+            Filtered list of results excluding "Source Document" media, low relevance scores, and non-visible media
         """
         from chatbot.models import CompanyBot
         company_bot = CompanyBot.objects.get(route='/sg_search_bot')
@@ -854,9 +855,15 @@ class MediaSearchV2View(APIView):
             ).values_list('media_id', flat=True)
         )
         
-        # Step 3: Filter out results where source_id matches excluded media IDs
+        # Step 3: Get all media IDs that have display_mode != "visible"
+        non_visible_media_ids = set(
+            Media.objects.exclude(display_mode=FileDisplayMode.VISIBLE).values_list('id', flat=True)
+        )
+        
+        # Step 4: Filter out results where source_id matches excluded media IDs
         filtered_results = []
         excluded_count = 0
+        display_mode_excluded_count = 0
         
         for result in score_filtered_results:
             source_id = result.get('source_id')
@@ -871,10 +878,18 @@ class MediaSearchV2View(APIView):
                 excluded_count += 1
                 continue
             
+            # Exclude if source_id matches any non-visible media ID
+            if source_id_int and source_id_int in non_visible_media_ids:
+                display_mode_excluded_count += 1
+                continue
+            
             filtered_results.append(result)
         
         if excluded_count > 0:
             print(f"[MediaSearchV2View] Content exclusion filter: Excluded {excluded_count} 'Source Document' media from results")
+        
+        if display_mode_excluded_count > 0:
+            print(f"[MediaSearchV2View] Display mode filter: Excluded {display_mode_excluded_count} non-visible media from results")
         
         return filtered_results
     

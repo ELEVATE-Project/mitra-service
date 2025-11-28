@@ -125,18 +125,20 @@ class MediaSearchResultSerializer(serializers.Serializer):
                 document_type = metadata[key]
                 break
         
-        # Fetch file_size, organization_url, org_logo, and key_entities from database
+        # Fetch file_size, organization_url, org_logo, key_entities, and display_mode from database
         # These fields are NOT reliable in vector DB metadata, so we query the Media model directly
         file_size = None
         organization_url = None
         org_logo = None
         key_entities = None
+        display_mode = None
+        display_mode_display = None
         
         if media_id:
             try:
                 from chatbot.models.media_models import Media
                 media_obj = Media.objects.select_related('organization').prefetch_related('key_values').only(
-                    'id', 'file', 'organization__url', 'organization__logo'
+                    'id', 'file', 'organization__url', 'organization__logo', 'display_mode'
                 ).get(id=media_id)
                 
                 # Get file_size from Django FileField (same as V1 API)
@@ -155,6 +157,10 @@ class MediaSearchResultSerializer(serializers.Serializer):
                 key_entities_kv = media_obj.key_values.filter(key__iexact='KEY ENTITIES').first()
                 if key_entities_kv:
                     key_entities = key_entities_kv.value
+                
+                # Get display_mode from Media model
+                display_mode = media_obj.display_mode
+                display_mode_display = media_obj.get_display_mode_display()
                 
                 # Debug logging
                 print(f"[MediaSearchResultSerializer] Media ID {media_id}: key_entities from DB = {key_entities}")
@@ -199,6 +205,8 @@ class MediaSearchResultSerializer(serializers.Serializer):
             'file_size': file_size,
             'organization_url': organization_url,
             'org_logo': org_logo,
+            'display_mode': display_mode,
+            'display_mode_display': display_mode_display,
             # V2 specific fields (additional metadata)
             'vector_id': instance.get('id'),
             'score': instance.get('score', 0),
@@ -234,6 +242,7 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
     tag_names = serializers.SerializerMethodField()
     media_type_display = serializers.CharField(source='get_media_type_display', read_only=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    display_mode_display = serializers.CharField(source='get_display_mode_display', read_only=True)
     title = serializers.SerializerMethodField()
     organization = serializers.SerializerMethodField()
     organization_url = serializers.SerializerMethodField()
@@ -256,6 +265,7 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
             'media_type', 'media_type_display', 'created_at', 'updated_at',
             's3_url', 'file', 'tag_names', 'title', 'organization',
             'document_type', 'key_entities', 'file_size', 'organization_url', 'org_logo',
+            'display_mode', 'display_mode_display',
             'keyword_coverage', 'total_matching_fields', 'avg_relevance_score', 'max_similarity',
             'match_reason'
         ]
@@ -349,6 +359,7 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
     children = serializers.SerializerMethodField()
     media_type_display = serializers.CharField(source='get_media_type_display', read_only=True)
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    display_mode_display = serializers.CharField(source='get_display_mode_display', read_only=True)
     title = serializers.SerializerMethodField()
     organization = serializers.SerializerMethodField()
     org_logo = serializers.SerializerMethodField()
@@ -366,7 +377,7 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
             'parent', 'parent_info', 'created_at', 'updated_at',
             's3_url', 'tags', 'title', 'organization', 'org_logo', 'document_type',
             'key_entities', 'key_values', 'images', 'children',
-            'file_size', 'size',
+            'file_size', 'size', 'display_mode', 'display_mode_display',
         ]
 
     def get_s3_url(self, obj):
