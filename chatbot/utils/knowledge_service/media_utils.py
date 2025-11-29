@@ -52,10 +52,10 @@ def build_key_values(data_dict):
             doc_type_value = document_type.get('type', '')
             if doc_type_value:
                 doc_type_value = doc_type_value.title()
-                key_values.append({'key': 'DOCUMENT TYPE', 'value': str(doc_type_value), 'source': 'ai'})
+                key_values.append({'key': 'DOCUMENT_TYPE', 'value': str(doc_type_value), 'source': 'ai'})
         else:
             doc_type_value = document_type.title() if document_type else ''
-            key_values.append({'key': 'DOCUMENT TYPE', 'value': str(doc_type_value), 'source': 'ai'})
+            key_values.append({'key': 'DOCUMENT_TYPE', 'value': str(doc_type_value), 'source': 'ai'})
 
     if data_dict.get('key_entities') and len(data_dict['key_entities']) > 0:
         key_values.append({'key': 'KEY ENTITIES', 'value': ', '.join(map(str, data_dict['key_entities'])), 'source': 'ai'})

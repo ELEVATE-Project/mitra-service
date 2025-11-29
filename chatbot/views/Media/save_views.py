@@ -842,7 +842,7 @@ class BatchMediaSaveView(View):
             # Key-value pairs - handle organization specially
             for kv in subdoc_data.get('key_values', []):
                 cleaned_key = self.clean_key_for_ordered_list(kv['key'])
-                if cleaned_key == 'DOCUMENT TYPE':
+                if cleaned_key == 'DOCUMENT_TYPE':
                     doc_type_value = kv['value']
                     if isinstance(doc_type_value, dict):
                         actual_value = doc_type_value.get('type', '')
@@ -852,7 +852,7 @@ class BatchMediaSaveView(View):
 
                     KeyValue.objects.create(
                         media=subdoc_media,
-                        key='DOCUMENT TYPE',
+                        key='DOCUMENT_TYPE',
                         value=actual_value
                     )
                 else:
