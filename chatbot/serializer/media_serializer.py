@@ -79,6 +79,130 @@ class MediaImageSerializer(serializers.ModelSerializer):
         return None
 
 
+class MediaSearchResultSerializer(serializers.Serializer):
+    """
+    Serializer for vector database search results (v2 API).
+    Transforms vector DB response format to match the existing Media API V1 format exactly.
+    """
+    
+    def to_representation(self, instance):
+        """
+        Transform vector DB result to match Media API V1 format.
+        Maps vector DB fields to V1 API fields based on the response structure.
+        """
+        metadata = instance.get('metadata', {})
+        
+        # Extract key fields from metadata
+        url = metadata.get('url', '')
+        company = metadata.get('company', '')
+        created_at = metadata.get('created_at', '')
+        updated_at = metadata.get('updated_at', '')
+        file_type = metadata.get('type', '')
+        priority = metadata.get('priority', 'P1')
+        
+        # Get source_id (this is the actual Media model ID)
+        source_id = instance.get('source_id', '')
+        
+        # Convert source_id to integer if possible
+        try:
+            media_id = int(source_id) if source_id else None
+        except (ValueError, TypeError):
+            media_id = source_id
+        
+        # Get title from metadata or instance
+        title = metadata.get('title', instance.get('title', ''))
+        
+        # Get tags from instance
+        tags = instance.get('tags', [])
+        
+        # Get document_type from metadata
+        document_type = None
+        for key in ['DOCUMENT_TYPE', 'document_type', 'Document Type','DOCUMENT TYPE']:
+            if key in metadata:
+                document_type = metadata[key]
+                break
+        
+        # Fetch file_size, organization_url, and org_logo from database
+        # These fields are NOT reliable in vector DB metadata, so we query the Media model directly
+        file_size = None
+        organization_url = None
+        org_logo = None
+        
+        if media_id:
+            try:
+                from chatbot.models.media_models import Media
+                media_obj = Media.objects.select_related('organization').only(
+                    'id', 'file', 'organization__url', 'organization__logo'
+                ).get(id=media_id)
+                
+                # Get file_size from Django FileField (same as V1 API)
+                if media_obj.file:
+                    file_size = getattr(media_obj.file, "size", None)
+                
+                # Get organization_url from related Company model (same as V1 API)
+                if media_obj.organization:
+                    organization_url = media_obj.organization.url
+                    
+                    # Get org_logo from related Company model (same as V1 API)
+                    if media_obj.organization.logo:
+                        org_logo = media_obj.organization.get_public_url()
+                        
+            except Exception as e:
+                # If database query fails, fall back to metadata (which may be None)
+                print(f"[MediaSearchResultSerializer] Error fetching DB fields for media_id {media_id}: {str(e)}")
+                file_size = metadata.get('file_size', None)
+                organization_url = metadata.get('organization_url', None)
+        
+        # Build response matching V1 format exactly
+        return {
+            'id': media_id,
+            'name': title,
+            'description': instance.get('summary', ''),
+            'priority': priority,
+            'priority_display': priority,
+            'media_type': file_type,
+            'media_type_display': self._get_media_type_display(file_type),
+            'created_at': created_at,
+            'updated_at': updated_at,
+            's3_url': url,
+            'file': url,
+            'tag_names': tags,
+            'title': title,
+            'organization': company,
+            'document_type': document_type,
+            'key_entities': metadata.get('KEY ENTITIES', metadata.get('key_entities', None)),
+            'file_size': file_size,
+            'organization_url': organization_url,
+            'org_logo': org_logo,
+            # V2 specific fields (additional metadata)
+            'vector_id': instance.get('id'),
+            'score': instance.get('score', 0),
+            'field_scores': instance.get('field_scores', {}),
+        }
+    
+    def _get_media_type_display(self, mime_type):
+        """
+        Convert MIME type to display name matching FileTypeChoices.
+        """
+        mime_to_display = {
+            'application/pdf': 'PDF',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
+            'application/msword': 'DOC',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'XLSX',
+            'application/vnd.ms-excel': 'XLS',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PPTX',
+            'application/vnd.ms-powerpoint': 'PPT',
+            'text/plain': 'TXT',
+            'text/csv': 'CSV',
+            'image/jpeg': 'JPEG',
+            'image/png': 'PNG',
+            'image/gif': 'GIF',
+            'video/mp4': 'MP4',
+            'audio/mpeg': 'MP3',
+        }
+        return mime_to_display.get(mime_type, mime_type.upper() if mime_type else '')
+
+
 class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
     s3_url = serializers.SerializerMethodField()
     file = serializers.SerializerMethodField()

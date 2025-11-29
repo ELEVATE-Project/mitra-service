@@ -1,15 +1,17 @@
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db import models
 
 from chatbot.models import Tag, FileTypeChoices, FileDisplayMode
 from chatbot.models.media_models import Media, KeyValue
 from chatbot.serializer.media_serializer import (
-    MediaListSerializer, MediaDetailSerializer
+    MediaListSerializer, MediaDetailSerializer, MediaSearchResultSerializer
 )
 from chatbot.filter.media_filters import MediaFilter
+from chatbot.utils.chat_query_handler import query_database_with_metadata
 from django.contrib.postgres.search import TrigramSimilarity
 from django.db.models import Count, Q, Value, FloatField, OuterRef, Subquery, TextField, CharField, IntegerField, Case, \
     When, F
@@ -462,19 +464,29 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
 
         queryset = self.filter_queryset(self.get_queryset())
 
-        # Already correct - using direct organization field
-        organizations = (
+        organizations_data = (
             queryset
-            .exclude(organization__name__isnull=True)
-            .exclude(organization__name='')
+            .exclude(organization__slug__isnull=True)
+            .exclude(organization__slug='')
+            .values('organization__name', 'organization__slug')
             .annotate(
-                lower_name=Lower('organization__name')
+                name=F('organization__name'),
+                slug=F('organization__slug')
             )
-            .values_list('lower_name', flat=True)
             .distinct()
         )
-        # Convert to set to remove any remaining duplicates, then sort
-        organizations = sorted(list(set([org.title() for org in organizations if org])))
+
+        organizations = []
+        seen_slugs = set()
+        for org in organizations_data:
+            if org['slug'] and org['slug'] not in seen_slugs:
+                organizations.append({
+                    'name': org['name'] if org['name'] else org['slug'].title(),
+                    'slug': org['slug']
+                })
+                seen_slugs.add(org['slug'])
+
+        organizations = sorted(organizations, key=lambda x: x['name'].lower())
 
         media_types = []
         media_type_counts = dict(
@@ -546,7 +558,7 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
 
         return Response({
             'total_count': queryset.count(),
-            'organizations': list(organizations),
+            'organizations': organizations,  # Now returns list of {name, slug} objects
             'media_types': media_types,
             'resource_types': resource_types,
             'priorities': priorities,
@@ -580,3 +592,399 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
             'related_count': related.count(),
             'related_media': serializer.data
         })
+
+
+class MediaSearchV2View(APIView):
+    """
+    Version 2 of Media Search API that uses vector database search.
+    
+    GET /api/v2/media/?q=education classroom&limit=12&offset=0&ordering=-created_at
+    GET /ai/documents/search?q=education classroom&limit=12&offset=0
+    
+    Query Parameters:
+        - q (optional): Search query string. If not provided, returns all documents with filters applied
+        - limit (optional): Number of results per page (default: 20)
+        - offset (optional): Pagination offset (default: 0)
+        - ordering (optional): Sort order field. Prefix with '-' for descending order.
+                             Supported fields: id, name, created_at, updated_at, priority, media_type, organization, title, score
+                             NOTE: When query or filters are present, ordering is ALWAYS 'score' (relevance-based).
+                                   The ordering parameter is only used when browsing all content without query/filters.
+                             Default: 'score' when query/filters present, '-created_at' otherwise
+        - categories (optional): Comma-separated list of categories/tags
+        - organizations (optional): Comma-separated list of organizations
+        - resource_type (optional): Comma-separated list of resource types
+        - media_types (optional): Comma-separated list of file types (e.g., pdf,docx)
+        - file_type (optional): Alias for media_types (backward compatibility)
+    """
+    
+    # Supported ordering fields (matching v1 API + score for relevance ranking)
+    VALID_ORDERING_FIELDS = ['id', 'name', 'created_at', 'updated_at', 'priority', 'media_type', 'organization', 'title', 'score']
+    
+    def get(self, request, format=None):
+        # Extract query parameters
+        query = request.query_params.get('q', '').strip()
+        
+        # Pagination parameters
+        try:
+            limit = int(request.query_params.get('limit', 20))
+            offset = int(request.query_params.get('offset', 0))
+        except ValueError:
+            return Response({
+                "error": "Invalid limit or offset parameter",
+                "count": 0,
+                "next": None,
+                "previous": None,
+                "results": []
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Filter parameters (convert comma-separated strings to lists)
+        categories = self._parse_list_param(request.query_params.get('categories', ''))
+        organizations = self._parse_list_param(request.query_params.get('organizations', ''))
+        resource_type = self._parse_list_param(request.query_params.get('resource_type', ''))
+        # Support both 'media_types' and 'file_type' parameter names for backward compatibility
+        media_types = self._parse_list_param(request.query_params.get('media_types', ''))
+        if not media_types:
+            media_types = self._parse_list_param(request.query_params.get('file_type', ''))
+        
+        # Ordering parameter (smart defaults based on query/filters)
+        # IMPORTANT: When query/filters are present, ALWAYS use score-based ordering
+        # The ordering parameter is IGNORED when there's a query/filter
+        has_query_or_filters = bool(query or categories or organizations or resource_type or media_types)
+        
+        ordering_param = request.query_params.get('ordering', '').strip()
+        
+        # Smart ordering logic:
+        # 1. If query/filters present -> ALWAYS use 'score' (ignore ordering parameter)
+        # 2. If no query/filters and NO explicit ordering -> use '-created_at'
+        # 3. If no query/filters and explicit ordering -> respect user choice
+        
+        if has_query_or_filters:
+            # ALWAYS use score when query/filters are present
+            ordering = 'score'
+            if ordering_param:
+                print(f"[MediaSearchV2View] Query/filters present - FORCING 'score' ordering (ignoring user's '{ordering_param}')")
+            else:
+                print(f"[MediaSearchV2View] Query/filters present - using 'score' ordering")
+        else:
+            # No query/filters - use created_at or user's choice
+            if not ordering_param:
+                ordering = '-created_at'  # Sort by newest first
+                print(f"[MediaSearchV2View] No query/filters - using default '-created_at' ordering")
+            else:
+                ordering = ordering_param
+                print(f"[MediaSearchV2View] No query/filters - using explicit ordering: '{ordering_param}'")
+        
+        ordering_field, ordering_reverse = self._parse_ordering(ordering)
+        print(f"[MediaSearchV2View] Parsed ordering: ordering_param='{ordering}' -> field='{ordering_field}', reverse={ordering_reverse}")
+        
+        # Calculate top_k for vector DB
+        # When ordering is applied, we need to fetch ALL results (or a large batch) to sort properly
+        # Otherwise, pagination won't work correctly with custom ordering
+        # Strategy: Fetch a large batch that covers most use cases
+        top_k = max(1000, offset + limit * 2)  # Fetch at least 1000 results or enough for pagination
+        
+        print(f"[MediaSearchV2View] Query: '{query}', top_k: {top_k}, offset: {offset}, limit: {limit}, ordering: {ordering}")
+        print(f"[MediaSearchV2View] Filters - categories: {categories}, organizations: {organizations}, "
+              f"resource_type: {resource_type}, media_types: {media_types}")
+        
+        # Call vector database search
+        # If query is empty, pass None or empty string to get all documents with filters
+        vector_response = query_database_with_metadata(
+            query=query if query else None,
+            top_k=top_k,
+            categories=categories if categories else None,
+            organizations=organizations if organizations else None,
+            resource_type=resource_type if resource_type else None,
+            file_type=media_types if media_types else None
+        )
+        
+        # Handle error response from vector DB
+        if vector_response.get('error'):
+            error_status = vector_response.get('status_code', 500)
+            return Response({
+                "error": vector_response.get('message', 'Vector database error'),
+                "count": 0,
+                "next": None,
+                "previous": None,
+                "results": [],
+                "search_metadata": {
+                    "query": query,
+                    "vector_db_error": True
+                }
+            }, status=error_status)
+        
+        # Extract results from vector DB response
+        all_results = vector_response.get('results', [])
+        
+        # Apply content exclusion filter (exclude "Source Document" media)
+        all_results = self._apply_content_exclusion_filter_v2(all_results)
+        total_results = len(all_results)
+        
+        # Log results BEFORE ordering
+        if all_results and len(all_results) > 0:
+            first_result = all_results[0]
+            print(f"[MediaSearchV2View] BEFORE ordering - First result: score={first_result.get('score', 0)}, created_at={first_result.get('metadata', {}).get('created_at')}")
+        
+        # Apply ordering if specified (sort results by the ordering field)
+        if ordering_field and all_results:
+            print(f"[MediaSearchV2View] Applying ordering: field={ordering_field}, reverse={ordering_reverse}, results_count={len(all_results)}")
+            all_results = self._apply_ordering(all_results, ordering_field, ordering_reverse)
+            # Log first few results for debugging
+            if all_results and len(all_results) > 0:
+                first_result = all_results[0]
+                metadata = first_result.get('metadata', {})
+                print(f"[MediaSearchV2View] AFTER ordering - First result: score={first_result.get('score', 0)}, created_at={metadata.get('created_at')}, title={metadata.get('title', '')[:50]}")
+        else:
+            print(f"[MediaSearchV2View] WARNING: Ordering NOT applied! ordering_field={ordering_field}, all_results count={len(all_results)}")
+        
+        # Apply pagination (slice results based on offset and limit)
+        paginated_results = all_results[offset:offset + limit] if offset < len(all_results) else []
+        
+        # Serialize results
+        serializer = MediaSearchResultSerializer(paginated_results, many=True)
+        
+        # Build pagination URLs
+        base_url = request.build_absolute_uri(request.path)
+        next_url = None
+        previous_url = None
+        
+        if offset + limit < total_results:
+            next_offset = offset + limit
+            next_url = f"{base_url}?q={query}&limit={limit}&offset={next_offset}"
+            # Only include ordering if it was explicitly provided by user (not smart default)
+            if ordering_param:
+                next_url += f"&ordering={ordering}"
+            if categories:
+                next_url += f"&categories={','.join(categories)}"
+            if organizations:
+                next_url += f"&organizations={','.join(organizations)}"
+            if resource_type:
+                next_url += f"&resource_type={','.join(resource_type)}"
+            if media_types:
+                next_url += f"&media_types={','.join(media_types)}"
+        
+        if offset > 0:
+            previous_offset = max(0, offset - limit)
+            previous_url = f"{base_url}?q={query}&limit={limit}&offset={previous_offset}"
+            # Only include ordering if it was explicitly provided by user (not smart default)
+            if ordering_param:
+                previous_url += f"&ordering={ordering}"
+            if categories:
+                previous_url += f"&categories={','.join(categories)}"
+            if organizations:
+                previous_url += f"&organizations={','.join(organizations)}"
+            if resource_type:
+                previous_url += f"&resource_type={','.join(resource_type)}"
+            if media_types:
+                previous_url += f"&media_types={','.join(media_types)}"
+        
+        # Build response in DRF pagination format
+        response_data = {
+            "count": total_results,
+            "next": next_url,
+            "previous": previous_url,
+            "results": serializer.data,
+            "search_metadata": {
+                "query": query,
+                "top_k": top_k,
+                "offset": offset,
+                "limit": limit,
+                "ordering": ordering,
+                "returned_results": len(serializer.data),
+                "search_config": vector_response.get('search_config', {})
+            }
+        }
+        
+        print(f"[MediaSearchV2View] Returning {len(serializer.data)} results out of {total_results} total")
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+    
+    def _apply_content_exclusion_filter_v2(self, results):
+        """
+        Exclude media where document_type is "Source Document" from v2 API results.
+        This filters the vector DB results by checking metadata for document_type.
+        Also applies filter_score to exclude results below relevance threshold.
+        
+        Args:
+            results: List of result dictionaries from vector DB
+            
+        Returns:
+            Filtered list of results excluding "Source Document" media and low relevance scores
+        """
+        from chatbot.models import CompanyBot
+        company_bot = CompanyBot.objects.get(route='/sg_search_bot')
+        
+        # Step 1: Apply filter_score to exclude results below relevance threshold
+        score_filtered_results = []
+        score_excluded_count = 0
+        
+        for result in results:
+            if not isinstance(result, dict):
+                print(f"[MediaSearchV2View] Skipping invalid result: {result}")
+                continue
+            
+            relevance_score = result.get('score', 0)
+            print(f"[MediaSearchV2View] relevance_score: {relevance_score}, filter_score: {company_bot.filter_score}")
+            
+            # Filter based on filter_score - only include results with score >= filter_score
+            if relevance_score >= company_bot.filter_score:
+                score_filtered_results.append(result)
+            else:
+                score_excluded_count += 1
+        
+        if score_excluded_count > 0:
+            print(f"[MediaSearchV2View] Filter score: Excluded {score_excluded_count} results below threshold {company_bot.filter_score}")
+        
+        # Step 2: Get all media IDs that have document_type = "Source Document"
+        source_document_media_ids = set(
+            KeyValue.objects.annotate(
+                norm_key=Lower('key', output_field=TextField())
+            ).filter(
+                norm_key__iregex=r'^document[_\s]type$',
+                value__icontains='source document'
+            ).values_list('media_id', flat=True)
+        )
+        
+        # Step 3: Filter out results where source_id matches excluded media IDs
+        filtered_results = []
+        excluded_count = 0
+        
+        for result in score_filtered_results:
+            source_id = result.get('source_id')
+            # Try to convert source_id to int for comparison
+            try:
+                source_id_int = int(source_id) if source_id else None
+            except (ValueError, TypeError):
+                source_id_int = None
+            
+            # Exclude if source_id matches any source document media ID
+            if source_id_int and source_id_int in source_document_media_ids:
+                excluded_count += 1
+                continue
+            
+            filtered_results.append(result)
+        
+        if excluded_count > 0:
+            print(f"[MediaSearchV2View] Content exclusion filter: Excluded {excluded_count} 'Source Document' media from results")
+        
+        return filtered_results
+    
+    def _parse_list_param(self, param_value):
+        """
+        Parse comma-separated string parameter into a list.
+        Returns empty list if param is empty.
+        """
+        if not param_value or not param_value.strip():
+            return []
+        return [item.strip() for item in param_value.split(',') if item.strip()]
+    
+    def _parse_ordering(self, ordering_param):
+        """
+        Parse ordering parameter to extract field name and direction.
+        Returns tuple: (field_name, reverse_order)
+        
+        Examples:
+            '-created_at' -> ('created_at', True)
+            'title' -> ('title', False)
+            'score' -> ('score', False)  # Higher scores first (ascending order gives higher scores at top)
+            'invalid_field' -> ('created_at', True)
+        """
+        if not ordering_param:
+            return 'created_at', True  # Default: newest first
+        
+        # Check if descending order (starts with '-')
+        reverse = ordering_param.startswith('-')
+        field = ordering_param.lstrip('-')
+        
+        # Validate field name
+        if field not in self.VALID_ORDERING_FIELDS:
+            print(f"[MediaSearchV2View] Invalid ordering field '{field}', using default '-created_at'")
+            return 'created_at', True
+        
+        # Special handling for score: higher scores should come first
+        # So 'score' means descending (reverse=True), '-score' means ascending (reverse=False)
+        if field == 'score':
+            reverse = not reverse  # Invert the reverse flag for score
+        
+        return field, reverse
+    
+    def _apply_ordering(self, results, field, reverse=False):
+        """
+        Sort results by the specified field.
+        Handles nested metadata fields and missing values gracefully.
+        
+        Args:
+            results: List of result dictionaries from vector DB
+            field: Field name to sort by
+            reverse: If True, sort in descending order
+        
+        Returns:
+            Sorted list of results
+        """
+        def get_sort_key(item):
+            """
+            Extract the sort key from a result item.
+            Handles nested metadata and missing values.
+            """
+            metadata = item.get('metadata', {})
+            
+            # Map field names to their locations in the result structure
+            if field == 'score':
+                # Vector DB relevance score - higher is better
+                try:
+                    return float(item.get('score', 0) or 0)
+                except (ValueError, TypeError):
+                    return 0.0
+            elif field == 'id':
+                # Try to get source_id and convert to int for proper numeric sorting
+                try:
+                    return int(item.get('source_id', 0) or 0)
+                except (ValueError, TypeError):
+                    return 0
+            elif field == 'name' or field == 'title':
+                # Title can be in metadata or top-level
+                title = metadata.get('title', item.get('title', ''))
+                return title.lower() if title else ''
+            elif field == 'created_at':
+                # Return as-is for string-based date sorting (ISO format)
+                # Handle None/empty values by putting them at the end
+                created_at = metadata.get('created_at', '')
+                return created_at if created_at else '1970-01-01T00:00:00'
+            elif field == 'updated_at':
+                updated_at = metadata.get('updated_at', '')
+                return updated_at if updated_at else '1970-01-01T00:00:00'
+            elif field == 'priority':
+                # Priority sorting: P1 > P2 > P3 > P4
+                priority = metadata.get('priority', 'P4')
+                priority_map = {'P1': 1, 'P2': 2, 'P3': 3, 'P4': 4}
+                return priority_map.get(priority, 5)
+            elif field == 'media_type':
+                media_type = metadata.get('type', '')
+                return media_type.lower() if media_type else ''
+            elif field == 'organization':
+                org = metadata.get('company', '')
+                return org.lower() if org else ''
+            else:
+                return ''
+        
+        try:
+            sorted_results = sorted(results, key=get_sort_key, reverse=reverse)
+            print(f"[MediaSearchV2View] Successfully sorted {len(results)} results by '{field}' (reverse={reverse})")
+            
+            # Debug: Log first 3 results' sort keys
+            if sorted_results and len(sorted_results) > 0:
+                for i, result in enumerate(sorted_results[:3]):
+                    metadata = result.get('metadata', {})
+                    if field == 'score':
+                        print(f"  Result {i+1}: score={result.get('score', 0)}")
+                    elif field == 'created_at':
+                        print(f"  Result {i+1}: created_at={metadata.get('created_at')}")
+                    elif field == 'title' or field == 'name':
+                        print(f"  Result {i+1}: title={metadata.get('title', '')[:50]}")
+            
+            return sorted_results
+        except Exception as e:
+            print(f"[MediaSearchV2View] Error sorting results: {str(e)}. Returning unsorted results.")
+            import traceback
+            traceback.print_exc()
+            return results

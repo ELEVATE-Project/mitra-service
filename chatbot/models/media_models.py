@@ -7,6 +7,7 @@ from shikshalokam.models.enums import PriorityChoices
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVector, TrigramSimilarity
 from simple_history.models import HistoricalRecords
+from chatbot.celery_tasks.knowledge_service.media_tasks import save_in_vector_db, update_in_vector_db
 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 
@@ -45,22 +46,27 @@ class Media(models.Model):
     def save(self, *args, company_slug=None, **kwargs):
         is_new = self.pk is None
         super().save(*args, **kwargs)
-        # if is_new:
-        #     task = save_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
-        #     return task.id
-        # else:
-        #     task = update_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
-        #     return task.id
+        if is_new:
+            task = save_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
+            return task.id
+        else:
+            task = update_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
+            return task.id
 
     def delete(self, *args, **kwargs):
-        status_code = 200#delete_from_vector_db(self.id)
-        if status_code == 200:
-            super().delete(*args, **kwargs)
-        else:
-            super().delete(*args, **kwargs)
-            # raise Exception(
-            #     f"Failed to delete from vector DB for media_id: {self.id}. Status: {status_code}"
-            # )
+        from chatbot.celery_tasks.knowledge_service.media_tasks import delete_from_vector_db
+        
+        # Try to delete from vector DB first
+        try:
+            result = delete_from_vector_db(self.id)
+            status_code = result if isinstance(result, int) else 200
+            print(f"Vector DB deletion status for media_id {self.id}: {status_code}")
+        except Exception as e:
+            print(f"Error deleting from vector DB for media_id {self.id}: {str(e)}")
+            status_code = 500
+        
+        # Always delete from Django DB regardless of vector DB status
+        super().delete(*args, **kwargs)
 
     @classmethod
     def find_trigram_similar(
@@ -102,6 +108,7 @@ class Media(models.Model):
     media_type = models.CharField(max_length=100, choices=FileTypeChoices.choices, default=FileTypeChoices.TXT)
     company_bot = models.ForeignKey(CompanyBot, on_delete=models.DO_NOTHING)
     file = models.FileField(upload_to=get_file_upload_path, max_length=1000)
+    markdown_file = models.FileField(upload_to=get_file_upload_path, max_length=1000, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
     extracted_text = models.TextField(null=True, blank=True)
     tags = models.ManyToManyField(Tag, related_name="medias")

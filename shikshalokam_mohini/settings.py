@@ -12,22 +12,22 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 import json
 import os
 import re
-from pathlib import Path
 from datetime import timedelta
 import sentry_sdk
 from dotenv import load_dotenv
+from socket import gethostbyname
+from socket import gethostname
 
 load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-LOGGING_DIR = BASE_DIR + '/shikshalokam-mohini-service/logs'
+CODE_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-# BASE_DIR = Path(__file__).resolve().parent.parent
+LOGGING_DIR = CODE_BASE_DIR + '/logs'
 
 def load_secrets():
     alt_path = os.getcwd() + "/config/secrets.json"
-    secrets_path = os.path.join(BASE_DIR, "shikshalokam-mohini-service/config/secrets.json")
+    secrets_path = os.path.join(CODE_BASE_DIR, "config/secrets.json")
 
     try:
         with open(secrets_path, 'r') as f:
@@ -80,6 +80,8 @@ CORS_ALLOWED_METHODS = [
 ]
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
+
+ALLOWED_HOSTS.append(gethostbyname(gethostname()))
 
 
 # Application definition
@@ -207,6 +209,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 ASGI_APPLICATION = 'shikshalokam_mohini.asgi.application'
 
+REDIS_HOST = os.environ.get('REDIS_HOST', "127.0.0.1")
+REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
@@ -250,8 +255,7 @@ INTERNAL_IPS = [
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
-CSRF_TRUSTED_ORIGINS = ['https://*.shikshalokam.org', 'https://*.127.0.0.1',
-                        'https://*.gritworks.ai', 'http://localhost:3000']
+CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "https://*.shikshalokam.org,https://*.127.0.0.1,https://*.gritworks.ai,http://localhost:3000").split(',')
 
 STORAGES = {
     "default": {

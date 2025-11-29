@@ -14,19 +14,30 @@ def prepare_vector_db_data(media_id, include_updated_at=False, company_slug=None
     company_obj = None
     if company_slug:
         company_obj = Company.objects.filter(slug=company_slug).first()
-    company_obj = company_obj or media.company_bot.company
-
-    company_obj = company_obj or media.company_bot.company
+    company_obj = company_obj or media.organization
 
     metadata = {
         'source': 'file',
         'url': str(media.url) if media.url is not None else S3_BASE_URL + media.file.name,
         'company': company_obj.slug,
         'created_at': str(media.created_at),
+        'type': media.media_type,
+        'priority': media.priority,
     }
 
     if include_updated_at:
         metadata['updated_at'] = str(media.updated_at)
+
+    # Add file_size if file exists
+    if media.file:
+        try:
+            metadata['file_size'] = media.file.size
+        except (ValueError, AttributeError):
+            metadata['file_size'] = None
+
+    # Add organization_url if organization exists
+    if company_obj and company_obj.url:
+        metadata['organization_url'] = company_obj.url
 
     for kv in kvs:
         metadata[kv.key] = kv.value

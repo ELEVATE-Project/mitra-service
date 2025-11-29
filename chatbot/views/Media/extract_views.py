@@ -194,7 +194,7 @@ class BatchMediaExtractView(View):
             'name': base_name,
             'media_type': self.get_media_type(file.name),
             'description': f'Extracted from {file.name}',
-            'extracted_text': 'AI extraction in progress...',
+            'extracted_text': '',
             'priority': 'P1',
             'tags': [],
             'manual_tags': [],

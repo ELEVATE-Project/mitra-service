@@ -67,8 +67,7 @@ class BatchMediaSaveView(View):
 
         return cleaned
 
-    def get_or_create_source_document_media(self, source_doc_url, parent_media, company_bot_id, user_profile,
-                                            company_slug):
+    def get_or_create_source_document_media(self, source_doc_url, parent_media, company_bot_id, markdown_content):
         """
         Download and save source document as a Media object if not already saved.
         Returns the Media object for the source document.
@@ -102,8 +101,31 @@ class BatchMediaSaveView(View):
                 display_mode=FileDisplayMode.PRIVATE
             )
 
-            # Save the file
-            source_media.file.save(filename, ContentFile(response.content), save=False)
+            file_content = response.content
+
+            # Save the main file
+            if file_content:
+                # Create a fresh ContentFile for the main file
+                file_content_file = ContentFile(file_content)
+                source_media.file.save(filename, file_content_file, save=False)
+                print(f"Saved main file: {filename} ({len(file_content)} bytes)")
+
+            # Save the markdown file if content exists
+            if markdown_content:
+                base_filename = os.path.splitext(filename)[0]  # Remove extension
+                markdown_filename = f"Markdown_{base_filename}.md"
+
+                # Ensure markdown content is properly encoded
+                if isinstance(markdown_content, str):
+                    markdown_content_bytes = markdown_content.encode('utf-8')
+                else:
+                    markdown_content_bytes = markdown_content
+
+                # Create a fresh ContentFile for the markdown
+                markdown_content_file = ContentFile(markdown_content_bytes)
+                source_media.markdown_file.save(markdown_filename, markdown_content_file, save=False)
+                print(f"Saved markdown file: {markdown_filename} ({len(markdown_content_bytes)} bytes)")
+
             source_media.save()
 
             # Add reference to original URL
@@ -127,8 +149,8 @@ class BatchMediaSaveView(View):
 
         except Exception as e:
             print(f"Error creating source document media for {source_doc_url}: {e}")
+            traceback.print_exc()
             return None
-
 
     def wait_for_vector_db_save_safe(self, task_id, timeout=30):
         """Enhanced waiting with better error handling"""
@@ -280,6 +302,18 @@ class BatchMediaSaveView(View):
                     from django.core.files.base import ContentFile
                     media.file.save(file_name, ContentFile(file_content), save=False)
 
+                # Create and save markdown file if extracted_text exists
+                if extracted_text and extracted_text.strip():
+                    base_name = file_name if file_name else item_data['name']
+                    if base_name and '.' in base_name:
+                        base_name = os.path.splitext(base_name)[0]
+                    markdown_filename = f"Markdown_{base_name}.md"
+                    # Ensure .md extension
+                    if not markdown_filename.endswith('.md'):
+                        markdown_filename = f"{markdown_filename}.md"
+                    markdown_content = extracted_text.encode('utf-8')
+                    media.markdown_file.save(markdown_filename, ContentFile(markdown_content), save=False)
+
                 # Save and get the vector DB task ID
                 vector_task_id = media.save(company_slug=company_slug)
 
@@ -359,19 +393,27 @@ class BatchMediaSaveView(View):
                         'image_results': []
                     }
 
-            # Step 5.5: Process source documents if no subdocuments but URLs exist
+            # Step 5.5: Process source documents if no subdocuments but source_documents exist
             source_document_results = []
-            if not item_data.get('subdocument') and item_data.get('url'):
-                print(f"Processing source documents for main document without subdocuments")
+            source_documents = item_data.get('source_documents', [])
 
-                for source_url in item_data.get('url', []):
+            if not item_data.get('subdocument') and source_documents:
+                print(f"Processing {len(source_documents)} source documents for main document without subdocuments")
+
+                for source_doc in source_documents:
+                    # source_doc is an object with 'url' and 'exact_content'
+                    source_url = source_doc.get('url') if isinstance(source_doc, dict) else source_doc
+
+                    if not source_url:
+                        print(f"Skipping source document with no URL: {source_doc}")
+                        continue
+                    markdown_content = source_doc.get('exact_content', '')
                     try:
                         source_media = self.get_or_create_source_document_media(
                             source_url,
                             media,
                             company_bot_id,
-                            user_profile,
-                            company_slug
+                            markdown_content
                         )
                         if source_media:
                             source_document_results.append({
@@ -414,7 +456,8 @@ class BatchMediaSaveView(View):
                     company_slug,
                     session_id,
                     file_index,
-                    ""
+                    "",
+                    item_data
                 )
                 subdocument_results.extend(subdoc_results)
 
@@ -483,7 +526,8 @@ class BatchMediaSaveView(View):
                 )
 
     def process_subdocuments_recursive(self, subdocuments, parent_media, company_bot_id, user_profile,
-                                       company_slug, session_id, parent_index, parent_path):
+                                       company_slug, session_id, parent_index, parent_path,
+                                       source_doc):  # Add source_doc parameter
         """Recursively process subdocuments at any depth"""
         results = []
 
@@ -492,8 +536,9 @@ class BatchMediaSaveView(View):
             subdoc_cache_key = CacheManager.get_cache_key(session_id, 'subdoc', f"{parent_index}_{current_path}")
 
             try:
+                # Pass source_doc to save_subdocument
                 subdoc_result = self.save_subdocument(
-                    subdoc_data, parent_media, company_bot_id, user_profile, company_slug
+                    subdoc_data, parent_media, company_bot_id, user_profile, company_slug, source_doc
                 )
                 subdoc_result['cache_key'] = subdoc_cache_key
                 subdoc_result['path'] = current_path
@@ -511,7 +556,8 @@ class BatchMediaSaveView(View):
                         company_slug,
                         session_id,
                         parent_index,
-                        current_path
+                        current_path,
+                        source_doc  # Pass source_doc to nested calls
                     )
                     subdoc_result['nested_subdocument_results'] = nested_results
 
@@ -529,20 +575,33 @@ class BatchMediaSaveView(View):
 
         return results
 
-    def save_subdocument(self, subdoc_data, parent_media, company_bot_id, user_profile, company_slug):
+    def save_subdocument(self, subdoc_data, parent_media, company_bot_id, user_profile, company_slug, source_doc):
         """Save a subdocument as a separate Media object linked to parent"""
         try:
             source_doc_url = subdoc_data.get('source_document')
             actual_parent = parent_media
 
+            print("=" * 50)
+            print("source_doc_url: ", source_doc_url)
+            print("source_doc: ", source_doc)
+            print("=" * 50)
+
             if source_doc_url:
+                source_documents = source_doc.get('source_documents', [])
+                markdown_content = ''
+                for source_document in source_documents:
+                    if source_document.get('url') == source_doc_url:
+                        print("URL MATCHED")
+                        markdown_content = source_document.get('exact_content', '')
+                        break
+
+                print("found markdown content: ", markdown_content)
                 # Try to get or create the source document media
                 source_media = self.get_or_create_source_document_media(
                     source_doc_url,
                     parent_media,
                     company_bot_id,
-                    user_profile,
-                    company_slug
+                    markdown_content
                 )
 
                 if source_media:
@@ -701,6 +760,9 @@ class BatchMediaSaveView(View):
                 except Company.DoesNotExist:
                     print(f"Warning: Company with slug {subdoc_data['organization_slug']} not found")
 
+            # Get extracted_text for subdocument
+            subdoc_extracted_text = subdoc_data.get('extracted_text', '')
+
             # Create subdocument media
             subdoc_media = Media(
                 name=subdoc_title,
@@ -721,6 +783,17 @@ class BatchMediaSaveView(View):
                 error_msg = f"Failed to save file content for subdocument: {str(e)}"
                 print(f"Error: {error_msg}")
                 raise ValueError(error_msg)
+
+            # Create and save markdown file if extracted_text exists
+            if subdoc_extracted_text and subdoc_extracted_text.strip():
+                base_filename = os.path.splitext(filename)[0]
+                markdown_filename = f"Markdown_{base_filename}.md"
+
+                # Ensure .md extension
+                if not markdown_filename.endswith('.md'):
+                    markdown_filename = f"{markdown_filename}.md"
+                markdown_content = subdoc_extracted_text.encode('utf-8')
+                subdoc_media.markdown_file.save(markdown_filename, ContentFile(markdown_content), save=False)
 
             # Save the media object
             subdoc_media.save()
@@ -1045,7 +1118,8 @@ class BatchMediaRetrySaveView(View):
                         parent_media=parent_media,
                         company_bot_id=company_bot_id,
                         user_profile=user_profile,
-                        company_slug=company_slug
+                        company_slug=company_slug,
+                        source_doc=data.get('source_document', {})
                     )
 
                     return JsonResponse({
