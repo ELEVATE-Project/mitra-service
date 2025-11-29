@@ -1,6 +1,7 @@
 from django.urls import re_path
 from .consumers.Reflection_bedrock_consumer import ReflectionBedrockConsumer
 from .consumers.async_chaupal_consumer import AsyncShikshalokamChaupalConsumer
+from .consumers.async_chaupal_consumer_v2 import AsyncShikshalokamChaupalV2Consumer
 from .consumers.async_consumer import AsyncSocketConsumer
 from .consumers.guided_guest_consumer import GuidedGuestConsumer
 from .consumers.mitra_bedrock_consumer import MitraBedrockConsumer
@@ -17,5 +18,6 @@ websocket_urlpatterns = [
     re_path(r"ws/oneshot_guest/$", OneShotGuestConsumer.as_asgi()),
     re_path(r"ws/mitra/$", MitraBedrockConsumer.as_asgi()),
     re_path(r"ws/shikshalokam_chaupal/$", AsyncShikshalokamChaupalConsumer.as_asgi()),
+    re_path(r"ws/shikshalokam_chaupal/v2/$", AsyncShikshalokamChaupalV2Consumer.as_asgi()),
     re_path(r"ws/common/$", AsyncSocketConsumer.as_asgi())
 ]
