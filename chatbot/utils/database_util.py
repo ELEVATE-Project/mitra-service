@@ -26,9 +26,7 @@ def upsert_single_file(filename, file, metadata, media):
     }
     
     # Add company_id if available
-    if hasattr(media, 'company_bot') and media.company_bot and media.company_bot.company:
-        payload['company_id'] = media.company_bot.company.slug
-    elif hasattr(media, 'organization') and media.organization:
+    if hasattr(media, 'organization') and media.organization:
         payload['company_id'] = media.organization.slug
     
     # Add title if available (from KeyValue or media name)
@@ -123,10 +121,7 @@ def update_single_file(media_id, filename, file, metadata, media):
         'priority': media.priority
     }
 
-    # Add company_id for safety verification if available
-    if hasattr(media, 'company_bot') and media.company_bot and media.company_bot.company:
-        payload['company_id'] = media.company_bot.company.slug
-    elif hasattr(media, 'organization') and media.organization:
+    if hasattr(media, 'organization') and media.organization:
         payload['company_id'] = media.organization.slug
     
     # Add title if available (from KeyValue or media name)
