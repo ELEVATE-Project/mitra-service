@@ -113,10 +113,10 @@ class MediaSearchResultSerializer(serializers.Serializer):
             media_id = source_id
         
         # Get title from metadata or instance
-        title = metadata.get('title', instance.get('title', ''))
+        title = metadata.get('TITLE', instance.get('title', ''))
         
         # Get tags from instance
-        tags = instance.get('tags', [])
+        tags = metadata.get('tags', [])
         
         # Get document_type from metadata
         document_type = None
@@ -125,7 +125,7 @@ class MediaSearchResultSerializer(serializers.Serializer):
                 document_type = metadata[key]
                 break
         
-        # Fetch file_size, organization_url, org_logo, key_entities, and display_mode from database
+        # Fetch file_size, organization_url, org_logo, key_entities, display_mode, description, and priority from database
         # These fields are NOT reliable in vector DB metadata, so we query the Media model directly
         file_size = None
         organization_url = None
@@ -133,12 +133,14 @@ class MediaSearchResultSerializer(serializers.Serializer):
         key_entities = None
         display_mode = None
         display_mode_display = None
+        description = None
+        db_priority = None
         
         if media_id:
             try:
                 from chatbot.models.media_models import Media
                 media_obj = Media.objects.select_related('organization').prefetch_related('key_values').only(
-                    'id', 'file', 'organization__url', 'organization__logo', 'display_mode'
+                    'id', 'file', 'organization__url', 'organization__logo', 'display_mode', 'description', 'priority'
                 ).get(id=media_id)
                 
                 # Get file_size from Django FileField (same as V1 API)
@@ -161,6 +163,12 @@ class MediaSearchResultSerializer(serializers.Serializer):
                 # Get display_mode from Media model
                 display_mode = media_obj.display_mode
                 display_mode_display = media_obj.get_display_mode_display()
+                
+                # Get description from Media model
+                description = media_obj.description
+                
+                # Get priority from Media model
+                db_priority = media_obj.priority
                 
                 # Debug logging
                 print(f"[MediaSearchResultSerializer] Media ID {media_id}: key_entities from DB = {key_entities}")
@@ -185,12 +193,16 @@ class MediaSearchResultSerializer(serializers.Serializer):
                 print(f"[MediaSearchResultSerializer] Media ID {media_id}: key_entities NOT FOUND in metadata or database")
         
         # Build response matching V1 format exactly
+        # Priority: PostgreSQL values > Vector DB metadata
+        final_description = description if description is not None else instance.get('summary', '')
+        final_priority = db_priority if db_priority is not None else priority
+        
         return {
             'id': media_id,
             'name': title,
-            'description': instance.get('summary', ''),
-            'priority': priority,
-            'priority_display': priority,
+            'description': final_description,
+            'priority': final_priority,
+            'priority_display': final_priority,
             'media_type': file_type,
             'media_type_display': self._get_media_type_display(file_type),
             'created_at': created_at,
