@@ -21,6 +21,7 @@ class ChatType(models.TextChoices):
     megaPTM = 'megaPTM', _('Mega PTM')
     YLC = 'YLC', _('YLC')
     listeningActivity = 'listening-activity', _('Listening Activity')
+    ParentPerceptionSurvey = 'parent_perception_survey', _('Parent Perception Survey')
 
 
 class LLMProvider(models.TextChoices):
@@ -280,6 +281,7 @@ class SessionFlowName(models.TextChoices):
     Reflection = 'reflection', _('reflection')
     megaPTM = 'megaPTM', _('Mega PTM')
     YLC = 'YLC', _('YLC')
+    ParentPerceptionSurvey = 'parent_perception_survey', _('Parent Perception Survey')
 
 
 class PreProcessType(models.TextChoices):
