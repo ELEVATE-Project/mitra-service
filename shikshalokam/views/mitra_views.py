@@ -4,15 +4,20 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.http import JsonResponse
-from chatbot.models import CompanyBot, Voice, VoiceType, Profile, BotVernacular, StoryMedia, MediaTypeChoices, SessionFlowName
+from chatbot.models import (CompanyBot, Voice, VoiceType, Profile, BotVernacular, StoryMedia, MediaTypeChoices,
+                            SessionFlowName)
 from chatbot.serializer.story_serializer import StoryMediaRetrieveSerializer
-from shikshalokam.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_objective_utils, validate_objective_utils, validate_actions_utils, generate_action_list_utils, generate_title_utils, validate_title_utils, post_process_objectives_with_source, post_process_actions_with_source
+from shikshalokam.utils.action_steps_utils import generate_action_list_utils, post_process_actions_with_source
+from shikshalokam.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_title_utils
 from chatbot.utils.story_llama_utils import translate_field
 from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf
 from shikshalokam.models import Project
+from shikshalokam.utils.objective_utils import generate_objective_utils, post_process_objectives_with_source
 from shikshalokam.utils.project_utils import update_project_status_utils
 import json_repair
+
+from shikshalokam.utils.validation_utils import validate_objective_utils, validate_actions_utils, validate_title_utils
 
 
 @api_view(['POST'])
@@ -170,9 +175,9 @@ def validate_objectives_view(request):
 
     profile = Profile.objects.filter(id=profile_id).first()
     if profile:
-        company_bot = CompanyBot.objects.get(company=profile.company, route='/objective')
+        company_bot = CompanyBot.objects.get(company=profile.company, route='/validate-objective')
     else:
-        company_bot = CompanyBot.objects.get(route='/objective')
+        company_bot = CompanyBot.objects.get(route='/validate-objective')
     bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
     error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
     if language !='en':
@@ -204,9 +209,9 @@ def validate_actions_view(request):
 
     profile = Profile.objects.filter(id=profile_id).first()
     if profile:
-        company_bot = CompanyBot.objects.get(company=profile.company, route='/action_list')
+        company_bot = CompanyBot.objects.get(company=profile.company, route='/validate-action_list')
     else:
-        company_bot = CompanyBot.objects.get(route='/action_list')
+        company_bot = CompanyBot.objects.get(route='/validate-action_list')
     bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
     error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
     if language !='en':
@@ -450,9 +455,9 @@ def validate_title_view(request):
 
     profile = Profile.objects.filter(id=profile_id).first()
     if profile:
-        company_bot = CompanyBot.objects.get(company=profile.company, route='/title')
+        company_bot = CompanyBot.objects.get(company=profile.company, route='/validate-title')
     else:
-        company_bot = CompanyBot.objects.get(route='/title')
+        company_bot = CompanyBot.objects.get(route='/validate-title')
     bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
     error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
     if language != 'en':

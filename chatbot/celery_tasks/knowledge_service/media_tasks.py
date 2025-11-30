@@ -53,7 +53,11 @@ def prepare_vector_db_data(media_id, include_updated_at=False, company_slug=None
 @shared_task
 def save_in_vector_db(media_id, company_slug=None):
     print(f"Save in vector for media_id: {media_id}, company_slug: {company_slug}")
-    media, file_name, file_content, metadata = prepare_vector_db_data(media_id, company_slug)
+    media, file_name, file_content, metadata = prepare_vector_db_data(
+        media_id=media_id,
+        include_updated_at=False,
+        company_slug=company_slug
+    )
     status_code, response_text = upsert_single_file(file_name, file_content, metadata, media)
     print(status_code, response_text)
     return status_code
@@ -63,7 +67,9 @@ def save_in_vector_db(media_id, company_slug=None):
 def update_in_vector_db(media_id, company_slug=None):
     print('Update in vector for media_id: {}'.format(media_id))
     media, file_name, file_content, metadata = prepare_vector_db_data(
-        media_id, include_updated_at=True, company_slug=company_slug
+        media_id=media_id,
+        include_updated_at=True,
+        company_slug=company_slug
     )
     status_code, response_text = update_single_file(media_id, file_name, file_content, metadata, media)
     print("Updated in vector DB:", status_code, response_text)
@@ -74,7 +80,7 @@ def delete_from_vector_db(media_id):
     print('Deleting from vector for media_id: {}'.format(media_id))
     from chatbot.models import Media
     media = Media.objects.get(id=media_id)
-    company_slug = media.company_bot.company.slug if media.company_bot and media.company_bot.company else None
+    company_slug = media.organization.slug if media and media.organization else None
     status_code, response_text = delete_single_file(media_id, company_slug)
     print(status_code, response_text)
     return status_code

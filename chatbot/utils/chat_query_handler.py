@@ -33,6 +33,88 @@ def query_database(query_prompt: str, priority_filter: str, limit: int):
         print(f"Error: {response.status_code} : {response.content}")
 
 
+def query_text_search(query: str, priority: str = "P1", limit: int = 10):
+    """
+    Query vector database using text-search API endpoint.
+    """
+    url = f"{base_url}/api/documents/text-search"
+    print(f"[query_text_search] URL: {url}")
+    
+    headers = {
+        "Content-Type": "application/json",
+        "accept": "application/json",
+    }
+    
+    payload = {
+        "query": query,
+        "priority": priority,
+        "limit": limit
+    }
+    
+    print(f"[query_text_search] Request Payload: {payload}")
+    
+    try:
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        
+        if response.status_code == 200:
+            result = response.json()
+            print(f"[query_text_search] Success: Retrieved {result.get('total_results', 0)} results")
+            return result
+        else:
+            error_msg = f"Error: {response.status_code}"
+            try:
+                error_detail = response.json()
+                error_msg += f" - {error_detail}"
+            except:
+                error_msg += f" - {response.text}"
+            
+            print(f"[query_text_search] {error_msg}")
+            return {
+                "error": True,
+                "status_code": response.status_code,
+                "message": error_msg,
+                "query": query,
+                "total_results": 0,
+                "results": []
+            }
+    
+    except requests.exceptions.Timeout:
+        error_msg = "Request timeout - Vector database took too long to respond"
+        print(f"[query_text_search] {error_msg}")
+        return {
+            "error": True,
+            "status_code": 504,
+            "message": error_msg,
+            "query": query,
+            "total_results": 0,
+            "results": []
+        }
+    
+    except requests.exceptions.ConnectionError:
+        error_msg = "Connection error - Unable to reach vector database"
+        print(f"[query_text_search] {error_msg}")
+        return {
+            "error": True,
+            "status_code": 503,
+            "message": error_msg,
+            "query": query,
+            "total_results": 0,
+            "results": []
+        }
+    
+    except Exception as e:
+        error_msg = f"Unexpected error: {str(e)}"
+        print(f"[query_text_search] {error_msg}")
+        return {
+            "error": True,
+            "status_code": 500,
+            "message": error_msg,
+            "query": query,
+            "total_results": 0,
+            "results": []
+        }
+
+
 def query_database_with_metadata(
     query: str = None,
     top_k: int = 20,
