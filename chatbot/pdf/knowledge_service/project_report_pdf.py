@@ -1,6 +1,80 @@
 import os
 from django.core.files.base import ContentFile
+
+from chatbot.models import ChatSession
+from chatbot.models.story_vernacular_model import StoryVernacular
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
+
+
+def format_sources_html(sources, sources_char_limit=1200):
+    if not sources or not isinstance(sources, dict):
+        return '<li value="1">No sources available</li>\n'
+
+    # Collect all sources
+    source_items = []
+
+    objective_chunk = sources.get('objective_chunk')
+    if objective_chunk and isinstance(objective_chunk, dict):
+        chunk_text = objective_chunk.get('chunk', '')
+        if chunk_text:
+            source_items.append(chunk_text)
+
+    action_chunk = sources.get('action_chunk')
+    if action_chunk and isinstance(action_chunk, dict):
+        chunk_text = action_chunk.get('chunk', '')
+        if chunk_text:
+            source_items.append(chunk_text)
+
+    if not source_items:
+        return '<li value="1">No sources available</li>\n'
+
+    # Chunk sources based on character limit
+    chunks = []
+    current_chunk = []
+    current_length = 0
+
+    for source in source_items:
+        source_len = len(source)
+
+        # If adding this source exceeds limit and we have content, start new chunk
+        if current_length + source_len > sources_char_limit and current_chunk:
+            chunks.append(current_chunk)
+            current_chunk = [source]
+            current_length = source_len
+        else:
+            current_chunk.append(source)
+            current_length += source_len
+
+    # Add remaining chunk
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    # Build HTML with page breaks between chunks
+    full_html = ""
+    current_number = 1
+
+    for i, chunk in enumerate(chunks):
+        # Apply page break to all chunks except the last one
+        page_break = "split-div1" if i < len(chunks) - 1 else ""
+
+        html = (
+                f"<div class='{page_break}'>"
+                "<div class='project-section'>"
+                "<div class='section-header'>"
+                "<span class='star-icon'>★</span>"
+                "<span class='section-title'>Sources</span>"
+                "</div>"
+                "<div class='section-content'>"
+                "<ol class='sources-list'>"
+                + ''.join(f"<li value='{current_number + idx}'>{source}</li>\n" for idx, source in enumerate(chunk))
+                + "</ol>"
+                  "</div></div></div>"
+        )
+
+        full_html += html
+        current_number += len(chunk)
+
+    return full_html
 
 
 def get_project_report_html(
@@ -11,6 +85,8 @@ def get_project_report_html(
         objective,
         timeline,
         action_steps,
+        language,
+        session,
         sources=None
 ):
     """Generate HTML for project report PDF matching the screenshot design"""
@@ -21,16 +97,19 @@ def get_project_report_html(
         for i, step in enumerate(action_steps, 1):
             action_steps_html += f'<li value="{i}">{step}</li>\n'
 
+    chat_session = ChatSession.objects.filter(session=session).first()
+    sources_char_limit=1200
+    if chat_session:
+        print("ChatSession found!")
+        story_vernacular = StoryVernacular.objects.filter(
+            company_bot=chat_session.company_bot, language=language
+        ).first()
+        if story_vernacular:
+            print("StoryVernacular found!")
+            sources_char_limit = story_vernacular.translation_json.get('sources_char_limit', 1200)
+
     # Format sources as numbered list
-    sources_html = ""
-    if sources:
-        if isinstance(sources, list):
-            for i, source in enumerate(sources, 1):
-                sources_html += f'<li value="{i}">{source}</li>\n'
-        else:
-            # Default sources if not provided
-            for i in range(1, 6):
-                sources_html += f'<li value="{i}">Source {i}</li>\n'
+    sources_html = format_sources_html(sources, sources_char_limit)
 
     # Get CSS path (using the story PDF CSS as base)
     css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "ks_report_pdf.css"))
@@ -105,17 +184,7 @@ def get_project_report_html(
                     </div>
                 </div>
 
-                <div class="project-section">
-                    <div class="section-header">
-                        <span class="star-icon">★</span>
-                        <span class="section-title">Sources</span>
-                    </div>
-                    <div class="section-content">
-                        <ol class="sources-list">
-                            {sources_html}
-                        </ol>
-                    </div>
-                </div>
+                {sources_html}
             </div>
         </body>
     </html>
@@ -167,6 +236,7 @@ def get_project_report_css():
         border-radius: 8px;
         padding: 20px;
         background-color: #f8f9fa;
+        page-break-inside: avoid;
     }
 
     .section-header {
@@ -228,8 +298,10 @@ def generate_project_pdf(
         objective,
         timeline,
         action_steps,
+        language,
+        session,
         sources=None,
-        pdf_filename=None
+        pdf_filename=None,
 ):
     """Generate PDF for project report"""
 
@@ -242,6 +314,8 @@ def generate_project_pdf(
         objective=objective,
         timeline=timeline,
         action_steps=action_steps,
+        language=language,
+        session=session,
         sources=sources
     )
 
