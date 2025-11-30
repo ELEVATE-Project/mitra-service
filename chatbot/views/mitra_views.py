@@ -166,7 +166,7 @@ def create_project_view(request):
             objective=project_objective,
             timeline=timeline,
             action_steps=user_action_steps,
-            sources=None
+            sources=chunks
         )
 
         print("PDF report is generated successfully")

@@ -3,6 +3,39 @@ from django.core.files.base import ContentFile
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 
 
+def format_sources_html(sources):
+    sources_html = ""
+
+    if sources:
+        if isinstance(sources, dict):
+            source_counter = 1
+
+            objective_chunk = sources.get('objective_chunk')
+            if objective_chunk and isinstance(objective_chunk, dict):
+                chunk_text = objective_chunk.get('chunk', '')
+                source_display = f"<strong>Source {source_counter}</strong> (Objective chunk used)<br/>{chunk_text}"
+                sources_html += f'<li value="{source_counter}">{source_display}</li>\n'
+                source_counter += 1
+
+            action_chunk = sources.get('action_chunk')
+            if action_chunk and isinstance(action_chunk, dict):
+                chunk_text = action_chunk.get('chunk', '')
+                source_display = f"<strong>Source {source_counter}</strong> (Action chunk used)<br/>{chunk_text}"
+                sources_html += f'<li value="{source_counter}">{source_display}</li>\n'
+                source_counter += 1
+
+        elif isinstance(sources, list):
+            for i, source in enumerate(sources, 1):
+                sources_html += f'<li value="{i}">{source}</li>\n'
+        else:
+            for i in range(1, 6):
+                sources_html += f'<li value="{i}">Source {i}</li>\n'
+    else:
+        sources_html += '<li value="1">No sources available</li>\n'
+
+    return sources_html
+
+
 def get_project_report_html(
         project_title,
         author_name,
@@ -22,15 +55,7 @@ def get_project_report_html(
             action_steps_html += f'<li value="{i}">{step}</li>\n'
 
     # Format sources as numbered list
-    sources_html = ""
-    if sources:
-        if isinstance(sources, list):
-            for i, source in enumerate(sources, 1):
-                sources_html += f'<li value="{i}">{source}</li>\n'
-        else:
-            # Default sources if not provided
-            for i in range(1, 6):
-                sources_html += f'<li value="{i}">Source {i}</li>\n'
+    sources_html = format_sources_html(sources)
 
     # Get CSS path (using the story PDF CSS as base)
     css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "ks_report_pdf.css"))
