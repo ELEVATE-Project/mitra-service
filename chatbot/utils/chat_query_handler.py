@@ -36,26 +36,6 @@ def query_database(query_prompt: str, priority_filter: str, limit: int):
 def query_text_search(query: str, priority: str = "P1", limit: int = 10):
     """
     Query vector database using text-search API endpoint.
-    
-    Args:
-        query: Search query string
-        priority: Priority filter (default: "P1")
-        limit: Number of results to return
-    
-    Returns:
-        dict: Response from text-search API with format:
-            {
-                "query": str,
-                "total_results": int,
-                "results": [
-                    {
-                        "source_id": str,
-                        "text": str,
-                        "score": float,
-                        "metadata": {...}
-                    }
-                ]
-            }
     """
     url = f"{base_url}/api/documents/text-search"
     print(f"[query_text_search] URL: {url}")
