@@ -1,39 +1,77 @@
 import os
 from django.core.files.base import ContentFile
+
+from chatbot.models import ChatSession
+from chatbot.models.story_vernacular_model import StoryVernacular
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 
 
-def format_sources_html(sources):
-    sources_html = ""
+def format_sources_html(sources, sources_char_limit=1200):
+    if not sources or not isinstance(sources, dict):
+        return '<li value="1">No sources available</li>\n'
 
-    if sources:
-        if isinstance(sources, dict):
-            source_counter = 1
+    # Collect all sources
+    source_items = []
 
-            objective_chunk = sources.get('objective_chunk')
-            if objective_chunk and isinstance(objective_chunk, dict):
-                chunk_text = objective_chunk.get('chunk', '')
-                source_display = f"<strong>Source {source_counter}</strong> (Objective chunk used)<br/>{chunk_text}"
-                sources_html += f'<li value="{source_counter}">{source_display}</li>\n'
-                source_counter += 1
+    objective_chunk = sources.get('objective_chunk')
+    if objective_chunk and isinstance(objective_chunk, dict):
+        chunk_text = objective_chunk.get('chunk', '')
+        if chunk_text:
+            source_items.append(chunk_text)
 
-            action_chunk = sources.get('action_chunk')
-            if action_chunk and isinstance(action_chunk, dict):
-                chunk_text = action_chunk.get('chunk', '')
-                source_display = f"<strong>Source {source_counter}</strong> (Action chunk used)<br/>{chunk_text}"
-                sources_html += f'<li value="{source_counter}">{source_display}</li>\n'
-                source_counter += 1
+    action_chunk = sources.get('action_chunk')
+    if action_chunk and isinstance(action_chunk, dict):
+        chunk_text = action_chunk.get('chunk', '')
+        if chunk_text:
+            source_items.append(chunk_text)
 
-        elif isinstance(sources, list):
-            for i, source in enumerate(sources, 1):
-                sources_html += f'<li value="{i}">{source}</li>\n'
+    if not source_items:
+        return '<li value="1">No sources available</li>\n'
+
+    # Chunk sources based on character limit
+    chunks = []
+    current_chunk = []
+    current_length = 0
+
+    for source in source_items:
+        source_len = len(source)
+
+        # If adding this source exceeds limit and we have content, start new chunk
+        if current_length + source_len > sources_char_limit and current_chunk:
+            chunks.append(current_chunk)
+            current_chunk = [source]
+            current_length = source_len
         else:
-            for i in range(1, 6):
-                sources_html += f'<li value="{i}">Source {i}</li>\n'
-    else:
-        sources_html += '<li value="1">No sources available</li>\n'
+            current_chunk.append(source)
+            current_length += source_len
 
-    return sources_html
+    # Add remaining chunk
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    # Build HTML with page breaks between chunks
+    full_html = ""
+    current_number = 1
+
+    for i, chunk in enumerate(chunks):
+        # Apply page break to all chunks except the last one
+        page_break = "split-div1" if i < len(chunks) - 1 else ""
+
+        html = (
+                   f"<div class='{page_break}'>" if page_break else ""
+               ) + (
+                       "<ol class='sources-list'>"
+                       + ''.join(
+                   f"<li value='{current_number + idx}'>{source}</li>\n" for idx, source in enumerate(chunk))
+                       + "</ol>"
+               ) + (
+                   "</div>" if page_break else ""
+               )
+
+        full_html += html
+        current_number += len(chunk)
+
+    return full_html
 
 
 def get_project_report_html(
@@ -44,6 +82,8 @@ def get_project_report_html(
         objective,
         timeline,
         action_steps,
+        language,
+        session,
         sources=None
 ):
     """Generate HTML for project report PDF matching the screenshot design"""
@@ -54,8 +94,16 @@ def get_project_report_html(
         for i, step in enumerate(action_steps, 1):
             action_steps_html += f'<li value="{i}">{step}</li>\n'
 
+    chat_session = ChatSession.objects.filter(session=session).first()
+
+    story_vernacular = StoryVernacular.objects.filter(
+        company_bot=chat_session.company_bot, language=language
+    ).first()
+
+    sources_char_limit = story_vernacular.translation_json.get('sources_char_limit', 1200)
+
     # Format sources as numbered list
-    sources_html = format_sources_html(sources)
+    sources_html = format_sources_html(sources, sources_char_limit)
 
     # Get CSS path (using the story PDF CSS as base)
     css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "ks_report_pdf.css"))
@@ -253,8 +301,10 @@ def generate_project_pdf(
         objective,
         timeline,
         action_steps,
+        language,
+        session,
         sources=None,
-        pdf_filename=None
+        pdf_filename=None,
 ):
     """Generate PDF for project report"""
 
@@ -267,6 +317,8 @@ def generate_project_pdf(
         objective=objective,
         timeline=timeline,
         action_steps=action_steps,
+        language=language,
+        session=session,
         sources=sources
     )
 
