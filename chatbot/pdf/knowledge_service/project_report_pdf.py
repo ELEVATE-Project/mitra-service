@@ -95,12 +95,15 @@ def get_project_report_html(
             action_steps_html += f'<li value="{i}">{step}</li>\n'
 
     chat_session = ChatSession.objects.filter(session=session).first()
-
-    story_vernacular = StoryVernacular.objects.filter(
-        company_bot=chat_session.company_bot, language=language
-    ).first()
-
-    sources_char_limit = story_vernacular.translation_json.get('sources_char_limit', 1200)
+    sources_char_limit=1200
+    if chat_session:
+        print("ChatSession found!")
+        story_vernacular = StoryVernacular.objects.filter(
+            company_bot=chat_session.company_bot, language=language
+        ).first()
+        if story_vernacular:
+            print("StoryVernacular found!")
+            sources_char_limit = story_vernacular.translation_json.get('sources_char_limit', 1200)
 
     # Format sources as numbered list
     sources_html = format_sources_html(sources, sources_char_limit)
