@@ -236,6 +236,7 @@ def get_project_report_css():
         border-radius: 8px;
         padding: 20px;
         background-color: #f8f9fa;
+        page-break-inside: avoid;
     }
 
     .section-header {

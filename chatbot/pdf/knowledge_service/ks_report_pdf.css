@@ -288,3 +288,7 @@
     page-break-after: always;
 }
 
+.split-div1 .project-section {
+    page-break-before: auto;
+    page-break-after: auto;
+}
