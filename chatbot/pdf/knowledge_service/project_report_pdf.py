@@ -58,15 +58,18 @@ def format_sources_html(sources, sources_char_limit=1200):
         page_break = "split-div1" if i < len(chunks) - 1 else ""
 
         html = (
-                   f"<div class='{page_break}'>" if page_break else ""
-               ) + (
-                       "<ol class='sources-list'>"
-                       + ''.join(
-                   f"<li value='{current_number + idx}'>{source}</li>\n" for idx, source in enumerate(chunk))
-                       + "</ol>"
-               ) + (
-                   "</div>" if page_break else ""
-               )
+                f"<div class='{page_break}'>"
+                "<div class='project-section'>"
+                "<div class='section-header'>"
+                "<span class='star-icon'>★</span>"
+                "<span class='section-title'>Sources</span>"
+                "</div>"
+                "<div class='section-content'>"
+                "<ol class='sources-list'>"
+                + ''.join(f"<li value='{current_number + idx}'>{source}</li>\n" for idx, source in enumerate(chunk))
+                + "</ol>"
+                  "</div></div></div>"
+        )
 
         full_html += html
         current_number += len(chunk)
@@ -181,17 +184,7 @@ def get_project_report_html(
                     </div>
                 </div>
 
-                <div class="project-section">
-                    <div class="section-header">
-                        <span class="star-icon">★</span>
-                        <span class="section-title">Sources</span>
-                    </div>
-                    <div class="section-content">
-                        <ol class="sources-list">
-                            {sources_html}
-                        </ol>
-                    </div>
-                </div>
+                {sources_html}
             </div>
         </body>
     </html>
