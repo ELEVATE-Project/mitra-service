@@ -284,10 +284,7 @@ def generate_action_list_view(request):
                 voice_provider=voice_provider, message_body=user_objective, source_language=language,
                 target_language='en'
             )
-            print("user_problem_statement: ", user_problem_statement)
-            print("user_objective: ", user_objective)
 
-        # Call generate_action_list_utils with new signature
         gen_result = generate_action_list_utils(
             query=user_problem_statement,
             objective_text=user_objective,
@@ -302,40 +299,36 @@ def generate_action_list_view(request):
                 error_message = translate_field(
                     voice_provider=voice_provider, message_body=error_message, target_language=language
                 )
-        
-        # Check if generation was successful
+
         if gen_result['status'] != 'ok':
             return Response({
                 'status': gen_result['status'],
                 'message': error_message,
                 'action_list': []
             }, status=gen_result['status_code'])
-        
+
         action_list = gen_result['action_list']
         chunk_response = gen_result.get('chunks_response', None)
-        
-        # If no actions were generated (filtered out), return early
+        filtered_chunks = gen_result['filtered_chunks']
+
         if not action_list:
             return Response({
                 'status': 'ok',
                 'message': error_message,
                 'action_list': []
             }, status=200)
-        
-        # Post-process actions to add source information
-        post_result = post_process_actions_with_source(action_list, chunk_response)
-        
-        # Check if post-processing was successful
+
+        post_result = post_process_actions_with_source(action_list, filtered_chunks, chunk_response)
+
         if post_result['status'] != 'ok':
             return Response({
                 'status': post_result['status'],
                 'message': error_message,
                 'action_list': []
             }, status=post_result['status_code'])
-        
+
         action_list = post_result['action_list']
 
-        # Translate if needed
         if language != 'en':
             for action_item in action_list:
                 action_steps = action_item.get('actionSteps', [])
@@ -354,16 +347,12 @@ def generate_action_list_view(request):
 
                     action_item['actionSteps'] = translated_steps
 
-            print("Translated action list: ", action_list)
-
-        print("type of action_list: ", type(action_list))
-
         return Response({
             'status': 'ok',
             'message': error_message,
             'action_list': action_list
         }, status=200)
-    
+
     except Exception as e:
         print(f"Error in generate_action_list_view: {str(e)}")
         traceback.print_exc()

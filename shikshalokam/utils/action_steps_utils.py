@@ -1,6 +1,8 @@
 from chatbot.llm_models.llm_script import handle_bedrock_model
 from shikshalokam.utils.chunks_utils import validate_inputs, filter_and_sort_chunks, prepare_chunks_for_template, \
     render_template_with_context
+import json_repair
+import json
 
 
 def generate_action_list_utils(query, objective_text, company_bot):
@@ -105,7 +107,6 @@ def generate_action_list_utils(query, objective_text, company_bot):
             system_prompt = [{'text': company_bot.context}] if company_bot.context else [
                 {'text': 'Generate action plans.'}]
 
-            import json_repair
             tool_context = company_bot.tool_context
             tool_context = json_repair.repair_json(tool_context, return_objects=True)
 
@@ -140,6 +141,7 @@ def generate_action_list_utils(query, objective_text, company_bot):
             'status': 'ok',
             'status_code': 200,
             'action_list': action_list,
+            'filtered_chunks': filtered_chunks,
             'total_actions': len(action_list),
             'total_chunks_used': len(filtered_chunks),
             'total_chunks_found': total_results,
@@ -165,27 +167,42 @@ def generate_action_list_utils(query, objective_text, company_bot):
 
 
 def parse_llm_action_response(response, filtered_chunks):
-    import json
-
+    print("llm response: ", response)
     if not response or not isinstance(response, dict):
         return []
+
+    if 'output' in response:
+        content = response.get('output', {}).get('message', {}).get('content', [])
+        if content and isinstance(content, list):
+            for item in content:
+                if 'toolUse' in item:
+                    tool_input = item['toolUse'].get('input', {})
+                    if tool_input:
+                        response = tool_input
+                        break
 
     extracted_data = response.pop("parameters", response.pop("input", None))
     if extracted_data and isinstance(extracted_data, dict):
         response = extracted_data
 
+    print("\nextracted_data: ", extracted_data)
+
     action_plans = (
-            response.get('action_plan') or
-            response.get('action_list') or
-            response.get('action_plans') or
-            response.get('actions') or
-            response.get('text') or
-            []
+        response.get('action_plan') or
+        response.get('action_list') or
+        response.get('action_plans') or
+        response.get('actions') or
+        []
     )
+
+    if isinstance(action_plans, dict):
+        if 'value' in action_plans:
+            action_plans = action_plans['value']
+        elif 'items' in action_plans:
+            action_plans = action_plans['items']
 
     if isinstance(action_plans, str):
         try:
-            import json_repair
             action_plans = json_repair.repair_json(action_plans, return_objects=True)
         except:
             try:
@@ -197,38 +214,36 @@ def parse_llm_action_response(response, filtered_chunks):
         action_plans = [action_plans] if action_plans else []
 
     action_list = []
-    source_id_to_score = {chunk['source_id']: chunk['relevance_score'] for chunk in filtered_chunks}
+    valid_source_ids = {chunk['source_id'] for chunk in filtered_chunks}
 
-    for plan in action_plans:
+    for idx, plan in enumerate(action_plans):
         if isinstance(plan, dict):
             duration = plan.get('duration', '3')
             action_steps = plan.get('actionSteps', []) or plan.get('action_steps', []) or plan.get('steps', [])
             source_id = plan.get('source_id', '')
             chunk_index = plan.get('chunk_index', 0)
 
-            if not source_id and chunk_index > 0 and chunk_index <= len(filtered_chunks):
-                source_id = filtered_chunks[chunk_index - 1]['source_id']
+            if not source_id or source_id not in valid_source_ids:
+                if chunk_index > 0 and chunk_index <= len(filtered_chunks):
+                    source_id = filtered_chunks[chunk_index - 1]['source_id']
+                elif idx < len(filtered_chunks):
+                    source_id = filtered_chunks[idx]['source_id']
+                else:
+                    continue
 
             if action_steps and source_id:
                 action_list.append({
                     'duration': str(duration),
                     'actionSteps': action_steps,
-                    'source_id': source_id,
-                    'score': source_id_to_score.get(source_id, 0)
+                    'source_id': source_id
                 })
 
+    print(f"\nParsed {len(action_list)} action plans from response")
     return action_list
 
 
-def post_process_actions_with_source(action_list, chunks_response):
-    """
-    Post-processing step for action list:
-    - Map each source_id with the chunk
-    - Fetch appropriate description, title, url, and organization from the database
-    - Transform to final format with source object
-    """
+def post_process_actions_with_source(action_list, filtered_chunks, chunks_response):
     try:
-        # Validate inputs
         if not action_list:
             return {
                 'status': 'ok',
@@ -245,44 +260,29 @@ def post_process_actions_with_source(action_list, chunks_response):
                 'message': 'Invalid action_list: must be a list'
             }
 
-        if not chunks_response:
-            # Return actions without source enrichment
-            return {
-                'status': 'ok',
-                'status_code': 200,
-                'action_list': action_list,
-                'message': 'No chunks_response provided, returning actions without source enrichment'
-            }
+        source_id_to_score = {chunk['source_id']: chunk['relevance_score'] for chunk in filtered_chunks}
 
-        # Create a mapping of source_id to chunk details
         source_map = {}
-        if chunks_response.get("results"):
+        if chunks_response and chunks_response.get("results"):
             try:
                 for result in chunks_response["results"]:
                     if not isinstance(result, dict):
                         print(f"Skipping invalid result in post_process: {result}")
                         continue
 
-                    # Extract source_id from the result (new API format)
                     source_id = result.get('source_id', '') or result.get('metadata', {}).get('source_id', '')
 
                     if not source_id:
                         print(f"Skipping result without source_id: {result}")
                         continue
 
-                    # Get chunk text (new API format)
                     chunk_text = result.get('text', '')
-
-                    # Get metadata fields from the result
                     metadata = result.get('metadata', {})
-
-                    # Extract fields - new API format has them in metadata
                     description = metadata.get('summary', '')
                     title = metadata.get('title', '') or metadata.get('TITLE', '')
                     url = metadata.get('url', '')
                     organization_slug = metadata.get('company', '')
 
-                    # Fetch Company object to get name and slug
                     organization_dict = {}
                     if organization_slug:
                         try:
@@ -294,7 +294,6 @@ def post_process_actions_with_source(action_list, chunks_response):
                                     'slug': company.slug
                                 }
                             else:
-                                # Fallback if company not found
                                 organization_dict = {
                                     'name': organization_slug,
                                     'slug': organization_slug
@@ -323,7 +322,6 @@ def post_process_actions_with_source(action_list, chunks_response):
                     'message': f'Error mapping source data: {str(map_error)}'
                 }
 
-        # Update actions with source information
         processed_actions = []
         for action in action_list:
             try:
@@ -332,6 +330,7 @@ def post_process_actions_with_source(action_list, chunks_response):
                     continue
 
                 source_id = action.get('source_id', '')
+                score = source_id_to_score.get(source_id, 0)
                 source_info = source_map.get(source_id, {
                     'source_id': source_id,
                     'chunk': '',
@@ -344,7 +343,7 @@ def post_process_actions_with_source(action_list, chunks_response):
                 processed_action = {
                     'duration': action.get('duration', '3'),
                     'actionSteps': action.get('actionSteps', []),
-                    'score': action.get('score', 0),
+                    'score': score,
                     'source': source_info
                 }
                 processed_actions.append(processed_action)
