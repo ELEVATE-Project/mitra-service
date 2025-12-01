@@ -161,6 +161,7 @@ def generate_objective_utils(user_problem_statement, company_bot):
 
 def parse_llm_objective_response(response, filtered_chunks):
 
+    print("llm response: ", response)
     if not response or not isinstance(response, dict):
         return []
 
@@ -178,6 +179,7 @@ def parse_llm_objective_response(response, filtered_chunks):
     if extracted_data and isinstance(extracted_data, dict):
         response = extracted_data
 
+    print("\n extracted_data: ", extracted_data)
     objectives_from_response = (
             response.get('objective_list') or
             response.get('objectives') or
