@@ -187,6 +187,14 @@ def parse_llm_objective_response(response, filtered_chunks):
             []
     )
 
+    if isinstance(objectives_from_response, dict):
+        if 'value' in objectives_from_response:
+            objectives_from_response = objectives_from_response['value']
+        elif 'items' in objectives_from_response:
+            objectives_from_response = objectives_from_response['items']
+
+    print("objectives_from_response: ", objectives_from_response)
+
     if isinstance(objectives_from_response, str):
         try:
             objectives_from_response = json_repair.repair_json(objectives_from_response, return_objects=True)
