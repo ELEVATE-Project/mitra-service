@@ -3,6 +3,9 @@ from shikshalokam.utils.chunks_utils import validate_inputs, filter_and_sort_chu
     render_template_with_context
 import json_repair
 import json
+import logging
+
+logger = logging.getLogger('django')
 
 
 def generate_objective_utils(user_problem_statement, company_bot):
@@ -63,6 +66,8 @@ def generate_objective_utils(user_problem_statement, company_bot):
         filtered_chunks = filter_and_sort_chunks(
             chunks_response, company_bot.filter_score, company_bot.top_k
         )
+
+        logger.info(f"filtered_chunks: {filtered_chunks}")
 
         if not filtered_chunks:
             total_chunks = len(chunks_response.get("results", []))
