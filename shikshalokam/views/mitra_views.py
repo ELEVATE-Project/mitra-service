@@ -107,8 +107,9 @@ def generate_objectives_view(request):
             }, status=gen_result['status_code'])
         
         objective_list = gen_result['objective_list']
-        chunk_response = gen_result.get('chunks_response', None)  # Use .get() to handle missing key
-        
+        chunk_response = gen_result.get('chunks_response', None)
+        filtered_chunks = gen_result['filtered_chunks']
+
         # If no objectives were generated (filtered out), return early
         if not objective_list:
             return Response({
@@ -118,8 +119,7 @@ def generate_objectives_view(request):
             }, status=200)
         
         # Post-process objectives to add source information (chunk, description, title, url, organization)
-        post_result = post_process_objectives_with_source(objective_list, chunk_response)
-        
+        post_result = post_process_objectives_with_source(objective_list, filtered_chunks, chunk_response)
         # Check if post-processing was successful
         if post_result['status'] != 'ok':
             return Response({
