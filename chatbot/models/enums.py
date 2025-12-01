@@ -213,6 +213,13 @@ class CompanyBotTypeChoices(models.TextChoices):
     INTERVIEW_STATE_MACHINE = 'INTERVIEW_STATE_MACHINE', _('INTERVIEW_STATE_MACHINE')
 
 
+class BotStrategyChoices(models.TextChoices):
+    ONESHOT = 'oneshot', _('One Shot')
+    GUIDED_GUEST = 'guided_guest', _('Guided Guest')
+    GUEST_DISCUSSION = 'guest_discussion', _('Guest Discussion')
+    COMMON = 'common', _('Common')
+
+
 class CompanyBotDynamicContextType(models.TextChoices):
     SQL_QUERY = 'SQL_QUERY', _('SQL_QUERY')
     PYTHON_SCRIPT = 'PYTHON_SCRIPT', _('PYTHON_SCRIPT')
@@ -316,3 +323,20 @@ class FileDisplayMode(models.TextChoices):
     VISIBLE = "visible", _("Visible to All")
     AI_ONLY = "ai_only", _("AI Only (Hidden from UI)")
     PRIVATE = "private", _("Private (Hidden from UI and AI)")
+
+
+class UserTypeChoices(models.TextChoices):
+    GUEST = 'guest', _('Guest')
+    AUTH = 'auth', _('Authenticated')
+    ALL = 'all', _('All')
+
+
+class LanguageOperationChoices(models.TextChoices):
+    TRANSLATE = 'translate', _('Translate')
+    TRANSLITERATE = 'transliterate', _('Transliterate')
+
+
+class OperationTypeChoices(models.TextChoices):
+    LLM = 'llm', _('LLM')
+    NON_LLM = 'non_llm', _('Non-LLM')
+

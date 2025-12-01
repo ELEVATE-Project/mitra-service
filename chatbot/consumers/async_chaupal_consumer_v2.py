@@ -1,29 +1,42 @@
+import asyncio
 import json
 import traceback
+from asgiref.sync import async_to_sync
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.async_base_consumer import AsyncBaseConsumer
-from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType, ChatType, CompanyChat, \
-    TextConversionType
-from chatbot.celery_tasks.flow_tasks import get_flow_response
+from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType, ChatType, CompanyChat
+from chatbot.celery_tasks.chaupal_tasks import get_chaupal_v2_response
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.audio_provider_utils import text_translate_provider
 import logging
 from channels.db import database_sync_to_async
+
 from chatbot.utils.transliterate_utils import transliterate_text
 
 logger = logging.getLogger('django')
 
 
-class AsyncSocketConsumer(AsyncBaseConsumer):
+class AsyncShikshalokamChaupalV2Consumer(AsyncBaseConsumer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.session_id = None
         self.profile_id = None
         self.route = None
-        self.bot_route = None
         self.company_bot = None
-        self.flow_name = None
         self.background_tasks = set()
+
+    # async def send_ping(self):
+    #     while True:
+    #         await asyncio.sleep(25)  # Send ping every 25 seconds
+    #         if self.scope["type"] == "websocket":
+    #             try:
+    #                 # Send ping frame
+    #                 await self.send({"type": "websocket.ping"})  # Empty ping
+    #                 # Or send a text ping
+    #                 # await self.send(text_data=json.dumps({"type": "ping"}))
+    #             except Exception as e:
+    #                 print(f"Error sending ping: {e}")
+    #                 break
 
     async def disconnect(self, code):
         try:
@@ -38,13 +51,11 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
         try:
             text_data_json = json.loads(text_data)
             message_type = text_data_json.get('type', None)
-            company_chat_status = None
+
             if message_type == 'authenticate':
                 self.session_id = text_data_json.get('sessionid')
                 self.profile_id = text_data_json.get('profileid')
                 self.route = text_data_json.get('route')
-                self.bot_route = text_data_json.get('bot_route')
-                self.flow_name = text_data_json.get('flow_name')
 
                 profile = await self.get_profile(self.profile_id)
                 logger.info(
@@ -52,29 +63,13 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                     self.channel_name, self.session_id, self.profile_id, self.route
                 )
 
-                self.company_bot = await self.get_company_bot(profile, self.bot_route)
+                self.company_bot = await self.get_company_bot(profile, '/shikshalokam_chaupal')
 
                 # Create chat session asynchronously
                 await self.create_chat_session(self.session_id, profile, self.company_bot)
             else:
-                # Validate that user is authenticated before processing messages
-                if not self.session_id or not self.bot_route:
-                    error_msg = "Authentication required. Please send authentication message first with type='authenticate', sessionid, profileid, route, and bot_route."
-                    logger.error(f"Unauthenticated message attempt: {error_msg}")
-                    await self.channel_layer.send(
-                        self.channel_name,
-                        {
-                            "type": "chat_message",
-                            "text": {
-                                "msg": error_msg,
-                                "source": "system",
-                                "error": True
-                            },
-                        },
-                    )
-                    return
                 company_chat_status = await self.determine_company_chat_status_async(
-                    session_id=self.session_id, profile_id=self.profile_id, route=self.bot_route
+                    session_id=self.session_id, profile_id=self.profile_id, route='/shikshalokam_chaupal'
                 )
                 await self.channel_layer.send(
                     self.channel_name,
@@ -95,20 +90,13 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
 
                 current_stage = None
                 if chat_session and self.company_bot:
-                    try:
-                        state_machine = await database_sync_to_async(
-                            lambda: CompanyStateMachine.objects.get(
-                                company_bot=self.company_bot, step=chat_session.current_step
-                            )
-                        )()
-                        if state_machine:
-                            current_stage = state_machine.name
-                    except CompanyStateMachine.DoesNotExist:
-                        logger.error(
-                            f"CompanyStateMachine not found for bot_id={self.company_bot.id}, "
-                            f"step={chat_session.current_step}. "
-                            f"Please create state machines in admin panel."
+                    state_machine = await database_sync_to_async(
+                        lambda: CompanyStateMachine.objects.get(
+                            company_bot=self.company_bot, step=chat_session.current_step
                         )
+                    )()
+                    if state_machine:
+                        current_stage = state_machine.name
                 # Use a task for database operations
                 await database_sync_to_async(save_in_company_db)(
                     session_id=self.session_id, profile_id=self.profile_id, initiated_by='User',
@@ -123,10 +111,16 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
             )
 
             if message_type != 'authenticate':
+                # Get strategy from company_bot, default to 'guest_discussion' if not set
+                bot_type = 'guest_discussion'  # Default fallback
+                if self.company_bot and self.company_bot.strategy:
+                    bot_type = self.company_bot.strategy
+                
+                logger.info(f"Using bot strategy: %s for session: %s", bot_type, self.session_id)
+                
                 # Start the Celery task but don't wait for it
-                get_flow_response.delay(
-                    self.channel_name, self.session_id, self.profile_id, self.route,
-                    'common', self.bot_route
+                get_chaupal_v2_response.delay(
+                    self.channel_name, self.session_id, self.profile_id, self.route, bot_type
                 )
 
         except Exception as e:
@@ -173,7 +167,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 'language': self.route,
                 'company_bot': company_bot,
                 'session_status': ChatStatus.IN_PROGRESS,
-                'session_type': self.flow_name
+                'session_type': ChatType.shikshaChaupal
             }
         )
         logger.info(f"Chatsession: %s %s", cs, cs_created)
@@ -205,7 +199,10 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 company_bot=self.company_bot, step=chat_session.current_step
             )
 
-            if state_machine and state_machine.text_conversion_type == TextConversionType.TRANSLITERATE:
+            if state_machine and state_machine.name in [
+                'INTRODUCTION', 'ORGANIZATION', 'PRI_MEMBER_ATTENDANCE',
+                'SCHOOL_REPRESENTATIVE_ATTENDANCE'
+            ]:
                 transliterate_voice_provider = Voice.objects.filter(
                     company_bot=self.company_bot,
                     type=VoiceType.Transliterate,
