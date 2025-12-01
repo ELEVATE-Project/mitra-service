@@ -274,6 +274,7 @@ class SessionFlowName(models.TextChoices):
     GuestDiscussion = 'guest-discussion', _('guest-discussion')
     LoginDiscussion = 'login-discussion', _('login-discussion')
     GuestMiStory = 'guest-mi-story', _('guest-mi-story')
+    SchoolSurvey = 'school-survey', _('school-survey')
     ListeningActivity = 'listening-activity', _('Listening Activity')
     LoginMiStory = 'login', _('login')
     SsoFlow = 'sso', _('sso')
