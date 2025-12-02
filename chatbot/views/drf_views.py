@@ -1,11 +1,15 @@
 import django_filters
 from rest_framework import generics
+from rest_framework.response import Response
+from rest_framework import status
 from chatbot.filter.drf_filter import ChatSessionProfileFilter
 from chatbot.models import ChatSession, BotVernacular, SessionFlowName, ChatType
-from chatbot.models.company_models import CompanyChat, CompanyBot
+from chatbot.models.company_models import CompanyChat, CompanyBot, Flow
 from chatbot.models.profile_models import Profile
 from chatbot.serializer.base_serializer import ChatSessionSerializer
-from chatbot.serializer.company_serializer import CompanyBotSerializer, BotVernacularSerializer
+from chatbot.serializer.company_serializer import (
+    CompanyBotSerializer, BotVernacularSerializer, ImageConfigurationSerializer
+)
 from chatbot.serializer.profile_serializer import ProfileSerializer, CompanyChatSerializer
 
 
@@ -87,3 +91,42 @@ class ChatSessionRetrieveUpdateDestroyViewSession(generics.RetrieveUpdateAPIView
     queryset = ChatSession.objects.all()
     serializer_class = ChatSessionSerializer
     lookup_field = 'session'
+
+
+class FlowImageConfigView(generics.GenericAPIView):
+    """
+    API endpoint to get image configuration for a specific flow route.
+    Query param: flow_route (required)
+    Returns: ImageConfiguration object or 404
+    """
+    serializer_class = ImageConfigurationSerializer
+
+    def get(self, request, *args, **kwargs):
+        flow_route = request.query_params.get('flow_route')
+        
+        if not flow_route:
+            return Response(
+                {'error': 'flow_route query parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            flow = Flow.objects.select_related('image_config_id').get(
+                flow_route=flow_route,
+                active=True
+            )
+            
+            if not flow.image_config_id:
+                return Response(
+                    {'error': 'No image configuration found for this flow'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            serializer = self.get_serializer(flow.image_config_id)
+            return Response(serializer.data)
+            
+        except Flow.DoesNotExist:
+            return Response(
+                {'error': 'Flow not found or inactive'},
+                status=status.HTTP_404_NOT_FOUND
+            )
