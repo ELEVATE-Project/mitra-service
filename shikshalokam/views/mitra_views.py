@@ -1,5 +1,5 @@
 import json
-import traceback
+import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -18,6 +18,8 @@ from shikshalokam.utils.project_utils import update_project_status_utils
 import json_repair
 
 from shikshalokam.utils.validation_utils import validate_objective_utils, validate_actions_utils, validate_title_utils
+
+logger = logging.getLogger('django')
 
 
 @api_view(['POST'])
@@ -43,7 +45,7 @@ def paraphrase_view(request):
         paraphrase_problem=user_input, should_paraphrase_text=should_paraphrase_text, company_bot=company_bot
     )
 
-    if language !='en' and isinstance(paraphrased_output, str) and paraphrased_output.lower() != 'no':
+    if language != 'en' and isinstance(paraphrased_output, str) and paraphrased_output.lower() != 'no':
         paraphrased_output = translate_field(
             voice_provider=voice_provider, message_body=user_input, target_language=paraphrased_output,
             source_language='en'
@@ -65,8 +67,10 @@ def generate_objectives_view(request):
         user_input = body.get('user_input')
         language = body.get('language')
         profile_id = body.get('profile_id')
-        print("User Input: ", user_input)
-        print("language: ", language)
+
+        logger.info(
+            f"[generate_objectives_view] Request received - user_input: {user_input}, language: {language}, "
+            f"profile_id: {profile_id}")
 
         profile = Profile.objects.filter(id=profile_id).first()
         if profile:
@@ -77,17 +81,23 @@ def generate_objectives_view(request):
         voice_provider = Voice.objects.filter(
             company_bot=company_bot, type=VoiceType.TextToText, language=language
         ).first()
+
         if language != 'en':
+            logger.info(f"[generate_objectives_view] Translating user input from {language} to English")
             user_input = translate_field(
                 voice_provider=voice_provider, message_body=user_input, source_language=language,
                 target_language='en'
             )
-            print("user_translated_message: ", user_input)
+            logger.info(f"[generate_objectives_view] Translated user input: {user_input}")
 
-        # Call generate_objective_utils - now returns a dict with status, status_code, etc.
+        logger.info(f"[generate_objectives_view] Calling generate_objective_utils")
         gen_result = generate_objective_utils(
             user_problem_statement=user_input, company_bot=company_bot
         )
+        logger.info(
+            f"[generate_objectives_view] Generation result status: {gen_result['status']}, "
+            f"objectives count: {len(gen_result.get('objective_list', []))}")
+
         if gen_result['objective_list'] == [] or not gen_result['objective_list']:
             bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
             error_message = bot_vernacular.error_message if bot_vernacular and bot_vernacular.error_message \
@@ -96,43 +106,53 @@ def generate_objectives_view(request):
                 error_message = translate_field(
                     voice_provider=voice_provider, message_body=error_message, target_language=language
                 )
-        
-        # Check if generation was successful
+            logger.info(f"[generate_objectives_view] No objectives generated, error message: {error_message}")
+
         if gen_result['status'] != 'ok':
+            logger.error(
+                f"[generate_objectives_view] Generation failed with status: "
+                f"{gen_result['status']}, message: {gen_result.get('message')}")
             return Response({
                 'status': gen_result['status'],
                 'message': error_message,
                 'objective_list': [],
                 'chunks': None
             }, status=gen_result['status_code'])
-        
+
         objective_list = gen_result['objective_list']
-        chunk_response = gen_result.get('chunks_response', None)  # Use .get() to handle missing key
-        
-        # If no objectives were generated (filtered out), return early
+        chunk_response = gen_result.get('chunks_response', None)
+        filtered_chunks = gen_result['filtered_chunks']
+
+        logger.info(
+            f"[generate_objectives_view] Objectives parsed: {len(objective_list)}, filtered chunks: {len(filtered_chunks)}")
+
         if not objective_list:
+            logger.info(f"[generate_objectives_view] Empty objective list, returning early")
             return Response({
                 'status': 'ok',
                 'message': error_message,
                 'objective_list': []
             }, status=200)
-        
-        # Post-process objectives to add source information (chunk, description, title, url, organization)
-        post_result = post_process_objectives_with_source(objective_list, chunk_response)
-        
-        # Check if post-processing was successful
+
+        logger.info(f"[generate_objectives_view] Calling post_process_objectives_with_source")
+        post_result = post_process_objectives_with_source(objective_list, filtered_chunks, chunk_response)
+        logger.info(f"[generate_objectives_view] Post-processing result status: {post_result['status']}")
+
         if post_result['status'] != 'ok':
+            logger.error(f"[generate_objectives_view] Post-processing failed: {post_result.get('message')}")
             return Response({
                 'status': post_result['status'],
                 'message': error_message,
                 'objective_list': [],
                 'chunks': chunk_response
             }, status=post_result['status_code'])
-        
+
         objective_list = post_result['objective_list']
-        
+        logger.info(f"[generate_objectives_view] Post-processed objectives count: {len(objective_list)}")
+
         translated_list = None
-        if language !='en':
+        if language != 'en':
+            logger.info(f"[generate_objectives_view] Translating objectives to {language}")
             translated_list = translate_field(
                 voice_provider=voice_provider, message_body=json.dumps(objective_list), target_language=language,
                 source_language='en'
@@ -140,23 +160,24 @@ def generate_objectives_view(request):
             if isinstance(translated_list, str):
                 try:
                     translated_list = json_repair.repair_json(translated_list, return_objects=True)
+                    logger.info(f"[generate_objectives_view] Successfully parsed translated objectives")
                 except Exception as e:
-                    print(e)
-            print("llm_translated_message: ", translated_list)
+                    logger.error(f"[generate_objectives_view] Error parsing translated objectives: {e}")
+
         if translated_list:
             objective_list = translated_list
-        print("type of: ", type(objective_list))
-        print("type of: ", type(translated_list))
+            logger.info(f"[generate_objectives_view] Using translated objectives")
+
+        logger.info(f"[generate_objectives_view] Returning {len(objective_list)} objectives successfully")
         return Response({
             'status': 'ok',
             'message': error_message,
             'objective_list': objective_list,
             'chunks': chunk_response
         }, status=200)
-    
+
     except Exception as e:
-        print(f"Error in generate_objectives_view: {str(e)}")
-        traceback.print_exc()
+        logger.error(f"[generate_objectives_view] Unhandled exception: {str(e)}", exc_info=True)
         return Response({
             'status': 'error',
             'message': error_message if error_message else "Please try again!",
@@ -167,92 +188,134 @@ def generate_objectives_view(request):
 
 @api_view(['POST'])
 def validate_objectives_view(request):
-    body = request.data
-    user_input = body.get('user_input')
-    language = body.get('language')
-    profile_id = body.get('profile_id')
-    print("User Input: ", user_input)
+    try:
+        body = request.data
+        user_input = body.get('user_input')
+        language = body.get('language')
+        profile_id = body.get('profile_id')
 
-    profile = Profile.objects.filter(id=profile_id).first()
-    if profile:
-        company_bot = CompanyBot.objects.get(company=profile.company, route='/validate-objective')
-    else:
-        company_bot = CompanyBot.objects.get(route='/validate-objective')
-    bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
-    error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
-    if language !='en':
-        voice_provider = Voice.objects.filter(
-            company_bot=company_bot, type=VoiceType.TextToText, language=language
-        ).first()
-        user_input = translate_field(
-            voice_provider=voice_provider, message_body=user_input, source_language=language,
-            target_language='en'
-        )
-        print("user_translated_message: ", user_input)
+        logger.info(
+            f"[validate_objectives_view] Request received - user_input: {user_input}, language: {language}, "
+            f"profile_id: {profile_id}")
 
-    response = validate_objective_utils(user_input=user_input, company_bot=company_bot)
-    return Response({
-        'status': 'ok',
-        'result': response,
-        'error_message': error_message
-    }, status=200)
-
-
-@api_view(['POST'])
-def validate_actions_view(request):
-    body = request.data
-    user_input = body.get('user_input')
-    user_objective = body.get('user_objective')
-    language = body.get('language')
-    problem_statement = body.get('problem_statement')
-    profile_id = body.get('profile_id')
-
-    profile = Profile.objects.filter(id=profile_id).first()
-    if profile:
-        company_bot = CompanyBot.objects.get(company=profile.company, route='/validate-action_list')
-    else:
-        company_bot = CompanyBot.objects.get(route='/validate-action_list')
-    bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
-    error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
-    if language !='en':
-        voice_provider = Voice.objects.filter(
-            company_bot=company_bot, type=VoiceType.TextToText, language=language
-        ).first()
-
-        if isinstance(user_input, list):
-            user_input = [
-                translate_field(
-                    voice_provider=voice_provider, message_body=action, source_language=language,
-                    target_language='en'
-                ) for action in user_input
-            ]
+        profile = Profile.objects.filter(id=profile_id).first()
+        if profile:
+            company_bot = CompanyBot.objects.get(company=profile.company, route='/validate-objective')
         else:
+            company_bot = CompanyBot.objects.get(route='/validate-objective')
+
+        bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
+        error_message = bot_vernacular.error_message if bot_vernacular and bot_vernacular.error_message else \
+            "Please try again!"
+
+        if language != 'en':
+            logger.info(f"[validate_objectives_view] Translating user input from {language} to English")
+            voice_provider = Voice.objects.filter(
+                company_bot=company_bot, type=VoiceType.TextToText, language=language
+            ).first()
             user_input = translate_field(
                 voice_provider=voice_provider, message_body=user_input, source_language=language,
                 target_language='en'
             )
-        user_objective = translate_field(
-            voice_provider=voice_provider, message_body=user_objective, source_language=language,
-            target_language='en'
-        )
-        problem_statement = translate_field(
-            voice_provider=voice_provider, message_body=problem_statement, source_language=language,
-            target_language='en'
-        )
-        print("user_translated_message: ", user_input)
-        print("user_translated_objective: ", user_objective)
-        print("user_translated_problem_statement: ", problem_statement)
-        print("error_translated_message: ", error_message)
+            logger.info(f"[validate_objectives_view] Translated user input: {user_input}")
 
-    response = validate_actions_utils(
-        user_input=user_input, user_objective=user_objective, problem_statement=problem_statement,
-        company_bot=company_bot
-    )
-    return Response({
-        'status': 'ok',
-        'result': response,
-        'error_message': error_message
-    }, status=200)
+        logger.info(f"[validate_objectives_view] Calling validate_objective_utils")
+        response = validate_objective_utils(user_input=user_input, company_bot=company_bot)
+        logger.info(f"[validate_objectives_view] Validation result: {response}")
+
+        logger.info(f"[validate_objectives_view] Returning validation result successfully")
+        return Response({
+            'status': 'ok',
+            'result': response,
+            'error_message': error_message
+        }, status=200)
+
+    except Exception as e:
+        logger.error(f"[validate_objectives_view] Unhandled exception: {str(e)}", exc_info=True)
+        return Response({
+            'status': 'error',
+            'result': None,
+            'error_message': "Please try again!"
+        }, status=500)
+
+
+@api_view(['POST'])
+def validate_actions_view(request):
+    try:
+        body = request.data
+        user_input = body.get('user_input')
+        user_objective = body.get('user_objective')
+        language = body.get('language')
+        problem_statement = body.get('problem_statement')
+        profile_id = body.get('profile_id')
+
+        logger.info(
+            f"[validate_actions_view] Request received - user_input: {user_input}, user_objective: {user_objective}, "
+            f"language: {language}, profile_id: {profile_id}")
+
+        profile = Profile.objects.filter(id=profile_id).first()
+        if profile:
+            company_bot = CompanyBot.objects.get(company=profile.company, route='/validate-action_list')
+        else:
+            company_bot = CompanyBot.objects.get(route='/validate-action_list')
+
+        bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
+        error_message = bot_vernacular.error_message if bot_vernacular and bot_vernacular.error_message else \
+            "Please try again!"
+
+        if language != 'en':
+            logger.info(f"[validate_actions_view] Translating inputs from {language} to English")
+            voice_provider = Voice.objects.filter(
+                company_bot=company_bot, type=VoiceType.TextToText, language=language
+            ).first()
+
+            if isinstance(user_input, list):
+                user_input = [
+                    translate_field(
+                        voice_provider=voice_provider, message_body=action, source_language=language,
+                        target_language='en'
+                    ) for action in user_input
+                ]
+            else:
+                user_input = translate_field(
+                    voice_provider=voice_provider, message_body=user_input, source_language=language,
+                    target_language='en'
+                )
+
+            user_objective = translate_field(
+                voice_provider=voice_provider, message_body=user_objective, source_language=language,
+                target_language='en'
+            )
+            problem_statement = translate_field(
+                voice_provider=voice_provider, message_body=problem_statement, source_language=language,
+                target_language='en'
+            )
+
+            logger.info(f"[validate_actions_view] Translated user input: {user_input}")
+            logger.info(f"[validate_actions_view] Translated user objective: {user_objective}")
+            logger.info(f"[validate_actions_view] Translated problem statement: {problem_statement}")
+
+        logger.info(f"[validate_actions_view] Calling validate_actions_utils")
+        response = validate_actions_utils(
+            user_input=user_input, user_objective=user_objective, problem_statement=problem_statement,
+            company_bot=company_bot
+        )
+        logger.info(f"[validate_actions_view] Validation result: {response}")
+
+        logger.info(f"[validate_actions_view] Returning validation result successfully")
+        return Response({
+            'status': 'ok',
+            'result': response,
+            'error_message': error_message
+        }, status=200)
+
+    except Exception as e:
+        logger.error(f"[validate_actions_view] Unhandled exception: {str(e)}", exc_info=True)
+        return Response({
+            'status': 'error',
+            'result': None,
+            'error_message': "Please try again!"
+        }, status=500)
 
 
 @api_view(['POST'])
@@ -265,17 +328,22 @@ def generate_action_list_view(request):
         language = body.get('language')
         profile_id = body.get('profile_id')
 
+        logger.info(
+            f"[generate_action_list_view] Request received - user_problem_statement: {user_problem_statement}, "
+            f"user_objective: {user_objective}, language: {language}, profile_id: {profile_id}")
+
         profile = Profile.objects.filter(id=profile_id).first()
         if profile:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/action_list')
         else:
             company_bot = CompanyBot.objects.get(route='/action_list')
-        
+
         voice_provider = Voice.objects.filter(
             company_bot=company_bot, type=VoiceType.TextToText, language=language
         ).first()
-        
+
         if language != 'en':
+            logger.info(f"[generate_action_list_view] Translating inputs from {language} to English")
             user_problem_statement = translate_field(
                 voice_provider=voice_provider, message_body=user_problem_statement, source_language=language,
                 target_language='en'
@@ -284,15 +352,18 @@ def generate_action_list_view(request):
                 voice_provider=voice_provider, message_body=user_objective, source_language=language,
                 target_language='en'
             )
-            print("user_problem_statement: ", user_problem_statement)
-            print("user_objective: ", user_objective)
+            logger.info(f"[generate_action_list_view] Translated problem statement: {user_problem_statement}")
+            logger.info(f"[generate_action_list_view] Translated objective: {user_objective}")
 
-        # Call generate_action_list_utils with new signature
+        logger.info(f"[generate_action_list_view] Calling generate_action_list_utils")
         gen_result = generate_action_list_utils(
             query=user_problem_statement,
             objective_text=user_objective,
             company_bot=company_bot
         )
+        logger.info(
+            f"[generate_action_list_view] Generation result status: {gen_result['status']}, action plans count: "
+            f"{len(gen_result.get('action_list', []))}")
 
         if gen_result['action_list'] == [] or not gen_result['action_list']:
             bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
@@ -302,42 +373,52 @@ def generate_action_list_view(request):
                 error_message = translate_field(
                     voice_provider=voice_provider, message_body=error_message, target_language=language
                 )
-        
-        # Check if generation was successful
+            logger.info(f"[generate_action_list_view] No action plans generated, error message: {error_message}")
+
         if gen_result['status'] != 'ok':
+            logger.error(
+                f"[generate_action_list_view] Generation failed with status: {gen_result['status']}, message: "
+                f"{gen_result.get('message')}")
             return Response({
                 'status': gen_result['status'],
                 'message': error_message,
                 'action_list': []
             }, status=gen_result['status_code'])
-        
+
         action_list = gen_result['action_list']
         chunk_response = gen_result.get('chunks_response', None)
-        
-        # If no actions were generated (filtered out), return early
+        filtered_chunks = gen_result['filtered_chunks']
+
+        logger.info(
+            f"[generate_action_list_view] Action plans parsed: {len(action_list)}, filtered chunks: "
+            f"{len(filtered_chunks)}")
+
         if not action_list:
+            logger.info(f"[generate_action_list_view] Empty action list, returning early")
             return Response({
                 'status': 'ok',
                 'message': error_message,
                 'action_list': []
             }, status=200)
-        
-        # Post-process actions to add source information
-        post_result = post_process_actions_with_source(action_list, chunk_response)
-        
-        # Check if post-processing was successful
+
+        logger.info(f"[generate_action_list_view] Calling post_process_actions_with_source")
+        post_result = post_process_actions_with_source(action_list, filtered_chunks, chunk_response)
+        logger.info(f"[generate_action_list_view] Post-processing result status: {post_result['status']}")
+
         if post_result['status'] != 'ok':
+            logger.error(f"[generate_action_list_view] Post-processing failed: {post_result.get('message')}")
             return Response({
                 'status': post_result['status'],
                 'message': error_message,
                 'action_list': []
             }, status=post_result['status_code'])
-        
-        action_list = post_result['action_list']
 
-        # Translate if needed
+        action_list = post_result['action_list']
+        logger.info(f"[generate_action_list_view] Post-processed action plans count: {len(action_list)}")
+
         if language != 'en':
-            for action_item in action_list:
+            logger.info(f"[generate_action_list_view] Translating action steps to {language}")
+            for idx, action_item in enumerate(action_list):
                 action_steps = action_item.get('actionSteps', [])
                 if action_steps:
                     translated_steps = translate_field(
@@ -348,25 +429,24 @@ def generate_action_list_view(request):
                     if isinstance(translated_steps, str):
                         try:
                             translated_steps = json_repair.repair_json(translated_steps, return_objects=True)
+                            logger.info(
+                                f"[generate_action_list_view] Successfully translated action steps for plan {idx + 1}")
                         except Exception as e:
-                            print("Error parsing translated steps: ", e)
+                            logger.error(
+                                f"[generate_action_list_view] Error parsing translated steps for plan {idx + 1}: {e}")
                             translated_steps = action_steps
 
                     action_item['actionSteps'] = translated_steps
 
-            print("Translated action list: ", action_list)
-
-        print("type of action_list: ", type(action_list))
-
+        logger.info(f"[generate_action_list_view] Returning {len(action_list)} action plans successfully")
         return Response({
             'status': 'ok',
             'message': error_message,
             'action_list': action_list
         }, status=200)
-    
+
     except Exception as e:
-        print(f"Error in generate_action_list_view: {str(e)}")
-        traceback.print_exc()
+        logger.error(f"[generate_action_list_view] Unhandled exception: {str(e)}", exc_info=True)
         return Response({
             'status': 'error',
             'message': error_message if error_message else "",
@@ -376,168 +456,215 @@ def generate_action_list_view(request):
 
 @api_view(['POST'])
 def generate_title_view(request):
-    body = request.data
-    user_problem_statement = body.get('user_problem_statement')
-    user_objective = body.get('user_objective')
-    user_action_list = body.get('user_action_list')
-    language = body.get('language')
-    profile_id = body.get('profile_id')
+    try:
+        body = request.data
+        user_problem_statement = body.get('user_problem_statement')
+        user_objective = body.get('user_objective')
+        user_action_list = body.get('user_action_list')
+        language = body.get('language')
+        profile_id = body.get('profile_id')
 
-    profile = Profile.objects.filter(id=profile_id).first()
-    if profile:
-        company_bot = CompanyBot.objects.get(company=profile.company, route='/title')
-    else:
-        company_bot = CompanyBot.objects.get(route='/title')
-    voice_provider = Voice.objects.filter(
-        company_bot=company_bot, type=VoiceType.TextToText, language=language
-    ).first()
-    if language != 'en':
-        user_problem_statement = translate_field(
-            voice_provider=voice_provider, message_body=user_problem_statement, source_language=language,
-            target_language='en'
-        )
-        user_objective = translate_field(
-            voice_provider=voice_provider, message_body=user_objective, source_language=language,
-            target_language='en'
-        )
-        if isinstance(user_action_list, list):
-            user_action_list = user_action_list[0]
-            user_action_list = user_action_list.get('actionSteps')
-            print("user_action_list: ", user_action_list)
-            user_action_list = [
-                translate_field(
-                    voice_provider=voice_provider, message_body=action, source_language=language,
-                    target_language='en'
-                ) for action in user_action_list
-            ]
+        logger.info(
+            f"[generate_title_view] Request received - user_problem_statement: {user_problem_statement}, "
+            f"user_objective: {user_objective}, language: {language}, profile_id: {profile_id}")
+
+        profile = Profile.objects.filter(id=profile_id).first()
+        if profile:
+            company_bot = CompanyBot.objects.get(company=profile.company, route='/title')
         else:
-            user_action_list = translate_field(
-                voice_provider=voice_provider, message_body=user_action_list, source_language=language,
-                target_language='en'
-            )
-        print("user_problem_statement: ", user_problem_statement)
-        print("user_objective: ", user_objective)
-        print("user_action_list: ", user_action_list)
+            company_bot = CompanyBot.objects.get(route='/title')
 
-    input_data = {
-        "user_problem_statement": user_problem_statement,
-        "user_objective": user_objective,
-        "user_action_list": user_action_list
-    }
-
-    title = generate_title_utils(input_data=input_data, company_bot=company_bot)
-
-    if language != 'en':
-        title = translate_field(
-            voice_provider=voice_provider, message_body=title, target_language=language,
-            source_language='en'
-        )
-        print("llm_translated_message: ", title)
-
-    print("\n\ntitle Output: ", title)
-
-
-    return Response({
-        'status': 'ok',
-        'title': title
-    }, status=200)
-
-
-@api_view(['POST'])
-def validate_title_view(request):
-    body = request.data
-    user_actions = body.get('user_actions')
-    user_objective = body.get('user_objective')
-    language = body.get('language')
-    problem_statement = body.get('problem_statement')
-    user_input = body.get('user_input')
-    profile_id = body.get('profile_id')
-
-    profile = Profile.objects.filter(id=profile_id).first()
-    if profile:
-        company_bot = CompanyBot.objects.get(company=profile.company, route='/validate-title')
-    else:
-        company_bot = CompanyBot.objects.get(route='/validate-title')
-    bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
-    error_message = bot_vernacular.error_message if bot_vernacular.error_message else "Please try again!"
-    if language != 'en':
         voice_provider = Voice.objects.filter(
             company_bot=company_bot, type=VoiceType.TextToText, language=language
         ).first()
 
-        if isinstance(user_actions, list):
-            user_actions = user_actions[0]
-            user_actions = user_actions.get('actionSteps')
-            print("user_action_list: ", user_actions)
-            user_actions = [
-                translate_field(
-                    voice_provider=voice_provider, message_body=action, source_language=language,
-                    target_language='en'
-                ) for action in user_actions
-            ]
-        else:
-            user_actions = translate_field(
-                voice_provider=voice_provider, message_body=user_actions, source_language=language,
+        if language != 'en':
+            logger.info(f"[generate_title_view] Translating inputs from {language} to English")
+            user_problem_statement = translate_field(
+                voice_provider=voice_provider, message_body=user_problem_statement, source_language=language,
                 target_language='en'
             )
-        user_objective = translate_field(
-            voice_provider=voice_provider, message_body=user_objective, source_language=language,
-            target_language='en'
+            user_objective = translate_field(
+                voice_provider=voice_provider, message_body=user_objective, source_language=language,
+                target_language='en'
+            )
+
+            if isinstance(user_action_list, list):
+                user_action_list = user_action_list[0]
+                user_action_list = user_action_list.get('actionSteps')
+                logger.info(f"[generate_title_view] Extracting action steps from list")
+                user_action_list = [
+                    translate_field(
+                        voice_provider=voice_provider, message_body=action, source_language=language,
+                        target_language='en'
+                    ) for action in user_action_list
+                ]
+            else:
+                user_action_list = translate_field(
+                    voice_provider=voice_provider, message_body=user_action_list, source_language=language,
+                    target_language='en'
+                )
+
+            logger.info(f"[generate_title_view] Translated problem statement: {user_problem_statement}")
+            logger.info(f"[generate_title_view] Translated objective: {user_objective}")
+            logger.info(f"[generate_title_view] Translated action list: {user_action_list}")
+
+        input_data = {
+            "user_problem_statement": user_problem_statement,
+            "user_objective": user_objective,
+            "user_action_list": user_action_list
+        }
+
+        logger.info(f"[generate_title_view] Calling generate_title_utils")
+        title = generate_title_utils(input_data=input_data, company_bot=company_bot)
+        logger.info(f"[generate_title_view] Generated title: {title}")
+
+        if language != 'en':
+            logger.info(f"[generate_title_view] Translating title to {language}")
+            title = translate_field(
+                voice_provider=voice_provider, message_body=title, target_language=language,
+                source_language='en'
+            )
+            logger.info(f"[generate_title_view] Translated title: {title}")
+
+        logger.info(f"[generate_title_view] Returning title successfully")
+        return Response({
+            'status': 'ok',
+            'title': title
+        }, status=200)
+
+    except Exception as e:
+        logger.error(f"[generate_title_view] Unhandled exception: {str(e)}", exc_info=True)
+        return Response({
+            'status': 'error',
+            'title': ''
+        }, status=500)
+
+
+@api_view(['POST'])
+def validate_title_view(request):
+    try:
+        body = request.data
+        user_actions = body.get('user_actions')
+        user_objective = body.get('user_objective')
+        language = body.get('language')
+        problem_statement = body.get('problem_statement')
+        user_input = body.get('user_input')
+        profile_id = body.get('profile_id')
+
+        logger.info(
+            f"[validate_title_view] Request received - user_input: {user_input}, user_objective: {user_objective}, "
+            f"language: {language}, profile_id: {profile_id}")
+
+        profile = Profile.objects.filter(id=profile_id).first()
+        if profile:
+            company_bot = CompanyBot.objects.get(company=profile.company, route='/validate-title')
+        else:
+            company_bot = CompanyBot.objects.get(route='/validate-title')
+
+        bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
+        error_message = bot_vernacular.error_message if bot_vernacular and bot_vernacular.error_message else \
+            "Please try again!"
+
+        if language != 'en':
+            logger.info(f"[validate_title_view] Translating inputs from {language} to English")
+            voice_provider = Voice.objects.filter(
+                company_bot=company_bot, type=VoiceType.TextToText, language=language
+            ).first()
+
+            if isinstance(user_actions, list):
+                user_actions = user_actions[0]
+                user_actions = user_actions.get('actionSteps')
+                logger.info(f"[validate_title_view] Extracting action steps from list")
+                user_actions = [
+                    translate_field(
+                        voice_provider=voice_provider, message_body=action, source_language=language,
+                        target_language='en'
+                    ) for action in user_actions
+                ]
+            else:
+                user_actions = translate_field(
+                    voice_provider=voice_provider, message_body=user_actions, source_language=language,
+                    target_language='en'
+                )
+
+            user_objective = translate_field(
+                voice_provider=voice_provider, message_body=user_objective, source_language=language,
+                target_language='en'
+            )
+            problem_statement = translate_field(
+                voice_provider=voice_provider, message_body=problem_statement, source_language=language,
+                target_language='en'
+            )
+            user_input = translate_field(
+                voice_provider=voice_provider, message_body=user_input, source_language=language,
+                target_language='en'
+            )
+
+            logger.info(f"[validate_title_view] Translated user input: {user_input}")
+            logger.info(f"[validate_title_view] Translated user actions: {user_actions}")
+            logger.info(f"[validate_title_view] Translated user objective: {user_objective}")
+            logger.info(f"[validate_title_view] Translated problem statement: {problem_statement}")
+
+        logger.info(f"[validate_title_view] Calling validate_title_utils")
+        response = validate_title_utils(
+            user_input=user_input, user_objective=user_objective, problem_statement=problem_statement,
+            user_actions=user_actions, company_bot=company_bot
         )
-        problem_statement = translate_field(
-            voice_provider=voice_provider, message_body=problem_statement, source_language=language,
-            target_language='en'
-        )
-        user_input = translate_field(
-            voice_provider=voice_provider, message_body=user_input, source_language=language,
-            target_language='en'
-        )
-        print("user_translated_message: ", user_input)
-        print("user_translated_actions: ", user_actions)
-        print("user_translated_objective: ", user_objective)
-        print("user_translated_problem_statement: ", problem_statement)
-        print("error_translated_message: ", error_message)
-    response = validate_title_utils(
-        user_input=user_input, user_objective=user_objective, problem_statement=problem_statement,
-        user_actions=user_actions, company_bot=company_bot
-    )
-    return Response({
-        'status': 'ok',
-        'result': response,
-        'error_message': error_message
-    }, status=200)
+        logger.info(f"[validate_title_view] Validation result: {response}")
+
+        logger.info(f"[validate_title_view] Returning validation result successfully")
+        return Response({
+            'status': 'ok',
+            'result': response,
+            'error_message': error_message
+        }, status=200)
+
+    except Exception as e:
+        logger.error(f"[validate_title_view] Unhandled exception: {str(e)}", exc_info=True)
+        return Response({
+            'status': 'error',
+            'result': None,
+            'error_message': "Please try again!"
+        }, status=500)
 
 
 @api_view(['POST'])
 def update_project_status_view(request):
-    body = request.data
-    access_token = body.get('access_token')
-    project_id = body.get('project_id')
-    flow = body.get('flow')
-    status = body.get("status", "completed")
     try:
+        body = request.data
+        access_token = body.get('access_token')
+        project_id = body.get('project_id')
+        flow = body.get('flow')
+        status = body.get("status", "completed")
+
+        logger.info(
+            f"[update_project_status_view] Request received - project_id: {project_id}, flow: {flow}, status: {status}")
 
         if not project_id:
+            logger.info(f"[update_project_status_view] No project_id provided, skipping")
             return JsonResponse(
                 {"message": "Project ID not provided. Skipping this API call."},
                 status=200
             )
 
-        session=None
+        session = None
         project = Project.objects.filter(project_id=project_id).first()
+
         if project:
-            print("project: ", project)
-            print("story: ", project.story)
+            logger.info(f"[update_project_status_view] Project found: {project}")
             if project.story:
                 session = project.story.session
-            print("session: ", session)
+                logger.info(f"[update_project_status_view] Session: {session}")
 
         if (project and project.story and flow in [SessionFlowName.Reflection, SessionFlowName.GuestMiStory] and
-                status=='completed'):
+                status == 'completed'):
+            logger.info(f"[update_project_status_view] Processing story media for project")
             story_media_objects = StoryMedia.objects.filter(
                 story=project.story, include_in_story=True
             ).exclude(media_type=MediaTypeChoices.PDF)
             serialized_data = StoryMediaRetrieveSerializer(story_media_objects, many=True).data
+            logger.info(f"[update_project_status_view] Found {len(serialized_data)} story media objects")
 
             with ThreadPoolExecutor() as executor:
                 futures = [executor.submit(
@@ -547,14 +674,18 @@ def update_project_status_view(request):
                 for future in as_completed(futures):
                     future.result()
 
+            logger.info(f"[update_project_status_view] Story media uploaded, updating story PDF")
             update_story_pdf(is_edit_story=True, session=session, access_token=access_token, flow=flow)
-        print("Update started with status: ", status)
+
+        logger.info(f"[update_project_status_view] Calling update_project_status_utils")
         response = update_project_status_utils(
             project_id=project_id, access_token=access_token, status=status
         )
-        return JsonResponse(response.get("message"), status=response.get("status"), safe=False)
-    except Exception as e:
-        traceback.print_exc()
+        logger.info(f"[update_project_status_view] Update response: {response}")
 
-        print("Error during status update: ", e)
+        logger.info(f"[update_project_status_view] Returning response successfully")
+        return JsonResponse(response.get("message"), status=response.get("status"), safe=False)
+
+    except Exception as e:
+        logger.error(f"[update_project_status_view] Unhandled exception: {str(e)}", exc_info=True)
         return JsonResponse({'message': f"{e}"}, status=500)

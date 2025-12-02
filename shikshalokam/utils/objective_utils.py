@@ -1,6 +1,11 @@
 from chatbot.llm_models.llm_script import handle_bedrock_model
 from shikshalokam.utils.chunks_utils import validate_inputs, filter_and_sort_chunks, prepare_chunks_for_template, \
     render_template_with_context
+import json_repair
+import json
+import logging
+
+logger = logging.getLogger('django')
 
 
 def generate_objective_utils(user_problem_statement, company_bot):
@@ -61,6 +66,8 @@ def generate_objective_utils(user_problem_statement, company_bot):
         filtered_chunks = filter_and_sort_chunks(
             chunks_response, company_bot.filter_score, company_bot.top_k
         )
+
+        logger.info(f"filtered_chunks: {filtered_chunks}")
 
         if not filtered_chunks:
             total_chunks = len(chunks_response.get("results", []))
@@ -132,6 +139,7 @@ def generate_objective_utils(user_problem_statement, company_bot):
             'status': 'ok',
             'status_code': 200,
             'objective_list': objective_list,
+            'filtered_chunks': filtered_chunks,
             'total_objectives': len(objective_list),
             'total_chunks_used': len(filtered_chunks),
             'total_chunks_found': total_results,
@@ -157,26 +165,43 @@ def generate_objective_utils(user_problem_statement, company_bot):
 
 
 def parse_llm_objective_response(response, filtered_chunks):
-    import json
 
+    print("llm response: ", response)
     if not response or not isinstance(response, dict):
         return []
+
+    if 'output' in response:
+        content = response.get('output', {}).get('message', {}).get('content', [])
+        if content and isinstance(content, list):
+            for item in content:
+                if 'toolUse' in item:
+                    tool_input = item['toolUse'].get('input', {})
+                    if tool_input:
+                        response = tool_input
+                        break
 
     extracted_data = response.pop("parameters", response.pop("input", None))
     if extracted_data and isinstance(extracted_data, dict):
         response = extracted_data
 
+    print("\n extracted_data: ", extracted_data)
     objectives_from_response = (
             response.get('objective_list') or
             response.get('objectives') or
             response.get('objective') or
-            response.get('text') or
             []
     )
 
+    if isinstance(objectives_from_response, dict):
+        if 'value' in objectives_from_response:
+            objectives_from_response = objectives_from_response['value']
+        elif 'items' in objectives_from_response:
+            objectives_from_response = objectives_from_response['items']
+
+    print("objectives_from_response: ", objectives_from_response)
+
     if isinstance(objectives_from_response, str):
         try:
-            import json_repair
             objectives_from_response = json_repair.repair_json(objectives_from_response, return_objects=True)
         except:
             try:
@@ -188,44 +213,39 @@ def parse_llm_objective_response(response, filtered_chunks):
         objectives_from_response = [objectives_from_response] if objectives_from_response else []
 
     objective_list = []
-    source_id_to_score = {chunk['source_id']: chunk['relevance_score'] for chunk in filtered_chunks}
+    valid_source_ids = {chunk['source_id'] for chunk in filtered_chunks}
 
-    for obj in objectives_from_response:
+    for idx, obj in enumerate(objectives_from_response):
         if isinstance(obj, dict):
             objective_text = obj.get('text', '')
             source_id = obj.get('source_id', '')
             chunk_index = obj.get('chunk_index', 0)
 
-            if not source_id and chunk_index > 0 and chunk_index <= len(filtered_chunks):
-                source_id = filtered_chunks[chunk_index - 1]['source_id']
+            if not source_id or source_id not in valid_source_ids:
+                if chunk_index > 0 and chunk_index <= len(filtered_chunks):
+                    source_id = filtered_chunks[chunk_index - 1]['source_id']
+                else:
+                    continue
 
             if objective_text and source_id:
                 objective_list.append({
                     'text': objective_text.strip(),
-                    'source_id': source_id,
-                    'score': source_id_to_score.get(source_id, 0)
+                    'source_id': source_id
                 })
+
         elif isinstance(obj, str) and obj.strip():
-            if len(objective_list) < len(filtered_chunks):
-                chunk = filtered_chunks[len(objective_list)]
+            if idx < len(filtered_chunks):
+                chunk = filtered_chunks[idx]
                 objective_list.append({
                     'text': obj.strip(),
-                    'source_id': chunk['source_id'],
-                    'score': chunk['relevance_score']
+                    'source_id': chunk['source_id']
                 })
 
     return objective_list
 
 
-def post_process_objectives_with_source(objective_list, chunks_response):
-    """
-    Post-processing step (Step 5 from requirements):
-    - Map each source_id with the chunk
-    - Fetch appropriate description and title from the database
-    - Transform to final format with source object
-    """
+def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_response):
     try:
-        # Validate inputs
         if not objective_list:
             return {
                 'status': 'ok',
@@ -242,44 +262,29 @@ def post_process_objectives_with_source(objective_list, chunks_response):
                 'message': 'Invalid objective_list: must be a list'
             }
 
-        if not chunks_response:
-            # Return objectives without source enrichment
-            return {
-                'status': 'ok',
-                'status_code': 200,
-                'objective_list': objective_list,
-                'message': 'No chunks_response provided, returning objectives without source enrichment'
-            }
+        source_id_to_score = {chunk['source_id']: chunk['relevance_score'] for chunk in filtered_chunks}
 
-        # Create a mapping of source_id to chunk details
         source_map = {}
-        if chunks_response.get("results"):
+        if chunks_response and chunks_response.get("results"):
             try:
                 for result in chunks_response["results"]:
                     if not isinstance(result, dict):
                         print(f"Skipping invalid result in post_process: {result}")
                         continue
 
-                    # Extract source_id from the result (new API format)
                     source_id = result.get('source_id', '') or result.get('metadata', {}).get('source_id', '')
 
                     if not source_id:
                         print(f"Skipping result without source_id: {result}")
                         continue
 
-                    # Get chunk text (new API format)
                     chunk_text = result.get('text', '')
-
-                    # Get metadata fields from the result
                     metadata = result.get('metadata', {})
-
-                    # Extract fields - new API format has them in metadata
                     description = metadata.get('summary', '')
                     title = metadata.get('title', '') or metadata.get('TITLE', '')
                     url = metadata.get('url', '')
                     organization_slug = metadata.get('company', '')
 
-                    # Fetch Company object to get name and slug
                     organization_dict = {}
                     if organization_slug:
                         try:
@@ -291,7 +296,6 @@ def post_process_objectives_with_source(objective_list, chunks_response):
                                     'slug': company.slug
                                 }
                             else:
-                                # Fallback if company not found
                                 organization_dict = {
                                     'name': organization_slug,
                                     'slug': organization_slug
@@ -320,7 +324,6 @@ def post_process_objectives_with_source(objective_list, chunks_response):
                     'message': f'Error mapping source data: {str(map_error)}'
                 }
 
-        # Update objectives with source information
         processed_objectives = []
         for objective in objective_list:
             try:
@@ -329,6 +332,7 @@ def post_process_objectives_with_source(objective_list, chunks_response):
                     continue
 
                 source_id = objective.get('source_id', '')
+                score = source_id_to_score.get(source_id, 0)
                 source_info = source_map.get(source_id, {
                     'source_id': source_id,
                     'chunk': '',
@@ -340,14 +344,13 @@ def post_process_objectives_with_source(objective_list, chunks_response):
 
                 processed_objective = {
                     'text': objective.get('text', ''),
-                    'score': objective.get('score', 0),
+                    'score': score,
                     'source': source_info
                 }
                 processed_objectives.append(processed_objective)
 
             except Exception as obj_error:
                 print(f"Error processing objective: {str(obj_error)}")
-                # Continue with next objective
                 continue
 
         return {
