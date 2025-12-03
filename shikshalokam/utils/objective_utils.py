@@ -305,15 +305,33 @@ def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_
                                 'name': organization_slug,
                                 'slug': organization_slug
                             }
-                    source_map[source_id] = {
-                        'source_id': source_id,
+
+                    chunk_data = {
                         'highlight_text': highlight_text,
-                        'description': description,
-                        'title': title,
-                        'url': url,
-                        'organization': organization_dict,
                         'chunk': chunk_text
                     }
+
+                    if source_id not in source_map:
+                        source_map[source_id] = {
+                            'source_id': source_id,
+                            'description': description,
+                            'title': title,
+                            'url': url,
+                            'organization': organization_dict,
+                            'chunks': [chunk_data]
+                        }
+                    else:
+                        source_map[source_id]['chunks'].append(chunk_data)
+
+                        if not source_map[source_id]['description'] and description:
+                            source_map[source_id]['description'] = description
+                        if not source_map[source_id]['title'] and title:
+                            source_map[source_id]['title'] = title
+                        if not source_map[source_id]['url'] and url:
+                            source_map[source_id]['url'] = url
+                        if not source_map[source_id]['organization'] and organization_dict:
+                            source_map[source_id]['organization'] = organization_dict
+
             except Exception as map_error:
                 print(f"Error creating source_map: {str(map_error)}")
                 return {
@@ -337,32 +355,43 @@ def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_
                 sources = []
                 total_score = 0
                 for source_id in source_ids:
+                    if isinstance(source_id, list):
+                        source_id = source_id[0] if source_id else ''
                     score = source_id_to_score.get(source_id, 0)
                     total_score += score
                     source_info = source_map.get(source_id, {
                         'source_id': source_id,
-                        'chunk': '',
+                        'chunks': [],
                         'description': '',
                         'title': '',
                         'url': '',
                         'organization': {}
                     })
 
-                    highlight_text = next(
-                        (src.get("highlight_text") for src in objective.get("sources", [])
-                         if src.get("source_id") == source_id),
-                        ""
-                    )
+                    highlight_texts = []
+                    for src in objective.get("sources", []):
+                        if src.get("source_id") == source_id and src.get("highlight_text"):
+                            highlight_texts.append(src.get("highlight_text"))
+
+                    chunks_with_highlights = []
+                    for i, chunk_data in enumerate(source_info.get('chunks', [])):
+                        chunk_entry = {
+                            'chunk': chunk_data.get('chunk', ''),
+                            'highlight_text': chunk_data.get('highlight_text', '')
+                        }
+                        if i < len(highlight_texts):
+                            chunk_entry['highlight_text'] = highlight_texts[i]
+                        chunks_with_highlights.append(chunk_entry)
 
                     sources.append({
                         'source_id': source_id,
                         'score': score,
-                        'highlight_text': highlight_text,
-                        'chunk': source_info.get('chunk', ''),
+                        'chunks': chunks_with_highlights,
                         'description': source_info.get('description', ''),
                         'title': source_info.get('title', ''),
                         'url': source_info.get('url', ''),
-                        'organization': source_info.get('organization', {})
+                        'organization': source_info.get('organization', {}),
+                        'chunk_count': len(chunks_with_highlights)
                     })
 
                 avg_score = total_score / len(source_ids) if source_ids else 0
