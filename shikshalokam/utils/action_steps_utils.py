@@ -188,11 +188,11 @@ def parse_llm_action_response(response, filtered_chunks):
     print("\nextracted_data: ", extracted_data)
 
     action_plans = (
-        response.get('action_plan') or
-        response.get('action_list') or
-        response.get('action_plans') or
-        response.get('actions') or
-        []
+            response.get('action_plans') or
+            response.get('action_plan') or
+            response.get('action_list') or
+            response.get('actions') or
+            []
     )
 
     if isinstance(action_plans, dict):
@@ -216,26 +216,61 @@ def parse_llm_action_response(response, filtered_chunks):
     action_list = []
     valid_source_ids = {chunk['source_id'] for chunk in filtered_chunks}
 
-    for idx, plan in enumerate(action_plans):
+    for plan in action_plans:
         if isinstance(plan, dict):
-            duration = plan.get('duration', '3')
-            action_steps = plan.get('actionSteps', []) or plan.get('action_steps', []) or plan.get('steps', [])
-            source_id = plan.get('source_id', '')
-            chunk_index = plan.get('chunk_index', 0)
+            plan_name = plan.get('plan_name', '')
+            duration_weeks = plan.get('duration_weeks', plan.get('duration', 3))
+            action_steps_data = plan.get('actionSteps', []) or plan.get('action_steps', []) or plan.get('steps', [])
 
-            if not source_id or source_id not in valid_source_ids:
-                if chunk_index > 0 and chunk_index <= len(filtered_chunks):
-                    source_id = filtered_chunks[chunk_index - 1]['source_id']
-                elif idx < len(filtered_chunks):
-                    source_id = filtered_chunks[idx]['source_id']
-                else:
-                    continue
+            processed_steps = []
+            all_source_ids = set()
+            all_sources = []
 
-            if action_steps and source_id:
+            for step_data in action_steps_data:
+                if isinstance(step_data, dict):
+                    step_text = step_data.get('step', step_data.get('text', ''))
+                    sources = step_data.get('sources', [])
+                    reason = step_data.get('reason', '')
+
+                    step_source_ids = []
+                    step_sources = []
+
+                    for src in sources:
+                        if isinstance(src, dict):
+                            source_id = src.get('source_id')
+                            highlight_text = src.get('highlight_text', '')
+
+                            if source_id and source_id in valid_source_ids:
+                                step_source_ids.append(source_id)
+                                all_source_ids.add(source_id)
+                                step_sources.append({
+                                    'source_id': source_id,
+                                    'highlight_text': highlight_text
+                                })
+
+                    processed_steps.append({
+                        'step': step_text,
+                        'sources': step_sources,
+                        'source_ids': step_source_ids,
+                        'reason': reason
+                    })
+                    all_sources.extend(step_sources)
+
+                elif isinstance(step_data, str):
+                    processed_steps.append({
+                        'step': step_data,
+                        'sources': [],
+                        'source_ids': [],
+                        'reason': ''
+                    })
+
+            if processed_steps:
                 action_list.append({
-                    'duration': str(duration),
-                    'actionSteps': action_steps,
-                    'source_id': source_id
+                    'plan_name': plan_name,
+                    'duration_weeks': duration_weeks,
+                    'actionSteps': processed_steps,
+                    'all_source_ids': list(all_source_ids),
+                    'all_sources': all_sources
                 })
 
     print(f"\nParsed {len(action_list)} action plans from response")
@@ -323,28 +358,66 @@ def post_process_actions_with_source(action_list, filtered_chunks, chunks_respon
                 }
 
         processed_actions = []
-        for action in action_list:
+        for action_plan in action_list:
             try:
-                if not isinstance(action, dict):
-                    print(f"Skipping invalid action: {action}")
+                if not isinstance(action_plan, dict):
+                    print(f"Skipping invalid action plan: {action_plan}")
                     continue
 
-                source_id = action.get('source_id', '')
-                score = source_id_to_score.get(source_id, 0)
-                source_info = source_map.get(source_id, {
-                    'source_id': source_id,
-                    'chunk': '',
-                    'description': '',
-                    'title': '',
-                    'url': '',
-                    'organization': {}
-                })
+                processed_steps = []
+                for step_data in action_plan.get('actionSteps', []):
+                    if isinstance(step_data, dict):
+                        step_sources = []
+                        for source_id in step_data.get('source_ids', []):
+                            score = source_id_to_score.get(source_id, 0)
+                            source_info = source_map.get(source_id, {
+                                'source_id': source_id,
+                                'chunk': '',
+                                'description': '',
+                                'title': '',
+                                'url': '',
+                                'organization': {}
+                            })
+
+                            highlight_text = next(
+                                (src.get("highlight_text") for src in step_data.get("sources", [])
+                                 if src.get("source_id") == source_id),
+                                ""
+                            )
+
+                            step_sources.append({
+                                'source_id': source_id,
+                                'score': score,
+                                'highlight_text': highlight_text,
+                                'chunk': source_info.get('chunk', ''),
+                                'description': source_info.get('description', ''),
+                                'title': source_info.get('title', ''),
+                                'url': source_info.get('url', ''),
+                                'organization': source_info.get('organization', {})
+                            })
+
+                        processed_steps.append({
+                            'step': step_data.get('step', ''),
+                            'reason': step_data.get('reason', ''),
+                            'sources': step_sources
+                        })
+                    elif isinstance(step_data, str):
+                        processed_steps.append({
+                            'step': step_data,
+                            'reason': '',
+                            'sources': []
+                        })
+
+                all_source_ids = action_plan.get('all_source_ids', [])
+                total_score = sum(source_id_to_score.get(sid, 0) for sid in all_source_ids)
+                avg_score = total_score / len(all_source_ids) if all_source_ids else 0
 
                 processed_action = {
-                    'duration': action.get('duration', '3'),
-                    'actionSteps': action.get('actionSteps', []),
-                    'score': score,
-                    'source': source_info
+                    'plan_name': action_plan.get('plan_name', ''),
+                    'duration_weeks': action_plan.get('duration_weeks', 3),
+                    'actionSteps': processed_steps,
+                    'score': avg_score,
+                    'source_count': len(all_source_ids)
                 }
                 processed_actions.append(processed_action)
 
