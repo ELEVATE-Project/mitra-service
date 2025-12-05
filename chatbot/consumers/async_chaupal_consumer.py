@@ -24,6 +24,7 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
         self.route = None
         self.company_bot = None
         self.background_tasks = set()
+        self.ip_address = None
 
     # async def send_ping(self):
     #     while True:
@@ -51,6 +52,7 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
         try:
             text_data_json = json.loads(text_data)
             message_type = text_data_json.get('type', None)
+            self.ip_address = text_data_json.get('address')
 
             if message_type == 'authenticate':
                 self.session_id = text_data_json.get('sessionid')
@@ -164,9 +166,21 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
             }
         )
         logger.info(f"Chatsession: %s %s", cs, cs_created)
-        if not cs_created and cs.language != self.route:
-            cs.language = self.route
-            cs.save(update_fields=['language'])
+
+        if not cs_created:
+            if cs.language != self.route:
+                cs.language = self.route
+
+            other_params = cs.other_params or {}
+            other_params["ip_address"] = self.ip_address
+
+            cs.other_params = other_params
+
+            cs.save(update_fields=["language", "other_params"])
+        else:
+            cs.other_params = {"ip_address": self.ip_address}
+            cs.save(update_fields=["other_params"])
+
         return cs
 
     @database_sync_to_async

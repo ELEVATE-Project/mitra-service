@@ -22,6 +22,7 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
         company_bot = None
         project_id = None
         task_id = None
+        ip_address = None
 
         def disconnect(self, code):
             print('Websocket closed')
@@ -50,6 +51,7 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
                     self.route = text_data_json.get('route')
                     self.project_id = text_data_json.get('projectid')
                     self.task_id = text_data_json.get('taskid')
+                    self.ip_address = text_data_json.get('address')
                     profile = Profile.objects.filter(id=self.profile_id).first()
                     print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
                           f"route: {self.route}, projectId: {self.project_id}, taskId: {self.task_id}")
@@ -78,9 +80,21 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
                         }
                     )
                     print(cs, cs_created)
-                    if not cs_created and cs.language != self.route:
-                        cs.language = self.route
-                        cs.save(update_fields=['language'])
+
+                    if not cs_created:
+                        if cs.language != self.route:
+                            cs.language = self.route
+
+                        other_params = cs.other_params or {}
+                        other_params["ip_address"] = self.ip_address
+
+                        cs.other_params = other_params
+
+                        cs.save(update_fields=["language", "other_params"])
+                    else:
+                        cs.other_params = {"ip_address": self.ip_address}
+                        cs.save(update_fields=["other_params"])
+
                     project = Project.objects.filter(project_id=self.project_id).first()
                     if not project:
                         print(f"Project with ID {self.project_id} not found. Creating a new one.")
