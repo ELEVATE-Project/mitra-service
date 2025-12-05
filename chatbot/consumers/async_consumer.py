@@ -23,6 +23,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
         self.bot_route = None
         self.company_bot = None
         self.flow_name = None
+        self.ip_address = None
         self.background_tasks = set()
 
     async def disconnect(self, code):
@@ -45,6 +46,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 self.route = text_data_json.get('route')
                 self.bot_route = text_data_json.get('bot_route')
                 self.flow_name = text_data_json.get('flow_name')
+                self.ip_address = text_data_json.get('address')
 
                 profile = await self.get_profile(self.profile_id)
                 logger.info(
@@ -55,7 +57,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 self.company_bot = await self.get_company_bot(profile, self.bot_route)
 
                 # Create chat session asynchronously
-                await self.create_chat_session(self.session_id, profile, self.company_bot)
+                await self.create_chat_session(self.session_id, profile, self.company_bot, self.ip_address)
             else:
                 company_chat_status = await self.determine_company_chat_status_async(
                     session_id=self.session_id, profile_id=self.profile_id, route=self.bot_route
@@ -132,7 +134,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
             return CompanyBot.objects.get(route=route)
 
     @database_sync_to_async
-    def create_chat_session(self, session_id, profile, company_bot):
+    def create_chat_session(self, session_id, profile, company_bot, ip_address):
         step_number = 1
         if profile and profile.first_name and profile.first_name != '':
             try:
@@ -154,9 +156,22 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
             }
         )
         logger.info(f"Chatsession: %s %s", cs, cs_created)
-        if not cs_created and cs.language != self.route:
-            cs.language = self.route
-            cs.save(update_fields=['language'])
+
+        if not cs_created:
+            if cs.language != self.route:
+                cs.language = self.route
+
+            other_params = cs.other_params or {}
+            other_params["ip_address"] = ip_address
+
+            cs.other_params = other_params
+
+            cs.save(update_fields=["language", "other_params"])
+        else:
+            cs.other_params = {"ip_address": ip_address}
+            cs.save(update_fields=["other_params"])
+
+
         return cs
 
     @database_sync_to_async
