@@ -33,12 +33,6 @@ class AsyncBaseConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logger.error('Receive Error: %s', e, exc_info=True)
 
-        finally:
-            # Always close the connection
-            logger.info('Disconnect stack trace: %s', {traceback.format_stack()}, exc_info=True)
-
-            await self.close()
-
     async def receive(self, text_data):
         raise NotImplementedError("receive method must be implemented in subclass")
 
