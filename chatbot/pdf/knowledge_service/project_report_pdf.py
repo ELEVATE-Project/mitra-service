@@ -16,10 +16,18 @@ def format_sources_html(sources):
     source_items = []
 
     for key in ['objective_chunk', 'action_chunk']:
-        data = sources.get(key)
-        if data and isinstance(data, dict):
+        data_list = sources.get(key)
+
+        if not data_list or not isinstance(data_list, list):
+            continue
+
+        for data in data_list:
+            if not isinstance(data, dict):
+                continue
+
             title = data.get('title')
             url = data.get('url')
+
             if title and url and url not in added_urls:
                 added_urls.add(url)
                 source_items.append(
