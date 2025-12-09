@@ -6,75 +6,50 @@ from chatbot.models.story_vernacular_model import StoryVernacular
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 
 
-def format_sources_html(sources, sources_char_limit=1200):
-    if not sources or not isinstance(sources, dict):
-        return '<li value="1">No sources available</li>\n'
+def format_sources_html(sources):
+    print("Sources check:", sources)
 
-    # Collect all sources
+    if not sources or not isinstance(sources, dict):
+        return '<li>No sources available</li>'
+
+    added_urls = set()
     source_items = []
 
-    objective_chunk = sources.get('objective_chunk')
-    if objective_chunk and isinstance(objective_chunk, dict):
-        chunk_text = objective_chunk.get('chunk', '')
-        if chunk_text:
-            source_items.append(chunk_text)
+    for key in ['objective_chunk', 'action_chunk']:
+        data_list = sources.get(key)
 
-    action_chunk = sources.get('action_chunk')
-    if action_chunk and isinstance(action_chunk, dict):
-        chunk_text = action_chunk.get('chunk', '')
-        if chunk_text:
-            source_items.append(chunk_text)
+        if not data_list or not isinstance(data_list, list):
+            continue
+
+        for data in data_list:
+            if not isinstance(data, dict):
+                continue
+
+            title = data.get('title')
+            url = data.get('url')
+
+            if title and url and url not in added_urls:
+                added_urls.add(url)
+                source_items.append(
+                    f'<li><a href="{url}" target="_blank">{title}</a></li>'
+                )
 
     if not source_items:
-        return '<li value="1">No sources available</li>\n'
+        return '<li>No sources available</li>'
 
-    # Chunk sources based on character limit
-    chunks = []
-    current_chunk = []
-    current_length = 0
-
-    for source in source_items:
-        source_len = len(source)
-
-        # If adding this source exceeds limit and we have content, start new chunk
-        if current_length + source_len > sources_char_limit and current_chunk:
-            chunks.append(current_chunk)
-            current_chunk = [source]
-            current_length = source_len
-        else:
-            current_chunk.append(source)
-            current_length += source_len
-
-    # Add remaining chunk
-    if current_chunk:
-        chunks.append(current_chunk)
-
-    # Build HTML with page breaks between chunks
-    full_html = ""
-    current_number = 1
-
-    for i, chunk in enumerate(chunks):
-        # Apply page break to all chunks except the last one
-        page_break = "split-div1" if i < len(chunks) - 1 else ""
-
-        html = (
-                f"<div class='{page_break}'>"
-                "<div class='project-section'>"
-                "<div class='section-header'>"
-                "<span class='star-icon'>★</span>"
-                "<span class='section-title'>Sources</span>"
-                "</div>"
-                "<div class='section-content'>"
-                "<ol class='sources-list'>"
-                + ''.join(f"<li value='{current_number + idx}'>{source}</li>\n" for idx, source in enumerate(chunk))
-                + "</ol>"
-                  "</div></div></div>"
-        )
-
-        full_html += html
-        current_number += len(chunk)
-
-    return full_html
+    return (
+        "<div class='project-section'>"
+        "<div class='section-header'>"
+        "<span class='star-icon'>★</span>"
+        "<span class='section-title'>Sources</span>"
+        "</div>"
+        "<div class='section-content'>"
+        "<ol class='sources-list'>"
+        + "\n".join(source_items) +
+        "</ol>"
+        "</div>"
+        "</div>"
+    )
 
 
 def get_project_report_html(
@@ -109,8 +84,8 @@ def get_project_report_html(
             sources_char_limit = story_vernacular.translation_json.get('sources_char_limit', 1200)
 
     # Format sources as numbered list
-    sources_html = format_sources_html(sources, sources_char_limit)
-
+    sources_html = format_sources_html(sources)
+    print("sources_html: ", sources_html)
     # Get CSS path (using the story PDF CSS as base)
     css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "ks_report_pdf.css"))
 

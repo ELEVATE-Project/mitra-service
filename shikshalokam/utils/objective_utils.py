@@ -165,7 +165,6 @@ def generate_objective_utils(user_problem_statement, company_bot):
 
 
 def parse_llm_objective_response(response, filtered_chunks):
-
     print("llm response: ", response)
     if not response or not isinstance(response, dict):
         return []
@@ -186,8 +185,8 @@ def parse_llm_objective_response(response, filtered_chunks):
 
     print("\n extracted_data: ", extracted_data)
     objectives_from_response = (
-            response.get('objective_list') or
             response.get('objectives') or
+            response.get('objective_list') or
             response.get('objective') or
             []
     )
@@ -215,30 +214,29 @@ def parse_llm_objective_response(response, filtered_chunks):
     objective_list = []
     valid_source_ids = {chunk['source_id'] for chunk in filtered_chunks}
 
-    for idx, obj in enumerate(objectives_from_response):
+    for obj in objectives_from_response:
         if isinstance(obj, dict):
-            objective_text = obj.get('text', '')
-            source_id = obj.get('source_id', '')
-            chunk_index = obj.get('chunk_index', 0)
+            objective_text = obj.get('objective', obj.get('text', ''))
+            sources = obj.get('sources', [])
+            source_ids = [src.get("source_id") for src in sources if src.get("source_id")]
+            reason = obj.get('reason', '')
 
-            if not source_id or source_id not in valid_source_ids:
-                if chunk_index > 0 and chunk_index <= len(filtered_chunks):
-                    source_id = filtered_chunks[chunk_index - 1]['source_id']
-                else:
-                    continue
+            if not isinstance(source_ids, list):
+                source_ids = [source_ids] if source_ids else []
 
-            if objective_text and source_id:
+            validated_source_ids = [sid for sid in source_ids if sid in valid_source_ids]
+
+            if objective_text and validated_source_ids:
+                filtered_sources = [
+                    src for src in sources
+                    if src.get("source_id") in validated_source_ids
+                ]
+
                 objective_list.append({
-                    'text': objective_text.strip(),
-                    'source_id': source_id
-                })
-
-        elif isinstance(obj, str) and obj.strip():
-            if idx < len(filtered_chunks):
-                chunk = filtered_chunks[idx]
-                objective_list.append({
-                    'text': obj.strip(),
-                    'source_id': chunk['source_id']
+                    'objective': objective_text.strip(),
+                    'sources': filtered_sources,
+                    'source_ids': validated_source_ids,
+                    'reason': reason
                 })
 
     return objective_list
@@ -284,6 +282,7 @@ def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_
                     title = metadata.get('title', '') or metadata.get('TITLE', '')
                     url = metadata.get('url', '')
                     organization_slug = metadata.get('company', '')
+                    highlight_text = result.get('highlight_text', '')
 
                     organization_dict = {}
                     if organization_slug:
@@ -307,14 +306,32 @@ def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_
                                 'slug': organization_slug
                             }
 
-                    source_map[source_id] = {
-                        'source_id': source_id,
-                        'chunk': chunk_text,
-                        'description': description,
-                        'title': title,
-                        'url': url,
-                        'organization': organization_dict
+                    chunk_data = {
+                        'highlight_text': highlight_text,
+                        'chunk': chunk_text
                     }
+
+                    if source_id not in source_map:
+                        source_map[source_id] = {
+                            'source_id': source_id,
+                            'description': description,
+                            'title': title,
+                            'url': url,
+                            'organization': organization_dict,
+                            'chunks': [chunk_data]
+                        }
+                    else:
+                        source_map[source_id]['chunks'].append(chunk_data)
+
+                        if not source_map[source_id]['description'] and description:
+                            source_map[source_id]['description'] = description
+                        if not source_map[source_id]['title'] and title:
+                            source_map[source_id]['title'] = title
+                        if not source_map[source_id]['url'] and url:
+                            source_map[source_id]['url'] = url
+                        if not source_map[source_id]['organization'] and organization_dict:
+                            source_map[source_id]['organization'] = organization_dict
+
             except Exception as map_error:
                 print(f"Error creating source_map: {str(map_error)}")
                 return {
@@ -331,21 +348,60 @@ def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_
                     print(f"Skipping invalid objective: {objective}")
                     continue
 
-                source_id = objective.get('source_id', '')
-                score = source_id_to_score.get(source_id, 0)
-                source_info = source_map.get(source_id, {
-                    'source_id': source_id,
-                    'chunk': '',
-                    'description': '',
-                    'title': '',
-                    'url': '',
-                    'organization': {}
-                })
+                source_ids = objective.get('source_ids', [])
+                if not isinstance(source_ids, list):
+                    source_ids = [source_ids] if source_ids else []
+
+                sources = []
+                total_score = 0
+                for source_id in source_ids:
+                    if isinstance(source_id, list):
+                        source_id = source_id[0] if source_id else ''
+                    score = source_id_to_score.get(source_id, 0)
+                    total_score += score
+                    source_info = source_map.get(source_id, {
+                        'source_id': source_id,
+                        'chunks': [],
+                        'description': '',
+                        'title': '',
+                        'url': '',
+                        'organization': {}
+                    })
+
+                    highlight_texts = []
+                    for src in objective.get("sources", []):
+                        if src.get("source_id") == source_id and src.get("highlight_text"):
+                            highlight_texts.append(src.get("highlight_text"))
+
+                    chunks_with_highlights = []
+                    for i, chunk_data in enumerate(source_info.get('chunks', [])):
+                        chunk_entry = {
+                            'chunk': chunk_data.get('chunk', ''),
+                            'highlight_text': chunk_data.get('highlight_text', '')
+                        }
+                        if i < len(highlight_texts):
+                            chunk_entry['highlight_text'] = highlight_texts[i]
+                        chunks_with_highlights.append(chunk_entry)
+
+                    sources.append({
+                        'source_id': source_id,
+                        'score': score,
+                        'chunks': chunks_with_highlights,
+                        'description': source_info.get('description', ''),
+                        'title': source_info.get('title', ''),
+                        'url': source_info.get('url', ''),
+                        'organization': source_info.get('organization', {}),
+                        'chunk_count': len(chunks_with_highlights)
+                    })
+
+                avg_score = total_score / len(source_ids) if source_ids else 0
 
                 processed_objective = {
-                    'text': objective.get('text', ''),
-                    'score': score,
-                    'source': source_info
+                    'text': objective.get('objective', objective.get('text', '')),
+                    'reason': objective.get('reason', ''),
+                    'score': avg_score,
+                    'sources': sources,
+                    'source_count': len(sources)
                 }
                 processed_objectives.append(processed_objective)
 

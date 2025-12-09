@@ -24,7 +24,8 @@ def extract_tags_from_document_url(url: str, company_bot) -> Dict[str, Any]:
         "url": [],
         "subdocument": [],
         "source_document": [],
-        "images": []
+        "images": [],
+        "media_type": None
     }
 
     try:
@@ -58,7 +59,8 @@ def extract_tags_from_document_file(file, company_bot, file_extension, other_dat
         "url": [],
         "subdocument": [],
         "source_document": [],
-        "images": []
+        "images": [],
+        "media_type": None
     }
 
     try:
@@ -89,7 +91,7 @@ def extract_tags_from_document_file(file, company_bot, file_extension, other_dat
         extractor = DocumentExtractor(**extractor_config)
 
         # Extract both limited and comprehensive content
-        document_text, extracted_images, comprehensive_text_for_urls = extractor.extract_text_from_file(
+        document_text, extracted_images, comprehensive_text_for_urls, media_type = extractor.extract_text_from_file(
             file, file_extension
         )
 
@@ -105,6 +107,10 @@ def extract_tags_from_document_file(file, company_bot, file_extension, other_dat
         result = extractor.extract_with_llm(
             document_text, company_bot, extracted_images=extracted_images, other_data=other_data
         )
+
+        if result and not result.get('media_type'):
+            print(f"Assigning media_type {media_type} to result")
+            result['media_type'] = media_type
 
         return result
 
@@ -125,7 +131,8 @@ def extract_tags_from_document_file(file, company_bot, file_extension, other_dat
             "url": [],
             "subdocument": [],
             "source_document": [],
-            "images": []
+            "images": [],
+            "media_type": None
         }
 
         # Distinguish between different types of ValueError

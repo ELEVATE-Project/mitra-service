@@ -6156,7 +6156,12 @@ function renderExtractedData() {
         const markdownContentHtml = isExcelFile ? `
             <div class="field-group">
                 <label>Markdown Content</label>
-                <textarea class="editable-field" id="extracted_text_${displayIndex}" onchange="saveFieldData(${displayIndex}, 'extracted_text', this.value)" style="min-height: 150px;">${item.data.extracted_text || ''}</textarea>
+                <textarea class="editable-field" id="extracted_text_${displayIndex}"
+                    onchange="saveFieldData(${displayIndex}, 'extracted_text', this.value)"
+                    style="min-height: 150px;"
+                >
+                    ${item.data.extracted_text || item.data.exact_content || ''}
+                </textarea>
             </div>
         ` : '';
 
