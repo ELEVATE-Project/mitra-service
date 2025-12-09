@@ -127,39 +127,8 @@ class BatchMediaTaskStatusView(View):
         return False
 
     def get_main_doc_media_type(self, ai_data):
-        """Get the correct document type for main document based on linked file, skipping failed URLs.
-        If only one failed URL exists and it's the same as the only URL, still consider it.
-        """
-        media_type = None
-        file_urls = ai_data.get('url', [])
-        failed_links = ai_data.get('failed_links', [])
-
-        # Collect failed URLs from failed_links
-        failed_urls = set()
-        if failed_links and isinstance(failed_links, list):
-            for item in failed_links:
-                file_url = item.get('file_url')
-                if file_url:
-                    failed_urls.add(file_url)
-
-        # Handle edge case: if only one URL and it's the same as the single failed URL → allow it
-        if (
-                len(file_urls) == 1
-                and len(failed_urls) == 1
-                and next(iter(failed_urls)) == file_urls[0]
-        ):
-            valid_urls = file_urls
-        else:
-            # Otherwise, filter out failed URLs
-            valid_urls = [url for url in file_urls if url not in failed_urls]
-
-        # Proceed only if we have at least one valid URL
-        if valid_urls:
-            source_doc_url = valid_urls[0]
-            media_type, filename, response = determine_media_type_from_url(source_doc_url, parent_media=None)
-
-        return media_type
-
+        if 'media_type' in ai_data and ai_data['media_type']:
+            return ai_data['media_type']
 
     def validate_tags_against_database(self, tags, company=None):
         """
