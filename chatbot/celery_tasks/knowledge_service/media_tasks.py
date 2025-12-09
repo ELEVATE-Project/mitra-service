@@ -19,6 +19,7 @@ def prepare_vector_db_data(media_id, include_updated_at=False, company_slug=None
     metadata = {
         'source': 'file',
         'url': str(media.url) if media.url is not None else S3_BASE_URL + media.file.name,
+        'markdown_url':  "" if not media.markdown_file else S3_BASE_URL + media.markdown_file.name,
         'company': company_obj.slug,
         'created_at': str(media.created_at),
         'type': media.media_type,
