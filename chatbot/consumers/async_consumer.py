@@ -3,13 +3,14 @@ import traceback
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.async_base_consumer import AsyncBaseConsumer
 from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType, ChatType, CompanyChat, \
-    TextConversionType
+    TextConversionType, CompanyBotTypeChoices
 from chatbot.celery_tasks.flow_tasks import get_flow_response
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.audio_provider_utils import text_translate_provider
 import logging
 from channels.db import database_sync_to_async
 from chatbot.utils.transliterate_utils import transliterate_text
+import jwt
 
 logger = logging.getLogger('django')
 
@@ -24,6 +25,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
         self.company_bot = None
         self.flow_name = None
         self.ip_address = None
+        self.access_token = None
         self.background_tasks = set()
 
     async def disconnect(self, code):
@@ -54,10 +56,14 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                     self.channel_name, self.session_id, self.profile_id, self.route
                 )
 
+                user_id = await self.handle_access_token(self.access_token)
+
                 self.company_bot = await self.get_company_bot(profile, self.bot_route)
 
                 # Create chat session asynchronously
-                await self.create_chat_session(self.session_id, profile, self.company_bot, self.ip_address)
+                await self.create_chat_session(
+                    self.session_id, profile, self.company_bot, self.ip_address, user_id
+                )
             else:
                 company_chat_status = await self.determine_company_chat_status_async(
                     session_id=self.session_id, profile_id=self.profile_id, route=self.bot_route
@@ -80,7 +86,8 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 )()
 
                 current_stage = None
-                if chat_session and self.company_bot:
+                if (chat_session and self.company_bot and
+                        self.company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE):
                     state_machine = await database_sync_to_async(
                         lambda: CompanyStateMachine.objects.get(
                             company_bot=self.company_bot, step=chat_session.current_step
@@ -127,6 +134,22 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
         return Profile.objects.filter(id=profile_id).first()
 
     @database_sync_to_async
+    def handle_access_token(self, access_token):
+        user_id = None
+        try:
+            if access_token:
+                decoded = jwt.decode(self.access_token, options={"verify_signature": False})
+                print(decoded)
+                if decoded:
+                    user_id = decoded.get('data', {}).get('id')
+        except Exception as e:
+            print("Exception occurred while decoding access token.")
+            logger.error('Access token Decode Error: %s', e, exc_info=True)
+        logger.info("User_id: %s", user_id)
+
+        return user_id
+
+    @database_sync_to_async
     def get_company_bot(self, profile, route):
         if profile:
             return CompanyBot.objects.get(company=profile.company, route=route)
@@ -134,7 +157,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
             return CompanyBot.objects.get(route=route)
 
     @database_sync_to_async
-    def create_chat_session(self, session_id, profile, company_bot, ip_address):
+    def create_chat_session(self, session_id, profile, company_bot, ip_address, user_id):
         step_number = 1
         if profile and profile.first_name and profile.first_name != '':
             try:
@@ -152,6 +175,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 'language': self.route,
                 'company_bot': company_bot,
                 'session_status': ChatStatus.IN_PROGRESS,
+                'user_id': user_id,
                 'session_type': self.flow_name
             }
         )

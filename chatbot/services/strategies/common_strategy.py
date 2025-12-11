@@ -17,9 +17,9 @@ class CommonBotStrategy(BotStrategy):
 
         try:
             from chatbot.models.company_models import CompanyStateMachine
-            state_machine = CompanyStateMachine.objects.get(
+            state_machine = CompanyStateMachine.objects.filter(
                 company_bot=company_bot, step=chat_session.current_step
-            )
+            ).first()
             return {'state_machine': state_machine}
         except Exception as e:
             return {'error': f"State machine error: {e}"}

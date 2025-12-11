@@ -148,7 +148,6 @@ class MediaVectorDBSync:
             # Prepare vector DB data using existing function
             media, file_name, file_content, metadata = prepare_vector_db_data(
                 media_id=media_id,
-                include_updated_at=False,
                 company_slug=self.company_slug
             )
             

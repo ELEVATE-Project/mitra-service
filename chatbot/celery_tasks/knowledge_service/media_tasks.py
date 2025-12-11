@@ -6,7 +6,7 @@ from chatbot.utils.database_util import update_single_file, delete_single_file, 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 
 
-def prepare_vector_db_data(media_id, include_updated_at=False, company_slug=None):
+def prepare_vector_db_data(media_id, company_slug=None):
     """Helper method to prepare data for vector DB operations"""
     from chatbot.models import KeyValue, Media, Company
     media = Media.objects.get(id=media_id)
@@ -24,10 +24,8 @@ def prepare_vector_db_data(media_id, include_updated_at=False, company_slug=None
         'created_at': str(media.created_at),
         'type': media.media_type,
         'priority': media.priority,
+        'updated_at': str(media.updated_at)
     }
-
-    if include_updated_at:
-        metadata['updated_at'] = str(media.updated_at)
 
     # Add file_size if file exists
     if media.file:
@@ -56,7 +54,6 @@ def save_in_vector_db(media_id, company_slug=None):
     print(f"Save in vector for media_id: {media_id}, company_slug: {company_slug}")
     media, file_name, file_content, metadata = prepare_vector_db_data(
         media_id=media_id,
-        include_updated_at=False,
         company_slug=company_slug
     )
     status_code, response_text = upsert_single_file(file_name, file_content, metadata, media)
@@ -69,7 +66,6 @@ def update_in_vector_db(media_id, company_slug=None):
     print('Update in vector for media_id: {}'.format(media_id))
     media, file_name, file_content, metadata = prepare_vector_db_data(
         media_id=media_id,
-        include_updated_at=True,
         company_slug=company_slug
     )
     status_code, response_text = update_single_file(media_id, file_name, file_content, metadata, media)
