@@ -9,99 +9,12 @@ from datetime import datetime
 logger = logging.getLogger('django')
 
 
-def render_template_from_db(template_name, context):
-    """
-    Fetch and render Jinja2 template from PDFTemplates database.
-    Falls back to hardcoded HTML if template not found.
-    
-    Args:
-        template_name: Name of the template in PDFTemplates model
-        context: Dictionary of variables to render in template
-    
-    Returns:
-        Rendered HTML string
-    """
-    try:
-        
-        # Fetch template from database
-        pdf_template = PDFTemplates.objects.get(template_name=template_name)
-        
-        logger.info(f"[PDF TEMPLATE] ✓ Template found in database!")
-        
-        # Merge constants_json into context if available
-        if pdf_template.constants_json:
-            # Constants from DB have lower priority than runtime context
-            merged_context = {**pdf_template.constants_json, **context}
-        else:
-            merged_context = context
-        
-        logger.info(f"[PDF TEMPLATE]   - Context keys: {list(merged_context.keys())}")
-        
-        # Render Jinja2 template
-        logger.info(f"[PDF TEMPLATE] Rendering Jinja2 template...")
-        template = Template(pdf_template.template)
-        html_content = template.render(**merged_context)
-        
-        logger.info(f"[PDF TEMPLATE] ✓✓✓ SUCCESS! Rendered template from DATABASE (Jinja2)")
-        print(f"\n{'='*80}")
-        print(f"✓ PDF GENERATION: Using DATABASE JINJA2 TEMPLATE")
-        print(f"  Template: {template_name}")
-        print(f"  User Type: {pdf_template.user_type}")
-        print(f"{'='*80}\n")
-        
-        return html_content
-        
-    except PDFTemplates.DoesNotExist:
-        logger.warning(f"[PDF TEMPLATE] ✗ Template '{template_name}' NOT FOUND in database")
-        logger.warning(f"[PDF TEMPLATE] ⚠ FALLING BACK to hardcoded HTML generation")
-        print(f"\n{'='*80}")
-        print(f"⚠ PDF GENERATION: Using FALLBACK HARDCODED HTML")
-        print(f"  Reason: Template '{template_name}' not found in database")
-        print(f"  Action: Create PDFTemplate record to use Jinja2 templates")
-        print(f"{'='*80}\n")
-        
-        # Fallback to legacy hardcoded HTML generation
-        return get_mom_report_html_legacy(
-            story=context.get('story'),
-            story_vernacular=context.get('story_vernacular'),
-            voice_provider=context.get('voice_provider'),
-            profile=context.get('profile'),
-            translation_json=context.get('translation_json'),
-            challenges_faced=context.get('challenges_faced'),
-            solutions_discussed=context.get('solutions_discussed'),
-            remarks=context.get('remarks')
-        )
-    except Exception as e:
-        logger.error(f"[PDF TEMPLATE] ✗✗✗ ERROR rendering template '{template_name}'")
-        logger.error(f"[PDF TEMPLATE]   - Error: {str(e)}")
-        logger.error(f"[PDF TEMPLATE]   - Error type: {type(e).__name__}")
-        logger.warning(f"[PDF TEMPLATE] ⚠ FALLING BACK to hardcoded HTML generation")
-        print(f"\n{'='*80}")
-        print(f"✗ PDF GENERATION: Using FALLBACK HARDCODED HTML")
-        print(f"  Reason: Template rendering error")
-        print(f"  Error: {str(e)}")
-        print(f"{'='*80}\n")
-        
-        # Fallback to legacy hardcoded HTML generation on any error
-        return get_mom_report_html_legacy(
-            story=context.get('story'),
-            story_vernacular=context.get('story_vernacular'),
-            voice_provider=context.get('voice_provider'),
-            profile=context.get('profile'),
-            translation_json=context.get('translation_json'),
-            challenges_faced=context.get('challenges_faced'),
-            solutions_discussed=context.get('solutions_discussed'),
-            remarks=context.get('remarks')
-        )
-
-
 def get_mom_report_html(story, story_vernacular, voice_provider, profile):
     """
-    Generate MOM (Minutes of Meeting) report HTML using database-driven Jinja2 templates.
-    Falls back to legacy hardcoded HTML if template not found.
+    Generate MOM report HTML. Tries to use Jinja2 template from database first,
+    falls back to hardcoded HTML if template not found.
     """
-    logger.info(f"[PDF GENERATION] Starting MOM PDF generation for story: '{story.title if story else 'Unknown'}'")
-    
+    # Extract raw data
     if story.other_params:
         challenges_faced = story.other_params.get('challenges_faced')
         solutions_discussed = story.other_params.get('solutions_discussed')
@@ -120,7 +33,7 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
     solutions_char_limit = translation_json.get('solutions_char_limit', None)
     remarks_char_limit = translation_json.get('remarks_char_limit', None)
 
-    # Process chunks for template rendering
+    # Process chunks for Jinja2 template
     challenges_chunks = process_steps_to_chunks(
         raw_data=challenges_faced,
         fallback_text=translation_json.get('no_challenges_faced_text', ""),
@@ -141,6 +54,7 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
         char_limit=remarks_char_limit
     )
 
+    # Get processed user details
     author, address_string, company_logo, date_of_discussion, participants_info, organization = get_user_details(
         story=story, profile=profile, voice_provider=voice_provider, translation_json=translation_json
     )
@@ -153,77 +67,47 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
     # Get images HTML
     images_html = get_report_images_page_html(story=story_obj)
 
-    # Build context dictionary for template rendering
-    context = {
-        'story': story,
-        'story_vernacular': story_vernacular,
-        'voice_provider': voice_provider,
-        'profile': profile,
-        'translation_json': translation_json,
-        'challenges_faced': challenges_faced,
-        'solutions_discussed': solutions_discussed,
-        'remarks': remarks,
-        'challenges_chunks': challenges_chunks,
-        'solutions_chunks': solutions_chunks,
-        'remarks_chunks': remarks_chunks,
-        'story_title': story.title,
-        'author': author if author else "",
-        'organization': organization,
-        'address_string': address_string,
-        'date_of_discussion': date_of_discussion,
-        'participants_info': participants_info,
-        'company_logo': company_logo,
-        'images_html': images_html,
-        'heading_challenges': translation_json.get('heading2', 'Challenges'),
-        'heading_solutions': translation_json.get('heading3', 'Solutions'),
-        'heading_remarks': translation_json.get('heading4', 'Remarks'),
-        'dateHeader': translation_json.get('dateHeader', 'Date of discussion'),
-    }
+    # Try to use Jinja2 template from database
+    try:
+        pdf_template = PDFTemplates.objects.get(template_name='chaupal_mom_report')
+        logger.info("[MOM PDF] Using Jinja2 template from database")
+        
+        # Build context for Jinja2 template with objects
+        context = {
+            # Core objects for direct access
+            'story': story,
+            'profile': profile,
+            'translation_json': translation_json,
+            
+            # Processed chunks
+            'challenges_chunks': challenges_chunks,
+            'solutions_chunks': solutions_chunks,
+            'remarks_chunks': remarks_chunks,
+            
+            # Processed values
+            'date_of_discussion': date_of_discussion,
+            'participants_info': participants_info,
+            'company_logo': company_logo,
+            'images_html': images_html,
+        }
+        
+        # Merge constants from template if available
+        if pdf_template.constants_json:
+            context = {**pdf_template.constants_json, **context}
+        
+        template = Template(pdf_template.template)
+        return template.render(**context)
+        
+    except PDFTemplates.DoesNotExist:
+        logger.warning("[MOM PDF] Template not found, using legacy HTML generation")
+        # Fallback to legacy hardcoded HTML
+        pass
+    except Exception as e:
+        logger.error(f"[MOM PDF] Error rendering template: {e}", exc_info=True)
+        # Fallback to legacy hardcoded HTML
+        pass
 
-    logger.info(f"[PDF GENERATION] Calling render_template_from_db for MOM report...")
-    
-    # Generate HTML content using database template (with fallback to legacy)
-    html_content = render_template_from_db(
-        template_name='chaupal_mom_report',
-        context=context
-    )
-    
-    logger.info(f"[PDF GENERATION] ✓ MOM PDF HTML generation complete, length: {len(html_content)} characters")
-    
-    return html_content
-
-
-def get_mom_report_html_legacy(story, story_vernacular, voice_provider, profile, 
-                                translation_json=None, challenges_faced=None, 
-                                solutions_discussed=None, remarks=None):
-    """
-    LEGACY FALLBACK FUNCTION - Use render_template_from_db() instead.
-    Generate MOM report HTML using hardcoded HTML generation.
-    This function is kept for backward compatibility and as fallback.
-    """
-    logger.info(f"[PDF GENERATION] Using LEGACY hardcoded HTML generation")
-    
-    # Recompute if not provided
-    if translation_json is None:
-        translation_json = story_vernacular.translation_json
-        if translation_json:
-            translation_json = translation_json.get('second_page', {})
-        else:
-            translation_json = {}
-    
-    if challenges_faced is None or solutions_discussed is None or remarks is None:
-        if story.other_params:
-            challenges_faced = story.other_params.get('challenges_faced')
-            solutions_discussed = story.other_params.get('solutions_discussed')
-            remarks = story.other_params.get('remarks')
-        else:
-            challenges_faced, solutions_discussed, remarks = None, None, None
-
-    challenges_char_limit = translation_json.get('challenges_char_limit', None)
-    first_challenges_char_limit = translation_json.get('first_challenges_char_limit', None)
-    solutions_char_limit = translation_json.get('solutions_char_limit', None)
-    remarks_char_limit = translation_json.get('remarks_char_limit', None)
-
+    # Legacy fallback: Generate HTML directly
     challenges_html = process_steps(
         raw_data=challenges_faced,
         fallback_text=translation_json.get('no_challenges_faced_text', ""),
@@ -247,23 +131,9 @@ def get_mom_report_html_legacy(story, story_vernacular, voice_provider, profile,
         char_limit=remarks_char_limit
     )
 
-    author, address_string, company_logo, date_of_discussion, participants_info, organization = get_user_details(
-        story=story, profile=profile, voice_provider=voice_provider, translation_json=translation_json
-    )
-
-    # Build organization line
     organization_html = f"<p>{organization}</p>" if organization else ""
-
-    # Build date line
     date_html = f"<p><span>{translation_json.get('dateHeader', 'Date of discussion')}:</span> {date_of_discussion}</p>" if date_of_discussion else ""
-
-    # Build participants line
     participants_html = f"<p>{participants_info}</p>" if participants_info else ""
-
-    if hasattr(story, 'story'):
-        story_obj = story.story
-    else:
-        story_obj = story
 
     page_html = f"""
     <div class="story-second-page-container">
@@ -284,7 +154,7 @@ def get_mom_report_html_legacy(story, story_vernacular, voice_provider, profile,
         {challenges_html if challenges_faced not in [None, [], [""]] else ""}
         {solutions_html if solutions_discussed not in [None, [], [""]] else ""}
         {remarks_html if remarks not in [None, [], [""], ""] else ""}
-        {get_report_images_page_html(story=story_obj)}
+        {images_html}
     </div>
     """
     return page_html
@@ -292,8 +162,8 @@ def get_mom_report_html_legacy(story, story_vernacular, voice_provider, profile,
 
 def process_steps_to_chunks(raw_data, fallback_text, char_limit, first_char_limit=None, is_challenges=False):
     """
-    Process steps data and return chunks for template rendering.
-    Similar to process_steps() but returns structured data instead of HTML.
+    Process steps and return chunks (arrays) for Jinja2 template.
+    Similar to process_steps but returns data instead of HTML.
     """
     if isinstance(raw_data, str):
         try:
@@ -323,7 +193,7 @@ def process_steps_to_chunks(raw_data, fallback_text, char_limit, first_char_limi
     else:
         split_steps = [step.strip() for step in steps if step.strip()]
 
-    # Determine chunking logic
+    # Chunking logic
     chunks = []
     current_chunk = []
     current_length = 0
