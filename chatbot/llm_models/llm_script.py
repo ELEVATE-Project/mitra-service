@@ -228,8 +228,16 @@ def handle_bedrock_model(
         inference_config['topP'] = top_p
     if messages and messages[-1]['role'] == 'assistant':
         messages.pop()
-    if messages:
-        messages = messages[-company_bot.chat_history_limit:]
+    if messages and (
+            len(messages) > company_bot.chat_history_limit
+            or messages[-1]['role'] != 'user'
+    ):
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i]['role'] == 'user':
+                messages = messages[max(0, i - company_bot.chat_history_limit): i + 1]
+                break
+        else:
+            messages = []
 
     try:
         request_payload = {
