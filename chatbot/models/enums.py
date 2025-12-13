@@ -282,6 +282,7 @@ class SessionFlowName(models.TextChoices):
     megaPTM = 'megaPTM', _('Mega PTM')
     YLC = 'YLC', _('YLC')
     ParentPerceptionSurvey = 'parent_perception_survey', _('Parent Perception Survey')
+    creation = 'creation', _('Creation')
 
 
 class PreProcessType(models.TextChoices):

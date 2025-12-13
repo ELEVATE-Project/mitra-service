@@ -1,4 +1,4 @@
-from chatbot.models import ChatStatus, CompanyChat, CompanyBotTypeChoices
+from chatbot.models import ChatStatus, CompanyChat, CompanyBotTypeChoices, LLMProvider
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.services.response_handlers.base_response_handler import BaseResponseHandler
 from chatbot.utils.shiksha_chaupal.date_utils import handle_date_prompt
@@ -472,6 +472,7 @@ class CommonResponseHandler(BaseResponseHandler):
             company_bot=company_bot, step=chat_session.current_step
         ).first()
         extra_content = None
+
         print("[_handle_regular_response] Response: ", response)
 
         response, extra_content = self._handle_response_extra_content(
@@ -500,6 +501,16 @@ class CommonResponseHandler(BaseResponseHandler):
 
     def _handle_response_extra_content(self, response, company_bot):
         extra_content = None
+        if company_bot.bot_type == CompanyBotTypeChoices.SIMPLE:
+            if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
+                if response and isinstance(response, dict):
+                    extracted_data = response.pop("parameters", response.pop("input", None))
+                    if extracted_data and isinstance(extracted_data, dict):
+                        response.clear()
+                        response.update(extracted_data)
+
+        print("Updated response post clean: ", response)
+        logger.info(f"Updated response post clean: {response}")
         if response and isinstance(response, dict):
             query = response.get("query", "")
 
