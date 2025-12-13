@@ -75,6 +75,31 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
             )
         )
 
+        source_child_qs = Media.objects.filter(
+            parent=OuterRef('pk'),
+            key_values__key__iregex=r'^document[_\s]type$',
+            key_values__value__icontains='source document'
+        ).order_by('id')
+
+        child_media_type_sq = Subquery(
+            source_child_qs.values('media_type')[:1]
+        )
+
+        queryset = queryset.annotate(
+            overridden_media_type=Coalesce(child_media_type_sq, F("media_type"))
+        )
+
+        queryset = queryset.annotate(
+            overridden_media_type_display=Case(
+                *[
+                    When(overridden_media_type=choice[0], then=Value(str(choice[1])))
+                    for choice in FileTypeChoices.choices
+                ],
+                default=Value(""),
+                output_field=CharField()
+            )
+        )
+
         search_text = self.request.query_params.get('q', '').strip()
         similarity_threshold = float(
             self.request.query_params.get('similarity_threshold', 0.3)
