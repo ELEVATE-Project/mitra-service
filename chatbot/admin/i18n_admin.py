@@ -1,7 +1,14 @@
 from django.contrib import admin
+from django.shortcuts import render
+from django.urls import path
 from simple_history.admin import SimpleHistoryAdmin
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import I18nTag, I18nTranslation
+from chatbot.services.i18n_export_service import (
+    get_supported_languages,
+    generate_i18n_json_string,
+    get_s3_path,
+)
 
 
 class I18nTranslationInline(admin.TabularInline):
@@ -25,6 +32,7 @@ class I18nTagAdmin(SimpleHistoryAdmin):
     date_hierarchy = 'created_at'
     ordering = ('tag_name',)
     inlines = [I18nTranslationInline]
+    change_list_template = 'admin/i18n_change_list.html'
     
     fieldsets = (
         ('Tag Information', {
@@ -37,6 +45,50 @@ class I18nTagAdmin(SimpleHistoryAdmin):
     )
     
     readonly_fields = ('created_at', 'updated_at')
+    
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                'export-to-s3/',
+                self.admin_site.admin_view(self.export_i18n_view),
+                name='chatbot_i18ntag_export_s3',
+            ),
+        ]
+        return custom_urls + urls
+    
+    def export_i18n_view(self, request):
+        """Handle export to S3 requests - shows language selection and JSON preview."""
+        context = {
+            'title': 'Export I18n Translations',
+            'languages': get_supported_languages(),
+            'opts': self.model._meta,
+        }
+        
+        if request.method == 'POST':
+            language = request.POST.get('language')
+            action = request.POST.get('action')
+            
+            if language:
+                # Get language display name
+                language_name = dict(get_supported_languages()).get(language, language)
+                
+                # Generate JSON preview
+                json_preview = generate_i18n_json_string(language)
+                
+                context.update({
+                    'json_preview': json_preview,
+                    'selected_language': language_name,
+                    'selected_language_code': language,
+                })
+                
+                # Placeholder for S3 upload action
+                if action == 'upload_to_s3':
+                    # TODO: Implement S3 upload functionality
+                    from django.contrib import messages
+                    messages.warning(request, 'S3 upload functionality is not yet implemented.')
+        
+        return render(request, 'admin/i18n_export.html', context)
     
     def get_translation_count(self, obj):
         """Display the count of translations for this tag."""
