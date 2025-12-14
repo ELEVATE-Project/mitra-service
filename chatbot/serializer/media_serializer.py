@@ -387,13 +387,32 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
         return getattr(obj.file, "size", None) if obj.file else None
 
     def get_media_type(self, obj):
-        return getattr(obj, "overridden_media_type", obj.media_type)
+        if hasattr(obj, "overridden_media_type"):
+            return obj.overridden_media_type
+
+        source_child = obj.subdocuments.filter(
+            key_values__key__iregex=r'^document[_\s]type$',
+            key_values__value__icontains='source document'
+        ).first()
+
+        if source_child:
+            return source_child.media_type
+
+        return obj.media_type
 
     def get_media_type_display(self, obj):
         if hasattr(obj, "overridden_media_type_display"):
             return obj.overridden_media_type_display
-        return obj.get_media_type_display()
 
+        source_child = obj.subdocuments.filter(
+            key_values__key__iregex=r'^document[_\s]type$',
+            key_values__value__icontains='source document'
+        ).first()
+
+        if source_child:
+            return source_child.get_media_type_display()
+
+        return obj.get_media_type_display()
 
 class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
     s3_url = serializers.SerializerMethodField()
