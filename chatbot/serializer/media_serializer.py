@@ -1,11 +1,12 @@
 from rest_framework import serializers
-from django.db.models import TextField, Value, Q
-from django.db.models.functions import Lower, Replace
+from django.db.models import Q
 from chatbot.models import Media, KeyValue, Tag, FileDisplayMode, FileTypeChoices
 from chatbot.models.media_models import MediaImage
 import ast
 import json
+import os
 
+media_base_url = os.getenv("MEDIA_BASE_URL")
 
 class S3UrlMixin:
     def resolve_s3_url(self, obj):
@@ -477,7 +478,8 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
         if organization_name:
             organization_url = obj.organization.url if obj.organization and obj.organization.url else "#"
             basic_info.append(
-                f'<div><b>Organization:</b> <a class="text-blue-600 underline underline-offset-2" href="{organization_url}" target="_blank" rel="noopener noreferrer">{organization_name}</a></div>')
+                f'<div><b>Organization:</b> <a class="text-blue-600 underline underline-offset-2" '
+                f'href="{organization_url}" target="_blank" rel="noopener noreferrer">{organization_name}</a></div>')
         if geography and geography.value:
             basic_info.append(f"<div><b>Geography:</b> {geography.value}</div>")
 
@@ -560,7 +562,7 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
 
                         references_html.append(
                             f'<div><a class="text-blue-600 underline underline-offset-2" '
-                            f'href="/{grandchild.id}" target="_blank" '
+                            f'href="{media_base_url}{grandchild.id}" target="_blank" '
                             f'rel="noopener noreferrer">{grandchild_title}</a></div>'
                         )
             else:
@@ -569,7 +571,7 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
 
                 references_html.append(
                     f'<div><a class="text-blue-600 underline underline-offset-2" '
-                    f'href="/{child.id}" target="_blank" '
+                    f'href="{media_base_url}{child.id}" target="_blank" '
                     f'rel="noopener noreferrer">{child_title}</a></div>'
                 )
 
