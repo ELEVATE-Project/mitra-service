@@ -114,13 +114,28 @@ class MediaSearchResultSerializer(serializers.Serializer):
         if media_id:
             try:
                 from chatbot.models.media_models import Media
-                media_obj = Media.objects.select_related('organization').prefetch_related('key_values').only(
+                media_obj = Media.objects.select_related('organization').prefetch_related(
+                    'key_values',
+                    'subdocuments',
+                    'subdocuments__key_values'
+                ).only(
                     'id', 'file', 'media_type', 'organization__url', 'organization__logo', 'display_mode',
                     'description', 'priority'
                 ).get(id=media_id)
 
-                db_media_type = media_obj.media_type
-                db_media_type_display = media_obj.get_media_type_display()
+                source_child = media_obj.subdocuments.filter(
+                    key_values__key__iregex=r'^document[_\s]type$',
+                    key_values__value__icontains='source document'
+                ).first()
+
+                if source_child:
+                    db_media_type = source_child.media_type
+                    db_media_type_display = source_child.get_media_type_display()
+                    print(f"[MediaSearchResultSerializer] Media ID {media_id}: Using source child media_type = {db_media_type}, display = {db_media_type_display}")
+                else:
+                    db_media_type = media_obj.media_type
+                    db_media_type_display = media_obj.get_media_type_display()
+                    print(f"[MediaSearchResultSerializer] Media ID {media_id}: No source child, using own media_type = {db_media_type}, display = {db_media_type_display}")
 
                 if media_obj.file:
                     file_size = getattr(media_obj.file, "size", None)
@@ -141,9 +156,6 @@ class MediaSearchResultSerializer(serializers.Serializer):
                 description = media_obj.description
 
                 db_priority = media_obj.priority
-
-                print(f"[MediaSearchResultSerializer] Media ID {media_id}: media_type from DB = {db_media_type}, "
-                      f"display = {db_media_type_display}")
 
             except Exception as e:
                 print(f"[MediaSearchResultSerializer] Error fetching DB fields for media_id {media_id}: {str(e)}")
@@ -207,20 +219,16 @@ class MediaSearchResultSerializer(serializers.Serializer):
 
         file_type_lower = file_type.lower().strip()
 
-        # First, try to get MIME type from extension using FileTypeChoices
         mime_type = FileTypeChoices.get_mime_from_extension(file_type_lower)
         if mime_type:
-            # Get the display value from the enum
             for choice_value, choice_display in FileTypeChoices.choices:
                 if choice_value == mime_type:
                     return choice_display
 
-        # If input is already a MIME type, check if it's in FileTypeChoices
         for choice_value, choice_display in FileTypeChoices.choices:
             if choice_value == file_type_lower:
                 return choice_display
 
-        # Handle additional file types not in FileTypeChoices
         additional_extension_to_display = {
             'ppt': 'PPT',
             'pptx': 'PPTX',
