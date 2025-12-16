@@ -73,8 +73,8 @@ class BaseResponseHandler(ABC):
         if not kwargs.get('skip_llm', False):
             response = self.get_llm_response(**kwargs)
             if response is None:
-                response = self.default_error_message
-
+                # response = self.default_error_message
+                response = {"name": "function_name", "parameters": {"argument_name": "argument_value"}}
         is_function_call = self.is_function_call(response=response)
         if is_function_call and state_machine and response:
             postprocessing_result = self.postprocessing_service.execute_postprocessing(
