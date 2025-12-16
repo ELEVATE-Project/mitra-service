@@ -1,5 +1,4 @@
 import traceback
-import requests
 from chatbot.models import Profile, MediaTypeChoices
 from chatbot.pdf.knowledge_service.project_report_pdf import generate_project_pdf
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_mitra_project_utils

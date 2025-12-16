@@ -72,3 +72,16 @@ class LLM:
             aws_secret_access_key=self.aws_secret_access_key_val,
             api_key=self.api_key
         )
+
+    def load_env_to_dict(value: Optional[str]) -> dict:
+        if value is None:
+            return {}
+        env_dict = {}
+        env_lines = value.split("\n")
+        for line in env_lines:
+            line = line.strip()
+            # Ignore empty lines and comments
+            if line and not line.startswith("#"):
+                key, value = line.split("=", 1)
+                env_dict[key.strip()] = value.strip().strip('"').strip("'")
+        return env_dict
