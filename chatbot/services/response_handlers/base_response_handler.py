@@ -73,11 +73,11 @@ class BaseResponseHandler(ABC):
         if not kwargs.get('skip_llm', False):
             response = self.get_llm_response(**kwargs)
             print("before response: ", response)
-            if response is None and company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
-                response = [{'toolUse': {'toolUseId': 'tooluse_2nAm-beFRzOM7WeckFidqQ', 'name':
-                    'get_state_information', 'input': {'next_state_name': 'SAMPLE_STATE', 'reason': ""}}}]
-            else:
-                response = self.default_error_message
+            if response is None:
+                if company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
+                    response = [{'toolUse': {...}}]
+                else:
+                    response = self.default_error_message
 
         print("after Response: ", response)
 
