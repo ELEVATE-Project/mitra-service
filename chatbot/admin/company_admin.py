@@ -476,4 +476,6 @@ class FlowAdmin(SimpleHistoryAdmin):
         """Customize form field for languages JSONField."""
         if db_field.name == 'languages':
             kwargs['help_text'] = 'Enter languages as JSON array, e.g., ["en", "hi", "kn"]'
+        elif db_field.name == 'websocket_url':
+            kwargs['help_text'] = 'Enter WebSocket route only (e.g., "ws/common/"). Do not include the full URL.'
         return super().formfield_for_dbfield(db_field, request, **kwargs)

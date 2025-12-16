@@ -494,11 +494,11 @@ class Flow(models.Model):
         related_name='story_flows',
         help_text="Optional secondary bot for story-related functionality."
     )
-    websocket_url = models.URLField(
+    websocket_url = models.CharField(
         max_length=500,
         null=True,
         blank=True,
-        help_text="WebSocket URL for real-time communication (optional)."
+        help_text="WebSocket path for real-time communication (e.g., ws/common). Do not include protocol or host."
     )
     parent_flow_id = models.ForeignKey(
         'self',

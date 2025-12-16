@@ -32,6 +32,7 @@ class AsyncBaseConsumer(AsyncWebsocketConsumer):
                     await self.update_last_chat_status_async(chat_status=company_chat_status)
         except Exception as e:
             logger.error('Receive Error: %s', e, exc_info=True)
+            
         finally:
             # Always close the connection
             logger.info('Disconnect stack trace: %s', {traceback.format_stack()}, exc_info=True)
