@@ -75,7 +75,13 @@ class BaseResponseHandler(ABC):
             print("before response: ", response)
             if response is None:
                 if company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
-                    response = [{'toolUse': {...}}]
+                    response = {
+                        "toolUseId": "tooluse_fallback", "name": "get_state_information",
+                        "input": {
+                            "next_state_name": "SAMPLE",
+                            "reason": "LLM returned no response"
+                        }
+                    }
                 else:
                     response = self.default_error_message
 
