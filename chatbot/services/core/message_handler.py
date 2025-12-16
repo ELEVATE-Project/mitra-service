@@ -18,7 +18,7 @@ class MessageHandler:
     @staticmethod
     def get_filtered_chats(session_id, state_machine, company_chats):
         """Get appropriate chats based on state machine settings"""
-        if state_machine.use_stage_chats:
+        if state_machine and state_machine.use_stage_chats:
             return CompanyChat.objects.filter(
                 session=session_id,
                 stage=state_machine.name

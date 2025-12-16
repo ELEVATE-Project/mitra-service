@@ -3,7 +3,7 @@ from channels.layers import get_channel_layer
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.celery_tasks.handle_message import translate_and_send_message
 from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_model
-from chatbot.models import ChatSession, ChatStatus, LLMProvider
+from chatbot.models import ChatSession, ChatStatus, LLMProvider, CompanyBotTypeChoices
 import logging
 
 from chatbot.models.company_models import CompanyStateMachine
@@ -72,10 +72,22 @@ class BaseResponseHandler(ABC):
         # Get LLM response
         if not kwargs.get('skip_llm', False):
             response = self.get_llm_response(**kwargs)
+            print("before response: ", response)
             if response is None:
-                response = self.default_error_message
+                if company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
+                    response = {
+                        "toolUseId": "tooluse_fallback", "name": "get_state_information",
+                        "input": {
+                            "next_state_name": "SAMPLE",
+                            "reason": "LLM returned no response"
+                        }
+                    }
+                else:
+                    response = self.default_error_message
 
-        is_function_call = self.is_function_call(response=response)
+        print("after Response: ", response)
+
+        is_function_call = self.is_function_call(response=response) if state_machine else False
         if is_function_call and state_machine and response:
             postprocessing_result = self.postprocessing_service.execute_postprocessing(
                 state_machine, response, **kwargs
@@ -114,11 +126,29 @@ class BaseResponseHandler(ABC):
             logger.error(f"Error getting state machine for tools: {e}")
 
         tools = None
-        if (state_machine and
-            hasattr(state_machine, 'tool_context') and
-            state_machine.tool_context and
-            state_machine.tool_context.strip()):
-            tool_context = state_machine.tool_context.strip()
+        has_state_machine_tool_context = (
+                state_machine
+                and hasattr(state_machine, 'tool_context')
+                and state_machine.tool_context
+                and state_machine.tool_context.strip()
+        )
+
+        has_company_bot_tool_context = (
+                company_bot
+                and hasattr(company_bot, 'tool_context')
+                and company_bot.tool_context
+                and company_bot.tool_context.strip()
+        )
+
+        if has_state_machine_tool_context or (
+                company_bot.bot_type == CompanyBotTypeChoices.SIMPLE and has_company_bot_tool_context
+        ):
+            tool_context = (
+                state_machine.tool_context.strip()
+                if has_state_machine_tool_context
+                else company_bot.tool_context.strip()
+            )
+
             try:
                 import json_repair
                 tools = json_repair.repair_json(tool_context, return_objects=True)
@@ -273,7 +303,7 @@ class BaseResponseHandler(ABC):
             other_params=other_params
         )
 
-    def translate_message(self, message, channel_name, step_number, language, company_bot):
+    def translate_message(self, message, channel_name, step_number, language, company_bot, extra_content=None):
         """Translate and send message"""
         return translate_and_send_message(
             accumulated_message=message,
@@ -281,7 +311,8 @@ class BaseResponseHandler(ABC):
             current_step_number=step_number,
             finish_reason="stop",
             route=language,
-            company_bot=company_bot
+            company_bot=company_bot,
+            extra_content=extra_content
         )
 
     def get_chat_status(self, state_machine, company_bot):

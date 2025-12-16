@@ -1,4 +1,4 @@
-from chatbot.models import ChatStatus, CompanyChat
+from chatbot.models import ChatStatus, CompanyChat, CompanyBotTypeChoices, LLMProvider
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.services.response_handlers.base_response_handler import BaseResponseHandler
 from chatbot.utils.shiksha_chaupal.date_utils import handle_date_prompt
@@ -17,10 +17,9 @@ class CommonResponseHandler(BaseResponseHandler):
         company_bot = kwargs['company_bot']
 
         try:
-            state_machine = CompanyStateMachine.objects.get(
+            state_machine = CompanyStateMachine.objects.filter(
                 company_bot=company_bot, step=chat_session.current_step
-            )
-            print("Current step in early func: ", state_machine.name)
+            ).first()
             # Special handling for EVENT state
             if state_machine and state_machine.name == 'EVENT_DATE':
                 print("Here inside")
@@ -63,9 +62,11 @@ class CommonResponseHandler(BaseResponseHandler):
                 language=language, company_bot=company_bot
             )
 
+            stage = state_machine.name if state_machine else None
+
             self.save_message(
                 session_id=session_id, profile_id=profile_id, message=bot_question, chunks=None,
-                status=ChatStatus.IN_PROGRESS, translated_message=translated_message, stage=state_machine.name
+                status=ChatStatus.IN_PROGRESS, translated_message=translated_message, stage=stage
             )
 
             return bot_question
@@ -149,7 +150,7 @@ class CommonResponseHandler(BaseResponseHandler):
         chat_messages = self.get_messages_for_llm(**kwargs)
 
         # Process based on response type
-        if is_function_call:
+        if is_function_call and company_bot and company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
             print("DEBUG: Processing as function call")
             return self._handle_function_call(
                 response=response, chat_session=chat_session, company_bot=company_bot,
@@ -437,9 +438,11 @@ class CommonResponseHandler(BaseResponseHandler):
             chat_session.current_step += 1
         chat_session.save()
 
-        state_machine = CompanyStateMachine.objects.get(
+        state_machine = CompanyStateMachine.objects.filter(
             company_bot=company_bot, step=chat_session.current_step
-        )
+        ).first()
+        if not state_machine:
+            return None
         bot_question = state_machine.bot_question
 
         chat_status = self.get_chat_status(state_machine=state_machine, company_bot=company_bot)
@@ -452,10 +455,10 @@ class CommonResponseHandler(BaseResponseHandler):
         # Prepare other_params with the whole function call response
         other_params = {'function_call_response': response}
         print(f"DEBUG: Saving whole function call response in other_params: {response}")
-
+        stage = state_machine.name if state_machine else None
         self.save_message(
             session_id=session_id, profile_id=profile_id, message=bot_question, chunks=chunks,
-            status=chat_status, translated_message=translated_message, stage=state_machine.name,
+            status=chat_status, translated_message=translated_message, stage=stage,
             other_params=other_params
         )
 
@@ -465,13 +468,20 @@ class CommonResponseHandler(BaseResponseHandler):
                                  session_id, channel_name, language, profile_id,
                                  chunks, current_step, reason=None):
         """Handle regular response for guided guest"""
-        state_machine = CompanyStateMachine.objects.get(
+        state_machine = CompanyStateMachine.objects.filter(
             company_bot=company_bot, step=chat_session.current_step
+        ).first()
+        extra_content = None
+
+        print("[_handle_regular_response] Response: ", response)
+
+        response, extra_content = self._handle_response_extra_content(
+            response=response, company_bot=company_bot
         )
 
         translated_message = self.translate_message(
             message=response, channel_name=channel_name, step_number=current_step,
-            language=language, company_bot=company_bot
+            language=language, company_bot=company_bot, extra_content=extra_content
         )
 
         # Prepare other_params with reason if available
@@ -480,10 +490,48 @@ class CommonResponseHandler(BaseResponseHandler):
             other_params['reason'] = reason
             print(f"DEBUG: Adding reason to other_params: {reason}")
 
+        stage = state_machine.name if state_machine else None
         self.save_message(
             session_id=session_id, profile_id=profile_id, message=response, chunks=chunks,
-            status=ChatStatus.IN_PROGRESS, translated_message=translated_message, stage=state_machine.name,
+            status=ChatStatus.IN_PROGRESS, translated_message=translated_message, stage=stage,
             other_params=other_params if other_params else None
         )
 
         return response
+
+    def _handle_response_extra_content(self, response, company_bot):
+        extra_content = None
+        if company_bot.bot_type == CompanyBotTypeChoices.SIMPLE:
+            if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
+                if response and isinstance(response, dict):
+                    extracted_data = response.pop("parameters", response.pop("input", None))
+                    if extracted_data and isinstance(extracted_data, dict):
+                        response.clear()
+                        response.update(extracted_data)
+
+        print("Updated response post clean: ", response)
+        logger.info(f"Updated response post clean: {response}")
+        if response and isinstance(response, dict):
+            query = response.get("query", "")
+
+            extra_content = {
+                "query": query,
+                "should_move_forward": response.get("should_move_forward", 'no'),
+                "validation": response.get("validation", "")
+            }
+            import json_repair
+            tag_context = company_bot.tag_context
+            if tag_context:
+                tag_context = json_repair.repair_json(tag_context, return_objects=True)
+
+            message = response.get("message", "")
+            validation = response.get("validation")
+
+            if response.get("should_move_forward") == 'yes':
+                message = ''
+            elif tag_context and validation:
+                message = tag_context.get(validation, message)
+
+            response = message
+
+        return response, extra_content
