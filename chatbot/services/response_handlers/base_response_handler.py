@@ -72,7 +72,9 @@ class BaseResponseHandler(ABC):
         # Get LLM response
         if not kwargs.get('skip_llm', False):
             response = self.get_llm_response(**kwargs)
-            if response is None:
+            if response is None and company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
+                response = {"name": "function_name", "parameters": {"argument_name": "argument_value"}}
+            else:
                 response = self.default_error_message
 
         is_function_call = self.is_function_call(response=response) if state_machine else False
@@ -140,9 +142,9 @@ class BaseResponseHandler(ABC):
             try:
                 import json_repair
                 tools = json_repair.repair_json(tool_context, return_objects=True)
-                logger.info("Using tool_context")
+                logger.info("Using state machine tool_context")
             except Exception as e:
-                logger.error(f"Failed to parse tool_context: {e}")
+                logger.error(f"Failed to parse state machine tool_context: {e}")
                 tools = None
 
         if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
