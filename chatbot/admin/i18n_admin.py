@@ -6,8 +6,7 @@ from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import I18nTag, I18nTranslation
 from chatbot.services.i18n_export_service import (
     get_supported_languages,
-    generate_i18n_json_string,
-    get_s3_path,
+    export_translations_to_cloud,
 )
 
 
@@ -50,7 +49,7 @@ class I18nTagAdmin(SimpleHistoryAdmin):
         urls = super().get_urls()
         custom_urls = [
             path(
-                'export-to-s3/',
+                'export-to-cloud/',
                 self.admin_site.admin_view(self.export_i18n_view),
                 name='chatbot_i18ntag_export_s3',
             ),
@@ -58,7 +57,7 @@ class I18nTagAdmin(SimpleHistoryAdmin):
         return custom_urls + urls
     
     def export_i18n_view(self, request):
-        """Handle export to S3 requests - shows language selection and JSON preview."""
+        """Handle export requests."""
         context = {
             'title': 'Export I18n Translations',
             'languages': get_supported_languages(),
@@ -67,26 +66,46 @@ class I18nTagAdmin(SimpleHistoryAdmin):
         
         if request.method == 'POST':
             language = request.POST.get('language')
-            action = request.POST.get('action')
             
             if language:
-                # Get language display name
-                language_name = dict(get_supported_languages()).get(language, language)
+                from django.contrib import messages
+                import logging
+                logger = logging.getLogger('django')
                 
-                # Generate JSON preview
-                json_preview = generate_i18n_json_string(language)
-                
-                context.update({
-                    'json_preview': json_preview,
-                    'selected_language': language_name,
-                    'selected_language_code': language,
-                })
-                
-                # Placeholder for S3 upload action
-                if action == 'upload_to_s3':
-                    # TODO: Implement S3 upload functionality
-                    from django.contrib import messages
-                    messages.warning(request, 'S3 upload functionality is not yet implemented.')
+                try:
+                    # Export translations to cloud
+                    result = export_translations_to_cloud(language)
+                    
+                    if result['success']:
+                        # Log public URLs to console
+                        print("="*80)
+                        print("I18N TRANSLATIONS EXPORT SUCCESSFUL")
+                        print("="*80)
+                        
+                        for export in result['exports']:
+                            print(f"{export['language_name']} ({export['language_code']}): {export['public_url']}")
+                        
+                        print("="*80)
+                        
+                        # Show success message to user
+                        messages.success(
+                            request,
+                            f"{result['message']}. Check console for public URLs."
+                        )
+                    else:
+                        # Show error message
+                        messages.error(
+                            request,
+                            f"Export failed: {result.get('error', 'Unknown error')}"
+                        )
+                        logger.error(f"Export failed: {result.get('error', 'Unknown error')}")
+                        
+                except Exception as e:
+                    error_msg = f"Unexpected error during export: {str(e)}"
+                    messages.error(request, error_msg)
+                    logger.error(error_msg)
+                    import traceback
+                    logger.error(traceback.format_exc())
         
         return render(request, 'admin/i18n_export.html', context)
     
@@ -101,7 +120,7 @@ class I18nTagAdmin(SimpleHistoryAdmin):
 class I18nTranslationAdmin(SimpleHistoryAdmin):
     """Admin interface for I18nTranslation model."""
     list_display = (
-        'tag_id', 'variable_name', 'language', 'get_value_preview', 'created_at'
+        'tag_id', 'variable_name', 'language', 'created_at'
     )
     list_filter = (
         'language',
@@ -128,13 +147,6 @@ class I18nTranslationAdmin(SimpleHistoryAdmin):
     )
     
     readonly_fields = ('created_at', 'updated_at')
-    
-    def get_value_preview(self, obj):
-        """Display a preview of the translation value."""
-        if len(obj.value) > 50:
-            return f"{obj.value[:50]}..."
-        return obj.value
-    get_value_preview.short_description = 'Value Preview'
     
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         """Customize form fields."""
