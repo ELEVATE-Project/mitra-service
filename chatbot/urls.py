@@ -22,7 +22,7 @@ from chatbot.views.drf_views import CompanyChatListCreateView, CompanyChatRetrie
     CompanyBotListCreateView, CompanyBotRetrieveUpdateDestroyView, ProfileListCreateView, \
     ProfileRetrieveUpdateDestroyView, ChatSessionListCreateView, ChatSessionRetrieveUpdateDestroyView, \
     ChatSessionRetrieveUpdateDestroyViewSession, BotVernacularListCreateView, BotVernacularRetrieveUpdateDestroyView, \
-    FlowImageConfigView
+    FlowImageConfigView, FlowLanguagesView, FlowConnectionInfoView
 from chatbot.views.mitra_views import \
     create_project_view
 from chatbot.views.recommendation import generate_recommendation
@@ -84,8 +84,10 @@ urlpatterns = [
     path('api/chatsession/<str:session>/', ChatSessionRetrieveUpdateDestroyViewSession.as_view(),
          name='chatsession-retrieve-update-destroy'),
 
-    # Image Configuration API - Get config by flow route
+    # Flow APIs
     path('api/flow-image-config/', FlowImageConfigView.as_view(), name='flow-image-config'),
+    path('api/flow-languages/', FlowLanguagesView.as_view(), name='flow-languages'),
+    path('api/flow-connection-info/', FlowConnectionInfoView.as_view(), name='flow-connection-info'),
 
     path('api/save-company-chat/', save_chats_view, name="save-company-chat"),
     path('api/create-chatsession/', create_chatsession, name="create-chatsession"),

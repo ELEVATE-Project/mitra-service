@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from chatbot.models import BotVernacular
-from chatbot.models.company_models import CompanyStateMachine, CompanyBot, Company, ImageConfiguration
+from chatbot.models.company_models import CompanyStateMachine, CompanyBot, Company, ImageConfiguration, Flow
 
 
 class CompanySerializer(serializers.ModelSerializer):
@@ -52,3 +52,22 @@ class ImageConfigurationSerializer(serializers.ModelSerializer):
     def get_image_size_mb(self, obj):
         """Convert image size from bytes to MB for easier reading."""
         return round(obj.image_size / 1048576, 2)
+
+
+class FlowLanguagesSerializer(serializers.ModelSerializer):
+    """Serializer for Flow languages."""
+    
+    class Meta:
+        model = Flow
+        fields = ('flow_route', 'languages')
+        read_only_fields = ('flow_route', 'languages')
+
+
+class FlowConnectionInfoSerializer(serializers.ModelSerializer):
+    """Serializer for Flow connection information."""
+    bot_route = serializers.CharField(source='bot_id.route', read_only=True)
+    
+    class Meta:
+        model = Flow
+        fields = ('flow_route', 'websocket_url', 'bot_route')
+        read_only_fields = ('flow_route', 'websocket_url', 'bot_route')

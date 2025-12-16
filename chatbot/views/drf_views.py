@@ -8,7 +8,8 @@ from chatbot.models.company_models import CompanyChat, CompanyBot, Flow
 from chatbot.models.profile_models import Profile
 from chatbot.serializer.base_serializer import ChatSessionSerializer
 from chatbot.serializer.company_serializer import (
-    CompanyBotSerializer, BotVernacularSerializer, ImageConfigurationSerializer
+    CompanyBotSerializer, BotVernacularSerializer, ImageConfigurationSerializer,
+    FlowLanguagesSerializer, FlowConnectionInfoSerializer
 )
 from chatbot.serializer.profile_serializer import ProfileSerializer, CompanyChatSerializer
 
@@ -123,6 +124,72 @@ class FlowImageConfigView(generics.GenericAPIView):
                 )
             
             serializer = self.get_serializer(flow.image_config_id)
+            return Response(serializer.data)
+            
+        except Flow.DoesNotExist:
+            return Response(
+                {'error': 'Flow not found or inactive'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class FlowLanguagesView(generics.GenericAPIView):
+    """
+    API endpoint to get supported languages for a specific flow route.
+    Query param: flow_route (required)
+    Returns: List of language codes
+    """
+    serializer_class = FlowLanguagesSerializer
+    
+    def get(self, request, *args, **kwargs):
+        flow_route = request.query_params.get('flow_route')
+        
+        if not flow_route:
+            return Response(
+                {'error': 'flow_route query parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            flow = Flow.objects.get(
+                flow_route=flow_route,
+                active=True
+            )
+            
+            serializer = self.get_serializer(flow)
+            return Response(serializer.data)
+            
+        except Flow.DoesNotExist:
+            return Response(
+                {'error': 'Flow not found or inactive'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class FlowConnectionInfoView(generics.GenericAPIView):
+    """
+    API endpoint to get websocket URL and bot route for a flow.
+    Query param: flow_route (required)
+    Returns: websocket_url and bot route
+    """
+    serializer_class = FlowConnectionInfoSerializer
+    
+    def get(self, request, *args, **kwargs):
+        flow_route = request.query_params.get('flow_route')
+        
+        if not flow_route:
+            return Response(
+                {'error': 'flow_route query parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            flow = Flow.objects.select_related('bot_id').get(
+                flow_route=flow_route,
+                active=True
+            )
+            
+            serializer = self.get_serializer(flow)
             return Response(serializer.data)
             
         except Flow.DoesNotExist:
