@@ -73,9 +73,12 @@ class BaseResponseHandler(ABC):
         if not kwargs.get('skip_llm', False):
             response = self.get_llm_response(**kwargs)
             if response is None and company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
-                response = {"name": "function_name", "parameters": {"argument_name": "argument_value"}}
+                response = [{'toolUse': {'toolUseId': 'tooluse_2nAm-beFRzOM7WeckFidqQ', 'name':
+                    'get_state_information', 'input': {'next_state_name': 'SAMPLE_STATE', 'reason': ""}}}]
             else:
                 response = self.default_error_message
+
+        print("Response: ", response)
 
         is_function_call = self.is_function_call(response=response) if state_machine else False
         if is_function_call and state_machine and response:
