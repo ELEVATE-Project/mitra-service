@@ -170,7 +170,7 @@ class FlowConnectionInfoView(generics.GenericAPIView):
     """
     API endpoint to get websocket URL and bot route for a flow.
     Query param: flow_route (required)
-    Returns: websocket_url and bot route
+    Returns: websocket_url, bot route, isParentFlow flag, children flows, and image configuration
     """
     serializer_class = FlowConnectionInfoSerializer
     
@@ -184,16 +184,22 @@ class FlowConnectionInfoView(generics.GenericAPIView):
             )
         
         try:
-            flow = Flow.objects.select_related('bot_id').get(
-                flow_route=flow_route,
-                active=True
+            flow = Flow.objects.select_related('bot_id', 'image_config_id').prefetch_related('child_flows').get(
+                flow_route=flow_route
             )
+            
+            # Check if flow is active
+            if not flow.active:
+                return Response(
+                    {'error': 'Flow is inactive'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
             serializer = self.get_serializer(flow)
             return Response(serializer.data)
             
         except Flow.DoesNotExist:
             return Response(
-                {'error': 'Flow not found or inactive'},
+                {'error': 'Flow not found'},
                 status=status.HTTP_404_NOT_FOUND
             )

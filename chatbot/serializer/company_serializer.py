@@ -63,11 +63,39 @@ class FlowLanguagesSerializer(serializers.ModelSerializer):
         read_only_fields = ('flow_route', 'languages')
 
 
-class FlowConnectionInfoSerializer(serializers.ModelSerializer):
-    """Serializer for Flow connection information."""
-    bot_route = serializers.CharField(source='bot_id.route', read_only=True)
+class ChildFlowSerializer(serializers.ModelSerializer):
+    """Serializer for child flow minimal information."""
     
     class Meta:
         model = Flow
-        fields = ('flow_route', 'websocket_url', 'bot_route')
-        read_only_fields = ('flow_route', 'websocket_url', 'bot_route')
+        fields = ('flow_route', 'flow_name', 'active')
+        read_only_fields = ('flow_route', 'flow_name', 'active')
+
+
+class FlowConnectionInfoSerializer(serializers.ModelSerializer):
+    """Serializer for Flow connection information."""
+    bot_route = serializers.CharField(source='bot_id.route', read_only=True)
+    isParentFlow = serializers.SerializerMethodField()
+    children_flows = serializers.SerializerMethodField()
+    image_config = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Flow
+        fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config')
+        read_only_fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config')
+    
+    def get_isParentFlow(self, obj):
+        """Check if this flow has children."""
+        return obj.child_flows.exists()
+    
+    def get_children_flows(self, obj):
+        """Get list of child flows if this is a parent flow."""
+        if obj.child_flows.exists():
+            return ChildFlowSerializer(obj.child_flows.all(), many=True).data
+        return []
+    
+    def get_image_config(self, obj):
+        """Get image configuration for this flow."""
+        if obj.image_config_id:
+            return ImageConfigurationSerializer(obj.image_config_id).data
+        return None
