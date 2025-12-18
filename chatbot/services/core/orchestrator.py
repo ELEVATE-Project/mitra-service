@@ -49,7 +49,7 @@ class ChatOrchestrator:
                     chat_session=session_data['chat_session'], company_bot=session_data['company_bot']
                 )
 
-            state_machine = session_result['state_machine']
+            state_machine = session_result.get('state_machine', None)
 
             # Get filtered chats
             temp_company_chats = self.message_handler.get_filtered_chats(

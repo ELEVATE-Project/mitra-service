@@ -1,15 +1,15 @@
 from rest_framework import serializers
-from django.db.models import TextField, Value, Q
-from django.db.models.functions import Lower, Replace
-from chatbot.models import Media, KeyValue, Tag, FileDisplayMode
+from django.db.models import Q
+from chatbot.models import Media, KeyValue, Tag, FileDisplayMode, FileTypeChoices
 from chatbot.models.media_models import MediaImage
 import ast
 import json
+import os
 
+media_base_url = os.getenv("MEDIA_BASE_URL")
 
 class S3UrlMixin:
     def resolve_s3_url(self, obj):
-        # Rule 1: Check if this media has a child with document type "source document"
         linked_file = obj.subdocuments.filter(
             key_values__key__iregex=r'^document[_\s]type$',
             key_values__value__icontains="source document"
@@ -18,15 +18,12 @@ class S3UrlMixin:
         if linked_file:
             return linked_file.get_s3_url()
 
-        # Rule 2: AI extracted file (subdocument of template's linked file)
-        # If this object is a child, check if parent is template or source document
         if obj.parent:
             parent_kv = obj.parent.key_values.filter(key__iregex=r'^document[_\s]type$').first()
             parent_doc_type = parent_kv.value.lower() if parent_kv and parent_kv.value else None
             if parent_doc_type in ["template", "source document"]:
                 return obj.get_s3_url()
 
-        # Default fallback
         return obj.get_s3_url()
 
 
@@ -38,25 +35,20 @@ class KeyValueSerializer(serializers.ModelSerializer):
         fields = ['id', 'key', 'value']
 
     def get_value(self, obj):
-        """Convert string representations of lists back to actual lists"""
         value = obj.value
 
-        # Check if the value looks like a list string representation
         if isinstance(value, str) and value.strip().startswith('[') and value.strip().endswith(']'):
             try:
-                # Try to safely evaluate the string as a Python literal
                 parsed_value = ast.literal_eval(value)
                 if isinstance(parsed_value, list):
                     return parsed_value
             except (ValueError, SyntaxError):
-                # If parsing fails, try JSON parsing
                 try:
                     parsed_value = json.loads(value)
                     if isinstance(parsed_value, list):
                         return parsed_value
                 except (json.JSONDecodeError, TypeError):
                     pass
-        # Return original value if not a list or parsing failed
         return value
 
 
@@ -80,88 +72,129 @@ class MediaImageSerializer(serializers.ModelSerializer):
 
 
 class MediaSearchResultSerializer(serializers.Serializer):
-    """
-    Serializer for vector database search results (v2 API).
-    Transforms vector DB response format to match the existing Media API V1 format exactly.
-    """
-    
+
     def to_representation(self, instance):
-        """
-        Transform vector DB result to match Media API V1 format.
-        Maps vector DB fields to V1 API fields based on the response structure.
-        """
         metadata = instance.get('metadata', {})
-        
-        # Extract key fields from metadata
+
+        print(f"[MediaSearchResultSerializer] Available metadata keys: {list(metadata.keys())}")
+
         url = metadata.get('url', '')
         company = metadata.get('company', '')
         created_at = metadata.get('created_at', '')
         updated_at = metadata.get('updated_at', '')
-        file_type = metadata.get('type', '')
         priority = metadata.get('priority', 'P1')
-        
-        # Get source_id (this is the actual Media model ID)
+
         source_id = instance.get('source_id', '')
-        
-        # Convert source_id to integer if possible
+
         try:
             media_id = int(source_id) if source_id else None
         except (ValueError, TypeError):
             media_id = source_id
-        
-        # Get title from metadata or instance
-        title = metadata.get('title', instance.get('title', ''))
-        
-        # Get tags from instance
-        tags = instance.get('tags', [])
-        
-        # Get document_type from metadata
+
+        title = metadata.get('TITLE', instance.get('title', ''))
+
+        tags = metadata.get('tags', [])
+
         document_type = None
-        for key in ['DOCUMENT_TYPE', 'document_type', 'Document Type','DOCUMENT TYPE']:
+        for key in ['DOCUMENT_TYPE', 'document_type', 'Document Type', 'DOCUMENT TYPE']:
             if key in metadata:
                 document_type = metadata[key]
                 break
-        
-        # Fetch file_size, organization_url, and org_logo from database
-        # These fields are NOT reliable in vector DB metadata, so we query the Media model directly
+
         file_size = None
         organization_url = None
         org_logo = None
-        
+        key_entities = None
+        display_mode = None
+        display_mode_display = None
+        description = None
+        db_priority = None
+        db_media_type = None
+        db_media_type_display = None
+
         if media_id:
             try:
                 from chatbot.models.media_models import Media
-                media_obj = Media.objects.select_related('organization').only(
-                    'id', 'file', 'organization__url', 'organization__logo'
+                media_obj = Media.objects.select_related('organization').prefetch_related(
+                    'key_values',
+                    'subdocuments',
+                    'subdocuments__key_values'
+                ).only(
+                    'id', 'file', 'media_type', 'organization__url', 'organization__logo', 'display_mode',
+                    'description', 'priority'
                 ).get(id=media_id)
-                
-                # Get file_size from Django FileField (same as V1 API)
+
+                source_child = media_obj.subdocuments.filter(
+                    key_values__key__iregex=r'^document[_\s]type$',
+                    key_values__value__icontains='source document'
+                ).first()
+
+                if source_child:
+                    db_media_type = source_child.media_type
+                    db_media_type_display = source_child.get_media_type_display()
+                    print(f"[MediaSearchResultSerializer] Media ID {media_id}: Using source child media_type = {db_media_type}, display = {db_media_type_display}")
+                else:
+                    db_media_type = media_obj.media_type
+                    db_media_type_display = media_obj.get_media_type_display()
+                    print(f"[MediaSearchResultSerializer] Media ID {media_id}: No source child, using own media_type = {db_media_type}, display = {db_media_type_display}")
+
                 if media_obj.file:
                     file_size = getattr(media_obj.file, "size", None)
-                
-                # Get organization_url from related Company model (same as V1 API)
+
                 if media_obj.organization:
                     organization_url = media_obj.organization.url
-                    
-                    # Get org_logo from related Company model (same as V1 API)
+
                     if media_obj.organization.logo:
                         org_logo = media_obj.organization.get_public_url()
-                        
+
+                key_entities_kv = media_obj.key_values.filter(key__iexact='KEY ENTITIES').first()
+                if key_entities_kv:
+                    key_entities = key_entities_kv.value
+
+                display_mode = media_obj.display_mode
+                display_mode_display = media_obj.get_display_mode_display()
+
+                description = media_obj.description
+
+                db_priority = media_obj.priority
+
             except Exception as e:
-                # If database query fails, fall back to metadata (which may be None)
                 print(f"[MediaSearchResultSerializer] Error fetching DB fields for media_id {media_id}: {str(e)}")
                 file_size = metadata.get('file_size', None)
                 organization_url = metadata.get('organization_url', None)
-        
-        # Build response matching V1 format exactly
+
+        if key_entities is None:
+            for key in ['KEY ENTITIES', 'key_entities', 'Key Entities', 'KEY_ENTITIES', 'keyEntities']:
+                if key in metadata:
+                    key_entities = metadata[key]
+                    print(f"[MediaSearchResultSerializer] Media ID {media_id}: key_entities from metadata "
+                          f"(key='{key}') = {key_entities}")
+                    break
+
+            if key_entities is None:
+                print(f"[MediaSearchResultSerializer] Media ID {media_id}: key_entities NOT FOUND in metadata "
+                      f"or database")
+
+        if db_media_type is None:
+            metadata_file_type = metadata.get('type', '')
+            if metadata_file_type:
+                db_media_type = metadata_file_type
+                db_media_type_display = self._get_media_type_display(metadata_file_type)
+            else:
+                db_media_type = ''
+                db_media_type_display = ''
+
+        final_description = description if description is not None else instance.get('summary', '')
+        final_priority = db_priority if db_priority is not None else priority
+
         return {
             'id': media_id,
             'name': title,
-            'description': instance.get('summary', ''),
-            'priority': priority,
-            'priority_display': priority,
-            'media_type': file_type,
-            'media_type_display': self._get_media_type_display(file_type),
+            'description': final_description,
+            'priority': final_priority,
+            'priority_display': final_priority,
+            'media_type': db_media_type,
+            'media_type_display': db_media_type_display,
             'created_at': created_at,
             'updated_at': updated_at,
             's3_url': url,
@@ -170,45 +203,105 @@ class MediaSearchResultSerializer(serializers.Serializer):
             'title': title,
             'organization': company,
             'document_type': document_type,
-            'key_entities': metadata.get('KEY ENTITIES', metadata.get('key_entities', None)),
+            'key_entities': key_entities,
             'file_size': file_size,
             'organization_url': organization_url,
             'org_logo': org_logo,
-            # V2 specific fields (additional metadata)
+            'display_mode': display_mode,
+            'display_mode_display': display_mode_display,
             'vector_id': instance.get('id'),
             'score': instance.get('score', 0),
             'field_scores': instance.get('field_scores', {}),
         }
-    
-    def _get_media_type_display(self, mime_type):
-        """
-        Convert MIME type to display name matching FileTypeChoices.
-        """
-        mime_to_display = {
-            'application/pdf': 'PDF',
-            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
-            'application/msword': 'DOC',
-            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'XLSX',
-            'application/vnd.ms-excel': 'XLS',
+
+    def _get_media_type_display(self, file_type):
+        if not file_type:
+            return ''
+
+        file_type_lower = file_type.lower().strip()
+
+        mime_type = FileTypeChoices.get_mime_from_extension(file_type_lower)
+        if mime_type:
+            for choice_value, choice_display in FileTypeChoices.choices:
+                if choice_value == mime_type:
+                    return choice_display
+
+        for choice_value, choice_display in FileTypeChoices.choices:
+            if choice_value == file_type_lower:
+                return choice_display
+
+        additional_extension_to_display = {
+            'ppt': 'PPT',
+            'pptx': 'PPTX',
+            'jpeg': 'JPEG',
+            'jpg': 'JPEG',
+            'png': 'PNG',
+            'gif': 'GIF',
+            'mp4': 'MP4',
+            'mp3': 'MP3',
+            'html': 'HTML',
+            'htm': 'HTML',
+            'xml': 'XML',
+            'json': 'JSON',
+            'zip': 'ZIP',
+            'rar': 'RAR',
+            'tar': 'TAR',
+            'gz': 'GZ',
+            '7z': '7Z',
+        }
+
+        if file_type_lower in additional_extension_to_display:
+            return additional_extension_to_display[file_type_lower]
+
+        if file_type_lower.startswith('.'):
+            clean_ext = file_type_lower[1:]
+            if clean_ext in additional_extension_to_display:
+                return additional_extension_to_display[clean_ext]
+
+        additional_mime_to_display = {
             'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PPTX',
             'application/vnd.ms-powerpoint': 'PPT',
-            'text/plain': 'TXT',
-            'text/csv': 'CSV',
+            'text/html': 'HTML',
+            'text/xml': 'XML',
+            'application/xml': 'XML',
+            'application/json': 'JSON',
             'image/jpeg': 'JPEG',
             'image/png': 'PNG',
             'image/gif': 'GIF',
+            'image/bmp': 'BMP',
+            'image/svg+xml': 'SVG',
             'video/mp4': 'MP4',
+            'video/mpeg': 'MPEG',
+            'video/quicktime': 'MOV',
+            'video/x-msvideo': 'AVI',
             'audio/mpeg': 'MP3',
+            'audio/mp3': 'MP3',
+            'audio/wav': 'WAV',
+            'audio/x-wav': 'WAV',
+            'application/zip': 'ZIP',
+            'application/x-rar-compressed': 'RAR',
+            'application/x-tar': 'TAR',
+            'application/gzip': 'GZ',
+            'application/x-7z-compressed': '7Z',
         }
-        return mime_to_display.get(mime_type, mime_type.upper() if mime_type else '')
+
+        if file_type_lower in additional_mime_to_display:
+            return additional_mime_to_display[file_type_lower]
+
+        if file_type.isupper() and len(file_type) <= 5:
+            return file_type
+
+        return file_type.upper() if file_type else ''
 
 
 class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
     s3_url = serializers.SerializerMethodField()
     file = serializers.SerializerMethodField()
     tag_names = serializers.SerializerMethodField()
-    media_type_display = serializers.CharField(source='get_media_type_display', read_only=True)
+    media_type = serializers.SerializerMethodField()
+    media_type_display = serializers.SerializerMethodField()
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    display_mode_display = serializers.CharField(source='get_display_mode_display', read_only=True)
     title = serializers.SerializerMethodField()
     organization = serializers.SerializerMethodField()
     organization_url = serializers.SerializerMethodField()
@@ -217,7 +310,6 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
     key_entities = serializers.SerializerMethodField()
     file_size = serializers.SerializerMethodField()
 
-    # Search matching scores
     keyword_coverage = serializers.IntegerField(read_only=True)
     total_matching_fields = serializers.IntegerField(read_only=True)
     avg_relevance_score = serializers.FloatField(read_only=True)
@@ -231,36 +323,28 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
             'media_type', 'media_type_display', 'created_at', 'updated_at',
             's3_url', 'file', 'tag_names', 'title', 'organization',
             'document_type', 'key_entities', 'file_size', 'organization_url', 'org_logo',
+            'display_mode', 'display_mode_display',
             'keyword_coverage', 'total_matching_fields', 'avg_relevance_score', 'max_similarity',
             'match_reason'
         ]
 
     def get_match_reason(self, obj):
-        """
-        Return a human-readable explanation of why this record was returned.
-        Uses the annotated match flags from the viewset.
-        """
-        # Get the similarity threshold from the request context
         request = self.context.get('request')
-        similarity_threshold = 0.3  # default
+        similarity_threshold = 0.3
         if request:
             similarity_threshold = float(request.query_params.get('similarity_threshold', 0.3))
 
-        # Check exact title match first (highest priority)
         if getattr(obj, "exact_title_match_flag", 0) == 1:
             return "Exact title match found."
 
-        # Check trigram similarity match
         if getattr(obj, "trigram_match", 0) == 1:
             max_sim = getattr(obj, "max_similarity", 0)
             if max_sim >= similarity_threshold:
                 return f"Fuzzy string similarity match found (similarity: {max_sim:.2f}, threshold: {similarity_threshold})."
 
-        # Check icontains match (substring match)
         if getattr(obj, "icontains_match", 0) == 1:
             return "Direct text match found in one or more fields."
 
-        # Fallback for legacy code or edge cases
         if getattr(obj, "keyword_coverage", 0) > 0:
             return "This result matched your search keywords."
 
@@ -297,13 +381,11 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
         return None
 
     def get_org_logo(self, obj):
-        """Get organization logo S3 URL"""
         if obj.organization and obj.organization.logo:
             return obj.organization.get_public_url()
         return None
 
     def get_document_type(self, obj):
-        # Handle both DOCUMENT_TYPE and DOCUMENT TYPE variants
         document_type = obj.key_values.filter(key__iregex=r'^document[_\s]type$').first()
         return document_type.value if document_type else None
 
@@ -313,6 +395,33 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
     def get_file_size(self, obj):
         return getattr(obj.file, "size", None) if obj.file else None
 
+    def get_media_type(self, obj):
+        if hasattr(obj, "overridden_media_type"):
+            return obj.overridden_media_type
+
+        source_child = obj.subdocuments.filter(
+            key_values__key__iregex=r'^document[_\s]type$',
+            key_values__value__icontains='source document'
+        ).first()
+
+        if source_child:
+            return source_child.media_type
+
+        return obj.media_type
+
+    def get_media_type_display(self, obj):
+        if hasattr(obj, "overridden_media_type_display"):
+            return obj.overridden_media_type_display
+
+        source_child = obj.subdocuments.filter(
+            key_values__key__iregex=r'^document[_\s]type$',
+            key_values__value__icontains='source document'
+        ).first()
+
+        if source_child:
+            return source_child.get_media_type_display()
+
+        return obj.get_media_type_display()
 
 class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
     s3_url = serializers.SerializerMethodField()
@@ -322,8 +431,10 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
     images = MediaImageSerializer(many=True, read_only=True)
     parent_info = serializers.SerializerMethodField()
     children = serializers.SerializerMethodField()
-    media_type_display = serializers.CharField(source='get_media_type_display', read_only=True)
+    media_type = serializers.SerializerMethodField()
+    media_type_display = serializers.SerializerMethodField()
     priority_display = serializers.CharField(source='get_priority_display', read_only=True)
+    display_mode_display = serializers.CharField(source='get_display_mode_display', read_only=True)
     title = serializers.SerializerMethodField()
     organization = serializers.SerializerMethodField()
     org_logo = serializers.SerializerMethodField()
@@ -341,7 +452,7 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
             'parent', 'parent_info', 'created_at', 'updated_at',
             's3_url', 'tags', 'title', 'organization', 'org_logo', 'document_type',
             'key_entities', 'key_values', 'images', 'children',
-            'file_size', 'size',
+            'file_size', 'size', 'display_mode', 'display_mode_display',
         ]
 
     def get_s3_url(self, obj):
@@ -351,37 +462,30 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
         return obj.get_s3_url() if hasattr(obj, 'get_s3_url') else None
 
     def get_key_values(self, obj):
-        # Create basic information array
         basic_info = []
 
-        # Get basic information fields
         title = obj.key_values.filter(key__iexact='TITLE').first()
         organization_name = None
         if obj.organization:
             organization_name = obj.organization.name
 
         geography = obj.key_values.filter(key__iexact='GEOGRAPHY').first()
-        # Handle both DOCUMENT_TYPE and DOCUMENT TYPE variants
         document_type = obj.key_values.filter(key__iregex=r'^document[_\s]type$').first()
 
-        # Add title to basic info
         if title and title.value:
             basic_info.append(f"<div><b>Title:</b> {title.value}</div>")
 
-        # Add organization with link to basic info (from direct organization FK)
         if organization_name:
             organization_url = obj.organization.url if obj.organization and obj.organization.url else "#"
             basic_info.append(
-                f'<div><b>Organization:</b> <a class="text-blue-600 underline underline-offset-2" href="{organization_url}" target="_blank" rel="noopener noreferrer">{organization_name}</a></div>')
+                f'<div><b>Organization:</b> <a class="text-blue-600 underline underline-offset-2" '
+                f'href="{organization_url}" target="_blank" rel="noopener noreferrer">{organization_name}</a></div>')
         if geography and geography.value:
             basic_info.append(f"<div><b>Geography:</b> {geography.value}</div>")
 
-        # Add document type to basic info
         if document_type and document_type.value:
             basic_info.append(f"<div><b>Document Type:</b> {document_type.value}</div>")
 
-        # Get filtered key-value pairs (excluding basic info fields and ORGANIZATION since we get it from FK)
-        # Use regex to exclude both DOCUMENT_TYPE and DOCUMENT TYPE variants
         filtered_kvs = obj.key_values.exclude(
             Q(key__in=['TITLE', 'ORGANIZATION', 'KEY ENTITIES', 'GEOGRAPHY',
                        'ORIGINAL_FILE_URL', 'FOUND_IN_DOCUMENT', 'DOCUMENT TYPE REASON']) |
@@ -390,10 +494,8 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
             Q(key='', value='')
         )
 
-        # Serialize filtered key-value pairs
         key_values_data = KeyValueSerializer(filtered_kvs, many=True).data
 
-        # Add basic information as the first key-value pair if any basic info exists
         if basic_info:
             basic_info_kv = {
                 'id': None,
@@ -402,7 +504,6 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
             }
             key_values_data.insert(0, basic_info_kv)
 
-        # If no key-value pairs exist after exclusion and no basic info, include the metadata fields
         if not filtered_kvs.exists() and not basic_info:
             metadata_kvs = obj.key_values.filter(
                 Q(key__in=['TITLE', 'KEY ENTITIES', 'GEOGRAPHY']) |
@@ -413,7 +514,6 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
             )
             key_values_data = KeyValueSerializer(metadata_kvs, many=True).data
 
-            # Add organization from direct organization FK if it exists
             if organization_name:
                 org_kv = {
                     'id': None,
@@ -443,43 +543,35 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
         return key_values_data
 
     def _get_references_and_associated_documents(self, obj):
-        """
-        Get references and associated documents for a media object.
-        """
         references_html = []
         children = obj.subdocuments.all()
 
         for child in children:
-            # Check if child is a "source document"
             child_doc_type_kv = child.key_values.filter(key__iregex=r'^document[_\s]type$').first()
             is_source_doc = False
 
             if child_doc_type_kv and child_doc_type_kv.value:
                 is_source_doc = 'source document' in child_doc_type_kv.value.lower()
 
-            # If it's a source document
             if is_source_doc:
-                # Only process if it has VISIBLE children
                 if child.subdocuments.filter(display_mode=FileDisplayMode.VISIBLE).exists():
                     grandchildren = child.subdocuments.filter(display_mode=FileDisplayMode.VISIBLE)
                     for grandchild in grandchildren:
-                        # Get title for grandchild
                         grandchild_title_kv = grandchild.key_values.filter(key__iexact='TITLE').first()
                         grandchild_title = grandchild_title_kv.value if grandchild_title_kv and grandchild_title_kv.value else grandchild.name
 
                         references_html.append(
                             f'<div><a class="text-blue-600 underline underline-offset-2" '
-                            f'href="/{grandchild.id}" target="_blank" '
+                            f'href="{media_base_url}{grandchild.id}" target="_blank" '
                             f'rel="noopener noreferrer">{grandchild_title}</a></div>'
                         )
             else:
                 child_title_kv = child.key_values.filter(key__iexact='TITLE').first()
                 child_title = child_title_kv.value if child_title_kv and child_title_kv.value else child.name
 
-                # Create HTML link for child
                 references_html.append(
                     f'<div><a class="text-blue-600 underline underline-offset-2" '
-                    f'href="/{child.id}" target="_blank" '
+                    f'href="{media_base_url}{child.id}" target="_blank" '
                     f'rel="noopener noreferrer">{child_title}</a></div>'
                 )
 
@@ -511,13 +603,11 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
         return None
 
     def get_org_logo(self, obj):
-        """Get organization logo S3 URL"""
         if obj.organization and obj.organization.logo:
             return obj.organization.get_public_url()
         return None
 
     def get_document_type(self, obj):
-        # Handle both DOCUMENT_TYPE and DOCUMENT TYPE variants
         document_type = obj.key_values.filter(key__iregex=r'^document[_\s]type$').first()
         return document_type.value if document_type else None
 
@@ -525,7 +615,6 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
         return self.get_metadata_field(obj, 'KEY ENTITIES')
 
     def get_file_size(self, obj):
-        """Get file size in bytes"""
         try:
             if obj.file and hasattr(obj.file, 'size'):
                 return obj.file.size
@@ -534,14 +623,12 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
             return None
 
     def get_size(self, obj):
-        """Get human-readable file size"""
         try:
             if obj.file and hasattr(obj.file, 'size'):
                 size = obj.file.size
                 if size is None:
                     return None
 
-                # Convert bytes to human readable format
                 for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
                     if size < 1024.0:
                         return f"{size:.1f} {unit}"
@@ -550,3 +637,11 @@ class MediaDetailSerializer(serializers.ModelSerializer, S3UrlMixin):
             return None
         except (ValueError, AttributeError):
             return None
+
+    def get_media_type(self, obj):
+        return getattr(obj, "overridden_media_type", obj.media_type)
+
+    def get_media_type_display(self, obj):
+        if hasattr(obj, "overridden_media_type_display"):
+            return obj.overridden_media_type_display
+        return obj.get_media_type_display()

@@ -498,7 +498,7 @@ class DocumentExtractor:
             logger.error(f"Failed to extract from URL {url}: {e}")
             return "", [], None, error_info, ""
 
-    def extract_text_from_file(self, file, file_extension: str) -> Tuple[str, List[Dict[str, Any]], str]:
+    def extract_text_from_file(self, file, file_extension: str):
         """Extract text content and images from various file types"""
 
         try:
@@ -525,7 +525,7 @@ class DocumentExtractor:
 
             logger.info(f"Extracted from file: {len(text)} chars, {len(comprehensive_text)} comprehensive chars")
 
-            return text, images, comprehensive_text
+            return text, images, comprehensive_text, media_type
 
         except Exception as e:
             logger.error(f"Error extracting from file: {e}")
@@ -537,7 +537,7 @@ class DocumentExtractor:
         file_ext = file_path.suffix.lower().strip('.')
 
         try:
-            text, _, _ = self.extract_text_from_file(file_path, file_ext)
+            text, _, _, _ = self.extract_text_from_file(file_path, file_ext)
             return text
         except Exception as e:
             raise Exception(f"Error reading document: {str(e)}")
@@ -817,7 +817,7 @@ class DocumentExtractor:
         """Process document from file path"""
         try:
             # Read document content with enhanced extraction
-            text_content, extracted_images, comprehensive_text_for_urls = self.extract_text_from_file(
+            text_content, extracted_images, comprehensive_text_for_urls, _ = self.extract_text_from_file(
                 file_path, Path(file_path).suffix.strip('.')
             )
 

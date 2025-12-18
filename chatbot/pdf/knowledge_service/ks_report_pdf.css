@@ -278,3 +278,17 @@
 .qa-spacing-tight { margin-bottom: 10px; }
 .qa-spacing-normal { margin-bottom: 20px; }
 .qa-spacing-loose { margin-bottom: 30px; }
+
+.sources-list li {
+    margin-bottom: 10px;
+    line-height: 1.6;
+}
+
+.split-div1 {
+    page-break-after: always;
+}
+
+.split-div1 .project-section {
+    page-break-before: auto;
+    page-break-after: auto;
+}

@@ -132,6 +132,13 @@ class CompanyBot(models.Model):
 
     connect_timeout = models.FloatField(default=5.0, help_text="Timeout in seconds for establishing a LLM connection.")
     read_timeout = models.FloatField(default=10.0, help_text="Timeout in seconds for reading a LLM response.")
+    chat_history_limit = models.IntegerField(
+        default=1000, validators=[MinValueValidator(1)],
+        help_text=(
+            "Controls how many of the most recent chat messages are included "
+            "as conversation history when making an LLM request."
+        )
+    )
 
     history = HistoricalRecords()
 

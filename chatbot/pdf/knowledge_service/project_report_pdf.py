@@ -1,6 +1,55 @@
 import os
 from django.core.files.base import ContentFile
+
+from chatbot.models import ChatSession
+from chatbot.models.story_vernacular_model import StoryVernacular
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
+
+
+def format_sources_html(sources):
+    print("Sources check:", sources)
+
+    if not sources or not isinstance(sources, dict):
+        return '<li>No sources available</li>'
+
+    added_urls = set()
+    source_items = []
+
+    for key in ['objective_chunk', 'action_chunk']:
+        data_list = sources.get(key)
+
+        if not data_list or not isinstance(data_list, list):
+            continue
+
+        for data in data_list:
+            if not isinstance(data, dict):
+                continue
+
+            title = data.get('title')
+            url = data.get('url')
+
+            if title and url and url not in added_urls:
+                added_urls.add(url)
+                source_items.append(
+                    f'<li><a href="{url}" target="_blank">{title}</a></li>'
+                )
+
+    if not source_items:
+        return '<li>No sources available</li>'
+
+    return (
+        "<div class='project-section'>"
+        "<div class='section-header'>"
+        "<span class='star-icon'>★</span>"
+        "<span class='section-title'>Sources</span>"
+        "</div>"
+        "<div class='section-content'>"
+        "<ol class='sources-list'>"
+        + "\n".join(source_items) +
+        "</ol>"
+        "</div>"
+        "</div>"
+    )
 
 
 def get_project_report_html(
@@ -11,6 +60,8 @@ def get_project_report_html(
         objective,
         timeline,
         action_steps,
+        language,
+        session,
         sources=None
 ):
     """Generate HTML for project report PDF matching the screenshot design"""
@@ -21,17 +72,20 @@ def get_project_report_html(
         for i, step in enumerate(action_steps, 1):
             action_steps_html += f'<li value="{i}">{step}</li>\n'
 
-    # Format sources as numbered list
-    sources_html = ""
-    if sources:
-        if isinstance(sources, list):
-            for i, source in enumerate(sources, 1):
-                sources_html += f'<li value="{i}">{source}</li>\n'
-        else:
-            # Default sources if not provided
-            for i in range(1, 6):
-                sources_html += f'<li value="{i}">Source {i}</li>\n'
+    chat_session = ChatSession.objects.filter(session=session).first()
+    sources_char_limit=1200
+    if chat_session:
+        print("ChatSession found!")
+        story_vernacular = StoryVernacular.objects.filter(
+            company_bot=chat_session.company_bot, language=language
+        ).first()
+        if story_vernacular:
+            print("StoryVernacular found!")
+            sources_char_limit = story_vernacular.translation_json.get('sources_char_limit', 1200)
 
+    # Format sources as numbered list
+    sources_html = format_sources_html(sources)
+    print("sources_html: ", sources_html)
     # Get CSS path (using the story PDF CSS as base)
     css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "ks_report_pdf.css"))
 
@@ -105,17 +159,7 @@ def get_project_report_html(
                     </div>
                 </div>
 
-                <div class="project-section">
-                    <div class="section-header">
-                        <span class="star-icon">★</span>
-                        <span class="section-title">Sources</span>
-                    </div>
-                    <div class="section-content">
-                        <ol class="sources-list">
-                            {sources_html}
-                        </ol>
-                    </div>
-                </div>
+                {sources_html}
             </div>
         </body>
     </html>
@@ -167,6 +211,7 @@ def get_project_report_css():
         border-radius: 8px;
         padding: 20px;
         background-color: #f8f9fa;
+        page-break-inside: avoid;
     }
 
     .section-header {
@@ -228,8 +273,10 @@ def generate_project_pdf(
         objective,
         timeline,
         action_steps,
+        language,
+        session,
         sources=None,
-        pdf_filename=None
+        pdf_filename=None,
 ):
     """Generate PDF for project report"""
 
@@ -242,6 +289,8 @@ def generate_project_pdf(
         objective=objective,
         timeline=timeline,
         action_steps=action_steps,
+        language=language,
+        session=session,
         sources=sources
     )
 

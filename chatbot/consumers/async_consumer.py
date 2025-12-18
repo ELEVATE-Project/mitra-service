@@ -3,13 +3,14 @@ import traceback
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.async_base_consumer import AsyncBaseConsumer
 from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType, ChatType, CompanyChat, \
-    TextConversionType
+    TextConversionType, CompanyBotTypeChoices
 from chatbot.celery_tasks.flow_tasks import get_flow_response
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.audio_provider_utils import text_translate_provider
 import logging
 from channels.db import database_sync_to_async
 from chatbot.utils.transliterate_utils import transliterate_text
+import jwt
 
 logger = logging.getLogger('django')
 
@@ -23,6 +24,8 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
         self.bot_route = None
         self.company_bot = None
         self.flow_name = None
+        self.ip_address = None
+        self.access_token = None
         self.background_tasks = set()
 
     async def disconnect(self, code):
@@ -45,6 +48,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 self.route = text_data_json.get('route')
                 self.bot_route = text_data_json.get('bot_route')
                 self.flow_name = text_data_json.get('flow_name')
+                self.ip_address = text_data_json.get('address')
 
                 profile = await self.get_profile(self.profile_id)
                 logger.info(
@@ -52,10 +56,14 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                     self.channel_name, self.session_id, self.profile_id, self.route
                 )
 
+                user_id = await self.handle_access_token(self.access_token)
+
                 self.company_bot = await self.get_company_bot(profile, self.bot_route)
 
                 # Create chat session asynchronously
-                await self.create_chat_session(self.session_id, profile, self.company_bot)
+                await self.create_chat_session(
+                    self.session_id, profile, self.company_bot, self.ip_address, user_id
+                )
             else:
                 # Validate that user is authenticated before processing messages
                 if not self.session_id or not self.bot_route:
@@ -148,6 +156,22 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
         return Profile.objects.filter(id=profile_id).first()
 
     @database_sync_to_async
+    def handle_access_token(self, access_token):
+        user_id = None
+        try:
+            if access_token:
+                decoded = jwt.decode(self.access_token, options={"verify_signature": False})
+                print(decoded)
+                if decoded:
+                    user_id = decoded.get('data', {}).get('id')
+        except Exception as e:
+            print("Exception occurred while decoding access token.")
+            logger.error('Access token Decode Error: %s', e, exc_info=True)
+        logger.info("User_id: %s", user_id)
+
+        return user_id
+
+    @database_sync_to_async
     def get_company_bot(self, profile, route):
         if profile:
             return CompanyBot.objects.get(company=profile.company, route=route)
@@ -155,7 +179,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
             return CompanyBot.objects.get(route=route)
 
     @database_sync_to_async
-    def create_chat_session(self, session_id, profile, company_bot):
+    def create_chat_session(self, session_id, profile, company_bot, ip_address, user_id):
         step_number = 1
         if profile and profile.first_name and profile.first_name != '':
             try:
@@ -173,13 +197,27 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 'language': self.route,
                 'company_bot': company_bot,
                 'session_status': ChatStatus.IN_PROGRESS,
+                'user_id': user_id,
                 'session_type': self.flow_name
             }
         )
         logger.info(f"Chatsession: %s %s", cs, cs_created)
-        if not cs_created and cs.language != self.route:
-            cs.language = self.route
-            cs.save(update_fields=['language'])
+
+        if not cs_created:
+            if cs.language != self.route:
+                cs.language = self.route
+
+            other_params = cs.other_params or {}
+            other_params["ip_address"] = ip_address
+
+            cs.other_params = other_params
+
+            cs.save(update_fields=["language", "other_params"])
+        else:
+            cs.other_params = {"ip_address": ip_address}
+            cs.save(update_fields=["other_params"])
+
+
         return cs
 
     @database_sync_to_async

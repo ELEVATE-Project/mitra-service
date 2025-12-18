@@ -135,7 +135,26 @@ def create_project_view(request):
         author_name = profile.first_name if profile else ""
         location = profile.location if profile and hasattr(profile, '') else ""
 
-        timeline = f"{project_duration}" if project_duration else ""
+        # Format timeline with proper week/weeks suffix
+        timeline = ""
+        if project_duration:
+            # Check if it's already a string with "week" or "weeks"
+            duration_str = str(project_duration).strip().lower()
+            if "week" in duration_str:
+                # Already contains "week", use as-is
+                timeline = str(project_duration).strip()
+            else:
+                try:
+                    # Convert to int and add appropriate suffix
+                    duration_value = int(project_duration)
+                    # Add "week" or "weeks" based on the value
+                    if duration_value == 1:
+                        timeline = f"{duration_value} week"
+                    else:
+                        timeline = f"{duration_value} weeks"
+                except (ValueError, TypeError):
+                    # If conversion fails, use the value as-is
+                    timeline = str(project_duration)
 
         # Generate the PDF
         pdf_content = generate_project_pdf(
@@ -146,7 +165,9 @@ def create_project_view(request):
             objective=project_objective,
             timeline=timeline,
             action_steps=user_action_steps,
-            sources=None
+            sources=chunks,
+            language=language,
+            session=session
         )
 
         print("PDF report is generated successfully")

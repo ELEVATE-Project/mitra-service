@@ -217,23 +217,16 @@ class BatchMediaSaveView(View):
 
         try:
             company_bot = CompanyBot.objects.get(id=company_bot_id)
+            company_slug = None
             selected_company = None
             if item_data.get('organization_slug'):
                 try:
                     selected_company = Company.objects.get(slug=item_data['organization_slug'])
+                    if selected_company:
+                        company_slug = selected_company.slug
                 except Company.DoesNotExist:
                     pass
 
-            if not selected_company and user_profile:
-                selected_company = user_profile.company
-
-            if not selected_company:
-                selected_company = company_bot.company
-
-            if selected_company:
-                company_slug = selected_company.slug
-            else:
-                company_slug = company_bot.company.slug
             extracted_text = item_data.get('extracted_text', '')
 
             # Step 1: Similarity check
@@ -315,7 +308,7 @@ class BatchMediaSaveView(View):
                     media.markdown_file.save(markdown_filename, ContentFile(markdown_content), save=False)
 
                 # Save and get the vector DB task ID
-                vector_task_id = media.save(company_slug=company_slug)
+                vector_task_id = media.save()
 
             except Exception as media_save_error:
                 return {
@@ -842,7 +835,7 @@ class BatchMediaSaveView(View):
             # Key-value pairs - handle organization specially
             for kv in subdoc_data.get('key_values', []):
                 cleaned_key = self.clean_key_for_ordered_list(kv['key'])
-                if cleaned_key == 'DOCUMENT TYPE':
+                if cleaned_key == 'DOCUMENT_TYPE':
                     doc_type_value = kv['value']
                     if isinstance(doc_type_value, dict):
                         actual_value = doc_type_value.get('type', '')
@@ -852,7 +845,7 @@ class BatchMediaSaveView(View):
 
                     KeyValue.objects.create(
                         media=subdoc_media,
-                        key='DOCUMENT TYPE',
+                        key='DOCUMENT_TYPE',
                         value=actual_value
                     )
                 else:

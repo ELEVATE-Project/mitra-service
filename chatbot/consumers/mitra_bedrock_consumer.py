@@ -22,6 +22,7 @@ class MitraBedrockConsumer(BaseConsumer):
 
         def disconnect(self, code):
             print('Websocket closed')
+            logger.info('Websocket closed')
             chat_session = ChatSession.objects.filter(session=self.session_id)
             if chat_session.exists():
                 c = chat_session[0]
@@ -37,6 +38,7 @@ class MitraBedrockConsumer(BaseConsumer):
 
         def receive(self, text_data):
             print(text_data)
+            logger.info('Received text_data: %s', text_data)
             text_data_json = json.loads(text_data)
             message_type = text_data_json.get('type', None)
 
@@ -49,6 +51,8 @@ class MitraBedrockConsumer(BaseConsumer):
                     profile = Profile.objects.filter(id=self.profile_id).first()
                     print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
                           f"route: {self.route}")
+                    logger.info("Authenticated with session_id: %s, profile_id: %s, route: %s",
+                                self.session_id, self.profile_id, self.route)
                     print(f"Received access_token: {self.access_token}")
                     if self.access_token:
                         decoded = jwt.decode(self.access_token, options={"verify_signature": False})
@@ -60,6 +64,7 @@ class MitraBedrockConsumer(BaseConsumer):
                     else:
                         user_id = None
                     print("User_id: ", user_id)
+                    logger.info("User_id: %s", user_id)
 
                     # chat session create (session, profile)
                     cs, cs_created = ChatSession.objects.get_or_create(
@@ -112,6 +117,8 @@ class MitraBedrockConsumer(BaseConsumer):
 
                     print(f"channel_name: {self.channel_name}, session_id: {self.session_id}, profile_id: {self.profile_id}, "
                           f"route: {self.route}")
+                    logger.info("channel_name: %s, session_id: %s, profile_id: %s, route: %s",
+                                self.channel_name, self.session_id, self.profile_id, self.route)
 
                     self.route = self.route.strip()
 
@@ -126,6 +133,7 @@ class MitraBedrockConsumer(BaseConsumer):
         def connect(self):
             try:
                 print('Attempting to connect to websocket')
+                logger.info('Attempting to connect to websocket')
                 super().connect()
             except Exception:
                 logger.error('Connect Error: %s', e, exc_info=True)

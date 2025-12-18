@@ -231,8 +231,31 @@ def handle_bedrock_model(
         inference_config['temperature'] = temperature
     if top_p:
         inference_config['topP'] = top_p
+    # Remove trailing assistant message
     if messages and messages[-1]['role'] == 'assistant':
         messages.pop()
+    # Enforce chat history rules
+    if messages:
+        # Find last user message
+        last_user_idx = None
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i]['role'] == 'user':
+                last_user_idx = i
+                break
+
+        if last_user_idx is None:
+            messages = []
+        else:
+            start_idx = max(0, last_user_idx - company_bot.chat_history_limit)
+
+            # Ensure first message is always a user
+            if messages[start_idx]['role'] != 'user':
+                for j in range(start_idx + 1, last_user_idx + 1):
+                    if messages[j]['role'] == 'user':
+                        start_idx = j
+                        break
+
+            messages = messages[start_idx:last_user_idx + 1]
 
     try:
         request_payload = {
