@@ -8,7 +8,7 @@ import json
 
 @method_decorator(staff_member_required, name='dispatch')
 class BatchMediaUploadView(TemplateView):
-    template_name = 'admin/batch_upload.html'
+    template_name = 'admin/batch_upload/batch_upload.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
