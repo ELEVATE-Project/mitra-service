@@ -12,7 +12,6 @@ logger = logging.getLogger('django')
 
 
 def is_english_text(text):
-    """Check if text contains only English characters (a-z, A-Z, numbers, punctuation, spaces)"""
     if not text or text.strip() == '':
         return True
 
@@ -46,7 +45,6 @@ def translate_to_english_if_needed(text, voice_provider, source_language):
 
 
 def transliterate_to_english_if_needed(text, voice_provider, source_language):
-    """Transliterate text to English if it's not already in English"""
     logger.info(f"Starting Transliteration for {text}.")
     if not text or text.strip() == '':
         logger.info(f"Text is empty or null so return original text.")
@@ -77,7 +75,6 @@ def transliterate_to_english_if_needed(text, voice_provider, source_language):
 
 
 def translate_nested_to_english(data, voice_provider, transliteration_voice_provider, source_language, field_path=""):
-    """Recursively translate nested data structures to English"""
     if isinstance(data, dict):
         translated_dict = {}
         for key, value in data.items():
@@ -119,12 +116,6 @@ def save_generic_story(
         response_json_story, language, voice_provider, profile, session, combined_reason, flow=None, project_id=None,
         company_bot=None
 ):
-    """
-    Generic save story function that saves English content to Story model
-    and creates translations for other languages.
-    Now detects and converts non-English content to English before saving.
-    """
-    # Get voice providers for translation/transliteration
     translation_voice_provider = voice_provider
     transliteration_voice_provider = None
 
@@ -168,68 +159,6 @@ def save_generic_story(
 
     response_json_story = parse_json_strings(response_json_story)
 
-    raw_title = response_json_story.get('title', '')
-    raw_content = response_json_story.get('content', '')
-    raw_objective = response_json_story.get('objective', '')
-    raw_impact = response_json_story.get('impact', '')
-    raw_blurb = response_json_story.get('blurb', '')
-
-    english_title = clean_escaped_text(
-        text=translate_to_english_if_needed(raw_title, translation_voice_provider, language)
-    )
-    english_content = clean_escaped_text(
-        text=translate_to_english_if_needed(raw_content, translation_voice_provider, language)
-    )
-    english_objective = clean_escaped_text(
-        text=translate_to_english_if_needed(raw_objective, translation_voice_provider, language)
-    )
-    english_impact = clean_escaped_text(
-        text=translate_to_english_if_needed(raw_impact, translation_voice_provider, language)
-    )
-    english_blurb = clean_escaped_text(
-        text=translate_to_english_if_needed(raw_blurb, translation_voice_provider, language)
-    )
-
-    english_tweet = response_json_story.get('tweet', '')
-    english_micro_improvement = response_json_story.get('micro_improvement', '')
-
-    raw_action_steps = response_json_story.get('action_steps', [])
-    if isinstance(raw_action_steps, str):
-        english_action_steps = translate_to_english_if_needed(raw_action_steps, translation_voice_provider, language)
-    elif isinstance(raw_action_steps, list):
-        english_action_steps = [
-            translate_to_english_if_needed(step, translation_voice_provider, language)
-            for step in raw_action_steps
-        ]
-    else:
-        english_action_steps = raw_action_steps
-
-    if not english_title and company_bot:
-        try:
-            story_vernacular = StoryVernacular.objects.filter(
-                company_bot=company_bot, language='en'
-            ).first()
-
-            if story_vernacular and story_vernacular.translation_json:
-                vernacular_title = story_vernacular.translation_json.get('title')
-                if vernacular_title:
-                    english_title = vernacular_title
-                    logger.info(f"Used StoryVernacular English title")
-        except Exception as e:
-            logger.info(f"Could not get title from StoryVernacular: {e}")
-
-    if not english_title or not english_title.strip():
-        english_title = 'Improvement_story'
-        logger.info("Using default title: Improvement_story")
-
-    user_name = profile.first_name if profile and profile.first_name else ''
-    fallback_location = ""
-    if profile:
-        address = ProfileAddress.objects.filter(profile=profile).first()
-        if address:
-            location_parts = filter(None, [address.block, address.district, address.state])
-            fallback_location = ", ".join(location_parts)
-
     story = Story.objects.filter(session=session).first()
 
     if story and story.other_params:
@@ -239,6 +168,14 @@ def save_generic_story(
         other_params = {}
 
     previous_english_snapshot = {k: v for k, v in other_params.items()}
+
+    user_name = profile.first_name if profile and profile.first_name else ''
+    fallback_location = ""
+    if profile:
+        address = ProfileAddress.objects.filter(profile=profile).first()
+        if address:
+            location_parts = filter(None, [address.block, address.district, address.state])
+            fallback_location = ", ".join(location_parts)
 
     other_params.update({
         'flow': flow,
@@ -252,7 +189,6 @@ def save_generic_story(
     }
 
     NON_TRANSLATABLE_FIELDS = {'flow', 'id', 'uuid', 'status', 'type', 'mode', 'version'}
-
     PERSONAL_INFO_FIELDS = {'name', 'user_name', 'location', 'organization', 'designation', 'district', 'block'}
 
     for key, value in response_json_story.items():
@@ -274,53 +210,124 @@ def save_generic_story(
 
     print(f"Story other_params before save: {other_params}")
 
-    raw_location = response_json_story.get('location', fallback_location)
-    location = ""
-    if raw_location and raw_location.strip():
-        location = transliterate_to_english_if_needed(raw_location, transliteration_voice_provider, language)
+    story_fields_to_update = {}
 
-    story_fields = {
-        'title': english_title,
-        'content': english_content,
-        'tweet': english_tweet,
-        'objective': english_objective,
-        'action_steps': english_action_steps,
-        'impact': english_impact,
-        'micro_improvement': english_micro_improvement,
-        'blurb': english_blurb,
-        'location': location,
+    if 'title' in response_json_story:
+        raw_title = response_json_story.get('title', '')
+        english_title = clean_escaped_text(
+            text=translate_to_english_if_needed(raw_title, translation_voice_provider, language)
+        )
+        if not english_title and company_bot:
+            try:
+                story_vernacular = StoryVernacular.objects.filter(
+                    company_bot=company_bot, language='en'
+                ).first()
+                if story_vernacular and story_vernacular.translation_json:
+                    vernacular_title = story_vernacular.translation_json.get('title')
+                    if vernacular_title:
+                        english_title = vernacular_title
+                        logger.info(f"Used StoryVernacular English title")
+            except Exception as e:
+                logger.info(f"Could not get title from StoryVernacular: {e}")
+        if not english_title or not english_title.strip():
+            english_title = 'Improvement_story'
+            logger.info("Using default title: Improvement_story")
+        story_fields_to_update['title'] = english_title
+
+    if 'content' in response_json_story:
+        raw_content = response_json_story.get('content', '')
+        story_fields_to_update['content'] = clean_escaped_text(
+            text=translate_to_english_if_needed(raw_content, translation_voice_provider, language)
+        )
+
+    if 'objective' in response_json_story:
+        raw_objective = response_json_story.get('objective', '')
+        story_fields_to_update['objective'] = clean_escaped_text(
+            text=translate_to_english_if_needed(raw_objective, translation_voice_provider, language)
+        )
+
+    if 'impact' in response_json_story:
+        raw_impact = response_json_story.get('impact', '')
+        story_fields_to_update['impact'] = clean_escaped_text(
+            text=translate_to_english_if_needed(raw_impact, translation_voice_provider, language)
+        )
+
+    if 'blurb' in response_json_story:
+        raw_blurb = response_json_story.get('blurb', '')
+        story_fields_to_update['blurb'] = clean_escaped_text(
+            text=translate_to_english_if_needed(raw_blurb, translation_voice_provider, language)
+        )
+
+    if 'tweet' in response_json_story:
+        story_fields_to_update['tweet'] = response_json_story.get('tweet', '')
+
+    if 'micro_improvement' in response_json_story:
+        story_fields_to_update['micro_improvement'] = response_json_story.get('micro_improvement', '')
+
+    if 'action_steps' in response_json_story:
+        raw_action_steps = response_json_story.get('action_steps', [])
+        if isinstance(raw_action_steps, str):
+            story_fields_to_update['action_steps'] = translate_to_english_if_needed(raw_action_steps,
+                                                                                    translation_voice_provider,
+                                                                                    language)
+        elif isinstance(raw_action_steps, list):
+            story_fields_to_update['action_steps'] = [
+                translate_to_english_if_needed(step, translation_voice_provider, language)
+                for step in raw_action_steps
+            ]
+        else:
+            story_fields_to_update['action_steps'] = raw_action_steps
+
+    if 'location' in response_json_story:
+        raw_location = response_json_story.get('location', fallback_location)
+        if raw_location and raw_location.strip():
+            story_fields_to_update['location'] = transliterate_to_english_if_needed(raw_location,
+                                                                                    transliteration_voice_provider,
+                                                                                    language)
+        else:
+            story_fields_to_update['location'] = ""
+
+    story_fields_to_update.update({
         'author': profile,
         'session': session,
         'language': 'en',
         'stage': StoryStatusChoices.COMPLETED,
         'other_params': other_params,
         'validation_logs': combined_reason
-    }
+    })
 
     if story:
-        for field, value in story_fields.items():
+        for field, value in story_fields_to_update.items():
             if hasattr(story, field):
                 setattr(story, field, value)
     else:
-        story = Story(**story_fields)
+        default_story_fields = {
+            'title': 'Improvement_story',
+            'content': '',
+            'tweet': '',
+            'objective': '',
+            'action_steps': [],
+            'impact': '',
+            'micro_improvement': '',
+            'blurb': '',
+            'location': '',
+        }
+        default_story_fields.update(story_fields_to_update)
+        story = Story(**default_story_fields)
 
     story.save()
     print(f"Story saved with other_params: {story.other_params}")
 
     if language != 'en':
+        english_data = {}
+        for field in ['title', 'content', 'tweet', 'objective', 'action_steps', 'impact', 'micro_improvement', 'blurb']:
+            if field in story_fields_to_update:
+                english_data[field] = story_fields_to_update[field]
+
         create_generic_story_translation(
             story=story,
             language=language,
-            english_data={
-                'title': english_title,
-                'content': english_content,
-                'tweet': english_tweet,
-                'objective': english_objective,
-                'action_steps': english_action_steps,
-                'impact': english_impact,
-                'micro_improvement': english_micro_improvement,
-                'blurb': english_blurb
-            },
+            english_data=english_data,
             voice_provider=voice_provider,
             flow=flow,
             company_bot=company_bot,
@@ -329,10 +336,14 @@ def save_generic_story(
         )
 
     logger.info(f"Successfully saved generic story for flow {flow}, session {session}")
-    raw_problem_statement = response_json_story.get('problem_statement', '')
-    problem_statement = clean_escaped_text(
-        text=translate_to_english_if_needed(raw_problem_statement, translation_voice_provider, language)
-    )
+
+    problem_statement = ""
+    if 'problem_statement' in response_json_story:
+        raw_problem_statement = response_json_story.get('problem_statement', '')
+        problem_statement = clean_escaped_text(
+            text=translate_to_english_if_needed(raw_problem_statement, translation_voice_provider, language)
+        )
+
     return story, problem_statement
 
 
@@ -341,8 +352,6 @@ def create_generic_story_translation(story, language, english_data, voice_provid
     try:
         print(f"Creating translation for language: {language}")
         print(f"Story other_params: {story.other_params}")
-
-        translated_data = {}
 
         existing_translation = StoryTranslation.objects.filter(
             story=story,
@@ -362,6 +371,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
 
         TRANSLATABLE_FIELDS = ['title', 'content', 'tweet', 'objective', 'impact', 'micro_improvement', 'blurb']
 
+        translated_data = {}
         for field in TRANSLATABLE_FIELDS:
             if field in english_data and english_data[field]:
                 try:
@@ -374,8 +384,8 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                     logger.info(f"Could not translate field {field}: {e}")
                     translated_data[field] = english_data[field]
 
-        action_steps = english_data.get('action_steps')
-        if action_steps:
+        if 'action_steps' in english_data:
+            action_steps = english_data['action_steps']
             if isinstance(action_steps, str) and action_steps.strip():
                 try:
                     translated_data['action_steps'] = translate_field(
@@ -587,29 +597,9 @@ def create_generic_story_translation(story, language, english_data, voice_provid
 
         translated_other_params.pop("_english_snapshot", None)
 
-        defaults = {
-            'other_params': translated_other_params,
-            'formatted_content': ''
-        }
-
-        for field in TRANSLATABLE_FIELDS:
-            if field in translated_data:
-                defaults[field] = translated_data[field]
-
-        if 'action_steps' in translated_data:
-            defaults['action_steps'] = translated_data['action_steps']
-
-        if 'location' in translated_other_params:
-            defaults['location'] = translated_other_params['location']
-
-        translation, created = StoryTranslation.objects.get_or_create(
-            story=story,
-            language=language,
-            defaults=defaults
-        )
-
-        if not created:
+        if existing_translation:
             update_fields = ['other_params']
+            translation = existing_translation
             translation.other_params = translated_other_params
 
             for field in TRANSLATABLE_FIELDS:
@@ -621,11 +611,43 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                 translation.action_steps = translated_data['action_steps']
                 update_fields.append('action_steps')
 
-            if 'location' in translated_other_params:
-                translation.location = translated_other_params['location']
+            if 'location' in translated_data:
+                translation.location = translated_other_params.get('location', translation.location)
                 update_fields.append('location')
 
             translation.save(update_fields=update_fields)
+            created = False
+        else:
+            defaults = {
+                'title': '',
+                'content': '',
+                'tweet': '',
+                'objective': '',
+                'action_steps': [],
+                'impact': '',
+                'micro_improvement': '',
+                'blurb': '',
+                'location': '',
+                'other_params': translated_other_params,
+                'formatted_content': ''
+            }
+
+            for field in TRANSLATABLE_FIELDS:
+                if field in translated_data:
+                    defaults[field] = translated_data[field]
+
+            if 'action_steps' in translated_data:
+                defaults['action_steps'] = translated_data['action_steps']
+
+            if 'location' in translated_other_params:
+                defaults['location'] = translated_other_params['location']
+
+            translation = StoryTranslation.objects.create(
+                story=story,
+                language=language,
+                **defaults
+            )
+            created = True
 
         print(f"Translation saved with other_params: {translation.other_params}")
 
