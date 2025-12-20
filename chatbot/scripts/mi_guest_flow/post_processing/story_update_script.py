@@ -203,12 +203,28 @@ def run_story_update_from_temp_bot(
     access_token,
     start_date=None,
     end_date=None,
-    max_workers=4
+    max_workers=4,
+    session_ids=None
 ):
     logger.info("Starting story update pipeline (story_temp bot)")
     print("[INFO] Starting story update pipeline (story_temp bot)")
 
-    sessions = get_sessions_from_story_flow(start_date, end_date)
+    # ------------------------------------------------
+    # MANUAL SESSION OVERRIDE
+    # ------------------------------------------------
+    if session_ids:
+        logger.info(f"Manual session override provided: {session_ids}")
+        print(f"[INFO] Manual session override provided: {session_ids}")
+
+        sessions = (
+            ChatSession.objects
+            .filter(session__in=session_ids)
+            .select_related("profile")
+        )
+
+    else:
+        sessions = get_sessions_from_story_flow(start_date, end_date)
+
     total = len(sessions)
 
     if not sessions:

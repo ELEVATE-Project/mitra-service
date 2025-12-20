@@ -258,11 +258,15 @@ def save_generic_story(
         existing_other_params = story.other_params.copy()
 
     other_params = existing_other_params
+    previous_english_snapshot = dict(existing_other_params)
 
     other_params.update({
         'flow': flow,
         'user_name': user_name,
     })
+
+    # Save previous English values for translation comparison
+    other_params["_english_snapshot"] = previous_english_snapshot
 
     # Define Story model fields that map directly
     STORY_MODEL_FIELDS = {
@@ -379,17 +383,6 @@ def create_generic_story_translation(story, language, english_data, voice_provid
         print(f"Creating translation for language: {language}")
         print(f"Story other_params: {story.other_params}")
 
-        existing_translation = StoryTranslation.objects.filter(
-            story=story,
-            language=language
-        ).first()
-
-        existing_translated_other_params = (
-            existing_translation.other_params.copy()
-            if existing_translation and existing_translation.other_params
-            else {}
-        )
-
         # Translate all English content to target language
         translated_data = {}
 
@@ -439,9 +432,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
         else:
             translated_data['action_steps'] = action_steps
 
-        # Start with a complete copy of story's other_params
-        translated_other_params = dict(existing_translated_other_params)
-
+        translated_other_params = story.other_params.copy() if story.other_params else {}
         print(f"Initial translated_other_params: {translated_other_params}")
 
         # Translate duration if it contains text
@@ -528,19 +519,20 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                 return data
 
         # Apply intelligent translation to ALL complex fields in other_params
+        previous_english_snapshot = story.other_params.get("_english_snapshot", {})
+
         for key, english_value in story.other_params.items():
 
-            old_english_value = (
-                existing_translation.other_params.get(key)
-                if existing_translation and existing_translation.other_params
-                else None
-            )
-
-            # If value did not change → keep old translation
-            if english_value == old_english_value:
+            if key == "_english_snapshot":
                 continue
 
-            # New or changed value → translate
+            previous_english_value = previous_english_snapshot.get(key)
+
+            # Skip translation if English value did not change
+            if english_value == previous_english_value:
+                continue
+
+            # New or changed → translate
             if isinstance(english_value, (dict, list)):
                 translated_other_params[key] = translate_nested_structure(english_value, key)
 
@@ -596,6 +588,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
 
         print(f"Final translated_other_params: {translated_other_params}")
 
+        translated_other_params.pop("_english_snapshot", None)
         # Create or update translation
         translation, created = StoryTranslation.objects.get_or_create(
             story=story,
