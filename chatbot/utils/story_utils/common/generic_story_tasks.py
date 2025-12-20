@@ -386,6 +386,29 @@ def create_generic_story_translation(story, language, english_data, voice_provid
         # Translate all English content to target language
         translated_data = {}
 
+        existing_translation = StoryTranslation.objects.filter(
+            story=story,
+            language=language
+        ).first()
+
+        existing_translated_params = (
+            existing_translation.other_params
+            if existing_translation and existing_translation.other_params
+            else {}
+        )
+
+        logger.info(
+            f"[TRANSLATION STATE] "
+            f"existing_translation={'YES' if existing_translation else 'NO'} | "
+            f"existing_keys={list(existing_translated_params.keys())}"
+        )
+
+        print(
+            f"[TRANSLATION STATE] "
+            f"existing_translation={'YES' if existing_translation else 'NO'} | "
+            f"existing_keys={list(existing_translated_params.keys())}"
+        )
+
         TRANSLATABLE_FIELDS = ['title', 'content', 'tweet', 'objective', 'impact', 'micro_improvement', 'blurb']
 
         for field in TRANSLATABLE_FIELDS:
@@ -520,6 +543,12 @@ def create_generic_story_translation(story, language, english_data, voice_provid
 
         # Apply intelligent translation to ALL complex fields in other_params
         previous_english_snapshot = story.other_params.get("_english_snapshot", {})
+        logger.info(
+            f"[SNAPSHOT] keys={list(previous_english_snapshot.keys())}"
+        )
+        print(
+            f"[SNAPSHOT] keys={list(previous_english_snapshot.keys())}"
+        )
 
         for key, english_value in story.other_params.items():
 
@@ -529,7 +558,23 @@ def create_generic_story_translation(story, language, english_data, voice_provid
             previous_english_value = previous_english_snapshot.get(key)
 
             # Skip translation if English value did not change
-            if english_value == previous_english_value:
+            translation_missing = key not in existing_translated_params
+
+            logger.info(
+                f"[TRANSLATION CHECK] key={key} | "
+                f"english_changed={english_value != previous_english_value} | "
+                f"translation_missing={translation_missing}"
+            )
+            print(
+                f"[TRANSLATION CHECK] key={key} | "
+                f"english_changed={english_value != previous_english_value} | "
+                f"translation_missing={translation_missing}"
+            )
+
+            if english_value == previous_english_value and not translation_missing:
+                logger.info(f"[TRANSLATION SKIPPED] key={key}")
+                print(f"[TRANSLATION SKIPPED] key={key}")
+
                 continue
 
             # New or changed → translate
@@ -538,6 +583,8 @@ def create_generic_story_translation(story, language, english_data, voice_provid
 
             elif isinstance(english_value, str) and is_translatable_text(english_value, key):
                 try:
+                    logger.info(f"[TRANSLATION RUN] key={key}")
+                    print(f"[TRANSLATION RUN] key={key}")
                     translated_other_params[key] = translate_field(
                         voice_provider=voice_provider,
                         message_body=english_value,
