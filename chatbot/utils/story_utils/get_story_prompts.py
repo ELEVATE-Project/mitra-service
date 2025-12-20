@@ -37,13 +37,13 @@ def get_creation_promt(company_bot, profile):
                 {tag_context}
                 {today_date}
                 {project_data}
-            """
+            """ if context else None
     story_prompt = f"""
                 {end_context}
                 {tag_context}
                 {today_date}
                 {project_data}
-            """
+            """ if end_context else None
     formatted_content_prompt = []
     formatted_story_prompt = []
 
@@ -52,25 +52,25 @@ def get_creation_promt(company_bot, profile):
             {
                 'text': content_prompt
             },
-        ]
+        ] if content_prompt else None
         formatted_story_prompt = [
             {
                 'text': story_prompt
             },
-        ]
+        ] if story_prompt else None
     elif company_bot.provider == LLMProvider.OPENAI:
         formatted_content_prompt = [
             {
                 'role': 'system',
                 'content': content_prompt
             },
-        ]
+        ] if content_prompt else None
         formatted_story_prompt = [
             {
                 'role': 'system',
                 'content': story_prompt
             },
-        ]
+        ] if story_prompt else None
 
     return formatted_content_prompt, formatted_story_prompt, tag_context, project_data
 

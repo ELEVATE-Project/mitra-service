@@ -67,13 +67,25 @@ async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, m
                 )
             )
 
-    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
-                SessionFlowName.Reflection, SessionFlowName.megaPTM, SessionFlowName.YLC
-    ]:
-        response_json_content, response_json_story = await asyncio.gather(func1(), func2())
+    tasks = []
+
+    if formatted_content_prompt:
+        tasks.append(func1())
     else:
-        response_json_content = await func1()
-        response_json_story = None
+        logger.info("Skipping CONTENT LLM as formatted_content_prompt is None")
+
+    if formatted_story_prompt:
+        tasks.append(func2())
+    else:
+        logger.info("Skipping STORY LLM as formatted_story_prompt is None")
+
+    results = await asyncio.gather(*tasks)
+
+    response_json_content = results[0] if formatted_content_prompt else None
+    response_json_story = results[1] if (formatted_content_prompt and formatted_story_prompt) else (
+        results[0] if (not formatted_content_prompt and formatted_story_prompt) else None
+    )
+
     logger.info(f"response_json_content: %s", response_json_content)
     logger.info(f"response_json_story: %s", response_json_story)
 
@@ -153,13 +165,25 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
                 )
             )
 
-    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
-                SessionFlowName.Reflection, SessionFlowName.megaPTM, SessionFlowName.YLC
-    ]:
-        response_json_content, response_json_story = await asyncio.gather(func1(), func2())
+    tasks = []
+
+    if formatted_content_prompt:
+        tasks.append(func1())
     else:
-        response_json_content = await func1()
-        response_json_story = None
+        logger.info("Skipping CONTENT LLM as formatted_content_prompt is None")
+
+    if formatted_story_prompt:
+        tasks.append(func2())
+    else:
+        logger.info("Skipping STORY LLM as formatted_story_prompt is None")
+
+    results = await asyncio.gather(*tasks)
+
+    response_json_content = results[0] if formatted_content_prompt else None
+    response_json_story = results[1] if (formatted_content_prompt and formatted_story_prompt) else (
+        results[0] if (not formatted_content_prompt and formatted_story_prompt) else None
+    )
+
     logger.info(f"Validation: response_json_content: %s", response_json_content)
     logger.info(f"Validation: response_json_story: %s", response_json_story)
     if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
