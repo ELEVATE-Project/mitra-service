@@ -257,8 +257,13 @@ def save_generic_story(
     if story and story.other_params:
         existing_other_params = story.other_params.copy()
 
-    other_params = existing_other_params
-    previous_english_snapshot = dict(existing_other_params)
+    if '_english_snapshot' in existing_other_params:
+        del existing_other_params['_english_snapshot']
+
+    other_params = existing_other_params.copy()
+
+    # Create snapshot of current state (without any _english_snapshot)
+    previous_english_snapshot = {k: v for k, v in existing_other_params.items() if k != '_english_snapshot'}
 
     other_params.update({
         'flow': flow,
@@ -525,7 +530,6 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                 continue
 
             previous_english_value = previous_english_snapshot.get(key)
-            existing_translation = existing_translated_params.get(key)
 
             english_changed = (english_value != previous_english_value)
             translation_missing = (key not in existing_translated_params)
@@ -554,11 +558,14 @@ def create_generic_story_translation(story, language, english_data, voice_provid
             elif isinstance(english_value, str) and is_translatable_text(english_value, key):
                 try:
                     print(f"Translating text field {key}: {english_value}")
-                    translated_other_params[key] = translate_field(
+                    # FIX: Actually translate the field instead of keeping it in English
+                    translated_value = translate_field(
                         voice_provider=voice_provider,
                         message_body=english_value,
                         target_language=language
                     )
+                    translated_other_params[key] = translated_value
+                    print(f"Translated to: {translated_value}")
                 except Exception as e:
                     logger.error(f"Translation failed for {key}: {e}")
                     translated_other_params[key] = english_value
