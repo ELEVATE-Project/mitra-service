@@ -566,8 +566,13 @@ class CommonResponseHandler(BaseResponseHandler):
             print(f"DEBUG: Adding reason to other_params: {reason}")
 
         stage = state_machine.name if state_machine else None
+        if not response and not state_machine:
+            message_to_save = extra_content.get("query", 'understood.')
+        else:
+            message_to_save = response
+
         self.save_message(
-            session_id=session_id, profile_id=profile_id, message=response, chunks=chunks,
+            session_id=session_id, profile_id=profile_id, message=message_to_save, chunks=chunks,
             status=ChatStatus.IN_PROGRESS, translated_message=translated_message, stage=stage,
             other_params=other_params if other_params else None
         )
