@@ -2,6 +2,7 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from chatbot.services.storage import StorageFactory
 from chatbot.services.storage.base_storage_handler import UploadConfig
+import time
 
 
 @api_view(["POST"])
@@ -30,9 +31,13 @@ def get_presigned_url(request):
     if not file_name or not file_type:
         return Response({"error": "Missing fileName or fileType"}, status=400)
 
+    # Add timestamp to filename for uniqueness
+    timestamp_ms = int(time.time() * 1000)
+    file_name_with_timestamp = f"{timestamp_ms}-{file_name}"
+
     # Create upload configuration
     upload_config = UploadConfig(
-        file_name=file_name,
+        file_name=file_name_with_timestamp,
         file_type=file_type,
         folder_structure=folder_structure or '',
         entity_id=story_id if story_id else None,
