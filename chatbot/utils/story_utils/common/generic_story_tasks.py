@@ -251,10 +251,18 @@ def save_generic_story(
             fallback_location = ", ".join(location_parts)
 
     # Process other fields that don't need translation
-    other_params = {
+    existing_other_params = {}
+
+    story = Story.objects.filter(session=session).first()
+    if story and story.other_params:
+        existing_other_params = story.other_params.copy()
+
+    other_params = existing_other_params
+
+    other_params.update({
         'flow': flow,
         'user_name': user_name,
-    }
+    })
 
     # Define Story model fields that map directly
     STORY_MODEL_FIELDS = {
@@ -371,6 +379,17 @@ def create_generic_story_translation(story, language, english_data, voice_provid
         print(f"Creating translation for language: {language}")
         print(f"Story other_params: {story.other_params}")
 
+        existing_translation = StoryTranslation.objects.filter(
+            story=story,
+            language=language
+        ).first()
+
+        existing_translated_other_params = (
+            existing_translation.other_params.copy()
+            if existing_translation and existing_translation.other_params
+            else {}
+        )
+
         # Translate all English content to target language
         translated_data = {}
 
@@ -421,7 +440,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
             translated_data['action_steps'] = action_steps
 
         # Start with a complete copy of story's other_params
-        translated_other_params = story.other_params.copy() if story.other_params else {}
+        translated_other_params = dict(existing_translated_other_params)
 
         print(f"Initial translated_other_params: {translated_other_params}")
 
@@ -509,25 +528,33 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                 return data
 
         # Apply intelligent translation to ALL complex fields in other_params
-        for field_name, field_value in list(translated_other_params.items()):
-            if isinstance(field_value, (dict, list)):
+        for key, english_value in story.other_params.items():
+
+            old_english_value = (
+                existing_translation.other_params.get(key)
+                if existing_translation and existing_translation.other_params
+                else None
+            )
+
+            # If value did not change → keep old translation
+            if english_value == old_english_value:
+                continue
+
+            # New or changed value → translate
+            if isinstance(english_value, (dict, list)):
+                translated_other_params[key] = translate_nested_structure(english_value, key)
+
+            elif isinstance(english_value, str) and is_translatable_text(english_value, key):
                 try:
-                    original_value = field_value
-                    translated_other_params[field_name] = translate_nested_structure(original_value, field_name)
-                    print(f"Processed nested field: {field_name}")
-                except Exception as e:
-                    logger.info(f"Could not process nested field {field_name}: {e}")
-            elif isinstance(field_value, str) and is_translatable_text(field_value, field_name):
-                # Handle top-level string fields that need translation
-                try:
-                    translated_other_params[field_name] = translate_field(
+                    translated_other_params[key] = translate_field(
                         voice_provider=voice_provider,
-                        message_body=field_value,
+                        message_body=english_value,
                         target_language=language
                     )
-                    print(f"Auto-translated top-level field {field_name}: {field_value[:50]}...")
-                except Exception as e:
-                    logger.info(f"Could not translate top-level field {field_name}: {e}")
+                except Exception:
+                    translated_other_params[key] = english_value
+            else:
+                translated_other_params[key] = english_value
 
         # Handle transliteration for specific fields (names, places) - these still need explicit handling
         if company_bot:
