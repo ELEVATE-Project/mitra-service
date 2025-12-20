@@ -549,28 +549,54 @@ def create_generic_story_translation(story, language, english_data, voice_provid
         for key in fields_to_translate:
             english_value = story.other_params[key]
 
-            print(f"[TRANSLATING] key={key}")
+            print(f"[TRANSLATING] key={key}, value={english_value}, type={type(english_value)}")
 
+            # Check if it's an enum or Python object (keep as-is)
             if hasattr(english_value, '__class__') and hasattr(english_value.__class__, '__name__'):
+                print(f"[SKIP] {key} is a Python object/enum")
                 translated_other_params[key] = english_value
+            # Handle nested structures
             elif isinstance(english_value, (dict, list)):
+                print(f"[NESTED] Translating nested structure for {key}")
                 translated_other_params[key] = translate_nested_structure(english_value, key)
-            elif isinstance(english_value, str) and is_translatable_text(english_value, key):
-                try:
-                    print(f"Translating text field {key}: {english_value}")
-                    # FIX: Actually translate the field instead of keeping it in English
-                    translated_value = translate_field(
-                        voice_provider=voice_provider,
-                        message_body=english_value,
-                        target_language=language
-                    )
-                    translated_other_params[key] = translated_value
-                    print(f"Translated to: {translated_value}")
-                except Exception as e:
-                    logger.error(f"Translation failed for {key}: {e}")
+            # Handle string fields
+            elif isinstance(english_value, str) and english_value.strip():
+                # Check if it's translatable
+                if is_translatable_text(english_value, key):
+                    try:
+                        print(f"[API CALL] Calling translate_field for {key}: '{english_value}'")
+                        translated_value = translate_field(
+                            voice_provider=voice_provider,
+                            message_body=english_value,
+                            target_language=language
+                        )
+                        print(f"[SUCCESS] Translated {key}: '{english_value}' -> '{translated_value}'")
+                        translated_other_params[key] = translated_value
+                    except Exception as e:
+                        logger.error(f"[ERROR] Translation failed for {key}: {e}", exc_info=True)
+                        print(f"[ERROR] Translation failed for {key}: {e}")
+                        translated_other_params[key] = english_value
+                else:
+                    print(f"[SKIP] {key} failed is_translatable_text check")
                     translated_other_params[key] = english_value
             else:
+                print(f"[KEEP] {key} is not a translatable type")
                 translated_other_params[key] = english_value
+
+        # Handle duration separately if needed
+        if 'duration' in story.other_params and 'duration' not in fields_to_translate:
+            if 'duration' not in existing_translated_params:
+                duration_value = story.other_params.get('duration', '')
+                if duration_value and ' ' in str(duration_value):
+                    try:
+                        print(f"[DURATION] Translating duration: {duration_value}")
+                        translated_other_params['duration'] = translate_field(
+                            voice_provider=voice_provider,
+                            message_body=str(duration_value),
+                            target_language=language
+                        )
+                    except Exception as e:
+                        logger.info(f"Could not translate duration: {e}")
 
         if company_bot:
             try:
