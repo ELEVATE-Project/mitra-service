@@ -372,33 +372,52 @@ def create_generic_story_translation(story, language, english_data, voice_provid
         TRANSLATABLE_FIELDS = ['title', 'content', 'tweet', 'objective', 'impact', 'micro_improvement', 'blurb']
 
         translated_data = {}
+
         for field in TRANSLATABLE_FIELDS:
+            should_translate = False
+            field_value = None
+
             if field in english_data and english_data[field]:
+                should_translate = True
+                field_value = english_data[field]
+            elif existing_translation and not getattr(existing_translation, field, None):
+                story_value = getattr(story, field, None)
+                if story_value:
+                    should_translate = True
+                    field_value = story_value
+
+            if should_translate and field_value:
                 try:
                     translated_data[field] = translate_field(
                         voice_provider=voice_provider,
-                        message_body=english_data[field],
+                        message_body=field_value,
                         target_language=language
                     )
                 except Exception as e:
                     logger.info(f"Could not translate field {field}: {e}")
-                    translated_data[field] = english_data[field]
+                    translated_data[field] = field_value
 
+        action_steps_to_translate = None
         if 'action_steps' in english_data:
-            action_steps = english_data['action_steps']
-            if isinstance(action_steps, str) and action_steps.strip():
+            action_steps_to_translate = english_data['action_steps']
+        elif existing_translation and not existing_translation.action_steps:
+            if story.action_steps:
+                action_steps_to_translate = story.action_steps
+
+        if action_steps_to_translate:
+            if isinstance(action_steps_to_translate, str) and action_steps_to_translate.strip():
                 try:
                     translated_data['action_steps'] = translate_field(
                         voice_provider=voice_provider,
-                        message_body=action_steps,
+                        message_body=action_steps_to_translate,
                         target_language=language
                     )
                 except Exception as e:
                     logger.info(f"Could not translate action_steps: {e}")
-                    translated_data['action_steps'] = action_steps
-            elif isinstance(action_steps, list):
+                    translated_data['action_steps'] = action_steps_to_translate
+            elif isinstance(action_steps_to_translate, list):
                 translated_action_steps = []
-                for action_step in action_steps:
+                for action_step in action_steps_to_translate:
                     if action_step:
                         try:
                             translated_step = translate_field(
@@ -611,8 +630,11 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                 translation.action_steps = translated_data['action_steps']
                 update_fields.append('action_steps')
 
-            if 'location' in translated_data:
-                translation.location = translated_other_params.get('location', translation.location)
+            if story.location and not translation.location:
+                if 'location' in translated_other_params:
+                    translation.location = translated_other_params['location']
+                else:
+                    translation.location = story.location
                 update_fields.append('location')
 
             translation.save(update_fields=update_fields)
