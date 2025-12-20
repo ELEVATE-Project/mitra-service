@@ -551,12 +551,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
 
             print(f"[TRANSLATING] key={key}, value={english_value}, type={type(english_value)}")
 
-            # Check if it's an enum or Python object (keep as-is)
-            if hasattr(english_value, '__class__') and hasattr(english_value.__class__, '__name__'):
-                print(f"[SKIP] {key} is a Python object/enum")
-                translated_other_params[key] = english_value
-            # Handle nested structures
-            elif isinstance(english_value, (dict, list)):
+            if isinstance(english_value, (dict, list)):
                 print(f"[NESTED] Translating nested structure for {key}")
                 translated_other_params[key] = translate_nested_structure(english_value, key)
             # Handle string fields
