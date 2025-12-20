@@ -445,9 +445,6 @@ def create_generic_story_translation(story, language, english_data, voice_provid
 
             value_str = str(value).strip()
 
-            if '.' in value_str and any(part[0].isupper() for part in value_str.split('.')):
-                return False
-
             technical_fields = ['flow', 'id', 'uuid', 'status', 'type', 'mode', 'version']
             if key.lower() in technical_fields:
                 return False
