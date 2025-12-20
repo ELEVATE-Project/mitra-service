@@ -108,7 +108,7 @@ def get_validation_prompt(
                {tag_context}
                 {today_date}
                {project_data}
-           """
+           """ if validate_bot.end_context else None
 
     validate_context_data = {
         "story_json_output": response_json_content,
@@ -127,32 +127,32 @@ def get_validation_prompt(
                {tag_context}
                 {today_date}
                {project_data}
-           """
+           """ if validate_bot.context else None
 
     if validate_bot.provider == LLMProvider.BEDROCK_CONVERSE:
         validate_content_prompt = [
             {
                 'text': validate_content_prompt
             },
-        ]
+        ] if validate_content_prompt else None
         validate_story_prompt = [
             {
                 'text': validate_story_prompt
             },
-        ]
+        ] if validate_story_prompt else None
     elif validate_bot.provider == LLMProvider.OPENAI:
         validate_content_prompt = [
             {
                 'role': 'system',
                 'content': validate_content_prompt
             },
-        ]
+        ] if validate_content_prompt else None
         validate_story_prompt = [
             {
                 'role': 'system',
                 'content': validate_story_prompt
             },
-        ]
+        ] if validate_story_prompt else None
 
     return validate_content_prompt, validate_story_prompt
 
