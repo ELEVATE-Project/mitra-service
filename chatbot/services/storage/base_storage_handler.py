@@ -16,6 +16,7 @@ class UploadConfig:
     acl: str = 'public-read'
     expires_in: int = 3600
     metadata: Optional[Dict[str, str]] = None
+    preserve_filename: bool = False
 
 
 @dataclass
@@ -111,19 +112,30 @@ class BaseStorageHandler(ABC):
 
     def _generate_object_key(self, upload_config: UploadConfig) -> str:
         """
-        Generate a unique object key for the file with millisecond timestamp
+        Generate object key for the file.
+        
+        If preserve_filename is True, uses the exact filename without timestamp.
+        This is useful for files that need deterministic paths where the same file should be overwritten on re-upload.
+        
+        Otherwise, adds millisecond timestamp for uniqueness (default behavior).
         
         Args:
             upload_config: Upload configuration
             
         Returns:
-            Generated object key with format: folder/entity_id/timestamp_millisecond-filename
+            Generated object key with format:
+            - If preserve_filename=True: folder/entity_id/filename
+            - If preserve_filename=False: folder/entity_id/timestamp_millisecond-filename
         """
-        import time
-        
         folder = upload_config.folder_structure or ''
         entity_part = f"{upload_config.entity_id}/" if upload_config.entity_id else ''
-        timestamp_ms = int(time.time() * 1000)  # Millisecond timestamp
         
-        return f"{folder}{entity_part}{timestamp_ms}-{upload_config.file_name}"
+        if upload_config.preserve_filename:
+            # Use exact filename for deterministic paths (e.g., translations)
+            return f"{folder}{entity_part}{upload_config.file_name}"
+        else:
+            # Add timestamp for uniqueness (default behavior)
+            import time
+            timestamp_ms = int(time.time() * 1000)  # Millisecond timestamp
+            return f"{folder}{entity_part}{timestamp_ms}-{upload_config.file_name}"
 
