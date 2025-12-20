@@ -473,7 +473,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                 for key, value in data.items():
                     current_path = f"{field_path}.{key}" if field_path else key
 
-                    if hasattr(value, '__class__') and hasattr(value.__class__, '__name__'):
+                    if not isinstance(value, (str, dict, list)):
                         translated_dict[key] = value
                     elif isinstance(value, str) and is_translatable_text(value, key):
                         try:
