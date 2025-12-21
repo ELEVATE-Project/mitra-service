@@ -142,8 +142,7 @@ def export_single_language_to_cloud(language: str) -> UploadResult:
             file_name='translations.json',
             file_type='application/json',
             folder_structure=f'translations/{language}/',
-            acl='public-read',
-            preserve_filename=True  # Keep same filename for deterministic URLs
+            acl='public-read'
         )
         
         # Upload to cloud storage
