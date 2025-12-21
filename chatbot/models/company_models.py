@@ -421,6 +421,114 @@ class ImageConfiguration(models.Model):
         ]
 
 
+class Flow(models.Model):
+    """
+    Flow model representing a conversation flow configuration.
+    Links to CompanyBot, can have associated State Machines, Voice configurations, and Image settings.
+    """
+    flow_name = models.CharField(
+        max_length=255,
+        help_text="Name of the flow."
+    )
+    flow_route = models.CharField(
+        max_length=255,
+        help_text="Route/path for accessing this flow.",
+        unique=True
+    )
+    languages = models.JSONField(
+        default=["en", "hi", "kn", "te"],
+        help_text="List of supported language codes (e.g., ['en', 'hi', 'kn'])."
+    )
+    hidden = models.BooleanField(
+        default=False,
+        help_text="If True, this flow will be hidden from public listing."
+    )
+    active = models.BooleanField(
+        default=True,
+        help_text="If False, this flow will be disabled and not accessible."
+    )
+    bot = models.ForeignKey(
+        CompanyBot,
+        on_delete=models.CASCADE,
+        related_name='flows',
+        help_text="The main bot associated with this flow."
+    )
+    story_bot = models.ForeignKey(
+        CompanyBot,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='story_flows',
+        help_text="Optional secondary bot for story-related functionality."
+    )
+    story_validation_bot = models.ForeignKey(
+        CompanyBot,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='story_validation_flows',
+        help_text="Optional secondary bot for story-related functionality."
+    )
+    websocket_url = models.CharField(
+        max_length=500,
+        help_text="WebSocket path for real-time communication (e.g., ws/common). Do not include protocol or host.",
+        default='ws/common/'
+    )
+    parent_flow = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='child_flows',
+        help_text="Parent flow if this is a sub-flow."
+    )
+    user_type = models.CharField(
+        max_length=20,
+        choices=UserTypeChoices.choices,
+        default=UserTypeChoices.ALL,
+        help_text="User types allowed to access this flow (guest, auth, or all)."
+    )
+    image_config = models.ForeignKey(
+        ImageConfiguration,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='flows',
+        help_text="Image configuration settings for this flow."
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
+
+    def __str__(self):
+        return f"{self.flow_name} ({self.flow_route})"
+
+    class Meta:
+        verbose_name = "Flow"
+        verbose_name_plural = "Flows"
+        indexes = [
+            models.Index(fields=['flow_route']),
+            models.Index(fields=['bot']),
+            models.Index(fields=['active']),
+            models.Index(fields=['hidden']),
+        ]
+
+    def clean(self):
+        """Validate flow configuration."""
+        super().clean()
+        
+        # Validate that languages is a list
+        if not isinstance(self.languages, list):
+            raise ValidationError({
+                'languages': "Languages must be a list of language codes."
+            })
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
 class PDFTemplates(models.Model):
     """
     Model for storing PDF templates used in flows.
@@ -445,6 +553,14 @@ class PDFTemplates(models.Model):
         blank=True,
         help_text="JSON object containing constants/variables used in the template."
     )
+    flow = models.ForeignKey(
+        Flow,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='pdf_templates',
+        help_text="Flow associated with this template."
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -461,111 +577,3 @@ class PDFTemplates(models.Model):
             models.Index(fields=['user_type']),
         ]
 
-
-class Flow(models.Model):
-    """
-    Flow model representing a conversation flow configuration.
-    Links to CompanyBot, can have associated State Machines, Voice configurations, and Image settings.
-    """
-    flow_name = models.CharField(
-        max_length=255,
-        help_text="Name of the flow."
-    )
-    flow_route = models.CharField(
-        max_length=255,
-        help_text="Route/path for accessing this flow."
-    )
-    languages = models.JSONField(
-        default=list,
-        help_text="List of supported language codes (e.g., ['en', 'hi', 'kn'])."
-    )
-    hidden = models.BooleanField(
-        default=False,
-        help_text="If True, this flow will be hidden from public listing."
-    )
-    active = models.BooleanField(
-        default=True,
-        help_text="If False, this flow will be disabled and not accessible."
-    )
-    bot_id = models.ForeignKey(
-        CompanyBot,
-        on_delete=models.CASCADE,
-        related_name='flows',
-        help_text="The main bot associated with this flow."
-    )
-    story_bot_id = models.ForeignKey(
-        CompanyBot,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='story_flows',
-        help_text="Optional secondary bot for story-related functionality."
-    )
-    websocket_url = models.CharField(
-        max_length=500,
-        null=True,
-        blank=True,
-        help_text="WebSocket path for real-time communication (e.g., ws/common). Do not include protocol or host."
-    )
-    parent_flow_id = models.ForeignKey(
-        'self',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='child_flows',
-        help_text="Parent flow if this is a sub-flow."
-    )
-    user_type = models.CharField(
-        max_length=20,
-        choices=UserTypeChoices.choices,
-        default=UserTypeChoices.ALL,
-        help_text="User types allowed to access this flow (guest, auth, or all)."
-    )
-    image_config_id = models.ForeignKey(
-        ImageConfiguration,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='flows',
-        help_text="Image configuration settings for this flow."
-    )
-    template_id = models.ForeignKey(
-        PDFTemplates,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='flows',
-        help_text="PDF template for generating documents in this flow."
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    history = HistoricalRecords()
-
-    def __str__(self):
-        return f"{self.flow_name} ({self.flow_route})"
-
-    class Meta:
-        verbose_name = "Flow"
-        verbose_name_plural = "Flows"
-        indexes = [
-            models.Index(fields=['flow_route']),
-            models.Index(fields=['bot_id']),
-            models.Index(fields=['active']),
-            models.Index(fields=['hidden']),
-        ]
-        unique_together = [['flow_route', 'bot_id']]
-
-    def clean(self):
-        """Validate flow configuration."""
-        super().clean()
-        
-        # Validate that languages is a list
-        if not isinstance(self.languages, list):
-            raise ValidationError({
-                'languages': "Languages must be a list of language codes."
-            })
-
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        super().save(*args, **kwargs)

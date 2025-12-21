@@ -25,7 +25,6 @@ def end_story(request):
     try:
         profile_id = request.data['profile_id']
         session = request.data['session']
-        model = request.data.get('model', None)
         access_token = request.data.get('access_token', None)
         flow = request.data.get('flow')
         language = request.data.get('language', 'en')

@@ -46,6 +46,7 @@ urlpatterns = [
     path('api/logout/', api_views.logout, name='logout'),
 
     path('api/end-story/', end_story, name='end-story'),
+    path('api/end-story/v2/', end_story, name='end-story'),
 
     path('api/text_to_speech/', text_speech_view, name='text_speech_view'),
     path('api/asr/', speech_text, name='speech_text'),

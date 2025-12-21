@@ -1,8 +1,11 @@
 import traceback
 from pprint import pprint
 
+from rest_framework.exceptions import NotFound
+
 from chatbot.models import (Profile, CompanyChat, CompanyBot,
                             ChatSession, ChatStatus, Voice, VoiceType, SessionFlowName, BotVernacular, StoryTranslation)
+from chatbot.models.company_models import Flow
 from chatbot.utils.chat_utils import get_guided_chat
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
 from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
@@ -30,36 +33,20 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         profile = Profile.objects.filter(id=profile_id).first()
         company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
 
-        company_bot, validate_bot = get_story_company_bot(profile=profile, flow=flow)
+        company_bot, validate_bot = get_story_company_bot(flow=flow)
 
-        voice_provider = Voice.objects.filter(
-            company_bot=company_bot, type=VoiceType.TextToText, language=language
-        ).first()
+        voice_provider = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText, language=language).first()
 
         chat_session = ChatSession.objects.get(session=session)
 
-        formatted_content_prompt, formatted_story_prompt, tag_context, project_data = get_creation_promt(
-            company_bot=company_bot, profile=profile
-        )
-
-        pprint({
-            "formatted_content_prompt": formatted_content_prompt,
-            "formatted_story_prompt": formatted_story_prompt,
-            "tag_context": tag_context,
-            "project_data": project_data,
-        })
+        formatted_content_prompt, formatted_story_prompt, tag_context, project_data = get_creation_promt(company_bot=company_bot, profile=profile)
 
         intro_to_pass = None
 
-        if flow in [SessionFlowName.GuestMiStory, SessionFlowName.GuestDiscussion]:
-            route_to_use = None
-            if flow == SessionFlowName.GuestMiStory:
-                route_to_use = '/guided_guest'
-            elif flow == SessionFlowName.GuestDiscussion:
-                route_to_use = '/shikshalokam_chaupal'
-            if route_to_use:
-                flow_company_bot = CompanyBot.objects.get(company=profile.company, route=route_to_use)
-                bot_vernacular = BotVernacular.objects.filter(company_bot=flow_company_bot).first()
+        try:
+            session_company_bot = chat_session.company_bot
+            if session_company_bot:
+                bot_vernacular = BotVernacular.objects.filter(company_bot=session_company_bot).first()
                 if bot_vernacular:
                     if access_token:
                         intro_to_pass = bot_vernacular.introductory_message
@@ -71,25 +58,11 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
                                 intro_to_pass = f"{words[0]} {profile.first_name}"
                     else:
                         intro_to_pass = bot_vernacular.alt_introductory_message
-        # Handle intro for new flows (common flow)
-        else:
-            try:
-                session_company_bot = chat_session.company_bot
-                if session_company_bot:
-                    bot_vernacular = BotVernacular.objects.filter(company_bot=session_company_bot).first()
-                    if bot_vernacular:
-                        if access_token:
-                            intro_to_pass = bot_vernacular.introductory_message
-                            if profile and profile.first_name and intro_to_pass:
-                                words = intro_to_pass.split(" ", 1)
-                                if len(words) > 1:
-                                    intro_to_pass = f"{words[0]} {profile.first_name} {words[1]}"
-                                else:
-                                    intro_to_pass = f"{words[0]} {profile.first_name}"
-                        else:
-                            intro_to_pass = bot_vernacular.alt_introductory_message
-            except Exception as e:
-                logger.warning(f"Could not get intro for new flow {flow}: {e}")
+            else:
+                raise ValueError("No bot found in the chat session")
+        except Exception as e:
+            traceback.print_exc()
+            logger.warning(f"Could not get intro for new flow {flow}: {e}")
 
         messages = get_guided_chat(
             company_bot=company_bot, company_chats=company_chats, intro=intro_to_pass
@@ -100,8 +73,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         response_json_content, response_json_story = asyncio.run(
             generate_story_llm(
                 formatted_content_prompt=formatted_content_prompt, formatted_story_prompt=formatted_story_prompt,
-                messages=messages, tool_content=tool_content, tool_story=tool_story, company_bot=company_bot,
-                flow=flow
+                messages=messages, tool_content=tool_content, tool_story=tool_story, company_bot=company_bot
             )
         )
 
@@ -117,9 +89,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         tool_content, tool_story = get_tool_values(company_bot=validate_bot)
 
         if company_bot.provider != validate_bot.provider:
-            messages = get_guided_chat(
-                company_bot=validate_bot, company_chats=company_chats, intro=intro_to_pass
-            )
+            messages = get_guided_chat(company_bot=validate_bot, company_chats=company_chats, intro=intro_to_pass)
 
         response_json_story, combined_reason = asyncio.run(
             validate_story_llm(
@@ -129,34 +99,13 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
             )
         )
 
-        logger.info(f"VALIDATION STORY response_json_story: %s", response_json_story)
+        logger.info("VALIDATION STORY response_json_story: {story}".format(story=response_json_story))
 
-        # Save story based on flow type
-        if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
-                    SessionFlowName.Reflection]:
-            story, problem_statement = save_story(
-                response_json_story=response_json_story, language=language, voice_provider=voice_provider,
-                profile=profile, session=session, combined_reason=combined_reason, flow=flow,
-                project_id=chat_session.project_id, company_bot=company_bot
-            )
-        elif flow == SessionFlowName.megaPTM:
-            story, problem_statement = save_ptm_story(
-                response_json_story=response_json_story, language=language, voice_provider=voice_provider,
-                profile=profile, session=session, combined_reason=combined_reason, flow=flow,
-                company_bot=company_bot
-            )
-        elif flow == SessionFlowName.GuestDiscussion:
-            story, problem_statement = save_chaupal_report(
-                response_json_story=response_json_story, language=language, voice_provider=voice_provider,
-                profile=profile, session=session, combined_reason=combined_reason, flow=flow,
-                messages=messages, company_bot=company_bot
-            )
-        else:
-            story, problem_statement = save_generic_story(
-                response_json_story=response_json_story, language=language, voice_provider=voice_provider,
-                profile=profile, session=session, combined_reason=combined_reason, flow=flow,
-                project_id=chat_session.project_id, company_bot=company_bot
-            )
+        story, problem_statement = save_generic_story(
+            response_json_story=response_json_story, language=language, voice_provider=voice_provider,
+            profile=profile, session=session, combined_reason=combined_reason, flow=flow,
+             company_bot=company_bot
+        )
 
         if story:
             formatted_content = get_formatted_story(story)
@@ -187,7 +136,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         save_shikshalokam_story(
             story=story, profile=profile,
             problem_statement=problem_statement, chat_history=chat_history, access_token=access_token,
-            project_id=None, session=session, conversation=conversation, flow=flow
+            project_id=None, session=session, conversation=conversation, flow=flow, language=language
         )
 
         story_id = story.id if story and story.id else ""
@@ -199,7 +148,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         traceback.print_exc()
         if not company_bot:
             profile = Profile.objects.filter(id=profile_id).first()
-            company_bot, validate_bot = get_story_company_bot(profile=profile, flow=flow)
+            company_bot, validate_bot = get_story_company_bot(flow=flow)
 
         bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
         error_message = bot_vernacular.error_message if bot_vernacular and bot_vernacular.error_message \
@@ -211,30 +160,18 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         return "", "", error_message
 
 
-def get_story_company_bot(profile, flow):
-    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.Reflection, SessionFlowName.SsoFlow]:
-        company_bot = CompanyBot.objects.get(route='/story')
-        validate_bot = CompanyBot.objects.get(route='/story_validation')
-    elif flow in [SessionFlowName.GuestMiStory]:
-        company_bot = CompanyBot.objects.get(route='/guest-story')
-        validate_bot = CompanyBot.objects.get(route='/guest-story_validation')
-    elif flow in [SessionFlowName.megaPTM]:
-        company_bot = CompanyBot.objects.get(route='/ptm-story')
-        validate_bot = CompanyBot.objects.get(route='/ptm-story_validation')
-    elif flow == SessionFlowName.GuestDiscussion:
-        company_bot = CompanyBot.objects.get(route='/chaupal-story')
-        validate_bot = CompanyBot.objects.get(route='/chaupal-_validation')
-    else:
-        flow_name = flow.value if hasattr(flow, 'value') else str(flow)
-        story_route = f'/{flow_name}-story'
-        validation_route = f'/{flow_name}-story_validation'
+def get_story_company_bot(flow):
+    try:
+        company_flow = Flow.objects.get(flow_route=flow)
 
-        try:
-            company_bot = CompanyBot.objects.get(route=story_route)
-            validate_bot = CompanyBot.objects.get(route=validation_route)
-        except CompanyBot.DoesNotExist:
-            logger.error(f"CompanyBot not found for routes: {story_route}, {validation_route}")
-            company_bot = CompanyBot.objects.get(route='/story')
-            validate_bot = CompanyBot.objects.get(route='/story_validation')
+        company_story_bot = company_flow.story_bot
+        company_story_validation_bot = company_flow.story_validation_bot
 
-    return company_bot, validate_bot
+        if not company_story_bot or not company_story_validation_bot:
+            raise NotFound(detail=f"Story bot not configured for the flow: {flow}")
+
+        return company_story_bot, company_story_validation_bot
+
+    except Flow.DoesNotExist:
+        logger.error(f"Flow not found for route: {flow}")
+        raise NotFound(detail=f"Flow not found with route: {flow}")

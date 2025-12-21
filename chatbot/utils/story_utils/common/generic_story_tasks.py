@@ -125,10 +125,7 @@ def translate_nested_to_english(data, voice_provider, transliteration_voice_prov
         return data
 
 
-def save_generic_story(
-        response_json_story, language, voice_provider, profile, session, combined_reason, flow=None, project_id=None,
-        company_bot=None
-):
+def save_generic_story(response_json_story, language, voice_provider, profile, session, combined_reason, flow=None, company_bot=None):
     """
     Generic save story function that saves English content to Story model
     and creates translations for other languages.

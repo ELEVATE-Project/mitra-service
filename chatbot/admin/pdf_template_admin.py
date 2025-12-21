@@ -8,10 +8,11 @@ from chatbot.models import PDFTemplates
 class PDFTemplatesAdmin(SimpleHistoryAdmin):
     """Admin interface for PDFTemplates model."""
     list_display = (
-        'template_name', 'user_type', 'created_at', 'updated_at'
+        'template_name', 'user_type', 'created_at', 'updated_at', 'flow'
     )
     list_filter = (
         'user_type',
+        'flow',
         CustomAdvanceDateFilter
     )
     search_fields = ('template_name',)
@@ -20,7 +21,7 @@ class PDFTemplatesAdmin(SimpleHistoryAdmin):
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('template_name', 'user_type')
+            'fields': ('template_name', 'user_type', 'flow')
         }),
         ('Template Content', {
             'fields': ('template', 'constants_json'),

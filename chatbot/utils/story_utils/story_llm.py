@@ -9,14 +9,13 @@ import logging
 logger = logging.getLogger('django')
 
 
-async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, messages, tool_content, tool_story,
-                             company_bot, flow):
-    async def func1():
+async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, messages, tool_content, tool_story, company_bot):
+    async def func1(prompt):
         if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
             return await asyncio.to_thread(
                 functools.partial(
                     handle_bedrock_model,
-                    system_prompt=formatted_content_prompt,
+                    system_prompt=prompt,
                     messages=messages,
                     tools=tool_content,
                     temperature=company_bot.bot_temperature,
@@ -30,7 +29,7 @@ async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, m
             return await asyncio.to_thread(
                 functools.partial(
                     handle_openai_model,
-                    system_prompt=formatted_content_prompt,
+                    system_prompt=prompt,
                     messages=messages,
                     temperature=company_bot.bot_temperature,
                     max_token=company_bot.max_token,
@@ -39,41 +38,8 @@ async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, m
                 )
             )
 
-    async def func2():
-        if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
-            return await asyncio.to_thread(
-                functools.partial(
-                    handle_bedrock_model,
-                    system_prompt=formatted_story_prompt,
-                    messages=messages,
-                    tools=tool_story,
-                    temperature=company_bot.bot_temperature,
-                    max_token=company_bot.max_token,
-                    top_p=company_bot.filter_score,
-                    model_name=company_bot.llm_model,
-                    company_bot=company_bot
-                )
-            )
-        elif company_bot.provider == LLMProvider.OPENAI:
-            return await asyncio.to_thread(
-                functools.partial(
-                    handle_openai_model,
-                    system_prompt=formatted_story_prompt,
-                    messages=messages,
-                    temperature=company_bot.bot_temperature,
-                    max_token=company_bot.max_token,
-                    top_p=company_bot.filter_score,
-                    model_name=company_bot.llm_model
-                )
-            )
+    response_json_content, response_json_story = await asyncio.gather(func1(formatted_content_prompt), func1(formatted_story_prompt))
 
-    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
-                SessionFlowName.Reflection, SessionFlowName.megaPTM, SessionFlowName.YLC
-    ]:
-        response_json_content, response_json_story = await asyncio.gather(func1(), func2())
-    else:
-        response_json_content = await func1()
-        response_json_story = None
     logger.info(f"response_json_content: %s", response_json_content)
     logger.info(f"response_json_story: %s", response_json_story)
 
@@ -84,9 +50,6 @@ async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, m
                 if extracted_data and isinstance(extracted_data, dict):
                     response.clear()
                     response.update(extracted_data)
-
-    elif company_bot.provider == LLMProvider.OPENAI:
-        pass
 
     logger.info(f"Final response_json_content: %s", response_json_content)
     logger.info(f"Final response_json_story: %s", response_json_story)
@@ -170,8 +133,6 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
                     response.clear()
                     response.update(extracted_data)
 
-    elif company_bot.provider == LLMProvider.OPENAI:
-        pass
     reason_content=""
     reason_content = response_json_content.get('reason')
     response_json_content = response_json_content.get('final_answer')

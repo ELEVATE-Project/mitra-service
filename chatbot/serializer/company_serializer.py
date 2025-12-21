@@ -74,7 +74,7 @@ class ChildFlowSerializer(serializers.ModelSerializer):
 
 class FlowConnectionInfoSerializer(serializers.ModelSerializer):
     """Serializer for Flow connection information."""
-    bot_route = serializers.CharField(source='bot_id.route', read_only=True)
+    bot_route = serializers.CharField(source='bot.route', read_only=True)
     isParentFlow = serializers.SerializerMethodField()
     children_flows = serializers.SerializerMethodField()
     image_config = serializers.SerializerMethodField()
@@ -96,6 +96,6 @@ class FlowConnectionInfoSerializer(serializers.ModelSerializer):
     
     def get_image_config(self, obj):
         """Get image configuration for this flow."""
-        if obj.image_config_id:
-            return ImageConfigurationSerializer(obj.image_config_id).data
+        if obj.image_config:
+            return ImageConfigurationSerializer(obj.image_config).data
         return None

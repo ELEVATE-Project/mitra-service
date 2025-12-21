@@ -401,28 +401,28 @@ class ImageConfigurationAdmin(admin.ModelAdmin):
 class FlowAdmin(SimpleHistoryAdmin):
     """Admin interface for Flow model."""
     list_display = (
-        'flow_name', 'flow_route', 'bot_id', 'active', 'hidden', 
+        'flow_name', 'flow_route', 'bot', 'active', 'hidden', 
         'user_type', 'created_at'
     )
     list_filter = (
         'active', 'hidden', 'user_type',
-        'bot_id__company', CustomAdvanceDateFilter
+        'bot__company', CustomAdvanceDateFilter
     )
-    search_fields = ('flow_name', 'flow_route', 'bot_id__name')
+    search_fields = ('flow_name', 'flow_route', 'bot__name')
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
-    raw_id_fields = ('bot_id', 'story_bot_id', 'parent_flow_id', 'image_config_id', 'template_id')
+    raw_id_fields = ('bot', 'story_bot', 'parent_flow', 'image_config')
     
     fieldsets = (
         ('Basic Information', {
             'fields': ('flow_name', 'flow_route', 'languages')
         }),
         ('Bot Configuration', {
-            'fields': ('bot_id', 'story_bot_id'),
+            'fields': ('bot', 'story_bot', 'story_validation_bot'),
             'description': 'Configure the bots associated with this flow.'
         }),
         ('Flow Settings', {
-            'fields': ('active', 'hidden', 'user_type', 'parent_flow_id', 'image_config_id', 'template_id'),
+            'fields': ('active', 'hidden', 'user_type', 'parent_flow', 'image_config'),
         }),
         ('Advanced Settings', {
             'fields': ('websocket_url',),
@@ -436,42 +436,6 @@ class FlowAdmin(SimpleHistoryAdmin):
     
     readonly_fields = ('created_at', 'updated_at')
     
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        user_email = request.user.email
-        profile = Profile.objects.filter(email=user_email).first()
-        
-        if request.user.is_superuser:
-            return qs.select_related('bot_id', 'story_bot_id', 'image_config_id', 'parent_flow_id', 'template_id')
-        elif profile and profile.profile_type == ProfileType.MODERATOR:
-            return qs.filter(
-                bot_id__company=profile.company
-            ).select_related('bot_id', 'story_bot_id', 'image_config_id', 'parent_flow_id', 'template_id')
-        else:
-            return qs.none()
-
-    def get_form(self, request, obj=None, **kwargs):
-        form = super().get_form(request, obj, **kwargs)
-        user_email = request.user.email
-        profile = Profile.objects.filter(email=user_email).first()
-        
-        if not request.user.is_superuser and profile and profile.profile_type == ProfileType.MODERATOR:
-            # Restrict bot selections to the moderator's company
-            if 'bot_id' in form.base_fields:
-                form.base_fields['bot_id'].queryset = CompanyBot.objects.filter(
-                    company=profile.company
-                )
-            if 'story_bot_id' in form.base_fields:
-                form.base_fields['story_bot_id'].queryset = CompanyBot.objects.filter(
-                    company=profile.company
-                )
-            if 'parent_flow_id' in form.base_fields:
-                form.base_fields['parent_flow_id'].queryset = Flow.objects.filter(
-                    bot_id__company=profile.company
-                )
-        
-        return form
-
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         """Customize form field for languages JSONField."""
         if db_field.name == 'languages':

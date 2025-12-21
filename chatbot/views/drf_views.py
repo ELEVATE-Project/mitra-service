@@ -184,7 +184,7 @@ class FlowConnectionInfoView(generics.GenericAPIView):
             )
         
         try:
-            flow = Flow.objects.select_related('bot_id', 'image_config_id').prefetch_related('child_flows').get(
+            flow = Flow.objects.select_related('bot', 'image_config').prefetch_related('child_flows').get(
                 flow_route=flow_route
             )
             
