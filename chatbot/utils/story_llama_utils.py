@@ -2,9 +2,11 @@ import json
 import secrets
 import traceback
 from datetime import datetime
-from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.audio_provider_utils import text_translate_provider
 from shikshalokam.models import Project, ProjectStatus, ProjectVernacular
+import logging
+
+logger = logging.getLogger('django')
 
 
 def create_project(response_json, title, objective, story, profile, problem_statement, project_id, language,
@@ -150,7 +152,12 @@ def parse_datetime(date_str):
 
 def translate_field(voice_provider, message_body, target_language, source_language="en"):
     print(f"Trying to translate: {message_body}")
+    logger.info(f"Trying to translate: {message_body}")
     if not message_body or message_body == '' or source_language == target_language:
+        logger.info(
+            f"Skipping translation; returning original message. body='{message_body}', source='{source_language}',"
+            f" target='{target_language}'")
+
         return message_body
 
     response = text_translate_provider(
@@ -158,6 +165,8 @@ def translate_field(voice_provider, message_body, target_language, source_langua
         source_language=source_language
     )
     if response.get('status') == 200:
+        logger.info(f"Got 200 response from translation service: {response.get('content')}")
         return response.get('content')
     else:
+        logger.info(f"Translation service returned non-200; using original text: {message_body}")
         return message_body

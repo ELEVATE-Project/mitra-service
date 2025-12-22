@@ -2,14 +2,17 @@ import os
 import traceback
 import requests
 from chatbot.translate.ai4Bharat.base_translation import get_service_id
+import logging
 
 ai4bharat_api_key = os.getenv("BHASHANI_API_KEY")
 ai4bharat_base_url = os.getenv("BHASHANI_BASE_URL")
 ai4bharat_user_id = os.getenv("BHASHANI_USER_ID")
 ai4bharat_authorization = os.getenv("BHASHANI_AUTHORIZATION")
+logger = logging.getLogger('django')
 
 
 def call_ai4bharat_transliterate_api(source_language, target_language, message_body, is_sentence=False):
+    logger.info(f"Trying to transliterate {message_body}.")
     api_url = ai4bharat_base_url
     service_id = None
     pipeline_response = get_service_id(
@@ -55,6 +58,8 @@ def call_ai4bharat_transliterate_api(source_language, target_language, message_b
         response = requests.post(api_url, json=payload, headers=headers, timeout=10)
         print("Response: ", response)
         print("Res text: ", response.json())
+        logger.info(f"Response from AI4Bharat Transliteration: {response}")
+        logger.info(f"JSON Response from AI4Bharat Transliteration: {response.json()}")
         if response.status_code == 200:
             transliteration_message_data = response.json()
             if isinstance(transliteration_message_data, dict) and 'pipelineResponse' in transliteration_message_data:
@@ -71,6 +76,7 @@ def call_ai4bharat_transliterate_api(source_language, target_language, message_b
         }
     except Exception as e:
         print(f"Error during transliteration API call: {str(e)}")
+        logger.error(f"Error during transliteration API call: {str(e)}")
         traceback.print_exc()
         return {
             'status': 500,

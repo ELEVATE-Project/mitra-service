@@ -30,7 +30,7 @@ def translate_text(
             }
         )
 
-        logger.info(f"Response {response}")
+        logger.info(f"Response from Google Text Translate: {response}")
 
         for translation in response.translations:
             return {
@@ -39,7 +39,7 @@ def translate_text(
             }
 
     except Exception as e:
-        logger.error('Error processing: %s', e, exc_info=True)
+        logger.error(f'Error processing Google Text Translate:{e}')
         print(f"Error during translation API call: {str(e)}")
         traceback.print_exc()
         return {

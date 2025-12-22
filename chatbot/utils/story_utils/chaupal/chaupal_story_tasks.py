@@ -15,22 +15,39 @@ logger = logging.getLogger('django')
 
 def is_english_text(text):
     """Check if text contains only English characters (a-z, A-Z, numbers, punctuation, spaces)"""
-    if not text or text.strip() == '':
+    if not text or str(text).strip() == '':
+        logger.info(f"[ENGLISH CHECK] Received empty or blank text. Treating as English. text='{text}'")
         return True
 
-    # Remove common punctuation and numbers
-    cleaned_text = re.sub(r'[0-9\s\.,\!\?\-\(\)\[\]\{\}\"\'\:\;\@\#\$\%\^\&\*\+\=\_\|\\\/<>~`]', '', str(text))
+    original_text = str(text)
+    logger.info(f"[ENGLISH CHECK] Starting English validation. text='{original_text}'")
 
-    # Check if remaining characters are only English letters
-    return bool(re.match(r'^[a-zA-Z]*$', cleaned_text))
+    # Remove common punctuation and numbers
+    cleaned_text = re.sub(
+        r'[0-9\s\.,\!\?\-\(\)\[\]\{\}\"\'\:\;\@\#\$\%\^\&\*\+\=\_\|\\\/<>~`]',
+        '',
+        original_text
+    )
+    logger.info(f"[ENGLISH CHECK] Cleaned text after removing numbers & punctuation: '{cleaned_text}'")
+
+    is_english = bool(re.match(r'^[a-zA-Z]*$', cleaned_text))
+
+    if is_english:
+        logger.info(f"[ENGLISH CHECK] Text identified as English. text='{original_text}', cleaned='{cleaned_text}'")
+    else:
+        logger.info(f"[ENGLISH CHECK] Non-English characters detected. text='{original_text}', cleaned='{cleaned_text}'")
+
+    return is_english
 
 
 def translate_to_english_if_needed(text, voice_provider, source_language):
     """Translate text to English if it's not already in English"""
     if not text or text.strip() == '':
+        logger.info(f"No need to translate. The data {text} is empty.")
         return text
 
     if is_english_text(text):
+        logger.info(f"No need to translate. The data {text} is already in english.")
         return text
 
     try:
@@ -39,8 +56,9 @@ def translate_to_english_if_needed(text, voice_provider, source_language):
                 voice_provider=voice_provider,
                 message_body=text,
                 target_language='en',
-                source_language = source_language
+                source_language=source_language
             )
+            logger.info(f"Translated data to english: {translated}.")
             return translated
         else:
             logger.info(f"No voice provider available for translation. Keeping original text: {text}")
@@ -53,9 +71,11 @@ def translate_to_english_if_needed(text, voice_provider, source_language):
 def transliterate_to_english_if_needed(text, voice_provider, source_language):
     """Transliterate text to English if it's not already in English"""
     if not text or text.strip() == '':
+        logger.info(f"No need to transliterate. The data {text} is empty.")
         return text
 
     if is_english_text(text):
+        logger.info(f"No need to transliterate. The data {text} is already in english.")
         return text
 
     try:
@@ -68,6 +88,7 @@ def transliterate_to_english_if_needed(text, voice_provider, source_language):
                 source_language=source_language,
                 is_sentence=is_sentence
             )
+            logger.info(f"Transliterated data to english: {transliterated}.")
             return get_transliteration_output(data=transliterated)
         else:
             logger.info(f"No voice provider available for transliteration. Keeping original text: {text}")

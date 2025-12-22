@@ -48,8 +48,8 @@ def call_ai4bharat_translation_api(voice_provider, source_language, target_langu
         response = requests.post(api_url, json=payload, headers=headers, timeout=10)
         print("Response: ", response)
         print("Res text: ", response.json())
-        logger.info(f"Response {response}")
-        logger.info(f"Response text {response.json()}")
+        logger.info(f"Response from AI4Bharat Text Translation {response}")
+        logger.info(f"JSON Response from AI4Bharat Text Translation {response.json()}")
 
         if response.status_code == 200:
             translated_data = response.json()
