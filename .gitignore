@@ -8,3 +8,5 @@ build/
 .envrc
 dist/
 **__pycache__/
+.sonar_lock
+report-task.txt

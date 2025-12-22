@@ -1,5 +1,7 @@
 import json
+import os
 import traceback
+from django.conf import settings
 from asgiref.sync import async_to_sync
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.base_consumer import BaseConsumer
@@ -11,7 +13,7 @@ import logging
 
 
 logger = logging.getLogger('django')
-
+PUBLIC_KEY = os.getenv('JWT_PUBLIC_KEY')
 
 class MitraBedrockConsumer(BaseConsumer):
     try:
@@ -55,14 +57,22 @@ class MitraBedrockConsumer(BaseConsumer):
                                 self.session_id, self.profile_id, self.route)
                     print(f"Received access_token: {self.access_token}")
                     if self.access_token:
-                        decoded = jwt.decode(self.access_token, options={"verify_signature": False})
-                        print(decoded)
-                        if decoded:
+                        try:
+                            decoded = jwt.decode(
+                                self.access_token,
+                                PUBLIC_KEY,
+                                algorithms=["RS256"]
+                            )
                             user_id = decoded.get('data', {}).get('id')
-                        else:
+                        except jwt.ExpiredSignatureError:
+                            logger.error("JWT token expired")
+                            user_id = None
+                        except jwt.InvalidTokenError:
+                            logger.error("Invalid JWT token")
                             user_id = None
                     else:
                         user_id = None
+
                     print("User_id: ", user_id)
                     logger.info("User_id: %s", user_id)
 

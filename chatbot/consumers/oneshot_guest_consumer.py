@@ -1,4 +1,6 @@
 import json
+import os
+from django.conf import settings
 from asgiref.sync import async_to_sync
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.base_consumer import BaseConsumer
@@ -13,7 +15,7 @@ from chatbot.utils.transliterate_utils import transliterate_text
 from shikshalokam.models import Project, ProjectStatus
 
 logger = logging.getLogger('django')
-
+PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")
 
 class OneShotGuestConsumer(BaseConsumer):
 
@@ -122,13 +124,16 @@ class OneShotGuestConsumer(BaseConsumer):
                     }
                 else:
                     other_params = {}
+
+                user_id = None
                 if self.access_token:
-                    decoded = jwt.decode(self.access_token, options={"verify_signature": False})
-                    print(decoded)
+                    decoded = jwt.decode(
+                        self.access_token,
+                        PUBLIC_KEY,
+                        algorithms=["RS256"]
+                    )
                     if decoded:
-                        user_id = decoded.get('data', {}).get('id')
-                    else:
-                        user_id = None
+                        user_id = decoded.get("data", {}).get("id")
                 else:
                     user_id = None
                 print("User_id: ", user_id)

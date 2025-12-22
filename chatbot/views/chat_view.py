@@ -1,3 +1,5 @@
+import os
+from jwt import ExpiredSignatureError, InvalidTokenError
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from chatbot.models import CompanyChat, ChatSession, ChatStatus, Profile, Company, TextConversionType, Voice, VoiceType
@@ -7,6 +9,8 @@ from chatbot.celery_tasks.ptm_report_tasks import create_ptm_report
 from chatbot.utils.audio_provider_utils import text_translate_provider
 from chatbot.utils.ptm_utils.chat_utils import save_question_answer_utils
 from chatbot.utils.transliterate_utils import transliterate_text
+
+JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")
 
 
 @api_view(['POST'])
@@ -70,14 +74,25 @@ def create_chatsession(request):
     preferred_language =  body.get('preferred_language', {}).get('value')
 
     access_token = request.headers.get("X-auth-token")
-    decoded = jwt.decode(access_token, options={"verify_signature": False})
-    print(decoded)
-    if decoded:
-        user_id = decoded.get('data', {}).get('id')
-        first_name = decoded.get('data', {}).get('name')
-        user_roles = decoded.get('roles', [])
-    else:
-        return JsonResponse({'message': f"Invalid access token"}, status=500)
+    if not access_token:
+        return JsonResponse({"message": "Access token missing"}, status=401)
+
+    try:
+        decoded = jwt.decode(
+            access_token,
+            JWT_PUBLIC_KEY,
+            algorithms=["RS256"]
+        )
+        user_id = decoded.get("data", {}).get("id")
+        first_name = decoded.get("data", {}).get("name")
+        user_roles = decoded.get("roles", [])
+
+    except ExpiredSignatureError:
+        return JsonResponse({"message": "Access token expired"}, status=401)
+
+    except InvalidTokenError:
+        return JsonResponse({"message": "Invalid access token"}, status=401)
+
 
     if not session:
         return Response({"error": "session is required."}, status=400)

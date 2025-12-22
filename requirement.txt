@@ -305,7 +305,7 @@ uritemplate==4.1.1
 urllib3==2.2.3
 uv==0.5.30
 uvicorn==0.34.0
-uvloop==0.21.0
+
 vine==5.1.0
 watchfiles==1.0.4
 wcwidth==0.2.13

@@ -1,4 +1,7 @@
 import json
+import os
+from django.conf import settings
+import traceback
 from asgiref.sync import async_to_sync
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.base_consumer import BaseConsumer
@@ -12,6 +15,7 @@ import logging
 from shikshalokam.models import Project, ProjectStatus
 
 logger = logging.getLogger('django')
+PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")
 
 
 class OneShotBedrockConsumer(BaseConsumer):
@@ -65,13 +69,17 @@ class OneShotBedrockConsumer(BaseConsumer):
                 else:
                     other_params = {}
 
+                user_id = None
+
                 if self.access_token:
-                    decoded = jwt.decode(self.access_token, options={"verify_signature": False})
+                    decoded = jwt.decode(
+                        self.access_token,
+                        PUBLIC_KEY,
+                        algorithms=["RS256"]
+                    )
                     print(decoded)
                     if decoded:
-                        user_id = decoded.get('data', {}).get('id')
-                    else:
-                        user_id = None
+                        user_id = decoded.get("data", {}).get("id")
                 else:
                     user_id = None
                 print("User_id: ", user_id)
