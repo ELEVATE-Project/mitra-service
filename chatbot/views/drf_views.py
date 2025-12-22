@@ -68,18 +68,6 @@ class ChatSessionListCreateView(generics.ListCreateAPIView):
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend, ChatSessionProfileFilter]
     filterset_fields = ['session', 'project_id', 'user_id', 'profile', 'session_type']
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        flow = self.request.query_params.get('flow')
-        if flow in [SessionFlowName.LoginMiStory.value, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory.value]:
-            queryset = queryset.filter(session_type__in=[
-                ChatType.guidedReflection.value, ChatType.oneStepReflection.value
-            ])
-        elif flow == SessionFlowName.LoginDiscussion.value:
-            queryset = queryset.filter(session_type=ChatType.shikshaChaupal.value)
-
-        return queryset
-
 
 class ChatSessionRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):
     queryset = ChatSession.objects.all()
