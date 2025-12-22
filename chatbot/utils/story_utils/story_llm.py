@@ -10,7 +10,7 @@ logger = logging.getLogger('django')
 
 
 async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, messages, tool_content, tool_story, company_bot):
-    async def func1(prompt):
+    async def invoke_llm(prompt):
         if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
             return await asyncio.to_thread(
                 functools.partial(
@@ -38,7 +38,7 @@ async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, m
                 )
             )
 
-    response_json_content, response_json_story = await asyncio.gather(func1(formatted_content_prompt), func1(formatted_story_prompt))
+    response_json_content, response_json_story = await asyncio.gather(invoke_llm(formatted_content_prompt), invoke_llm(formatted_story_prompt))
 
     logger.info(f"response_json_content: %s", response_json_content)
     logger.info(f"response_json_story: %s", response_json_story)

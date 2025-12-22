@@ -411,7 +411,7 @@ class FlowAdmin(SimpleHistoryAdmin):
     search_fields = ('flow_name', 'flow_route', 'bot__name')
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
-    raw_id_fields = ('bot', 'story_bot', 'parent_flow', 'image_config')
+    raw_id_fields = ('bot', 'story_bot', 'parent_flow', 'image_config', 'story_validation_bot')
     
     fieldsets = (
         ('Basic Information', {

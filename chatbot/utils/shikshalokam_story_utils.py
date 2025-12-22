@@ -146,7 +146,7 @@ def get_story_html(story, profile, flow, auth=False, language=None):
     constants = pdf_template.constants_json
 
     render_params = {
-        "constants": pdf_template.constants_json.get(language_used, {}),
+        "constants": constants.get(language_used, {}),
         "story": story_serialized.data,
         "project": project_serialized.data,
         "profile": profile_serialized.data,

@@ -189,7 +189,7 @@ class AWSS3StorageHandler(BaseStorageHandler):
         Returns:
             Public URL string
         """
-        return f"https://{self.bucket_name}.s3.{self.region_name}.amazonaws.com/{object_key}"
+        return f"https://{self.bucket_name}/{object_key}"
 
     def file_exists(self, object_key: str) -> bool:
         """
