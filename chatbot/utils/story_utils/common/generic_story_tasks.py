@@ -114,8 +114,13 @@ def translate_nested_to_english(data, voice_provider, transliteration_voice_prov
 
 def save_generic_story(
         response_json_story, language, voice_provider, profile, session, combined_reason, flow=None, project_id=None,
-        company_bot=None
+        company_bot=None, exclude_fields=None
 ):
+
+    if exclude_fields is None:
+        exclude_fields = []
+    exclude_fields_set = set(exclude_fields) if exclude_fields else set()
+
     translation_voice_provider = voice_provider
     transliteration_voice_provider = None
 
@@ -192,6 +197,8 @@ def save_generic_story(
     PERSONAL_INFO_FIELDS = {'name', 'user_name', 'location', 'organization', 'designation', 'district', 'block'}
 
     for key, value in response_json_story.items():
+        if key in exclude_fields_set:
+            continue
         if key not in STORY_MODEL_FIELDS:
             if isinstance(value, dict) or isinstance(value, list):
                 other_params[key] = translate_nested_to_english(
@@ -212,7 +219,7 @@ def save_generic_story(
 
     story_fields_to_update = {}
 
-    if 'title' in response_json_story:
+    if 'title' in response_json_story and 'title' not in exclude_fields_set:
         raw_title = response_json_story.get('title', '')
         english_title = clean_escaped_text(
             text=translate_to_english_if_needed(raw_title, translation_voice_provider, language)
@@ -234,37 +241,37 @@ def save_generic_story(
             logger.info("Using default title: Improvement_story")
         story_fields_to_update['title'] = english_title
 
-    if 'content' in response_json_story:
+    if 'content' in response_json_story and 'content' not in exclude_fields_set:
         raw_content = response_json_story.get('content', '')
         story_fields_to_update['content'] = clean_escaped_text(
             text=translate_to_english_if_needed(raw_content, translation_voice_provider, language)
         )
 
-    if 'objective' in response_json_story:
+    if 'objective' in response_json_story and 'objective' not in exclude_fields_set:
         raw_objective = response_json_story.get('objective', '')
         story_fields_to_update['objective'] = clean_escaped_text(
             text=translate_to_english_if_needed(raw_objective, translation_voice_provider, language)
         )
 
-    if 'impact' in response_json_story:
+    if 'impact' in response_json_story and 'impact' not in exclude_fields_set:
         raw_impact = response_json_story.get('impact', '')
         story_fields_to_update['impact'] = clean_escaped_text(
             text=translate_to_english_if_needed(raw_impact, translation_voice_provider, language)
         )
 
-    if 'blurb' in response_json_story:
+    if 'blurb' in response_json_story and 'blurb' not in exclude_fields_set:
         raw_blurb = response_json_story.get('blurb', '')
         story_fields_to_update['blurb'] = clean_escaped_text(
             text=translate_to_english_if_needed(raw_blurb, translation_voice_provider, language)
         )
 
-    if 'tweet' in response_json_story:
+    if 'tweet' in response_json_story and 'tweet' not in exclude_fields_set:
         story_fields_to_update['tweet'] = response_json_story.get('tweet', '')
 
-    if 'micro_improvement' in response_json_story:
+    if 'micro_improvement' in response_json_story and 'micro_improvement' not in exclude_fields_set:
         story_fields_to_update['micro_improvement'] = response_json_story.get('micro_improvement', '')
 
-    if 'action_steps' in response_json_story:
+    if 'action_steps' in response_json_story and 'action_steps' not in exclude_fields_set:
         raw_action_steps = response_json_story.get('action_steps', [])
         if isinstance(raw_action_steps, str):
             story_fields_to_update['action_steps'] = translate_to_english_if_needed(raw_action_steps,
@@ -278,7 +285,7 @@ def save_generic_story(
         else:
             story_fields_to_update['action_steps'] = raw_action_steps
 
-    if 'location' in response_json_story:
+    if 'location' in response_json_story and 'location' not in exclude_fields_set:
         raw_location = response_json_story.get('location', fallback_location)
         if raw_location and raw_location.strip():
             story_fields_to_update['location'] = transliterate_to_english_if_needed(raw_location,
@@ -332,13 +339,14 @@ def save_generic_story(
             flow=flow,
             company_bot=company_bot,
             response_json_story=response_json_story,
-            previous_english_snapshot=previous_english_snapshot
+            previous_english_snapshot=previous_english_snapshot,
+            exclude_fields=exclude_fields_set
         )
 
     logger.info(f"Successfully saved generic story for flow {flow}, session {session}")
 
     problem_statement = ""
-    if 'problem_statement' in response_json_story:
+    if 'problem_statement' in response_json_story and 'problem_statement' not in exclude_fields_set:
         raw_problem_statement = response_json_story.get('problem_statement', '')
         problem_statement = clean_escaped_text(
             text=translate_to_english_if_needed(raw_problem_statement, translation_voice_provider, language)
@@ -348,8 +356,12 @@ def save_generic_story(
 
 
 def create_generic_story_translation(story, language, english_data, voice_provider, flow, company_bot,
-                                     response_json_story, previous_english_snapshot):
+                                     response_json_story, previous_english_snapshot, exclude_fields=None):
     try:
+
+        if exclude_fields is None:
+            exclude_fields = set()
+
         print(f"Creating translation for language: {language}")
         print(f"Story other_params: {story.other_params}")
 
@@ -374,6 +386,8 @@ def create_generic_story_translation(story, language, english_data, voice_provid
         translated_data = {}
 
         for field in TRANSLATABLE_FIELDS:
+            if field in exclude_fields:
+                continue
             should_translate = False
             field_value = None
 

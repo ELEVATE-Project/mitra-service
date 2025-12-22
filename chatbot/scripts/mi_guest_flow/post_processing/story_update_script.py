@@ -150,7 +150,8 @@ def process_session(session, access_token):
             session=session_id,
             combined_reason="",
             flow=SessionFlowName.GuestMiStory,
-            company_bot=company_bot
+            company_bot=company_bot,
+            exclude_fields=['problem_statement']
         )
 
         if response_json_content.get('problem_statement'):
@@ -160,9 +161,14 @@ def process_session(session, access_token):
             import json
 
             raw_problem_statement = response_json_content.get('problem_statement', '')
+            raw_title = response_json_content.get('title', '')
 
             english_problem_statement = clean_escaped_text(
                 text=translate_to_english_if_needed(raw_problem_statement, voice_provider, language)
+            )
+
+            english_title = clean_escaped_text(
+                text=translate_to_english_if_needed(raw_title, voice_provider, language)
             )
 
             story = Story.objects.filter(session=session_id).first()
@@ -172,13 +178,21 @@ def process_session(session, access_token):
 
                 if project:
                     project.actual_problem_statement = english_problem_statement
-                    project.save(update_fields=['actual_problem_statement'])
+                    project.actual_title = english_title
+                    project.save(update_fields=['actual_problem_statement', 'actual_title'])
                     logger.info(f"Updated project {project.project_id} with problem_statement")
 
                     if language != 'en':
                         translated_problem_statement = translate_field(
                             voice_provider=voice_provider,
                             message_body=english_problem_statement,
+                            target_language=language,
+                            source_language='en'
+                        )
+
+                        translated_title = translate_field(
+                            voice_provider=voice_provider,
+                            message_body=english_title,
                             target_language=language,
                             source_language='en'
                         )
@@ -194,6 +208,7 @@ def process_session(session, access_token):
                                 if 'project' not in details:
                                     details['project'] = {}
                                 details['project']['actual_problem_statement'] = translated_problem_statement
+                                details['project']['actual_title'] = translated_title
                                 project_vernacular.details = json.dumps(details)
                                 project_vernacular.save(update_fields=['details'])
                                 logger.info(f"Updated ProjectVernacular for project {project.project_id} in {language}")
@@ -206,7 +221,8 @@ def process_session(session, access_token):
                                 language=language,
                                 details=json.dumps({
                                     "project": {
-                                        "actual_problem_statement": translated_problem_statement
+                                        "actual_problem_statement": translated_problem_statement,
+                                        "actual_title": translated_title
                                     }
                                 })
                             )
