@@ -30,7 +30,7 @@ def translate_text(
             }
         )
 
-        logger.info(f"Response {response}")
+        logger.info(f"Response from Google Text Translate: {response}")
 
         for translation in response.translations:
             return {
