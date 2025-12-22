@@ -9,7 +9,10 @@ from shikshalokam.resource import ExpertProjectResource
 class ProjectAdmin(ImportMixin, ExportActionMixin, admin.ModelAdmin):
     resource_class = ExpertProjectResource
     list_display = ('project_id', 'actual_title', 'actual_duration', 'generated_by', 'created_at', )
-    list_filter = (CustomAdvanceDateFilter, 'project_id', 'author', 'generated_by', 'actual_title', 'expected_title')
+    list_filter = (
+        CustomAdvanceDateFilter, 'project_id', 'author', 'generated_by', 'actual_title',
+        'expected_title', 'story__session'
+    )
     raw_id_fields = ('author', 'story')
     # inlines = [TaskInline, EvidenceInline]
 
