@@ -12,6 +12,7 @@ logger = logging.getLogger('django')
 
 
 def call_ai4bharat_transliterate_api(source_language, target_language, message_body, is_sentence=False):
+    logger.info(f"Trying to transliterate {message_body}.")
     api_url = ai4bharat_base_url
     service_id = None
     pipeline_response = get_service_id(
@@ -57,8 +58,8 @@ def call_ai4bharat_transliterate_api(source_language, target_language, message_b
         response = requests.post(api_url, json=payload, headers=headers, timeout=10)
         print("Response: ", response)
         print("Res text: ", response.json())
-        logger.info(f"Response from AI4Bharat Transliteration: ", response)
-        logger.info(f"JSON Response from AI4Bharat Transliteration: ", response.json())
+        logger.info(f"Response from AI4Bharat Transliteration: {response}")
+        logger.info(f"JSON Response from AI4Bharat Transliteration: {response.json()}")
         if response.status_code == 200:
             transliteration_message_data = response.json()
             if isinstance(transliteration_message_data, dict) and 'pipelineResponse' in transliteration_message_data:
