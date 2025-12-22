@@ -38,43 +38,15 @@ async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, m
                 )
             )
 
-    async def func2():
-        if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
-            return await asyncio.to_thread(
-                functools.partial(
-                    handle_bedrock_model,
-                    system_prompt=formatted_story_prompt,
-                    messages=messages,
-                    tools=tool_story,
-                    temperature=company_bot.bot_temperature,
-                    max_token=company_bot.max_token,
-                    top_p=company_bot.filter_score,
-                    model_name=company_bot.llm_model,
-                    company_bot=company_bot
-                )
-            )
-        elif company_bot.provider == LLMProvider.OPENAI:
-            return await asyncio.to_thread(
-                functools.partial(
-                    handle_openai_model,
-                    system_prompt=formatted_story_prompt,
-                    messages=messages,
-                    temperature=company_bot.bot_temperature,
-                    max_token=company_bot.max_token,
-                    top_p=company_bot.filter_score,
-                    model_name=company_bot.llm_model
-                )
-            )
-
     tasks = []
 
     if formatted_content_prompt:
-        tasks.append(func1())
+        tasks.append(invoke_llm(formatted_content_prompt))
     else:
         logger.info("Skipping CONTENT LLM as formatted_content_prompt is None")
 
     if formatted_story_prompt:
-        tasks.append(func2())
+        tasks.append(invoke_llm(formatted_story_prompt))
     else:
         logger.info("Skipping STORY LLM as formatted_story_prompt is None")
 
