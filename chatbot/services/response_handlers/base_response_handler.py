@@ -4,11 +4,11 @@ from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.celery_tasks.handle_message import translate_and_send_message
 from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_model
 from chatbot.models import ChatSession, ChatStatus, LLMProvider, CompanyBotTypeChoices
-import logging
-
 from chatbot.models.company_models import CompanyStateMachine
+from chatbot.models.enums import OperationTypeChoices
 from chatbot.services.postprocessing.postprocessing_service import PostprocessingService
 from chatbot.services.preprocessing.preprocessing_service import PreprocessingService
+import logging
 
 logger = logging.getLogger('django')
 channel_layer = get_channel_layer()
@@ -51,7 +51,6 @@ class BaseResponseHandler(ABC):
 
         # Check operation_type - if non_llm, automatically skip LLM and move to next step
         if state_machine and hasattr(state_machine, 'operation_type'):
-            from chatbot.models.enums import OperationTypeChoices
             if state_machine.operation_type == OperationTypeChoices.NON_LLM:
                 kwargs['skip_llm'] = True
                 kwargs['skip_reason'] = 'non_llm_operation_type'

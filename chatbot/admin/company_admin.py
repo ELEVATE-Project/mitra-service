@@ -406,7 +406,7 @@ class FlowAdmin(SimpleHistoryAdmin):
     )
     list_filter = (
         'active', 'hidden', 'user_type',
-        'bot__company', CustomAdvanceDateFilter
+        'bot__company', CustomAdvanceDateFilter, 'create_story'
     )
     search_fields = ('flow_name', 'flow_route', 'bot__name')
     date_hierarchy = 'created_at'
@@ -422,7 +422,7 @@ class FlowAdmin(SimpleHistoryAdmin):
             'description': 'Configure the bots associated with this flow.'
         }),
         ('Flow Settings', {
-            'fields': ('active', 'hidden', 'user_type', 'parent_flow', 'image_config'),
+            'fields': ('active', 'hidden', 'user_type', 'parent_flow', 'image_config', 'create_story'),
         }),
         ('Advanced Settings', {
             'fields': ('websocket_url',),

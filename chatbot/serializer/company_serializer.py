@@ -81,7 +81,7 @@ class FlowConnectionInfoSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Flow
-        fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config')
+        fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config', 'create_story')
         read_only_fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config')
     
     def get_isParentFlow(self, obj):

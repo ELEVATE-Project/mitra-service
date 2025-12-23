@@ -1,6 +1,10 @@
 import json
 import traceback
+
+from django.contrib.auth import PermissionDenied
 from chatbot.models import Story, StoryMedia, ChatSession, SessionFlowName, StoryTranslation, VoiceType, Voice
+from chatbot.models.base_models import Flow
+from chatbot.models.enums import CreateStoryChoices
 from chatbot.serializer.story_serializer import StoryCreateSerializer, StoryRetrieveSerializer, \
     StoryMediaRetrieveSerializer, StoryFullSerializer
 from chatbot.utils.media_utils import upload_to_cloud
@@ -25,9 +29,14 @@ def end_story(request):
     try:
         profile_id = request.data['profile_id']
         session = request.data['session']
-        access_token = request.data.get('access_token', None)
+        access_token = request.headers.get('Authorization', "Bearer: ")[7:]
         flow = request.data.get('flow')
         language = request.data.get('language', 'en')
+
+        if isinstance(access_token, str):
+            access_token = access_token.strip()
+            if access_token == "":
+                access_token = None
 
         if session is None:
             return Response({
@@ -36,10 +45,19 @@ def end_story(request):
                 'error_message': 'session is mandatory'
             }, status=400)
         else:
+            flow_inst = Flow.objects.get(flow_route=flow)
+
+            if access_token and flow_inst.create_story in [CreateStoryChoices.GUEST, CreateStoryChoices.NONE]:
+                raise PermissionDenied(detail="Insufficient permissions")
+
+            if not access_token and flow_inst.create_story in [CreateStoryChoices.AUTH, CreateStoryChoices.NONE]:
+                raise PermissionDenied(detail="Insufficient permissions")
+
             id, content, error_msg = create_story_object(
                 profile_id=profile_id, session=session,
                 access_token=access_token, flow=flow, language=language
             )
+
 
             return Response({
                 'status': 'ok',
@@ -48,6 +66,13 @@ def end_story(request):
                 'content': content,
                 'error_message': error_msg
             }, status=200)
+    except Flow.DoesNotExists:
+        return Response({
+            'status': 'error',
+            'message': '',
+            'error_message': "Invalid flow"
+        }, status=404)
+
     except Exception as e:
         traceback.print_exc()
         return Response({

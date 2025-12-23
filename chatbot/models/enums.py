@@ -334,6 +334,13 @@ class UserTypeChoices(models.TextChoices):
     ALL = 'all', _('All')
 
 
+class CreateStoryChoices(models.TextChoices):
+    GUEST = 'guest', _('Guest')
+    AUTH = 'auth', _('Authenticated')
+    ALL = 'all', _('All')
+    NONE = 'none', _('None')
+
+
 class LanguageOperationChoices(models.TextChoices):
     TRANSLATE = 'translate', _('Translate')
     TRANSLITERATE = 'transliterate', _('Transliterate')

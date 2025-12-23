@@ -5,11 +5,11 @@ from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator
 from simple_history.models import HistoricalRecords
 from chatbot.models.enums import (
-    EntityStatus, LLMModel, GenderChoices, ChatStatus,
+    CreateStoryChoices, EntityStatus, LLMModel, GenderChoices, ChatStatus,
     FeedbackChoices, CompanyBotTypeChoices, CompanyBotDynamicContextType, CompanyChatSourceChoices,
     VoiceProvider, VoiceType, LLMProvider, EntityTypeChoices, TextConversionType,
     PreProcessType, PreProcessOutputMode, PostProcessType, PostProcessOutputMode,
-    UserTypeChoices, LanguageOperationChoices, OperationTypeChoices, BotStrategyChoices
+    UserTypeChoices, OperationTypeChoices, BotStrategyChoices
 )
 
 S3_BASE_URL = os.getenv('S3_BASE_URL')
@@ -211,6 +211,7 @@ class Voice(models.Model):
     )
 
     other_params = models.JSONField(null=True, blank=True)
+    history = HistoricalRecords()
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -406,6 +407,7 @@ class ImageConfiguration(models.Model):
         validators=[MinValueValidator(1)],
         help_text="Maximum image size in bytes (default: 5MB)."
     )
+    history = HistoricalRecords()
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -495,6 +497,12 @@ class Flow(models.Model):
         blank=True,
         related_name='flows',
         help_text="Image configuration settings for this flow."
+    )
+    create_story = models.CharField(
+        max_length=20,
+        choices=CreateStoryChoices.choices,
+        default=CreateStoryChoices.ALL,
+        help_text="Whether to post process the story or not"
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
