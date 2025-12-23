@@ -267,7 +267,8 @@ def save_generic_story(
             print("Default title")
             english_title = 'Improvement_story'
             logger.info("Using default title: Improvement_story")
-            story_fields_to_update['title'] = english_title
+
+        story_fields_to_update['title'] = english_title
 
     print("english_title: ", english_title)
     if 'content' in response_json_story and 'content' not in exclude_fields_set:
