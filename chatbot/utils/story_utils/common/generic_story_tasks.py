@@ -240,27 +240,27 @@ def save_generic_story(
     print(f"Story other_params before save: {other_params}")
 
     story_fields_to_update = {}
-
+    english_title=None
     if 'title' in response_json_story and 'title' not in exclude_fields_set:
         raw_title = response_json_story.get('title', '')
         english_title = clean_escaped_text(
             text=translate_to_english_if_needed(raw_title, translation_voice_provider, language)
         )
-        if not english_title and company_bot:
-            try:
-                story_vernacular = StoryVernacular.objects.filter(
-                    company_bot=company_bot, language='en'
-                ).first()
-                if story_vernacular and story_vernacular.translation_json:
-                    vernacular_title = story_vernacular.translation_json.get('title')
-                    if vernacular_title:
-                        english_title = vernacular_title
-                        logger.info(f"Used StoryVernacular English title")
-            except Exception as e:
-                logger.info(f"Could not get title from StoryVernacular: {e}")
-        if not english_title or not english_title.strip():
-            english_title = 'Improvement_story'
-            logger.info("Using default title: Improvement_story")
+    if not english_title and company_bot:
+        try:
+            story_vernacular = StoryVernacular.objects.filter(
+                company_bot=company_bot, language='en'
+            ).first()
+            if story_vernacular and story_vernacular.translation_json:
+                vernacular_title = story_vernacular.translation_json.get('title')
+                if vernacular_title:
+                    english_title = vernacular_title
+                    logger.info(f"Used StoryVernacular English title")
+        except Exception as e:
+            logger.info(f"Could not get title from StoryVernacular: {e}")
+    if not english_title or not english_title.strip():
+        english_title = 'Improvement_story'
+        logger.info("Using default title: Improvement_story")
         story_fields_to_update['title'] = english_title
 
     if 'content' in response_json_story and 'content' not in exclude_fields_set:
