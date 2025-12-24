@@ -1,3 +1,13 @@
+def normalize_source_id(source_id):
+    """
+    Normalize source ID to string for consistent comparison.
+    Handles both integer and string inputs.
+    """
+    if source_id is None:
+        return None
+    return str(source_id).strip()
+
+
 def filter_and_sort_chunks(chunks_response, filter_score, top_k=None):
     filtered_chunks = []
 
@@ -15,9 +25,11 @@ def filter_and_sort_chunks(chunks_response, filter_score, top_k=None):
 
             if chunk_text and len(chunk_text.strip()) > 20:
                 source_id = result.get('source_id', '') or result.get('metadata', {}).get('source_id', '')
+
                 filtered_chunks.append({
                     'chunk_text': chunk_text.strip(),
                     'source_id': source_id,
+                    'normalized_id': normalize_source_id(source_id),
                     'relevance_score': relevance_score,
                     'full_result': result
                 })
@@ -37,6 +49,7 @@ def prepare_chunks_for_template(filtered_chunks):
             'index': idx,
             'text': chunk['chunk_text'],
             'source_id': chunk['source_id'],
+            'normalized_id': chunk.get('normalized_id', normalize_source_id(chunk['source_id'])),
             'score': chunk['relevance_score']
         })
     return chunks_data

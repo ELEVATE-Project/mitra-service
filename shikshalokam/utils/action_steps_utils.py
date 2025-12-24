@@ -5,6 +5,16 @@ import json_repair
 import json
 
 
+def normalize_source_id(source_id):
+    """
+    Normalize source ID to string for consistent comparison.
+    Handles both integer and string inputs.
+    """
+    if source_id is None:
+        return None
+    return str(source_id).strip()
+
+
 def generate_action_list_utils(query, objective_text, company_bot):
     try:
         from chatbot.utils.chat_query_handler import query_text_search
@@ -214,7 +224,15 @@ def parse_llm_action_response(response, filtered_chunks):
         action_plans = [action_plans] if action_plans else []
 
     action_list = []
-    valid_source_ids = {chunk['source_id'] for chunk in filtered_chunks}
+
+    # Create set of normalized source IDs for validation
+    valid_source_ids = set()
+    for chunk in filtered_chunks:
+        normalized_id = normalize_source_id(chunk.get('source_id'))
+        if normalized_id:
+            valid_source_ids.add(normalized_id)
+
+    print(f"Valid source IDs (normalized): {valid_source_ids}")
 
     for plan in action_plans:
         if isinstance(plan, dict):
@@ -237,16 +255,27 @@ def parse_llm_action_response(response, filtered_chunks):
 
                     for src in sources:
                         if isinstance(src, dict):
-                            source_id = src.get('source_id')
+                            raw_source_id = src.get('source_id')
+                            normalized_id = normalize_source_id(raw_source_id)
                             highlight_text = src.get('highlight_text', '')
 
-                            if source_id and source_id in valid_source_ids:
-                                step_source_ids.append(source_id)
-                                all_source_ids.add(source_id)
-                                step_sources.append({
-                                    'source_id': source_id,
-                                    'highlight_text': highlight_text
-                                })
+                            if normalized_id and normalized_id in valid_source_ids:
+                                original_id = None
+                                for chunk in filtered_chunks:
+                                    if normalize_source_id(chunk.get('source_id')) == normalized_id:
+                                        original_id = chunk.get('source_id')
+                                        break
+
+                                if original_id is not None:
+                                    step_source_ids.append(original_id)
+                                    all_source_ids.add(original_id)
+                                    step_sources.append({
+                                        'source_id': original_id,
+                                        'highlight_text': highlight_text
+                                    })
+                            else:
+                                print(
+                                    f"Warning: source_id '{raw_source_id}' (normalized: '{normalized_id}') not found in valid chunks")
 
                     processed_steps.append({
                         'step': step_text,
@@ -295,7 +324,14 @@ def post_process_actions_with_source(action_list, filtered_chunks, chunks_respon
                 'message': 'Invalid action_list: must be a list'
             }
 
-        source_id_to_score = {chunk['source_id']: chunk['relevance_score'] for chunk in filtered_chunks}
+        source_id_to_score = {}
+        for chunk in filtered_chunks:
+            source_id = chunk.get('source_id')
+            if source_id is not None:
+                source_id_to_score[source_id] = chunk['relevance_score']
+                normalized = normalize_source_id(source_id)
+                if normalized:
+                    source_id_to_score[normalized] = chunk['relevance_score']
 
         source_map = {}
         if chunks_response and chunks_response.get("results"):
@@ -347,7 +383,7 @@ def post_process_actions_with_source(action_list, filtered_chunks, chunks_respon
                     }
 
                     if source_id not in source_map:
-                        source_map[source_id] = {
+                        source_entry = {
                             'source_id': source_id,
                             'description': description,
                             'title': title,
@@ -355,6 +391,11 @@ def post_process_actions_with_source(action_list, filtered_chunks, chunks_respon
                             'organization': organization_dict,
                             'chunks': [chunk_data]
                         }
+                        source_map[source_id] = source_entry
+
+                        normalized_id = normalize_source_id(source_id)
+                        if normalized_id and normalized_id != source_id:
+                            source_map[normalized_id] = source_entry
                     else:
                         source_map[source_id]['chunks'].append(chunk_data)
 
@@ -389,18 +430,30 @@ def post_process_actions_with_source(action_list, filtered_chunks, chunks_respon
                         step_sources = []
                         for source_id in step_data.get('source_ids', []):
                             score = source_id_to_score.get(source_id, 0)
-                            source_info = source_map.get(source_id, {
-                                'source_id': source_id,
-                                'chunks': [],
-                                'description': '',
-                                'title': '',
-                                'url': '',
-                                'organization': {}
-                            })
+                            if score == 0:
+                                normalized_id = normalize_source_id(source_id)
+                                score = source_id_to_score.get(normalized_id, 0)
+
+                            source_info = source_map.get(source_id)
+                            if not source_info:
+                                normalized_id = normalize_source_id(source_id)
+                                source_info = source_map.get(normalized_id)
+
+                            if not source_info:
+                                source_info = {
+                                    'source_id': source_id,
+                                    'chunks': [],
+                                    'description': '',
+                                    'title': '',
+                                    'url': '',
+                                    'organization': {}
+                                }
 
                             highlight_texts = []
                             for src in step_data.get("sources", []):
-                                if src.get("source_id") == source_id and src.get("highlight_text"):
+                                src_id_normalized = normalize_source_id(src.get("source_id"))
+                                source_id_normalized = normalize_source_id(source_id)
+                                if src_id_normalized == source_id_normalized and src.get("highlight_text"):
                                     highlight_texts.append(src.get("highlight_text"))
 
                             chunks_with_highlights = []
@@ -437,7 +490,14 @@ def post_process_actions_with_source(action_list, filtered_chunks, chunks_respon
                         })
 
                 all_source_ids = action_plan.get('all_source_ids', [])
-                total_score = sum(source_id_to_score.get(sid, 0) for sid in all_source_ids)
+                total_score = 0
+                for sid in all_source_ids:
+                    score = source_id_to_score.get(sid, 0)
+                    if score == 0:
+                        normalized_id = normalize_source_id(sid)
+                        score = source_id_to_score.get(normalized_id, 0)
+                    total_score += score
+
                 avg_score = total_score / len(all_source_ids) if all_source_ids else 0
 
                 processed_action = {
