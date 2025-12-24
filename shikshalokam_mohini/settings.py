@@ -26,20 +26,20 @@ CODE_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOGGING_DIR = CODE_BASE_DIR + '/logs'
 
 def load_secrets():
-    alt_path = os.getcwd() + "/config/secrets.json"
-    secrets_path = os.path.join(CODE_BASE_DIR, "config/secrets.json")
+    paths_to_try = [
+        '/home/ubuntu/shikshalokam-mohini-service/config/secrets.json',
+        os.path.join(CODE_BASE_DIR, "config/secrets.json"),
+        os.getcwd() + "/config/secrets.json"
+    ]
 
-    try:
-        with open(secrets_path, 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
+    for path in paths_to_try:
         try:
-            with open(alt_path, 'r') as f:
+            with open(path, 'r') as f:
                 return json.load(f)
         except FileNotFoundError:
-            raise FileNotFoundError(f"secrets.json not found in either {secrets_path} or {alt_path}")
-    except json.JSONDecodeError as e:
-        raise json.JSONDecodeError(f"Invalid JSON in secrets file: {e}")
+            continue
+
+    raise FileNotFoundError(f"secrets.json not found in any of: {paths_to_try}")
 
 
 SECRETS = load_secrets()
