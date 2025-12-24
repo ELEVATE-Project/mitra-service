@@ -2,6 +2,7 @@ import logging
 from django.utils import timezone
 from chatbot.scripts.guest_discussion.output.update_non_english_story import fix_guest_discussion_stories
 from chatbot.scripts.mi_guest_flow.output.update_non_english_story import fix_guest_mi_story_stories
+import os
 
 logger = logging.getLogger('django')
 
@@ -13,6 +14,8 @@ def handle_non_english_fix_cron():
     try:
         logger.info('=' * 70)
         logger.info('🌐 Starting Non-English Content Fix Cron at: {}'.format(timezone.now()))
+        print(f"Cron running from cwd: {os.getcwd()}")
+        logger.info(f"Cron running from cwd: {os.getcwd()}")
 
         logger.info('🔧 Starting Guest Discussion non-English fix...')
         discussion_result = fix_guest_discussion_stories()

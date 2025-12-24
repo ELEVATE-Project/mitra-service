@@ -399,11 +399,10 @@ LOGGING = {
 ASGI_APPLICATION_SHUTDOWN_TIMEOUT = 30
 
 CRONJOBS = [
-    ('30 3 * * *',
-     'cd /home/ubuntu/shikshalokam-mohini-service && '
-     '/home/ubuntu/mohini-env/bin/python manage.py runscript handle_village_ingestion_cron >> /tmp/handle_village_ingestion_cron.log 2>&1'),
-
-    ('30 4 * * *',
-     'cd /home/ubuntu/shikshalokam-mohini-service && '
-     '/home/ubuntu/mohini-env/bin/python manage.py runscript handle_non_english_fix_cron >> /tmp/handle_non_english_fix_cron.log 2>&1'),
+    # ('30 2 * * *', 'chatbot.cron_tasks.chaupal.chaupal_cront_tasks.handle_story_cleanup_cron',
+    #  '>> /tmp/handle_story_cleanup_cron.log 2>&1'),
+    ('30 3 * * *', 'chatbot.cron_tasks.chaupal.chaupal_cront_tasks.handle_village_ingestion_cron',
+     '>> /tmp/handle_village_ingestion_cron.log 2>&1'),
+    ('16 11 * * *', 'chatbot.cron_tasks.translation_cron.handle_non_english_fix_cron',
+     '>> /tmp/handle_non_english_fix_cron.log 2>&1'),
 ]
