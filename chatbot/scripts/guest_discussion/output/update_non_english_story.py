@@ -63,6 +63,8 @@ def fix_guest_discussion_stories():
         # 🔹 CHECK STORY.LOCATION
         if is_non_english_text(story.location):
             offending_fields.append("story.location")
+        if is_non_english_text(story.title):
+            offending_fields.append("story.title")
 
         # 🔹 CHECK OTHER_PARAMS
         if story.other_params:
@@ -114,6 +116,16 @@ def fix_guest_discussion_stories():
                 is_sentence=" " in story.location
             )
             story.location = get_transliteration_output(result)
+            updated = True
+
+        # ---------- TRANSLATE STORY.TITLE ----------
+        if is_non_english_text(story.title):
+            story.title = translate_field(
+                voice_provider=translation_provider,
+                message_body=story.title,
+                target_language="en",
+                source_language=source_language
+            )
             updated = True
 
         # ---------- TRANSLATE FIELDS ----------
@@ -173,7 +185,7 @@ def fix_guest_discussion_stories():
         if updated:
             story.other_params = other_params
             story.language = "en"
-            story.save(update_fields=["location", "other_params", "language"])
+            story.save(update_fields=["location", "title", "other_params", "language"])
 
             fixed.append({
                 "story_id": story.id,
