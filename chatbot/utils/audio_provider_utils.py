@@ -10,9 +10,7 @@ from chatbot.translate.openai.openai_stt import transcribe_audio
 from chatbot.translate.sarvam.speech_to_text import transcribe_sarvam_multiple_chunks
 from chatbot.translate.sarvam.translate import sarvam_translate_text
 from django.conf import settings
-import logging
 
-logger = logging.getLogger('django')
 
 
 def text_speech_provider(voice_provider, text, gender, source_language):
@@ -89,8 +87,6 @@ def text_translate_provider(voice_provider, message_body, target_language, sourc
         )
     elif voice_provider.provider == VoiceProvider.GOOGLE:
         secret = settings.SECRETS
-        logger.info(f"got secrets: {secret}")
-        logger.info(f"got project_id: {secret.get('project_id')}")
         response = translate_text(
             project_id=secret.get('project_id'), text=message_body,
             source_language_code=LanguageMapping.get_mapped_language(source_language),
