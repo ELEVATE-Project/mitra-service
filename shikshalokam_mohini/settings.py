@@ -33,13 +33,17 @@ def load_secrets():
     ]
 
     for path in paths_to_try:
+        print(f"Trying to load secrets from: {path}")
         try:
             with open(path, 'r') as f:
+                print(f"Loaded secrets from: {path}")
                 return json.load(f)
         except FileNotFoundError:
+            print(f"File not found at: {path}")
             continue
 
     raise FileNotFoundError(f"secrets.json not found in any of: {paths_to_try}")
+
 
 
 SECRETS = load_secrets()
