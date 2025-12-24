@@ -151,7 +151,7 @@ def process_session(session, access_token):
             combined_reason="",
             flow=SessionFlowName.GuestMiStory,
             company_bot=company_bot,
-            exclude_fields=['problem_statement']
+            exclude_fields=['problem_statement', 'user_name']
         )
 
         if response_json_content.get('problem_statement'):

@@ -138,7 +138,7 @@ def save_generic_story(
         response_json_story, language, voice_provider, profile, session, combined_reason, flow=None, project_id=None,
         company_bot=None, exclude_fields=None
 ):
-
+    import copy
     if exclude_fields is None:
         exclude_fields = []
     exclude_fields_set = set(exclude_fields) if exclude_fields else set()
@@ -189,7 +189,7 @@ def save_generic_story(
     story = Story.objects.filter(session=session).first()
 
     if story and story.other_params:
-        other_params = story.other_params.copy()
+        other_params = copy.deepcopy(story.other_params)
         other_params.pop('_english_snapshot', None)
     else:
         other_params = {}
@@ -204,10 +204,10 @@ def save_generic_story(
             location_parts = filter(None, [address.block, address.district, address.state])
             fallback_location = ", ".join(location_parts)
 
-    other_params.update({
-        'flow': flow,
-        'user_name': user_name,
-    })
+    other_params['flow'] = flow
+
+    if 'user_name' not in exclude_fields_set:
+        other_params['user_name'] = user_name
 
     STORY_MODEL_FIELDS = {
         'title', 'content', 'tweet', 'objective', 'action_steps',
@@ -389,6 +389,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                                      response_json_story, previous_english_snapshot, exclude_fields=None):
     try:
 
+        import copy
         if exclude_fields is None:
             exclude_fields = set()
 
@@ -401,7 +402,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
         ).first()
 
         if existing_translation and existing_translation.other_params:
-            translated_other_params = existing_translation.other_params.copy()
+            translated_other_params = copy.deepcopy(existing_translation.other_params)
         else:
             translated_other_params = {}
 

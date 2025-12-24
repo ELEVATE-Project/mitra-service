@@ -224,15 +224,19 @@ def save_chaupal_report(
             location = user_location
 
         other_params = {
-            'challenges_faced': english_challenges_faced,
-            'solutions_discussed': english_solutions_discussed,
+            'challenges_faced': list(english_challenges_faced) if isinstance(
+                english_challenges_faced, list) else english_challenges_faced,
+            'solutions_discussed': list(english_solutions_discussed) if isinstance(
+                english_solutions_discussed, list) else english_solutions_discussed,
             'user_name': user_name,
             'location': location,
             'organization': organization,
-            'participants_count': participants_count,
+            'participants_count': dict(participants_count) if isinstance(
+                participants_count, dict) else participants_count,
             'discussion_date': discussion_date,
-            'pri_member': pri_member,
-            'school_representative': school_representative,
+            'pri_member': dict(pri_member) if isinstance(pri_member, dict) else pri_member,
+            'school_representative': dict(school_representative) if isinstance(
+                school_representative, dict) else school_representative,
             'remarks': remarks,
             'flow': flow
         }
@@ -257,6 +261,7 @@ def save_chaupal_report(
                 other_params=other_params
             )
         story.save()
+        story.refresh_from_db()
 
         if language != 'en':
             create_chaupal_translation(
@@ -324,7 +329,8 @@ def create_chaupal_translation(story, language, english_title, english_challenge
             for solution in english_solutions_discussed
         ]
 
-        translated_other_params = story.other_params.copy() if story.other_params else {}
+        import copy
+        translated_other_params = copy.deepcopy(story.other_params) if story.other_params else {}
         translated_other_params.update({
             'challenges_faced': translated_challenges_faced,
             'solutions_discussed': translated_solutions_discussed,
