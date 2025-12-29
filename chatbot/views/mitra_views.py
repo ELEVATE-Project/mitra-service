@@ -233,6 +233,7 @@ def create_project_view(request):
     return Response({
         'status': 'ok',
         'result': response,
+        'project_id': project_id,
         'mitra_result': result,
         'media': media_response
     }, status=200)
