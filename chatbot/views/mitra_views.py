@@ -9,6 +9,8 @@ import boto3
 import os
 import time
 
+from shikshalokam.models import Project
+
 
 def get_s3_presigned_url_and_upload(file_name, file_content, file_type, project_id, folder_structure):
     """Generate presigned URL and upload file to S3"""
@@ -192,6 +194,19 @@ def create_project_view(request):
             if key:
                 base = os.getenv("S3_MEDIA_URL")
                 pdf_url = f"{base}{key}"
+                if pdf_url and result.get("project_id"):
+                    Project.objects.filter(id=result.get("project_id")).update(
+                        other_params={
+                            **(Project.objects.filter(id=result.get("project_id"))
+                               .values_list("other_params", flat=True)
+                               .first() or {}),
+                            "pdf": {
+                                "url": pdf_url,
+                                "file_name": pdf_filename
+                            }
+                        }
+                    )
+
             else:
                 print("Failed to upload PDF to S3")
 
