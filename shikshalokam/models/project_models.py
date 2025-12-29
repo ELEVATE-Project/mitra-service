@@ -60,6 +60,7 @@ class Project(models.Model):
 
     project_start_date = models.DateTimeField(null=True, blank=True)
     project_end_date = models.DateTimeField(null=True, blank=True)
+    solution_download_count = models.PositiveBigIntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

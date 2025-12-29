@@ -131,6 +131,8 @@ class Media(models.Model):
     display_mode = models.CharField(
         max_length=20, choices=FileDisplayMode.choices, default=FileDisplayMode.VISIBLE
     )
+    view_count = models.PositiveBigIntegerField(default=0)
+    download_count = models.PositiveBigIntegerField(default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

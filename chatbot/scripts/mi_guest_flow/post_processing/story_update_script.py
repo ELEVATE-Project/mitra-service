@@ -168,6 +168,14 @@ def process_session(session, access_token):
             print(f"[ERROR] Validation LLM returned invalid JSON for session {session_id}")
             raise Exception("Validation LLM failed")
 
+        if "challenge" in response_json_content:
+            response_json_content.setdefault(
+                "problem_statement",
+                response_json_content.get("challenge")
+            )
+
+            response_json_content.pop("challenge", None)
+
         logger.info(f"Saving story for session {session_id}")
         print(f"[INFO] Saving story for session {session_id}")
 

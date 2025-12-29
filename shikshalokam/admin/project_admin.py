@@ -14,6 +14,7 @@ class ProjectAdmin(ImportMixin, ExportActionMixin, admin.ModelAdmin):
         'expected_title', 'story__session'
     )
     raw_id_fields = ('author', 'story')
+    readonly_fields = ('solution_download_count', )
     # inlines = [TaskInline, EvidenceInline]
 
     def save_model(self, request, obj, form, change):

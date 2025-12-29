@@ -177,9 +177,9 @@ def create_mitra_project_utils(
             )
 
         chat_session = ChatSession.objects.filter(session=session).first()
-        if chat_session:
+        if chat_session and not chat_session.project_id:
             chat_session.project_id = project_id
-            chat_session.save()
+            chat_session.save(update_fields=["project_id"])
 
         return {
             "status": "success",

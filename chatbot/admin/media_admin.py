@@ -32,7 +32,10 @@ class MediaImagesInline(admin.TabularInline):
 @admin.register(Media)
 class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
     form = MediaAdminForm
-    list_display = ('file_name', 'get_title', 'media_type', 'display_mode', 'parent__name', 'updated_at', 'created_at')
+    list_display = (
+        'file_name', 'get_title', 'media_type', 'display_mode', 'parent__name',
+        'view_count', 'download_count', 'updated_at', 'created_at'
+    )
     list_filter = (
         CustomAdvanceDateFilter,
         'display_mode',
@@ -45,6 +48,7 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
     inlines = [KeyValueInline, MediaImagesInline]
     raw_id_fields = ('company_bot', 'parent', 'organization')
     date_hierarchy = 'created_at'
+    readonly_fields = ('view_count', 'download_count')
     ordering = ('-created_at',)
 
     def file_name(self, obj):
@@ -97,11 +101,11 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
 
         if is_moderator:
             base_fields = ('name', 'organization', 'file', 'markdown_file', 'url', 'display_mode', 'description', 'extracted_text',
-                           'media_type')
+                           'media_type', 'view_count', 'download_count')
         else:
             base_fields = (
                 'name', 'organization', 'file', 'markdown_file', 'url', 'display_mode', 'description', 'extracted_text', 'priority',
-                'media_type', 'company_bot', 'parent'
+                'media_type', 'company_bot', 'parent', 'view_count', 'download_count'
             )
 
         fieldsets = [
