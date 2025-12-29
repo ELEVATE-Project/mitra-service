@@ -2,8 +2,6 @@ from django.contrib import admin
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from django.contrib.admin.decorators import action
-
-from shikshalokam.models import Project
 from .generic_upload_admin import BatchUploadMixin
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.form.media.media_form import MediaAdminForm
@@ -36,7 +34,7 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
     form = MediaAdminForm
     list_display = (
         'file_name', 'get_title', 'media_type', 'display_mode', 'parent__name',
-        'view_count', 'download_count', 'solution_download_count', 'updated_at', 'created_at'
+        'view_count', 'download_count', 'updated_at', 'created_at'
     )
     list_filter = (
         CustomAdvanceDateFilter,
@@ -136,30 +134,6 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
         # if 'delete_selected' in actions:
         #     del actions['delete_selected']
         return actions
-
-    def solution_download_count(self, obj):
-        """
-        Show solution download count based on project_id (if present)
-        """
-        try:
-            project_id_kv = obj.key_values.filter(
-                key__iexact="project_id"
-            ).first()
-
-            if not project_id_kv or not project_id_kv.value:
-                return "-"
-
-            project = Project.objects.filter(
-                project_id=project_id_kv.value
-            ).only("solution_download_count").first()
-
-            return project.solution_download_count if project else "-"
-
-        except Exception:
-            return "-"
-
-    solution_download_count.short_description = "Solution Downloads"
-
 
     @action(description="Change display mode")
     def change_display_mode_action(self, request, queryset):
