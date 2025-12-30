@@ -143,7 +143,7 @@ class MediaSearchResultSerializer(serializers.Serializer):
                     file_size = getattr(media_obj.file, "size", None)
 
                 if media_obj.thumbnail:
-                    thumbnail_url = media_obj.thumbnail.url
+                    thumbnail_url = media_obj.get_s3_url()
 
                 if media_obj.organization:
                     organization_url = media_obj.organization.url

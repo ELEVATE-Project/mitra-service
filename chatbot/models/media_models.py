@@ -10,6 +10,8 @@ from simple_history.models import HistoricalRecords
 from chatbot.celery_tasks.knowledge_service.media_tasks import save_in_vector_db
 import time
 from django.utils.text import slugify
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 
@@ -100,18 +102,6 @@ class Media(models.Model):
             return
 
     def delete(self, *args, **kwargs):
-        from chatbot.celery_tasks.knowledge_service.media_tasks import delete_from_vector_db
-        
-        # Try to delete from vector DB first
-        try:
-            result = delete_from_vector_db(self.id)
-            status_code = result if isinstance(result, int) else 200
-            print(f"Vector DB deletion status for media_id {self.id}: {status_code}")
-        except Exception as e:
-            print(f"Error deleting from vector DB for media_id {self.id}: {str(e)}")
-            status_code = 500
-        
-        # Always delete from Django DB regardless of vector DB status
         super().delete(*args, **kwargs)
 
     @classmethod
@@ -245,3 +235,15 @@ class MediaTemplate(models.Model):
 
     def __str__(self):
         return self.name
+
+
+@receiver(pre_delete, sender=Media)
+def delete_media_from_vector_db_signal(sender, instance, **kwargs):
+    from chatbot.celery_tasks.knowledge_service.media_tasks import delete_from_vector_db
+
+    try:
+        result = delete_from_vector_db(instance.id)
+        status_code = result if isinstance(result, int) else 200
+        print(f"Vector DB deletion status for media_id {instance.id}: {status_code}")
+    except Exception as e:
+        print(f"Error deleting from vector DB for media_id {instance.id}: {str(e)}")
