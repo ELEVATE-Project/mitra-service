@@ -1,8 +1,9 @@
 from celery import shared_task
 import os
-
 from chatbot.utils.database_util import update_single_file, delete_single_file, upsert_single_file
+import logging
 
+logger = logging.getLogger('django')
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 
 
@@ -81,3 +82,67 @@ def delete_from_vector_db(media_id):
     status_code, response_text = delete_single_file(media_id, company_slug)
     print(status_code, response_text)
     return status_code
+
+
+@shared_task(bind=True, max_retries=3)
+def generate_media_preview(self, media_id):
+    """
+    Generate preview/thumbnail for uploaded media
+    """
+    import tempfile
+    from chatbot.models import Media
+
+    try:
+        from chatbot.utils.media_preview import ThumbnailGenerator
+        from django.core.files.base import ContentFile
+        from io import BytesIO
+
+        media = Media.objects.get(id=media_id)
+
+        if not media.file:
+            logger.info(f"No file found for media_id {media_id}")
+            return None
+
+        temp_file = None
+
+        try:
+            file_path = media.file.path
+        except (NotImplementedError, AttributeError):
+            logger.info(f"File is on S3, downloading for media_id {media_id}")
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(media.file.name)[1])
+            media.file.open('rb')
+            temp_file.write(media.file.read())
+            media.file.close()
+            temp_file.close()
+            file_path = temp_file.name
+
+        thumbnail = ThumbnailGenerator.generate_thumbnail(file_path)
+
+        if thumbnail:
+            buffer = BytesIO()
+            thumbnail.save(buffer, format='JPEG', quality=85)
+            buffer.seek(0)
+
+            filename = f"thumb_{media.id}.jpg"
+            media.thumbnail.save(filename, ContentFile(buffer.getvalue()), save=False)
+
+            Media.objects.filter(pk=media.id).update(thumbnail=media.thumbnail)
+
+            logger.info(f"Successfully generated preview for media_id {media_id}")
+            return f"Preview generated for {media.name}"
+        else:
+            logger.info(f"Could not generate preview for media_id {media_id}")
+            return None
+
+    except Media.DoesNotExist:
+        logger.error(f"Media with id {media_id} does not exist")
+        return None
+    except Exception as e:
+        logger.error(f"Error generating preview for media_id {media_id}: {str(e)}")
+        raise self.retry(exc=e, countdown=60)
+    finally:
+        if temp_file and os.path.exists(temp_file.name):
+            try:
+                os.unlink(temp_file.name)
+            except Exception as e:
+                logger.info(f"Could not delete temp file: {str(e)}")
