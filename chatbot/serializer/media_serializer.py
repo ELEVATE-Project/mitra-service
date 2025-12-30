@@ -315,6 +315,7 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
     avg_relevance_score = serializers.FloatField(read_only=True)
     max_similarity = serializers.FloatField(read_only=True)
     match_reason = serializers.SerializerMethodField()
+    thumbnail_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Media
@@ -325,7 +326,7 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
             'document_type', 'key_entities', 'file_size', 'organization_url', 'org_logo',
             'display_mode', 'display_mode_display',
             'keyword_coverage', 'total_matching_fields', 'avg_relevance_score', 'max_similarity',
-            'match_reason'
+            'match_reason', 'thumbnail_url'
         ]
 
     def get_match_reason(self, obj):
@@ -356,6 +357,11 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
 
     def get_s3_url(self, obj):
         return self.resolve_s3_url(obj)
+
+    def get_thumbnail_url(self, obj):
+        if obj.thumbnail:
+            return obj.thumbnail.url
+        return None
 
     def get_file(self, obj):
         return obj.get_s3_url() if hasattr(obj, 'get_s3_url') else None
