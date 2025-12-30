@@ -100,11 +100,11 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
             is_moderator = False
 
         if is_moderator:
-            base_fields = ('name', 'organization', 'file', 'markdown_file', 'url', 'display_mode', 'description', 'extracted_text',
+            base_fields = ('name', 'organization', 'file', 'markdown_file', 'thumbnail', 'url', 'display_mode', 'description', 'extracted_text',
                            'media_type', 'view_count', 'download_count')
         else:
             base_fields = (
-                'name', 'organization', 'file', 'markdown_file', 'url', 'display_mode', 'description', 'extracted_text', 'priority',
+                'name', 'organization', 'file', 'markdown_file', 'thumbnail', 'url', 'display_mode', 'description', 'extracted_text', 'priority',
                 'media_type', 'company_bot', 'parent', 'view_count', 'download_count'
             )
 
