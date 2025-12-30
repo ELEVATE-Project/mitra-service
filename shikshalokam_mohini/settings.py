@@ -121,6 +121,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
+    'querycount.middleware.QueryCountMiddleware',
     'chatbot.middlewares.VerifyAuthToken'
 ]
 
@@ -141,6 +142,10 @@ TEMPLATES = [
         },
     },
 ]
+
+QUERYCOUNT = {
+    'DISPLAY_DUPLICATES': 5,
+}
 
 WSGI_APPLICATION = 'shikshalokam_mohini.wsgi.application'
 

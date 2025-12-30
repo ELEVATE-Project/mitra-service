@@ -105,6 +105,7 @@ def save_shikshalokam_story( story, problem_statement, chat_history, access_toke
     except Exception as e:
         traceback.print_exc()
         print(f"Failed to save story to Shikshalokam: {str(e)}")
+        raise e
 
 
 def get_story_html(story, profile, flow, auth=False, language=None):
@@ -126,7 +127,7 @@ def get_story_html(story, profile, flow, auth=False, language=None):
 
     story_serialized = StoryCreateSerializer(story)
     project_serialized = ProjectSerializer(project)
-    profile_serialized = ProfileSerializer(profile)
+    profile_serialized = profile
 
     pdf_template: PDFTemplates | None = None
     if auth:
@@ -149,7 +150,7 @@ def get_story_html(story, profile, flow, auth=False, language=None):
         "constants": constants.get(language_used, {}),
         "story": story_serialized.data,
         "project": project_serialized.data,
-        "profile": profile_serialized.data,
+        "profile": profile_serialized
     }
 
     print(json.dumps(render_params, indent=2))
@@ -157,152 +158,6 @@ def get_story_html(story, profile, flow, auth=False, language=None):
     template = Template(jinja_template)
     html_content = template.render(**render_params)
     return html_content
-    # if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
-    #             SessionFlowName.Reflection, SessionFlowName.YLC]:
-    #     css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/story_pdf.css"))
-    # elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
-    #     css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/shiksha_chaupal/mom_report_pdf.css"))
-    # else:
-    #     css_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../pdf/listening_activity/la_report_pdf.css"))
-    # if profile:
-    #     if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.Reflection]:
-    #         company_bot = CompanyBot.objects.get(route='/story')
-    #     elif flow in [SessionFlowName.GuestMiStory]:
-    #         company_bot = CompanyBot.objects.get(route='/guest-story')
-    #     elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
-    #         company_bot = CompanyBot.objects.get(company=profile.company, route='/chaupal-story')
-    #     else:
-    #         company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
-    # else:
-    #     if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.Reflection]:
-    #         company_bot = CompanyBot.objects.get(route='/story')
-    #     elif flow in [SessionFlowName.GuestMiStory]:
-    #         company_bot = CompanyBot.objects.get(route='/guest-story')
-    #     elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
-    #         company_bot = CompanyBot.objects.get(route='/chaupal-story')
-    #     else:
-    #         company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
-
-    # translation_languages = list(story.translations.values_list('language', flat=True))
-    # chat_session = ChatSession.objects.filter(session=story.session).first()
-
-
-    # voice_provider = Voice.objects.filter(
-    #     company_bot=company_bot, type=VoiceType.TextToText, language=language_used
-    # ).first()
-
-    # story_vernacular = StoryVernacular.objects.filter(
-    #     company_bot=company_bot, language=language_used
-    # ).first()
-    # if story_vernacular:
-    #     print(f"story_vernacular found: {story_vernacular.id} & {story_vernacular.company_bot} & {story_vernacular.language}")
-    # if language_used == 'en':
-    #     object_to_pass = story
-    #     if project:
-    #         project_serializer = ProjectSerializer(project)
-    #         project_to_pass = project_serializer.data
-    #     else:
-    #         project_to_pass = None
-    # else:
-    #     try:
-    #         story_translation = story.translations.get(language=language_used)
-    #         object_to_pass = story_translation
-    #     except StoryTranslation.DoesNotExist:
-    #         print(f"Translation for language '{language_used}' not found, using English story")
-    #         object_to_pass = story
-    #     if project:
-    #         try:
-    #             project_vernacular = project.project_vernacular.get(language=language_used)
-    #             project_details = json.loads(project_vernacular.details)
-    #             project_to_pass = project_details.get('project', {})
-    #         except ProjectVernacular.DoesNotExist:
-    #             print(f"Project vernacular for language '{language_used}' not found, using English project")
-    #             project_serializer = ProjectSerializer(project)
-    #             project_to_pass = project_serializer.data
-    #         except (json.JSONDecodeError, KeyError) as e:
-    #             print(f"Error parsing project vernacular details: {e}, using English project")
-    #             project_serializer = ProjectSerializer(project)
-    #             project_to_pass = project_serializer.data
-    #     else:
-    #         print("No project found for story, using None for project_to_pass")
-    #         project_to_pass = None
-
-    # if project_to_pass:
-    #     pdf_file_name = project_to_pass.get('expected_title') or project_to_pass.get('actual_title') or "Improvement_story"
-    # else:
-    #     pdf_file_name = object_to_pass.title or "Improvement_story"
-
-    # print("Using pdf name: ", pdf_file_name)
-    # with open(css_path, 'r') as css_file:
-    #     inline_css = css_file.read()
-    # html_content = f"""
-    #         <!DOCTYPE html>
-    #         <html>
-    #             <head>
-    #                 <meta charset="utf-8" />
-    #                 <title>{pdf_file_name}</title>
-    #                 <link rel="preconnect" href="https://fonts.googleapis.com">
-    #                 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    #                 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Open+Sans:ital,wght@0,300..800;1,300..800&family=Urbanist:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
-    #                 <style>
-    #                 #header, #footer {{ padding: 0 !important; }}
-    #                 {inline_css}
-    #                 </style>
-    #             </head>
-    #          <body>
-
-    #     """
-
-    # print("Generating for FLOW: ", flow)
-    # if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory,
-    #             SessionFlowName.Reflection, SessionFlowName.YLC]:
-    #     html_content += get_first_page_html(
-    #         profile=profile, project=project_to_pass, voice_provider=voice_provider, story=object_to_pass,
-    #         story_vernacular=story_vernacular, flow=flow
-    #     )
-    #     html_content += get_story_secondpage_html(
-    #         story=object_to_pass, project=project_to_pass, story_vernacular=story_vernacular
-    #     )
-    #     html_content += get_story_images_page_html(story=story, story_vernacular=story_vernacular)
-    #     html_content += get_thirdpage_html(
-    #         story=object_to_pass, profile=profile, project=project_to_pass, voice_provider=voice_provider,
-    #         story_vernacular=story_vernacular, flow=flow
-    #     )
-    # elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
-    #     html_content += get_mom_report_html(
-    #         story=object_to_pass, story_vernacular=story_vernacular, profile=profile,
-    #         voice_provider=voice_provider
-    #     )
-    # else:
-    #     html_content += get_common_report_html(
-    #         story=object_to_pass, profile=profile, story_vernacular=story_vernacular
-    #     )
-
-    # html_content += f"""
-    #     <script>
-    #     document.addEventListener("DOMContentLoaded", function () {{
-    #         function checkOverflowAndInsertBreaks() {{
-    #             const containers = document.querySelectorAll(".story-second-page-container");
-    #             console.log("containers: ", containers)
-    #             containers.forEach(container => {{
-    #                 if (container.scrollHeight > container.clientHeight) {{
-    #                     // Create a page break div if the content overflows
-    #                     const pageBreak = document.createElement("div");
-    #                     pageBreak.style.pageBreakBefore = "always";
-    #                     container.parentNode.insertBefore(pageBreak, container.nextSibling);
-    #                 }}
-    #             }});
-    #         }}
-
-    #         checkOverflowAndInsertBreaks(); // Run on page load
-    #     }});
-    #     </script>
-    #     </body>
-    # </html>
-    # """
-    # return html_content
-    # return ""
-
 
 def update_story_pdf(access_token, session, flow, is_edit_story=False):
 

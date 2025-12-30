@@ -13,6 +13,7 @@ from django.http import JsonResponse
 from django.contrib.sessions.backends.db import SessionStore
 from rest_framework_simplejwt.tokens import RefreshToken
 from chatbot.translate.ai4Bharat.transliterate import call_ai4bharat_transliterate_api
+from chatbot.models.company_models import Flow
 
 logger = logging.getLogger('django')
 
@@ -32,65 +33,67 @@ def generate_session_id(request):
 def post_profile(request):
     try:
         data = request.data
-        if not ('email' in data and ('company' in data or 'subdomain' in data)):
+        if not ('email' in data and 'company' in data):
             return Response({
                'status': 'error',
                'message': 'email and subdomain/company are mandatory'
             }, status=400)
-        company_slug = data.get('company') if 'company' in data else data.get('subdomain')
-        company = Company.objects.filter(slug=company_slug)
+        company_slug = data.get('company')
+        company = Company.objects.get(slug=company_slug)
 
-        if len(company) > 0:
-            company = company[0]
-            email = data['email']
-            first_name = data.get('first_name', '')
-            target_language = data.get('preferred_route', None)
-            if first_name and first_name != '' and target_language:
-                source_language='en'
-                first_names = call_ai4bharat_transliterate_api(
-                    source_language=source_language, target_language=target_language, message_body=first_name
-                )
-                if first_names and isinstance(first_names, dict):
-                    first_names = first_names.get('content', [])
-                if first_names and isinstance(first_names, list) and len(first_names) > 0:
-                    data['first_name'] = first_names[0]
-            profile = Profile.objects.filter(email=email, company=company).first()
-            if profile:
-                serializer = ProfileSerializer(profile, data=request.data)
-            else:
-                phone = data.get('phone', None)
-                if phone:
-                    profile = Profile.objects.filter(phone=phone, company=company)
-                    if len(profile) > 0:
-                        serializer = ProfileSerializer(profile[0])
-                        return Response(serializer.data)
-                serializer = ProfileSerializer(data=request.data)
-            if serializer.is_valid():
-                serializer.save(company=company)
-                return Response(serializer.data)
-            else:
-                return Response({
-                    'status': 'error',
-                    'message': 'Invalid data',
-                    'errors': serializer.errors
-                }, status=400)
+        email = data['email']
+        first_name = data.get('first_name', '')
+        target_language = data.get('preferred_route', None)
+        if first_name and first_name != '' and target_language:
+            source_language='en'
+            first_names = call_ai4bharat_transliterate_api(
+                source_language=source_language, target_language=target_language, message_body=first_name
+            )
+            if first_names and isinstance(first_names, dict):
+                first_names = first_names.get('content', [])
+            if first_names and isinstance(first_names, list) and len(first_names) > 0:
+                data['first_name'] = first_names[0]
+
+        # handling the latest flow
+        flow_route = data.get('latest_flow', None)
+
+        if flow_route:
+            flow = Flow.objects.values('id').get(flow_route=flow_route)
+            data['latest_flow'] = flow.get('id')
+
+        profile = Profile.objects.filter(email=email, company=company).first()
+        if profile:
+            serializer = ProfileSerializer(profile, data=data)
         else:
-            if company_slug in ['demo', 'demous', 'localhost', 'interview', 'voicedemo']:
-                email = data['email']
-                profile = Profile.objects.filter(email=email).first()
-                if profile:
-                    serializer = ProfileSerializer(profile, data=request.data)
-                else:
-                    serializer = ProfileSerializer(data=request.data)
-                if serializer.is_valid():
-                    serializer.save()
+            phone = data.get('phone', None)
+            if phone:
+                profile = Profile.objects.filter(phone=phone, company=company)
+                if len(profile) > 0:
+                    serializer = ProfileSerializer(profile[0])
                     return Response(serializer.data)
-                else:
-                    return Response({
-                        'status': 'error',
-                        'message': 'Invalid data',
-                        'errors': serializer.errors
-                    }, status=400)
+            serializer = ProfileSerializer(data=data)
+        if serializer.is_valid():
+            serializer.save(company=company)
+            return Response(serializer.data)
+        else:
+            return Response({
+                'status': 'error',
+                'message': 'Invalid data',
+                'errors': serializer.errors
+            }, status=400)
+
+    except Company.DoesNotExist:
+        return Response({
+            'status': 'error',
+            'message': 'Company does not exist'
+        }, status=404)
+
+    except Flow.DoesNotExist:
+        return Response({
+            'status': 'error',
+            'message': 'Flow does not exist'
+        }, status=404)
+
     except Exception as e:
         traceback.print_exc()
         return Response({

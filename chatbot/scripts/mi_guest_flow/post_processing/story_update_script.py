@@ -91,7 +91,7 @@ def process_session(session, access_token):
             type=VoiceType.TextToText,
             language=language
         ).first()
-        company_chats = CompanyChat.objects.filter(session=session_id).order_by('created_at')
+        company_chats = CompanyChat.objects.select_related('sender', 'receiver').filter(session=session_id).order_by('created_at').values("receiver", "receiver__id", "translated_message", "message", "status", "created_at")
 
         intro_to_pass = None
         route_to_use = '/guided_guest'

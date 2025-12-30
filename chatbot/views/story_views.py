@@ -1,27 +1,20 @@
-import json
-import traceback
-
-from django.contrib.auth import PermissionDenied
-from chatbot.models import Story, StoryMedia, ChatSession, SessionFlowName, StoryTranslation, VoiceType, Voice
+from chatbot.models import Story, StoryMedia, SessionFlowName
 from chatbot.models.base_models import Flow
 from chatbot.models.enums import CreateStoryChoices
-from chatbot.serializer.story_serializer import StoryCreateSerializer, StoryRetrieveSerializer, \
-    StoryMediaRetrieveSerializer, StoryFullSerializer
-from chatbot.utils.media_utils import upload_to_cloud
+from chatbot.models.media_models import ProfileMedia
+from chatbot.serializer.profile_serializer import ProfileMediaSerializer
+from chatbot.serializer.story_serializer import StoryCreateSerializer, StoryRetrieveSerializer, StoryMediaRetrieveSerializer, StoryFullSerializer
+from chatbot.utils.recreate_story_utils import re_create_story_object
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf
-import django_filters
+from chatbot.utils.story_utils.base.story_update_utils import extract_update_data, get_or_create_translation, update_translation_fields, sync_to_main_story
+from chatbot.utils.story_utils.base.translation_mixins import LanguageDetectionMixin
+from chatbot.utils.story_utils.story_utils import create_story_object
+from django.contrib.auth import PermissionDenied
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from chatbot.models.media_models import ProfileMedia
-from chatbot.serializer.profile_serializer import ProfileMediaSerializer
-from chatbot.utils.recreate_story_utils import re_create_story_object
-from chatbot.utils.story_llama_utils import translate_field
-from chatbot.utils.story_utils.base.story_update_utils import extract_update_data, get_or_create_translation, \
-    update_translation_fields, sync_to_main_story
-from chatbot.utils.story_utils.base.translation_mixins import LanguageDetectionMixin
-from chatbot.utils.story_utils.format_utils import get_formatted_story
-from chatbot.utils.story_utils.story_utils import create_story_object
+import django_filters
+import traceback
 
 
 @api_view(['POST'])
@@ -66,7 +59,7 @@ def end_story(request):
                 'content': content,
                 'error_message': error_msg
             }, status=200)
-    except Flow.DoesNotExists:
+    except Flow.DoesNotExist:
         return Response({
             'status': 'error',
             'message': '',

@@ -1,26 +1,18 @@
-import traceback
-from pprint import pprint
-
-from rest_framework.exceptions import NotFound
-
-from chatbot.models import (Profile, CompanyChat, CompanyBot,
-                            ChatSession, ChatStatus, Voice, VoiceType, SessionFlowName, BotVernacular, StoryTranslation)
+from chatbot.models import (Profile, CompanyChat, ChatSession, ChatStatus, Voice, VoiceType, SessionFlowName, BotVernacular, StoryTranslation)
 from chatbot.models.company_models import Flow
+from chatbot.serializer.profile_serializer import ProfileSerializer
 from chatbot.utils.chat_utils import get_guided_chat
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
 from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
 from chatbot.utils.story_llama_utils import translate_field
-import asyncio
-
-from chatbot.utils.story_utils.chaupal.chaupal_story_tasks import save_chaupal_report
-from chatbot.utils.story_utils.format_utils import get_formatted_story
-from chatbot.utils.story_utils.get_story_prompts import get_creation_promt, get_chat_message, get_tool_values, \
-    get_validation_prompt
-from chatbot.utils.story_utils.mi_story_capture.mi_story_tasks import save_story
-from chatbot.utils.story_utils.ptm.ptm_story_tasks import save_ptm_story
 from chatbot.utils.story_utils.common.generic_story_tasks import save_generic_story
+from chatbot.utils.story_utils.format_utils import get_formatted_story
+from chatbot.utils.story_utils.get_story_prompts import get_creation_promt, get_tool_values, get_validation_prompt
 from chatbot.utils.story_utils.story_llm import generate_story_llm, validate_story_llm
+from rest_framework.exceptions import NotFound
+import asyncio
 import logging
+import traceback
 
 logger = logging.getLogger('django')
 
@@ -30,8 +22,12 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
     company_bot = None
     print("Working with flow: ", flow)
     try:
-        profile = Profile.objects.filter(id=profile_id).first()
-        company_chats = CompanyChat.objects.filter(session=session).order_by('created_at')
+        profile = Profile.objects.prefetch_related('profile_address').defer('password').get(id=profile_id)
+
+        print("Profile instance")
+
+        profile_data = ProfileSerializer(profile).data
+        company_chats = CompanyChat.objects.select_related('sender', 'receiver').filter(session=session).order_by('created_at').values("receiver", "receiver__id", "translated_message", "message", "status", "created_at")
 
         company_bot, validate_bot = get_story_company_bot(flow=flow)
 
@@ -39,7 +35,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
 
         chat_session = ChatSession.objects.get(session=session)
 
-        formatted_content_prompt, formatted_story_prompt, tag_context, project_data = get_creation_promt(company_bot=company_bot, profile=profile)
+        formatted_content_prompt, formatted_story_prompt, tag_context, project_data = get_creation_promt(company_bot=company_bot, profile=profile_data)
 
         intro_to_pass = None
 
@@ -50,12 +46,12 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
                 if bot_vernacular:
                     if access_token:
                         intro_to_pass = bot_vernacular.introductory_message
-                        if profile and profile.first_name and intro_to_pass:
+                        if profile_data and profile_data.get("first_name") and intro_to_pass:
                             words = intro_to_pass.split(" ", 1)
                             if len(words) > 1:
-                                intro_to_pass = f"{words[0]} {profile.first_name} {words[1]}"
+                                intro_to_pass = f"{words[0]} {profile_data.get("first_name")} {words[1]}"
                             else:
-                                intro_to_pass = f"{words[0]} {profile.first_name}"
+                                intro_to_pass = f"{words[0]} {profile_data.get("first_name")}"
                     else:
                         intro_to_pass = bot_vernacular.alt_introductory_message
             else:
@@ -83,7 +79,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         validate_content_prompt, validate_story_prompt = get_validation_prompt(
             response_json_story=response_json_story, validate_bot=validate_bot,
             response_json_content=response_json_content, tag_context=tag_context, project_data=project_data,
-            profile=profile
+            profile=profile_data
         )
 
         tool_content, tool_story = get_tool_values(company_bot=validate_bot)
@@ -103,7 +99,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
 
         story, problem_statement = save_generic_story(
             response_json_story=response_json_story, language=language, voice_provider=voice_provider,
-            profile=profile, session=session, combined_reason=combined_reason, flow=flow,
+            profile=profile_data, session=session, combined_reason=combined_reason, flow=flow,
              company_bot=company_bot
         )
 
@@ -134,7 +130,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
             conversation, chat_history = [], []
 
         save_shikshalokam_story(
-            story=story, profile=profile,
+            story=story, profile=profile_data,
             problem_statement=problem_statement, chat_history=chat_history, access_token=access_token,
             project_id=None, session=session, conversation=conversation, flow=flow, language=language
         )

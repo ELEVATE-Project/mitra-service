@@ -248,43 +248,43 @@ def get_conversation(company_chats, ai_user):
 
 
 def get_stored_conversation(company_chats):
-    ai_user = Profile.objects.get(id=1)
+    ai_user = Profile.objects.values('id').get(id=1)
     conversation=[]
     for chat in company_chats:
-        if chat.receiver == ai_user:
-            user_message = chat.message
-            if chat.translated_message is not None and chat.translated_message != '':
-                user_message = chat.translated_message
+        if chat.get("receiver") == ai_user.get("id"):
+            user_message = chat.get("message")
+            if chat.get("translated_message") is not None and chat.get("translated_message") != '':
+                user_message = chat.get("translated_message")
             conversation.append({
                 'user': user_message,
-                'timestamp': chat.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'timestamp': chat.get("created_at").strftime('%Y-%m-%d %H:%M:%S'),
             })
         else:
             conversation.append({
-                'bot': chat.message,
-                'timestamp': chat.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+                'bot': chat.get("message"),
+                'timestamp': chat.get("created_at").strftime('%Y-%m-%d %H:%M:%S'),
             })
 
     return conversation
 
 def get_stored_chathistory(company_chats):
-    ai_user = Profile.objects.get(id=1)
+    ai_user = Profile.objects.values("id").get(id=1)
     chat_history=[]
     for chat in company_chats:
-        if chat.receiver == ai_user:
-            user_message = chat.message
-            if chat.translated_message is not None and chat.translated_message != '':
-                user_message = chat.translated_message
+        if chat.get("receiver") == ai_user.get("id"):
+            user_message = chat.get("message")
+            if chat.get("translated_message") is not None and chat.get("translated_message") != '':
+                user_message = chat.get("translated_message")
             chat_history.append({
                 'user': user_message,
-                'timestamp': chat.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-                'event': chat.status
+                'timestamp': chat.get("created_at").strftime('%Y-%m-%d %H:%M:%S'),
+                'event': chat.get("status")
             })
         else:
             chat_history.append({
-                'bot': chat.message,
-                'timestamp': chat.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-                'event': chat.status
+                'bot': chat.get("message"),
+                'timestamp': chat.get("created_at").strftime('%Y-%m-%d %H:%M:%S'),
+                'event': chat.get("status")
             })
 
     return chat_history

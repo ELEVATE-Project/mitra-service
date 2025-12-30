@@ -196,10 +196,10 @@ def save_generic_story(
 
     previous_english_snapshot = {k: v for k, v in other_params.items()}
 
-    user_name = profile.first_name if profile and profile.first_name else ''
+    user_name = profile.get("first_name", "") if profile and profile.get("first_name") else ''
     fallback_location = ""
     if profile:
-        address = ProfileAddress.objects.filter(profile=profile).first()
+        address = profile.get("profile_address", [])
         if address:
             location_parts = filter(None, [address.block, address.district, address.state])
             fallback_location = ", ".join(location_parts)
@@ -317,7 +317,7 @@ def save_generic_story(
             story_fields_to_update['location'] = ""
 
     story_fields_to_update.update({
-        'author': profile,
+        'author': profile.get("first_name", ""),
         'session': session,
         'language': 'en',
         'stage': StoryStatusChoices.COMPLETED,
