@@ -132,7 +132,7 @@ def create_project_view(request):
     print("Result: ", result)
     pdf_url = None
     pdf_filename = "Project_Report.pdf"
-
+    project_id = result.get('project_id') if not project_id else project_id
     try:
         # Get author info from profile
         author_name = profile.first_name if profile else ""
