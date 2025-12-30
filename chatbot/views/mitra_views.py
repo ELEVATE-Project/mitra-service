@@ -175,7 +175,7 @@ def create_project_view(request):
 
         print("PDF report is generated successfully")
 
-        if pdf_content and result.get('project_id'):
+        if pdf_content and result.get('id'):
             # Prepare file name for S3
             pdf_filename = f"{project_title}.pdf" if project_title else "Project_Report.pdf"
             # Clean filename for S3 (remove special characters)
@@ -187,17 +187,17 @@ def create_project_view(request):
                 file_name=pdf_filename,
                 file_content=pdf_content.read(),
                 file_type="application/pdf",
-                project_id=result.get('project_id'),
+                project_id=result.get('id'),
                 folder_structure="shikshagraha_commons/"
             )
 
             if key:
                 base = os.getenv("S3_MEDIA_URL")
                 pdf_url = f"{base}{key}"
-                if pdf_url and result.get("project_id"):
-                    Project.objects.filter(id=result.get("project_id")).update(
+                if pdf_url and result.get("id"):
+                    Project.objects.filter(id=result.get("id")).update(
                         other_params={
-                            **(Project.objects.filter(id=result.get("project_id"))
+                            **(Project.objects.filter(id=result.get("id"))
                                .values_list("other_params", flat=True)
                                .first() or {}),
                             "pdf": {
