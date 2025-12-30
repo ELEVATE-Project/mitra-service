@@ -185,7 +185,7 @@ def create_mitra_project_utils(
             "status": "success",
             "message": "Project and Task created successfully",
             "id": project.id,
-            "project_id": project,
+            "project_id": project.project_id,
         }
 
     except Profile.DoesNotExist:
