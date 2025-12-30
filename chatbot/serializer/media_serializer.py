@@ -76,8 +76,6 @@ class MediaSearchResultSerializer(serializers.Serializer):
     def to_representation(self, instance):
         metadata = instance.get('metadata', {})
 
-        print(f"[MediaSearchResultSerializer] Available metadata keys: {list(metadata.keys())}")
-
         url = metadata.get('url', '')
         company = metadata.get('company', '')
         created_at = metadata.get('created_at', '')
@@ -133,17 +131,15 @@ class MediaSearchResultSerializer(serializers.Serializer):
                 if source_child:
                     db_media_type = source_child.media_type
                     db_media_type_display = source_child.get_media_type_display()
-                    print(f"[MediaSearchResultSerializer] Media ID {media_id}: Using source child media_type = {db_media_type}, display = {db_media_type_display}")
                 else:
                     db_media_type = media_obj.media_type
                     db_media_type_display = media_obj.get_media_type_display()
-                    print(f"[MediaSearchResultSerializer] Media ID {media_id}: No source child, using own media_type = {db_media_type}, display = {db_media_type_display}")
 
                 if media_obj.file:
                     file_size = getattr(media_obj.file, "size", None)
 
                 if media_obj.thumbnail:
-                    thumbnail_url = media_obj.thumbnail.get_thumbnail_s3_url()
+                    thumbnail_url = media_obj.get_thumbnail_s3_url()
 
                 if media_obj.organization:
                     organization_url = media_obj.organization.url
@@ -163,7 +159,6 @@ class MediaSearchResultSerializer(serializers.Serializer):
                 db_priority = media_obj.priority
 
             except Exception as e:
-                print(f"[MediaSearchResultSerializer] Error fetching DB fields for media_id {media_id}: {str(e)}")
                 file_size = metadata.get('file_size', None)
                 organization_url = metadata.get('organization_url', None)
 
@@ -171,13 +166,7 @@ class MediaSearchResultSerializer(serializers.Serializer):
             for key in ['KEY ENTITIES', 'key_entities', 'Key Entities', 'KEY_ENTITIES', 'keyEntities']:
                 if key in metadata:
                     key_entities = metadata[key]
-                    print(f"[MediaSearchResultSerializer] Media ID {media_id}: key_entities from metadata "
-                          f"(key='{key}') = {key_entities}")
                     break
-
-            if key_entities is None:
-                print(f"[MediaSearchResultSerializer] Media ID {media_id}: key_entities NOT FOUND in metadata "
-                      f"or database")
 
         if db_media_type is None:
             metadata_file_type = metadata.get('type', '')
@@ -365,7 +354,7 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
 
     def get_thumbnail_url(self, obj):
         if obj.thumbnail:
-            return obj.thumbnail.get_thumbnail_s3_url()
+            return obj.get_thumbnail_s3_url()
         return None
 
     def get_file(self, obj):
