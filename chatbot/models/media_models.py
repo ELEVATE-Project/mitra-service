@@ -7,7 +7,11 @@ from shikshalokam.models.enums import PriorityChoices
 from django.contrib.postgres.indexes import GinIndex
 from django.contrib.postgres.search import SearchVector, TrigramSimilarity
 from simple_history.models import HistoricalRecords
-from chatbot.celery_tasks.knowledge_service.media_tasks import save_in_vector_db, update_in_vector_db
+from chatbot.celery_tasks.knowledge_service.media_tasks import save_in_vector_db
+import time
+from django.utils.text import slugify
+from django.db.models.signals import pre_delete
+from django.dispatch import receiver
 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 
@@ -37,15 +41,46 @@ class ProfileMedia(models.Model):
 
 class Media(models.Model):
 
-    def get_file_upload_path(self, filename):
-        folder_name = f'shikshalokam/media/{self.company_bot.id}'
-        upload_path = f"{folder_name}/{filename}"
-        return upload_path
+    def _get_org_slug(self):
+        return self.organization.slug if self.organization else self.company_bot.company.slug
 
+    def _generate_clean_filename(self, filename):
+        timestamp = int(time.time())
+        base_name, ext = os.path.splitext(filename)
+        safe_name = slugify(base_name)[:40]
+        return f"{timestamp}_{safe_name}{ext.lower()}"
+
+    def get_file_upload_path(self, filename):
+        clean_filename = self._generate_clean_filename(filename)
+        org_slug = self._get_org_slug()
+
+        return f'shikshalokam/media/{org_slug}/{clean_filename}'
+
+    def get_thumbnail_upload_path(self, filename):
+        clean_filename = self._generate_clean_filename(filename)
+        org_slug = self._get_org_slug()
+
+        return f'shikshalokam/media/{org_slug}/thumbnails/{clean_filename}'
 
     def save(self, *args, company_slug=None, **kwargs):
         is_new = self.pk is None
+        file_changed = False
+
+        # Check if file has changed (for updates)
+        if not is_new and self.pk:
+            try:
+                old_instance = Media.objects.get(pk=self.pk)
+                file_changed = old_instance.file != self.file
+            except Media.DoesNotExist:
+                pass
+
         super().save(*args, **kwargs)
+
+        if is_new or file_changed:
+            from chatbot.celery_tasks.knowledge_service.media_tasks import generate_media_preview
+            # Schedule preview generation with a small delay
+            generate_media_preview.apply_async(args=(self.id,), countdown=2)
+
         if is_new:
             task = save_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
             return
@@ -67,18 +102,6 @@ class Media(models.Model):
             return
 
     def delete(self, *args, **kwargs):
-        from chatbot.celery_tasks.knowledge_service.media_tasks import delete_from_vector_db
-        
-        # Try to delete from vector DB first
-        try:
-            result = delete_from_vector_db(self.id)
-            status_code = result if isinstance(result, int) else 200
-            print(f"Vector DB deletion status for media_id {self.id}: {status_code}")
-        except Exception as e:
-            print(f"Error deleting from vector DB for media_id {self.id}: {str(e)}")
-            status_code = 500
-        
-        # Always delete from Django DB regardless of vector DB status
         super().delete(*args, **kwargs)
 
     @classmethod
@@ -114,6 +137,11 @@ class Media(models.Model):
     def get_s3_url(self):
         return f"{S3_BASE_URL}{self.file.name}"
 
+    def get_thumbnail_s3_url(self):
+        if not self.thumbnail:
+            return None
+        return f"{S3_BASE_URL}{self.thumbnail.name}"
+
     name = models.CharField(max_length=1000)
     organization = models.ForeignKey(Company, on_delete=models.CASCADE, null=True, blank=True)
     url = models.URLField(max_length=1000, null=True, blank=True)
@@ -133,7 +161,10 @@ class Media(models.Model):
     )
     view_count = models.PositiveBigIntegerField(default=0)
     download_count = models.PositiveBigIntegerField(default=0)
-
+    thumbnail = models.ImageField(
+        upload_to=get_thumbnail_upload_path, max_length=1000, null=True, blank=True,
+        help_text="Auto-generated preview thumbnail"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     history = HistoricalRecords()
@@ -209,3 +240,15 @@ class MediaTemplate(models.Model):
 
     def __str__(self):
         return self.name
+
+
+@receiver(pre_delete, sender=Media)
+def delete_media_from_vector_db_signal(sender, instance, **kwargs):
+    from chatbot.celery_tasks.knowledge_service.media_tasks import delete_from_vector_db
+
+    try:
+        result = delete_from_vector_db(instance.id)
+        status_code = result if isinstance(result, int) else 200
+        print(f"Vector DB deletion status for media_id {instance.id}: {status_code}")
+    except Exception as e:
+        print(f"Error deleting from vector DB for media_id {instance.id}: {str(e)}")

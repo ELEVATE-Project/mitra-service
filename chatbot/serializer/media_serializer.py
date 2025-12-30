@@ -76,8 +76,6 @@ class MediaSearchResultSerializer(serializers.Serializer):
     def to_representation(self, instance):
         metadata = instance.get('metadata', {})
 
-        print(f"[MediaSearchResultSerializer] Available metadata keys: {list(metadata.keys())}")
-
         url = metadata.get('url', '')
         company = metadata.get('company', '')
         created_at = metadata.get('created_at', '')
@@ -111,6 +109,7 @@ class MediaSearchResultSerializer(serializers.Serializer):
         db_priority = None
         db_media_type = None
         db_media_type_display = None
+        thumbnail_url = None
 
         if media_id:
             try:
@@ -121,7 +120,7 @@ class MediaSearchResultSerializer(serializers.Serializer):
                     'subdocuments__key_values'
                 ).only(
                     'id', 'file', 'media_type', 'organization__url', 'organization__logo', 'display_mode',
-                    'description', 'priority'
+                    'description', 'thumbnail', 'priority'
                 ).get(id=media_id)
 
                 source_child = media_obj.subdocuments.filter(
@@ -132,14 +131,15 @@ class MediaSearchResultSerializer(serializers.Serializer):
                 if source_child:
                     db_media_type = source_child.media_type
                     db_media_type_display = source_child.get_media_type_display()
-                    print(f"[MediaSearchResultSerializer] Media ID {media_id}: Using source child media_type = {db_media_type}, display = {db_media_type_display}")
                 else:
                     db_media_type = media_obj.media_type
                     db_media_type_display = media_obj.get_media_type_display()
-                    print(f"[MediaSearchResultSerializer] Media ID {media_id}: No source child, using own media_type = {db_media_type}, display = {db_media_type_display}")
 
                 if media_obj.file:
                     file_size = getattr(media_obj.file, "size", None)
+
+                if media_obj.thumbnail:
+                    thumbnail_url = media_obj.get_thumbnail_s3_url()
 
                 if media_obj.organization:
                     organization_url = media_obj.organization.url
@@ -159,7 +159,6 @@ class MediaSearchResultSerializer(serializers.Serializer):
                 db_priority = media_obj.priority
 
             except Exception as e:
-                print(f"[MediaSearchResultSerializer] Error fetching DB fields for media_id {media_id}: {str(e)}")
                 file_size = metadata.get('file_size', None)
                 organization_url = metadata.get('organization_url', None)
 
@@ -167,13 +166,7 @@ class MediaSearchResultSerializer(serializers.Serializer):
             for key in ['KEY ENTITIES', 'key_entities', 'Key Entities', 'KEY_ENTITIES', 'keyEntities']:
                 if key in metadata:
                     key_entities = metadata[key]
-                    print(f"[MediaSearchResultSerializer] Media ID {media_id}: key_entities from metadata "
-                          f"(key='{key}') = {key_entities}")
                     break
-
-            if key_entities is None:
-                print(f"[MediaSearchResultSerializer] Media ID {media_id}: key_entities NOT FOUND in metadata "
-                      f"or database")
 
         if db_media_type is None:
             metadata_file_type = metadata.get('type', '')
@@ -198,6 +191,7 @@ class MediaSearchResultSerializer(serializers.Serializer):
             'created_at': created_at,
             'updated_at': updated_at,
             's3_url': url,
+            'thumbnail_url': thumbnail_url,
             'file': url,
             'tag_names': tags,
             'title': title,
@@ -315,6 +309,7 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
     avg_relevance_score = serializers.FloatField(read_only=True)
     max_similarity = serializers.FloatField(read_only=True)
     match_reason = serializers.SerializerMethodField()
+    thumbnail_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Media
@@ -325,7 +320,7 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
             'document_type', 'key_entities', 'file_size', 'organization_url', 'org_logo',
             'display_mode', 'display_mode_display',
             'keyword_coverage', 'total_matching_fields', 'avg_relevance_score', 'max_similarity',
-            'match_reason'
+            'match_reason', 'thumbnail_url'
         ]
 
     def get_match_reason(self, obj):
@@ -356,6 +351,11 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
 
     def get_s3_url(self, obj):
         return self.resolve_s3_url(obj)
+
+    def get_thumbnail_url(self, obj):
+        if obj.thumbnail:
+            return obj.get_thumbnail_s3_url()
+        return None
 
     def get_file(self, obj):
         return obj.get_s3_url() if hasattr(obj, 'get_s3_url') else None

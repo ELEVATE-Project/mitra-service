@@ -48,7 +48,7 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
     inlines = [KeyValueInline, MediaImagesInline]
     raw_id_fields = ('company_bot', 'parent', 'organization')
     date_hierarchy = 'created_at'
-    readonly_fields = ('view_count', 'download_count')
+    readonly_fields = ('view_count', 'download_count', 'thumbnail')
     ordering = ('-created_at',)
 
     def file_name(self, obj):
@@ -100,11 +100,11 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
             is_moderator = False
 
         if is_moderator:
-            base_fields = ('name', 'organization', 'file', 'markdown_file', 'url', 'display_mode', 'description', 'extracted_text',
+            base_fields = ('name', 'organization', 'file', 'markdown_file', 'thumbnail', 'url', 'display_mode', 'description', 'extracted_text',
                            'media_type', 'view_count', 'download_count')
         else:
             base_fields = (
-                'name', 'organization', 'file', 'markdown_file', 'url', 'display_mode', 'description', 'extracted_text', 'priority',
+                'name', 'organization', 'file', 'markdown_file', 'thumbnail', 'url', 'display_mode', 'description', 'extracted_text', 'priority',
                 'media_type', 'company_bot', 'parent', 'view_count', 'download_count'
             )
 
@@ -230,6 +230,22 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
                  name='chatbot_media_get_cached_item'),
         ]
         return custom_urls + urls
+
+    def delete_queryset(self, request, queryset):
+        errors = []
+
+        for obj in queryset:
+            try:
+                obj.delete()
+            except Exception as e:
+                errors.append(f"{obj.id}: {str(e)}")
+
+        if errors:
+            self.message_user(
+                request,
+                f"Some files failed to delete:\n" + "\n".join(errors),
+                level="error"
+            )
 
 
 @admin.register(Tag)
