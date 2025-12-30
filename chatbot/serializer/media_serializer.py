@@ -111,6 +111,7 @@ class MediaSearchResultSerializer(serializers.Serializer):
         db_priority = None
         db_media_type = None
         db_media_type_display = None
+        thumbnail_url = None
 
         if media_id:
             try:
@@ -140,6 +141,9 @@ class MediaSearchResultSerializer(serializers.Serializer):
 
                 if media_obj.file:
                     file_size = getattr(media_obj.file, "size", None)
+
+                if media_obj.thumbnail:
+                    thumbnail_url = media_obj.thumbnail.url
 
                 if media_obj.organization:
                     organization_url = media_obj.organization.url
@@ -198,6 +202,7 @@ class MediaSearchResultSerializer(serializers.Serializer):
             'created_at': created_at,
             'updated_at': updated_at,
             's3_url': url,
+            'thumbnail_url': thumbnail_url,
             'file': url,
             'tag_names': tags,
             'title': title,
