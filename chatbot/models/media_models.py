@@ -137,6 +137,11 @@ class Media(models.Model):
     def get_s3_url(self):
         return f"{S3_BASE_URL}{self.file.name}"
 
+    def get_thumbnail_s3_url(self):
+        if not self.thumbnail:
+            return None
+        return f"{S3_BASE_URL}{self.thumbnail.name}"
+
     name = models.CharField(max_length=1000)
     organization = models.ForeignKey(Company, on_delete=models.CASCADE, null=True, blank=True)
     url = models.URLField(max_length=1000, null=True, blank=True)
