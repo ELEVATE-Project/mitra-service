@@ -9,6 +9,8 @@ import boto3
 import os
 import time
 
+from shikshalokam.models import Project
+
 
 def get_s3_presigned_url_and_upload(file_name, file_content, file_type, project_id, folder_structure):
     """Generate presigned URL and upload file to S3"""
@@ -130,7 +132,7 @@ def create_project_view(request):
     print("Result: ", result)
     pdf_url = None
     pdf_filename = "Project_Report.pdf"
-
+    project_id = result.get('project_id') if not project_id else project_id
     try:
         # Get author info from profile
         author_name = profile.first_name if profile else ""
@@ -173,7 +175,7 @@ def create_project_view(request):
 
         print("PDF report is generated successfully")
 
-        if pdf_content and result.get('project_id'):
+        if pdf_content and result.get('id'):
             # Prepare file name for S3
             pdf_filename = f"{project_title}.pdf" if project_title else "Project_Report.pdf"
             # Clean filename for S3 (remove special characters)
@@ -185,13 +187,26 @@ def create_project_view(request):
                 file_name=pdf_filename,
                 file_content=pdf_content.read(),
                 file_type="application/pdf",
-                project_id=result.get('project_id'),
+                project_id=result.get('id'),
                 folder_structure="shikshagraha_commons/"
             )
 
             if key:
                 base = os.getenv("S3_MEDIA_URL")
                 pdf_url = f"{base}{key}"
+                if pdf_url and result.get("id"):
+                    Project.objects.filter(id=result.get("id")).update(
+                        other_params={
+                            **(Project.objects.filter(id=result.get("id"))
+                               .values_list("other_params", flat=True)
+                               .first() or {}),
+                            "pdf": {
+                                "url": pdf_url,
+                                "file_name": pdf_filename
+                            }
+                        }
+                    )
+
             else:
                 print("Failed to upload PDF to S3")
 
@@ -218,6 +233,7 @@ def create_project_view(request):
     return Response({
         'status': 'ok',
         'result': response,
+        'project_id': project_id,
         'mitra_result': result,
         'media': media_response
     }, status=200)
