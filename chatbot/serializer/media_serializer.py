@@ -120,7 +120,7 @@ class MediaSearchResultSerializer(serializers.Serializer):
                     'subdocuments__key_values'
                 ).only(
                     'id', 'file', 'media_type', 'organization__url', 'organization__logo', 'display_mode',
-                    'description', 'priority'
+                    'description', 'thumbnail', 'priority'
                 ).get(id=media_id)
 
                 source_child = media_obj.subdocuments.filter(
