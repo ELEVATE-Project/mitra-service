@@ -212,29 +212,35 @@ def parse_llm_objective_response(response, filtered_chunks):
         objectives_from_response = [objectives_from_response] if objectives_from_response else []
 
     objective_list = []
-    valid_source_ids = {chunk['source_id'] for chunk in filtered_chunks}
+    from shikshalokam.utils.chunks_utils import normalize_source_id
+
+    valid_source_ids_normalized = {normalize_source_id(chunk['source_id']) for chunk in filtered_chunks}
 
     for obj in objectives_from_response:
         if isinstance(obj, dict):
             objective_text = obj.get('objective', obj.get('text', ''))
             sources = obj.get('sources', [])
-            source_ids = [src.get("source_id") for src in sources if src.get("source_id")]
             reason = obj.get('reason', '')
 
-            if not isinstance(source_ids, list):
-                source_ids = [source_ids] if source_ids else []
+            validated_sources = []
+            validated_source_ids = []
 
-            validated_source_ids = [sid for sid in source_ids if sid in valid_source_ids]
+            for src in sources:
+                if isinstance(src, dict):
+                    source_id = src.get("source_id")
+                    if source_id is not None:
+                        normalized_id = normalize_source_id(source_id)
+                        if normalized_id in valid_source_ids_normalized:
+                            validated_sources.append({
+                                "source_id": normalized_id,
+                                "highlight_text": src.get("highlight_text", "")
+                            })
+                            validated_source_ids.append(normalized_id)
 
             if objective_text and validated_source_ids:
-                filtered_sources = [
-                    src for src in sources
-                    if src.get("source_id") in validated_source_ids
-                ]
-
                 objective_list.append({
                     'objective': objective_text.strip(),
-                    'sources': filtered_sources,
+                    'sources': validated_sources,
                     'source_ids': validated_source_ids,
                     'reason': reason
                 })
