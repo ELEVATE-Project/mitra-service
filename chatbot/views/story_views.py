@@ -8,7 +8,7 @@ from chatbot.utils.recreate_story_utils import re_create_story_object
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf
 from chatbot.utils.story_utils.base.story_update_utils import extract_update_data, get_or_create_translation, update_translation_fields, sync_to_main_story
 from chatbot.utils.story_utils.base.translation_mixins import LanguageDetectionMixin
-from chatbot.utils.story_utils.story_utils import create_story_object
+from chatbot.utils.story_utils.story_utils import create_story_object, generate_story
 from django.contrib.auth import PermissionDenied
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
@@ -19,6 +19,44 @@ import traceback
 
 @api_view(['POST'])
 def end_story(request):
+    try:
+        profile_id = request.data['profile_id']
+        session = request.data['session']
+        model = request.data.get('model', None)
+        access_token = request.data.get('access_token', None)
+        flow = request.data.get('flow')
+        language = request.data.get('language', 'en')
+
+        if session is None:
+            return Response({
+                'status': 'error',
+                'message': 'session is mandatory',
+                'error_message': 'session is mandatory'
+            }, status=400)
+        else:
+            id, content, error_msg = create_story_object(
+                profile_id=profile_id, session=session,
+                access_token=access_token, flow=flow, language=language
+            )
+
+            return Response({
+                'status': 'ok',
+                'message': 'Story created',
+                'id': id,
+                'content': content,
+                'error_message': error_msg
+            }, status=200)
+    except Exception as e:
+        traceback.print_exc()
+        return Response({
+            'status': 'error',
+            'message': '',
+            'error_message': f'{e}'
+        }, status=500)
+
+
+@api_view(['POST'])
+def end_story_v2(request):
     try:
         profile_id = request.data['profile_id']
         session = request.data['session']
@@ -37,28 +75,20 @@ def end_story(request):
                 'message': 'session is mandatory',
                 'error_message': 'session is mandatory'
             }, status=400)
-        else:
-            flow_inst = Flow.objects.get(flow_route=flow)
 
-            if access_token and flow_inst.create_story in [CreateStoryChoices.GUEST, CreateStoryChoices.NONE]:
-                raise PermissionDenied(detail="Insufficient permissions")
-
-            if not access_token and flow_inst.create_story in [CreateStoryChoices.AUTH, CreateStoryChoices.NONE]:
-                raise PermissionDenied(detail="Insufficient permissions")
-
-            id, content, error_msg = create_story_object(
-                profile_id=profile_id, session=session,
-                access_token=access_token, flow=flow, language=language
-            )
+        id, content, error_msg = generate_story(
+            profile_id=profile_id, session=session,
+            access_token=access_token, flow=flow, language=language
+        )
 
 
-            return Response({
-                'status': 'ok',
-                'message': 'Story created',
-                'id': id,
-                'content': content,
-                'error_message': error_msg
-            }, status=200)
+        return Response({
+            'status': 'ok',
+            'message': 'Story created',
+            'id': id,
+            'content': content,
+            'error_message': error_msg
+        }, status=200)
     except Flow.DoesNotExist:
         return Response({
             'status': 'error',

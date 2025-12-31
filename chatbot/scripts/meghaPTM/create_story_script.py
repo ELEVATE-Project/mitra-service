@@ -2,7 +2,7 @@ from chatbot.models import (Profile, CompanyChat,
                             ChatSession, ChatStatus, BotVernacular)
 from chatbot.utils.chat_utils import get_guided_chat
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
-from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
+from chatbot.utils.shikshalokam_story_utils import save_project_story
 
 from chatbot.utils.story_utils.format_utils import get_formatted_story
 from chatbot.utils.story_utils.get_story_prompts import get_creation_promt, get_tool_values, \
@@ -227,7 +227,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         else:
             conversation, chat_history = [], []
 
-        save_shikshalokam_story(
+        save_project_story(
             story=story, profile=profile,
             problem_statement=problem_statement, chat_history=chat_history, access_token=access_token,
             project_id=None, session=session, conversation=conversation, flow=flow
