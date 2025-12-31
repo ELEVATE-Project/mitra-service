@@ -212,26 +212,36 @@ def parse_llm_objective_response(response, filtered_chunks):
         objectives_from_response = [objectives_from_response] if objectives_from_response else []
 
     objective_list = []
+    from shikshalokam.utils.chunks_utils import normalize_source_id
+
     valid_source_ids = {chunk['source_id'] for chunk in filtered_chunks}
 
     for obj in objectives_from_response:
         if isinstance(obj, dict):
             objective_text = obj.get('objective', obj.get('text', ''))
             sources = obj.get('sources', [])
-            source_ids = [src.get("source_id") for src in sources if src.get("source_id")]
             reason = obj.get('reason', '')
 
-            if not isinstance(source_ids, list):
-                source_ids = [source_ids] if source_ids else []
+            if not isinstance(sources, list):
+                sources = [sources] if sources else []
 
-            validated_source_ids = [sid for sid in source_ids if sid in valid_source_ids]
+            filtered_sources = []
+            validated_source_ids = []
+
+            for src in sources:
+                if isinstance(src, dict):
+                    raw_source_id = src.get("source_id")
+                    if raw_source_id is not None:
+                        normalized_id = normalize_source_id(raw_source_id)
+
+                        if normalized_id in valid_source_ids:
+                            filtered_sources.append({
+                                "source_id": normalized_id,
+                                "highlight_text": src.get("highlight_text", "")
+                            })
+                            validated_source_ids.append(normalized_id)
 
             if objective_text and validated_source_ids:
-                filtered_sources = [
-                    src for src in sources
-                    if src.get("source_id") in validated_source_ids
-                ]
-
                 objective_list.append({
                     'objective': objective_text.strip(),
                     'sources': filtered_sources,
@@ -260,6 +270,8 @@ def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_
                 'message': 'Invalid objective_list: must be a list'
             }
 
+        from shikshalokam.utils.chunks_utils import normalize_source_id
+
         source_id_to_score = {chunk['source_id']: chunk['relevance_score'] for chunk in filtered_chunks}
 
         source_map = {}
@@ -275,6 +287,8 @@ def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_
                     if not source_id:
                         print(f"Skipping result without source_id: {result}")
                         continue
+
+                    normalized_id = normalize_source_id(source_id)
 
                     chunk_text = result.get('text', '')
                     metadata = result.get('metadata', {})
@@ -311,9 +325,9 @@ def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_
                         'chunk': chunk_text
                     }
 
-                    if source_id not in source_map:
-                        source_map[source_id] = {
-                            'source_id': source_id,
+                    if normalized_id not in source_map:
+                        source_map[normalized_id] = {
+                            'source_id': normalized_id,  # Store normalized ID
                             'description': description,
                             'title': title,
                             'url': url,
@@ -321,16 +335,16 @@ def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_
                             'chunks': [chunk_data]
                         }
                     else:
-                        source_map[source_id]['chunks'].append(chunk_data)
+                        source_map[normalized_id]['chunks'].append(chunk_data)
 
-                        if not source_map[source_id]['description'] and description:
-                            source_map[source_id]['description'] = description
-                        if not source_map[source_id]['title'] and title:
-                            source_map[source_id]['title'] = title
-                        if not source_map[source_id]['url'] and url:
-                            source_map[source_id]['url'] = url
-                        if not source_map[source_id]['organization'] and organization_dict:
-                            source_map[source_id]['organization'] = organization_dict
+                        if not source_map[normalized_id]['description'] and description:
+                            source_map[normalized_id]['description'] = description
+                        if not source_map[normalized_id]['title'] and title:
+                            source_map[normalized_id]['title'] = title
+                        if not source_map[normalized_id]['url'] and url:
+                            source_map[normalized_id]['url'] = url
+                        if not source_map[normalized_id]['organization'] and organization_dict:
+                            source_map[normalized_id]['organization'] = organization_dict
 
             except Exception as map_error:
                 print(f"Error creating source_map: {str(map_error)}")
@@ -377,10 +391,9 @@ def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_
                     for i, chunk_data in enumerate(source_info.get('chunks', [])):
                         chunk_entry = {
                             'chunk': chunk_data.get('chunk', ''),
-                            'highlight_text': chunk_data.get('highlight_text', '')
+                            'highlight_text': highlight_texts[i] if i < len(highlight_texts) else chunk_data.get(
+                                'highlight_text', '')
                         }
-                        if i < len(highlight_texts):
-                            chunk_entry['highlight_text'] = highlight_texts[i]
                         chunks_with_highlights.append(chunk_entry)
 
                     sources.append({

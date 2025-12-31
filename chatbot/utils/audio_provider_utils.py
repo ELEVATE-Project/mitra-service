@@ -9,7 +9,8 @@ from chatbot.translate.google.google_tts import google_text_to_speech
 from chatbot.translate.openai.openai_stt import transcribe_audio
 from chatbot.translate.sarvam.speech_to_text import transcribe_sarvam_multiple_chunks
 from chatbot.translate.sarvam.translate import sarvam_translate_text
-from shikshalokam_mohini.settings import load_secrets
+from django.conf import settings
+
 
 
 def text_speech_provider(voice_provider, text, gender, source_language):
@@ -43,7 +44,7 @@ def speech_text_provider(voice_provider, base64, audio_format, source_language):
         else:
             region = "IN"
 
-        secret = load_secrets()
+        secret = settings.SECRETS
         response = transcribe_multiple_languages_v2(
             project_id=secret.get('project_id'), audio_file=base64,
             language_codes=[LanguageMapping.get_mapped_language(source_language, region)],
@@ -85,7 +86,7 @@ def text_translate_provider(voice_provider, message_body, target_language, sourc
             voice_provider=voice_provider
         )
     elif voice_provider.provider == VoiceProvider.GOOGLE:
-        secret = load_secrets()
+        secret = settings.SECRETS
         response = translate_text(
             project_id=secret.get('project_id'), text=message_body,
             source_language_code=LanguageMapping.get_mapped_language(source_language),

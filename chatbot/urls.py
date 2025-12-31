@@ -1,5 +1,7 @@
 from chatbot.utils.image_converter import convert_image
 from chatbot.views.Media.extract_views import BatchMediaExtractView, BatchMediaRetryExtractView
+from chatbot.views.Media.media_tracking_views import MediaViewTrackAPIView, MediaDownloadTrackAPIView, \
+    SolutionDownloadTrackView
 from chatbot.views.Media.save_views import BatchMediaSaveView, BatchMediaRetrySaveView
 from chatbot.views.Media.status_views import BatchMediaTaskStatusView, VectorDBTaskStatusView
 from chatbot.views.Media.upload_views import BatchMediaUploadView
@@ -103,6 +105,10 @@ urlpatterns = [
     path("api/get-presigned-url/", get_presigned_url,  name='get-presigned-url'),
     path("api/image-converter/", convert_image, name='image-converter'),
     path('api/questions/save/', save_ptm_chats, name="save_ptm_chats"),
+    path("api/track-view/<int:media_id>/", MediaViewTrackAPIView.as_view(), name="media-track-view"),
+    path("api/track-download/<int:media_id>/", MediaDownloadTrackAPIView.as_view(), name="media-track-download"),
+    path("api/track-solution-download/<str:project_id>/", SolutionDownloadTrackView.as_view(),
+         name="project-solution-download-track"),
 
     path("api/search/", MediaSearchView.as_view(), name="media-search"),
 

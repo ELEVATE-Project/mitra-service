@@ -26,20 +26,26 @@ CODE_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOGGING_DIR = CODE_BASE_DIR + '/logs'
 
 def load_secrets():
-    alt_path = os.getcwd() + "/config/secrets.json"
-    secrets_path = os.path.join(CODE_BASE_DIR, "config/secrets.json")
+    paths_to_try = [
+        '/home/ubuntu/shikshalokam-mohini-service/config/secrets.json',
+        os.path.join(CODE_BASE_DIR, "config/secrets.json"),
+        os.path.join(os.getcwd(), "config/secrets.json")
+    ]
 
-    try:
-        with open(secrets_path, 'r') as f:
-            return json.load(f)
-    except FileNotFoundError:
+    for path in paths_to_try:
+        print(f"[DEBUG] Trying secrets file at: {path}")
         try:
-            with open(alt_path, 'r') as f:
+            with open(path, 'r') as f:
+                print(f"[DEBUG] Loaded secrets from: {path}")
                 return json.load(f)
         except FileNotFoundError:
-            raise FileNotFoundError(f"secrets.json not found in either {secrets_path} or {alt_path}")
-    except json.JSONDecodeError as e:
-        raise json.JSONDecodeError(f"Invalid JSON in secrets file: {e}")
+            print(f"[DEBUG] File not found at: {path}")
+            continue
+
+    raise FileNotFoundError(f"secrets.json not found in any of: {paths_to_try}")
+
+
+
 
 
 SECRETS = load_secrets()
@@ -467,6 +473,8 @@ ASGI_APPLICATION_SHUTDOWN_TIMEOUT = 30
 CRONJOBS = [
     # ('30 2 * * *', 'chatbot.cron_tasks.chaupal.chaupal_cront_tasks.handle_story_cleanup_cron',
     #  '>> /tmp/handle_story_cleanup_cron.log 2>&1'),
-    # ('30 4 * * *', 'chatbot.cron_tasks.chaupal.chaupal_cront_tasks.handle_village_ingestion_cron',
-    #  '>> /tmp/handle_village_ingestion_cron.log 2>&1'),
+    ('30 3 * * *', 'chatbot.cron_tasks.chaupal.chaupal_cront_tasks.handle_village_ingestion_cron',
+     '>> /tmp/handle_village_ingestion_cron.log 2>&1'),
+    ('0 22 * * *', 'chatbot.cron_tasks.translation_cron.handle_non_english_fix_cron',
+     '>> /tmp/handle_non_english_fix_cron.log 2>&1'),
 ]

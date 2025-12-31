@@ -329,7 +329,8 @@ def create_story_translation(story, language, english_data, voice_provider, flow
                 for action_step in action_steps
             ]
 
-        translated_other_params = story.other_params.copy() if story.other_params else {}
+        import copy
+        translated_other_params = copy.deepcopy(story.other_params) if story.other_params else {}
 
         if translated_other_params.get('duration'):
             duration_value = translated_other_params['duration']
