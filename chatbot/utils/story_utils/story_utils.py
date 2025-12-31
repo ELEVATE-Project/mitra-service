@@ -325,7 +325,7 @@ def generate_story(profile_id, session, access_token, flow, language='en'):
         save_project_story(
             story=story, profile=profile_data,
             problem_statement=problem_statement, chat_history=chat_history, access_token=access_token,
-            project_id=None, session=session, conversation=conversation, flow=flow, language=language
+            project_id=None, session=session, conversation=conversation, flow=flow
         )
 
         story_id = story.id if story and story.id else ""
