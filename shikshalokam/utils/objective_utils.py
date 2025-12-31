@@ -214,7 +214,7 @@ def parse_llm_objective_response(response, filtered_chunks):
     objective_list = []
     from shikshalokam.utils.chunks_utils import normalize_source_id
 
-    valid_source_ids_normalized = {normalize_source_id(chunk['source_id']) for chunk in filtered_chunks}
+    valid_source_ids = {chunk['source_id'] for chunk in filtered_chunks}
 
     for obj in objectives_from_response:
         if isinstance(obj, dict):
@@ -222,16 +222,20 @@ def parse_llm_objective_response(response, filtered_chunks):
             sources = obj.get('sources', [])
             reason = obj.get('reason', '')
 
-            validated_sources = []
+            if not isinstance(sources, list):
+                sources = [sources] if sources else []
+
+            filtered_sources = []
             validated_source_ids = []
 
             for src in sources:
                 if isinstance(src, dict):
-                    source_id = src.get("source_id")
-                    if source_id is not None:
-                        normalized_id = normalize_source_id(source_id)
-                        if normalized_id in valid_source_ids_normalized:
-                            validated_sources.append({
+                    raw_source_id = src.get("source_id")
+                    if raw_source_id is not None:
+                        normalized_id = normalize_source_id(raw_source_id)
+
+                        if normalized_id in valid_source_ids:
+                            filtered_sources.append({
                                 "source_id": normalized_id,
                                 "highlight_text": src.get("highlight_text", "")
                             })
@@ -240,13 +244,12 @@ def parse_llm_objective_response(response, filtered_chunks):
             if objective_text and validated_source_ids:
                 objective_list.append({
                     'objective': objective_text.strip(),
-                    'sources': validated_sources,
+                    'sources': filtered_sources,
                     'source_ids': validated_source_ids,
                     'reason': reason
                 })
 
     return objective_list
-
 
 def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_response):
     try:
