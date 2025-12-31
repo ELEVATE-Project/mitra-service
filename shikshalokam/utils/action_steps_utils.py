@@ -1,18 +1,8 @@
 from chatbot.llm_models.llm_script import handle_bedrock_model
 from shikshalokam.utils.chunks_utils import validate_inputs, filter_and_sort_chunks, prepare_chunks_for_template, \
-    render_template_with_context
+    render_template_with_context, normalize_source_id
 import json_repair
 import json
-
-
-def normalize_source_id(source_id):
-    """
-    Normalize source ID to string for consistent comparison.
-    Handles both integer and string inputs.
-    """
-    if source_id is None:
-        return None
-    return str(source_id).strip()
 
 
 def generate_action_list_utils(query, objective_text, company_bot):
