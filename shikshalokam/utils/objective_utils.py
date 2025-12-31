@@ -251,6 +251,7 @@ def parse_llm_objective_response(response, filtered_chunks):
 
     return objective_list
 
+
 def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_response):
     try:
         if not objective_list:
@@ -269,6 +270,8 @@ def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_
                 'message': 'Invalid objective_list: must be a list'
             }
 
+        from shikshalokam.utils.chunks_utils import normalize_source_id
+
         source_id_to_score = {chunk['source_id']: chunk['relevance_score'] for chunk in filtered_chunks}
 
         source_map = {}
@@ -284,6 +287,8 @@ def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_
                     if not source_id:
                         print(f"Skipping result without source_id: {result}")
                         continue
+
+                    normalized_id = normalize_source_id(source_id)
 
                     chunk_text = result.get('text', '')
                     metadata = result.get('metadata', {})
@@ -320,9 +325,9 @@ def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_
                         'chunk': chunk_text
                     }
 
-                    if source_id not in source_map:
-                        source_map[source_id] = {
-                            'source_id': source_id,
+                    if normalized_id not in source_map:
+                        source_map[normalized_id] = {
+                            'source_id': normalized_id,  # Store normalized ID
                             'description': description,
                             'title': title,
                             'url': url,
@@ -330,16 +335,16 @@ def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_
                             'chunks': [chunk_data]
                         }
                     else:
-                        source_map[source_id]['chunks'].append(chunk_data)
+                        source_map[normalized_id]['chunks'].append(chunk_data)
 
-                        if not source_map[source_id]['description'] and description:
-                            source_map[source_id]['description'] = description
-                        if not source_map[source_id]['title'] and title:
-                            source_map[source_id]['title'] = title
-                        if not source_map[source_id]['url'] and url:
-                            source_map[source_id]['url'] = url
-                        if not source_map[source_id]['organization'] and organization_dict:
-                            source_map[source_id]['organization'] = organization_dict
+                        if not source_map[normalized_id]['description'] and description:
+                            source_map[normalized_id]['description'] = description
+                        if not source_map[normalized_id]['title'] and title:
+                            source_map[normalized_id]['title'] = title
+                        if not source_map[normalized_id]['url'] and url:
+                            source_map[normalized_id]['url'] = url
+                        if not source_map[normalized_id]['organization'] and organization_dict:
+                            source_map[normalized_id]['organization'] = organization_dict
 
             except Exception as map_error:
                 print(f"Error creating source_map: {str(map_error)}")
@@ -386,10 +391,9 @@ def post_process_objectives_with_source(objective_list, filtered_chunks, chunks_
                     for i, chunk_data in enumerate(source_info.get('chunks', [])):
                         chunk_entry = {
                             'chunk': chunk_data.get('chunk', ''),
-                            'highlight_text': chunk_data.get('highlight_text', '')
+                            'highlight_text': highlight_texts[i] if i < len(highlight_texts) else chunk_data.get(
+                                'highlight_text', '')
                         }
-                        if i < len(highlight_texts):
-                            chunk_entry['highlight_text'] = highlight_texts[i]
                         chunks_with_highlights.append(chunk_entry)
 
                     sources.append({
