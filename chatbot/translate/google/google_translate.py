@@ -2,6 +2,7 @@ import traceback
 from google.cloud import translate
 import logging
 from google.oauth2 import service_account
+from django.conf import settings
 
 logger = logging.getLogger('django')
 
@@ -15,9 +16,7 @@ def translate_text(
     """Translating Text."""
     try:
 
-        credentials = service_account.Credentials.from_service_account_file(
-            '/home/ubuntu/shikshalokam-mohini-service/config/secrets.json'
-        )
+        credentials = service_account.Credentials.from_service_account_file(settings.SECRETS_JSON_PATH)
         client = translate.TranslationServiceClient(credentials=credentials)
         location = "global"
 

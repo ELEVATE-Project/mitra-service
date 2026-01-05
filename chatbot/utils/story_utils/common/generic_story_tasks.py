@@ -1,7 +1,7 @@
 import logging
 import json
 import re
-from chatbot.models import StoryStatusChoices, Story, Voice, VoiceType, StoryTranslation
+from chatbot.models import StoryStatusChoices, Story, Voice, VoiceType, StoryTranslation, Profile
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.story_vernacular_model import StoryVernacular
 from chatbot.utils.story_llama_utils import translate_field
@@ -196,12 +196,23 @@ def save_generic_story(
 
     previous_english_snapshot = {k: v for k, v in other_params.items()}
 
-    user_name = profile.get("first_name", "") if profile and profile.get("first_name") else ''
+    if isinstance(profile, Profile):
+        user_name = profile.first_name if profile and profile.first_name else ''
+
+    elif isinstance(profile, dict):
+        user_name = profile.get("first_name", "") if profile and profile.get("first_name") else ''
+
     fallback_location = ""
-    if profile:
-        address = profile.get("profile_address", [])
+
+    if isinstance(profile, Profile):
+        address = ProfileAddress.objects.filter(profile=profile).first()
         if address:
             location_parts = filter(None, [address.block, address.district, address.state])
+            fallback_location = ", ".join(location_parts)
+    elif isinstance(profile, dict):
+        address = profile.get("profile_address", [])
+        if len(address) > 0:
+            location_parts = filter(None, [address[0].get("block"), address[0].get("district"), address[0].get("state")])
             fallback_location = ", ".join(location_parts)
 
     other_params['flow'] = flow
@@ -325,7 +336,7 @@ def save_generic_story(
             story_fields_to_update['location'] = ""
 
     story_fields_to_update.update({
-        'author': profile.get("first_name", ""),
+        'author': profile if isinstance(profile, Profile) else profile.get("id"),
         'session': session,
         'language': 'en',
         'stage': StoryStatusChoices.COMPLETED,
@@ -534,7 +545,14 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                         translated_dict[key] = value
                 return translated_dict
             elif isinstance(data, list):
-                return [translate_nested_structure(item, f"{field_path}[{i}]") for i, item in enumerate(data)]
+                return [translate_nested_structure(item, field_path) for i, item in enumerate(data)]
+
+            elif isinstance(data, str) and is_translatable_text(data, field_path):
+                return translate_field(
+                    voice_provider=voice_provider,
+                    message_body=data,
+                    target_language=language
+                )
             else:
                 return data
 

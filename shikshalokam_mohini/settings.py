@@ -37,7 +37,7 @@ def load_secrets():
         try:
             with open(path, 'r') as f:
                 print(f"[DEBUG] Loaded secrets from: {path}")
-                return json.load(f)
+                return json.load(f), path
         except FileNotFoundError:
             print(f"[DEBUG] File not found at: {path}")
             continue
@@ -48,7 +48,7 @@ def load_secrets():
 
 
 
-SECRETS = load_secrets()
+SECRETS, SECRETS_JSON_PATH = load_secrets()
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
@@ -127,9 +127,15 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
-    'querycount.middleware.QueryCountMiddleware',
+    ## extra middlwares
     'chatbot.middlewares.VerifyAuthToken'
 ]
+
+if DEBUG:
+    MIDDLEWARE.extend([
+        'querycount.middleware.QueryCountMiddleware'
+    ])
+
 
 ROOT_URLCONF = 'shikshalokam_mohini.urls'
 
