@@ -14,21 +14,190 @@ from chatbot.models import (
     Voice,
     VoiceType,
     CompanyChat,
-    BotVernacular,
+    BotVernacular, LLMProvider,
 )
+from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.chat_utils import get_guided_chat
+from chatbot.utils.sql_utils import get_todays_date
 from chatbot.utils.story_utils.common.generic_story_tasks import (
     save_generic_story,
     translate_to_english_if_needed
 )
 from chatbot.utils.story_utils.get_story_prompts import (
     get_tool_values,
-    get_creation_promt, get_validation_prompt
 )
 from chatbot.utils.story_utils.story_llm import generate_story_llm
 
 logger = logging.getLogger("django")
 
+def get_creation_promt(company_bot, profile, session_id):
+    context = company_bot.context
+    address = ProfileAddress.objects.filter(profile=profile)
+
+    state_machines = company_bot.companystatemachine_set.all().order_by('step')
+    master_question = None
+
+    if state_machines.exists():
+        first_state_machine = state_machines.first()
+        if first_state_machine.bot_question and first_state_machine.bot_question.strip():
+            master_question = first_state_machine.bot_question.strip()
+
+    story = Story.objects.filter(session=session_id).first()
+    if not story:
+        print("No story found!!!")
+        return {}
+
+    context_data = {
+        "profile": profile,
+        "address": address if address else [{}],
+        "story": story
+    }
+
+    if master_question:
+        context_data["master_question"] = master_question
+
+    template = Template(company_bot.tag_context)
+    tag_context = template.render(context_data)
+
+    end_context = company_bot.end_context
+    project_data = ''
+    today_date = get_todays_date(company_bot=company_bot)
+
+    content_prompt = f"""
+                {context}
+                {tag_context}
+                {today_date}
+                {project_data}
+            """ if context else None
+    story_prompt = f"""
+                {end_context}
+                {tag_context}
+                {today_date}
+                {project_data}
+            """ if end_context else None
+    formatted_content_prompt = []
+    formatted_story_prompt = []
+
+    if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
+        formatted_content_prompt = [
+            {
+                'text': content_prompt
+            },
+        ] if content_prompt else None
+        formatted_story_prompt = [
+            {
+                'text': story_prompt
+            },
+        ] if story_prompt else None
+    elif company_bot.provider == LLMProvider.OPENAI:
+        formatted_content_prompt = [
+            {
+                'role': 'system',
+                'content': content_prompt
+            },
+        ] if content_prompt else None
+        formatted_story_prompt = [
+            {
+                'role': 'system',
+                'content': story_prompt
+            },
+        ] if story_prompt else None
+
+    return formatted_content_prompt, formatted_story_prompt, tag_context, project_data
+
+
+def get_validation_prompt(
+        response_json_story, validate_bot, response_json_content, tag_context, project_data, profile, session_id
+):
+    address = ProfileAddress.objects.filter(profile=profile)
+
+    state_machines = validate_bot.companystatemachine_set.all().order_by('step')
+    master_question = None
+
+    if state_machines.exists():
+        first_state_machine = state_machines.first()
+        if first_state_machine.bot_question and first_state_machine.bot_question.strip():
+            master_question = first_state_machine.bot_question.strip()
+
+
+    story = Story.objects.filter(session=session_id).first()
+    if not story:
+        print("No story found!!!")
+        return {}
+
+    validate_context_data = {
+        "story_json_output": response_json_story,
+        "profile": profile,
+        "address": address if address else [{}],
+        "story": story,
+    }
+
+    if master_question:
+        validate_context_data["master_question"] = master_question
+
+    validate_template = Template(validate_bot.tag_context)
+    validate_tag_context = validate_template.render(validate_context_data)
+
+    today_date = get_todays_date(company_bot=validate_bot)
+
+    validate_story_prompt = f"""
+               {validate_bot.end_context}
+               {validate_tag_context}
+               {tag_context}
+                {today_date}
+               {project_data}
+           """ if validate_bot.end_context else None
+
+    validate_context_data = {
+        "story_json_output": response_json_content,
+        "story": story,
+        "profile": profile,
+        "address": address if address else [{}]
+    }
+
+    if master_question:
+        validate_context_data["master_question"] = master_question
+
+    validate_tag_context = validate_template.render(validate_context_data)
+
+    print("="*70)
+    print("response_json_content: ", response_json_content)
+    print("validate_tag_context: ", validate_tag_context)
+    print("="*70)
+    validate_content_prompt = f"""
+               {validate_bot.context}
+               {validate_tag_context}
+               {tag_context}
+                {today_date}
+               {project_data}
+           """ if validate_bot.context else None
+
+    if validate_bot.provider == LLMProvider.BEDROCK_CONVERSE:
+        validate_content_prompt = [
+            {
+                'text': validate_content_prompt
+            },
+        ] if validate_content_prompt else None
+        validate_story_prompt = [
+            {
+                'text': validate_story_prompt
+            },
+        ] if validate_story_prompt else None
+    elif validate_bot.provider == LLMProvider.OPENAI:
+        validate_content_prompt = [
+            {
+                'role': 'system',
+                'content': validate_content_prompt
+            },
+        ] if validate_content_prompt else None
+        validate_story_prompt = [
+            {
+                'role': 'system',
+                'content': validate_story_prompt
+            },
+        ] if validate_story_prompt else None
+
+    return validate_content_prompt, validate_story_prompt
 
 def resolve_date_range(start_date=None, end_date=None):
     if start_date and end_date:
@@ -73,8 +242,8 @@ def process_session(session, access_token):
         logger.info(f"Processing session {session_id}")
         print(f"[INFO] Processing session {session_id}")
 
-        company_bot = CompanyBot.objects.get(route="/story_temp")
-        validate_bot = CompanyBot.objects.get(route="/story_temp_validate")
+        company_bot = CompanyBot.objects.get(route="/mi_story_update")
+        validate_bot = CompanyBot.objects.get(route="/mi_story_update_validate")
 
         voice_provider = Voice.objects.filter(
             company_bot=company_bot,
@@ -105,7 +274,8 @@ def process_session(session, access_token):
 
         formatted_content_prompt, formatted_story_prompt, _, _ = get_creation_promt(
             company_bot=company_bot,
-            profile=profile
+            profile=profile,
+            session_id=session_id
         )
 
         tool_content, tool_story = get_tool_values(company_bot=company_bot)
@@ -136,7 +306,8 @@ def process_session(session, access_token):
             response_json_content=response_json_content,
             tag_context="",
             project_data="",
-            profile=profile
+            profile=profile,
+            session_id=session_id
         )
 
         print("=" * 70)
@@ -188,7 +359,7 @@ def process_session(session, access_token):
             combined_reason="",
             flow=SessionFlowName.GuestMiStory,
             company_bot=company_bot,
-            exclude_fields=['problem_statement']
+            exclude_fields=['problem_statement', 'user_name', 'title']
         )
 
         if response_json_content.get("problem_statement"):

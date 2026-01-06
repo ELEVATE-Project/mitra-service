@@ -237,9 +237,17 @@ def parse_llm_action_response(response, filtered_chunks):
             for step_data in action_steps_data:
                 if isinstance(step_data, dict):
                     step_text = step_data.get('step', step_data.get('text', ''))
+
                     sources = step_data.get('sources', [])
+                    if sources is None:
+                        sources = []
+                    if not isinstance(sources, list):
+                        sources = [sources]
+
                     reason = step_data.get('reason', '')
 
+                    has_sources = bool(sources)
+                    has_valid_sources = False
                     step_source_ids = []
                     step_sources = []
 
@@ -251,6 +259,7 @@ def parse_llm_action_response(response, filtered_chunks):
 
                             if normalized_id and normalized_id in valid_source_ids:
                                 original_id = None
+                                has_valid_sources = True
                                 for chunk in filtered_chunks:
                                     if normalize_source_id(chunk.get('source_id')) == normalized_id:
                                         original_id = chunk.get('source_id')
@@ -267,12 +276,17 @@ def parse_llm_action_response(response, filtered_chunks):
                                 print(
                                     f"Warning: source_id '{raw_source_id}' (normalized: '{normalized_id}') not found in valid chunks")
 
-                    processed_steps.append({
-                        'step': step_text,
-                        'sources': step_sources,
-                        'source_ids': step_source_ids,
-                        'reason': reason
-                    })
+                    step_text = step_text.strip()
+
+                    if step_text and (has_valid_sources or not has_sources):
+                        processed_steps.append({
+                            'step': step_text,
+                            'sources': step_sources,
+                            'source_ids': step_source_ids,
+                            'reason': reason,
+                            'is_evidence_optional': not has_sources
+                        })
+
                     all_sources.extend(step_sources)
 
                 elif isinstance(step_data, str):

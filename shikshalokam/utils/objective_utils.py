@@ -219,11 +219,15 @@ def parse_llm_objective_response(response, filtered_chunks):
     for obj in objectives_from_response:
         if isinstance(obj, dict):
             objective_text = obj.get('objective', obj.get('text', ''))
+            objective_text = objective_text.strip()
             sources = obj.get('sources', [])
             reason = obj.get('reason', '')
 
+            if sources is None:
+                sources = []
+
             if not isinstance(sources, list):
-                sources = [sources] if sources else []
+                sources = [sources]
 
             filtered_sources = []
             validated_source_ids = []
@@ -240,13 +244,16 @@ def parse_llm_objective_response(response, filtered_chunks):
                                 "highlight_text": src.get("highlight_text", "")
                             })
                             validated_source_ids.append(normalized_id)
+            has_sources = bool(sources)
+            has_valid_sources = bool(validated_source_ids)
 
-            if objective_text and validated_source_ids:
+            if objective_text and (has_valid_sources or not has_sources):
                 objective_list.append({
                     'objective': objective_text.strip(),
                     'sources': filtered_sources,
                     'source_ids': validated_source_ids,
-                    'reason': reason
+                    'reason': reason,
+                    'is_evidence_optional': not has_sources
                 })
 
     return objective_list
