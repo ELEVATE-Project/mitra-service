@@ -72,6 +72,13 @@ def get_project_report_html(
         for i, step in enumerate(action_steps, 1):
             action_steps_html += f'<li value="{i}">{step}</li>\n'
 
+    objective_html = ""
+    if objective and isinstance(objective, list):
+        for i, obj in enumerate(objective, 1):
+            objective_html += f'<li value="{i}">{obj}</li>\n'
+    else:
+        objective_html = objective or ""
+
     chat_session = ChatSession.objects.filter(session=session).first()
     sources_char_limit=1200
     if chat_session:
@@ -133,7 +140,11 @@ def get_project_report_html(
                         <span class="section-title">Objective</span>
                     </div>
                     <div class="section-content">
-                        {objective}
+                        {
+                            f"<ol class='action-steps-list'>{objective_html}</ol>"
+                            if isinstance(objective, list)
+                            else objective_html
+                        }
                     </div>
                 </div>
 
