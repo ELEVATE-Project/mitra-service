@@ -198,6 +198,11 @@ def validate_objectives_view(request):
             f"[validate_objectives_view] Request received - user_input: {user_input}, language: {language}, "
             f"profile_id: {profile_id}")
 
+        if isinstance(user_input, list):
+            user_input = " and ".join(
+                str(obj).strip() for obj in user_input if obj
+            )
+
         profile = Profile.objects.filter(id=profile_id).first()
         if profile:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/validate-objective')
@@ -252,6 +257,11 @@ def validate_actions_view(request):
         logger.info(
             f"[validate_actions_view] Request received - user_input: {user_input}, user_objective: {user_objective}, "
             f"language: {language}, profile_id: {profile_id}")
+
+        if isinstance(user_objective, list):
+            user_objective = " and ".join(
+                str(obj).strip() for obj in user_objective if obj
+            )
 
         profile = Profile.objects.filter(id=profile_id).first()
         if profile:
@@ -331,6 +341,11 @@ def generate_action_list_view(request):
         logger.info(
             f"[generate_action_list_view] Request received - user_problem_statement: {user_problem_statement}, "
             f"user_objective: {user_objective}, language: {language}, profile_id: {profile_id}")
+
+        if isinstance(user_objective, list):
+            user_objective = " and ".join(
+                str(obj).strip() for obj in user_objective if obj
+            )
 
         profile = Profile.objects.filter(id=profile_id).first()
         if profile:
