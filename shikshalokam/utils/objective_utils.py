@@ -124,6 +124,7 @@ def generate_objective_utils(user_problem_statement, company_bot):
                 }
 
             objective_list = parse_llm_objective_response(response, filtered_chunks)
+            logger.info(f"objective_list: {objective_list}")
 
         except Exception as llm_error:
             return {
@@ -184,6 +185,7 @@ def parse_llm_objective_response(response, filtered_chunks):
         response = extracted_data
 
     print("\n extracted_data: ", extracted_data)
+    logger.info(f"extracted_data: {extracted_data}")
     objectives_from_response = (
             response.get('objectives') or
             response.get('objective_list') or
@@ -198,6 +200,7 @@ def parse_llm_objective_response(response, filtered_chunks):
             objectives_from_response = objectives_from_response['items']
 
     print("objectives_from_response: ", objectives_from_response)
+    logger.info(f"objectives_from_response: {objectives_from_response}")
 
     if isinstance(objectives_from_response, str):
         try:

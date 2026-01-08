@@ -3,6 +3,9 @@ from shikshalokam.utils.chunks_utils import validate_inputs, filter_and_sort_chu
     render_template_with_context, normalize_source_id
 import json_repair
 import json
+import logging
+
+logger = logging.getLogger('django')
 
 
 def generate_action_list_utils(query, objective_text, company_bot):
@@ -126,6 +129,7 @@ def generate_action_list_utils(query, objective_text, company_bot):
                 }
 
             action_list = parse_llm_action_response(response, filtered_chunks)
+            logger.info(f"action_list: {action_list}")
 
         except Exception as llm_error:
             return {
@@ -186,6 +190,7 @@ def parse_llm_action_response(response, filtered_chunks):
         response = extracted_data
 
     print("\nextracted_data: ", extracted_data)
+    logger.info(f"extracted_data: {extracted_data}")
 
     action_plans = (
             response.get('action_plans') or
