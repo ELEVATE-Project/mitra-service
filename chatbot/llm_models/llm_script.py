@@ -349,7 +349,7 @@ def handle_bedrock_model(
         print(f'❌ Error processing Bedrock request: {e}')
         return None
 
-
+@observe()
 def handle_openai_response_api(
         messages, system_prompt=None, max_token=None, temperature=None, company_bot=None,
         model_name=None, key_name='OPENAI_API_KEY', is_actual_key=False, vector_store_ids=None,
