@@ -200,6 +200,12 @@ def parse_llm_action_response(response, filtered_chunks):
             []
     )
 
+    if not action_plans:
+        if response.get('plan_name') and response.get('actionSteps'):
+            action_plans = [response]
+        elif response.get('plan_name') and (response.get('action_steps') or response.get('steps')):
+            action_plans = [response]
+
     if isinstance(action_plans, dict):
         if 'value' in action_plans:
             action_plans = action_plans['value']
@@ -232,8 +238,13 @@ def parse_llm_action_response(response, filtered_chunks):
     for plan in action_plans:
         if isinstance(plan, dict):
             plan_name = plan.get('plan_name', '')
-            duration_weeks = plan.get('duration_weeks', plan.get('duration', 3))
-            action_steps_data = plan.get('actionSteps', []) or plan.get('action_steps', []) or plan.get('steps', [])
+            duration_weeks = (plan.get('duration_weeks') or
+                              plan.get('overall_duration_weeks') or
+                              plan.get('duration', 13))
+
+            action_steps_data = (plan.get('actionSteps', []) or
+                                 plan.get('action_steps', []) or
+                                 plan.get('steps', []))
 
             processed_steps = []
             all_source_ids = set()
