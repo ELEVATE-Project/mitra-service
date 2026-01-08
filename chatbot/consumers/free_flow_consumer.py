@@ -15,9 +15,11 @@ logger = logging.getLogger('django')
 
 class FreeFlowConsumer(AsyncBaseConsumer):
     """
-    WebSocket consumer for free-flow conversation using OpenAI streaming API.
+    WebSocket consumer for free-flow conversation using OpenAI Responses API.
     Unlike other consumers, this bypasses the state machine architecture and enables
-    direct streaming conversations with optional file search/vector store support.
+    direct streaming conversations with file_search for vector store RAG.
+    
+    Uses OpenAI Responses API (client.responses.create) which supports file_search tool.
     """
     
     def __init__(self, *args, **kwargs):
@@ -30,7 +32,7 @@ class FreeFlowConsumer(AsyncBaseConsumer):
         self.flow_name = None
         self.ip_address = None
         self.access_token = None
-        self.vector_store_id = None  # For file search capability
+        self.vector_store_id = None  # For file_search capability with Responses API
 
     async def disconnect(self, code):
         try:
@@ -74,9 +76,10 @@ class FreeFlowConsumer(AsyncBaseConsumer):
                 # Send acknowledgment
                 await self.send(text_data=json.dumps({
                     "text": {
-                        "msg": "Connected to free-flow chat",
+                        "msg": "Connected to free-flow chat with Responses API file_search",
                         "source": "system",
-                        "type": "connection_ack"
+                        "type": "connection_ack",
+                        "vector_store_enabled": bool(self.vector_store_id)
                     }
                 }))
                 
@@ -153,22 +156,34 @@ class FreeFlowConsumer(AsyncBaseConsumer):
                 chats=company_chats,
                 intro=None  # No intro for free-flow
             )
-            
-            # Prepare system prompt
+            # Prepare system prompt for retrieval-only behavior
             system_prompt = None
             if self.company_bot and self.company_bot.context:
-                system_prompt = [{
-                    'role': 'system',
-                    'content': self.company_bot.context
-                }]
+                system_prompt = self.company_bot.context
+            else:
+                # Default retrieval-only prompt for RAG
+                system_prompt = (
+                    "You are a retrieval-only assistant.\n"
+                    "Answer the user ONLY using information found in the vector store.\n"
+                    "If the answer is not present in the retrieved documents, reply exactly:\n"
+                    "'I do not have enough information in the knowledge base to answer this.'"
+                )
             
-            # Prepare vector store IDs for file search
+            # Convert to list format for Responses API
+            system_prompt = [{
+                'role': 'system',
+                'content': system_prompt
+            }]
+            
+            # Prepare vector store IDs for file_search tool
             vector_store_ids = None
             if self.vector_store_id:
-                # TODO: Replace hardcoded vector store ID with dynamic configuration
                 vector_store_ids = [self.vector_store_id]
+                logger.info(f"Using vector store for RAG: {self.vector_store_id}")
+            else:
+                logger.warning("⚠️ No vector_store_id provided - responses won't use file_search")
             
-            # Stream response from OpenAI
+            # Stream response from OpenAI Responses API with file_search
             accumulated_response = ""
             finish_reason = None
             
@@ -178,10 +193,11 @@ class FreeFlowConsumer(AsyncBaseConsumer):
                     messages=messages,
                     system_prompt=system_prompt,
                     max_token=self.company_bot.max_token if self.company_bot else 2048,
-                    temperature=self.company_bot.bot_temperature if self.company_bot else 0.7,
+                    temperature=self.company_bot.bot_temperature if self.company_bot else 0.0,  # 0.0 for deterministic retrieval
                     company_bot=self.company_bot,
                     vector_store_ids=vector_store_ids,
-                    top_p=self.company_bot.filter_score if self.company_bot else None
+                    top_p=self.company_bot.filter_score if self.company_bot else None,
+                    tool_choice="auto"  # Use "required" to force file_search
                 )
             
             # Execute streaming in thread pool

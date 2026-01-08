@@ -356,23 +356,25 @@ def handle_openai_response_api(
         top_p=None, tool_choice="auto"
 ):
     """
-    Streaming OpenAI Chat Completions API call.
+    Streaming OpenAI Responses API with file_search support for vector stores.
     
-    NOTE: @observe() decorator removed to avoid Langfuse import errors with OpenAI SDK.
-    NOTE: file_search with vector stores is NOT supported in Chat Completions API.
+    This uses the new Responses API (client.responses.create) which supports:
+    - file_search tool with vector stores
+    - Streaming responses
+    - Unified interface for chat + tools
     
     Args:
-        messages: List of conversation messages in OpenAI format
-        system_prompt: System prompt (string or list format with role/content)
-        max_token: Maximum tokens to generate
+        messages: List of conversation messages in OpenAI format [{'role': 'user', 'content': '...'}]
+        system_prompt: System instructions (string or list format)
+        max_token: Maximum tokens to generate (maps to max_output_tokens)
         temperature: Sampling temperature
         company_bot: CompanyBot instance for configuration
         model_name: Model to use (default: GPT4_O_MINI)
         key_name: Environment variable name for API key
         is_actual_key: If True, key_name is the actual key
-        vector_store_ids: NOT USED - file_search not supported
+        vector_store_ids: List of vector store IDs for file_search tool (REQUIRED for RAG)
         top_p: Top-p sampling parameter
-        tool_choice: NOT USED
+        tool_choice: Tool choice strategy ("auto" or "required")
     
     Yields:
         dict: Chunks with 'content', 'finish_reason', 'error', 'accumulated' keys
@@ -398,64 +400,113 @@ def handle_openai_response_api(
     else:
         model_to_use = LLMModel.GPT4_O_MINI
     
-    # Prepare messages with system prompt
-    full_messages = []
+    # Build input array for Responses API (includes system + conversation messages)
+    input_messages = []
     
+    # Add system prompt as first message
     if system_prompt:
         if isinstance(system_prompt, list):
-            full_messages.extend(system_prompt)
+            # Extract system content from list format
+            for msg in system_prompt:
+                if msg.get('role') == 'system':
+                    input_messages.append({
+                        'role': 'system',
+                        'content': msg.get('content', '')
+                    })
         elif isinstance(system_prompt, str):
-            full_messages.append({'role': 'system', 'content': system_prompt})
+            input_messages.append({
+                'role': 'system',
+                'content': system_prompt
+            })
     
-    full_messages.extend(messages)
+    # Add conversation messages
+    input_messages.extend(messages)
     
+    # Build request data for Responses API
+    # Note: client.responses.stream() doesn't take 'stream' parameter - it streams by default
     request_data = {
         "model": model_to_use,
-        "messages": full_messages,
-        "stream": True
+        "input": input_messages
     }
     
     if max_token:
-        request_data["max_tokens"] = max_token
+        request_data["max_output_tokens"] = max_token
     if temperature is not None:
         request_data['temperature'] = temperature
     if top_p:
         request_data['top_p'] = top_p
     
-    logger.info("Chat Completions streaming request: %s", request_data)
-    print("Chat Completions streaming request: ", request_data)
+    # Add file_search tool if vector_store_ids provided
+    if vector_store_ids and len(vector_store_ids) > 0:
+        request_data["tools"] = [
+            {
+                "type": "file_search",
+                "vector_store_ids": vector_store_ids
+            }
+        ]
+        request_data["tool_choice"] = tool_choice
+        logger.info(f"Using file_search with vector stores: {vector_store_ids}")
+    else:
+        logger.warning("⚠️ No vector_store_ids provided - responses won't use RAG")
+    
+    logger.info("Responses API streaming request: %s", request_data)
+    print("Responses API streaming request: ", request_data)
     
     try:
-        response_stream = client.chat.completions.create(**request_data)
-        
+        # Use Responses API with streaming context manager
         accumulated_content = ""
-        for chunk in response_stream:
-            if hasattr(chunk, 'choices') and len(chunk.choices) > 0:
-                choice = chunk.choices[0]
-                delta = choice.delta
+        
+        with client.responses.stream(**request_data) as response_stream:
+            for event in response_stream:
+                # Handle different event types from streaming
+                event_type = getattr(event, 'type', None)
                 
-                content_chunk = ""
-                if hasattr(delta, 'content') and delta.content:
-                    content_chunk = delta.content
-                    accumulated_content += content_chunk
+                if event_type == 'response.output_item.delta':
+                    # Text content delta
+                    if hasattr(event, 'delta') and hasattr(event.delta, 'text'):
+                        content_chunk = event.delta.text or ""
+                        accumulated_content += content_chunk
+                        
+                        yield {
+                            'content': content_chunk,
+                            'finish_reason': None,
+                            'accumulated': accumulated_content
+                        }
                 
-                finish_reason = choice.finish_reason if hasattr(choice, 'finish_reason') else None
+                elif event_type == 'response.output_item.done':
+                    # Item completed
+                    logger.info("Output item completed")
                 
-                yield {
-                    'content': content_chunk,
-                    'finish_reason': finish_reason,
-                    'accumulated': accumulated_content
-                }
+                elif event_type == 'response.done':
+                    # Full response completed
+                    finish_reason = 'stop'
+                    logger.info(f"Stream finished: {finish_reason}")
+                    
+                    yield {
+                        'content': '',
+                        'finish_reason': finish_reason,
+                        'accumulated': accumulated_content
+                    }
+                    break
                 
-                if finish_reason:
-                    logger.info("Stream finished: %s", finish_reason)
+                elif event_type == 'error':
+                    # Error event
+                    error_msg = getattr(event, 'error', {}).get('message', 'Unknown error')
+                    logger.error(f"Stream error: {error_msg}")
+                    
+                    yield {
+                        'content': '',
+                        'error': error_msg,
+                        'finish_reason': 'error'
+                    }
                     break
         
-        logger.info("Response length: %d characters", len(accumulated_content))
+        logger.info(f"Response completed. Length: {len(accumulated_content)} characters")
         
     except Exception as e:
-        error_msg = f"Error during streaming: {str(e)}"
+        error_msg = f"Error during Responses API streaming: {str(e)}"
         logger.error('Streaming Error: %s', e, exc_info=True)
+        print(error_msg)
         yield {
             'content': '',
             'error': error_msg,
