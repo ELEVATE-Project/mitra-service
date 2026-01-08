@@ -3,7 +3,7 @@ import json
 import os
 from django.core.validators import URLValidator
 from langfuse.decorators import observe
-from langfuse.openai import openai
+from openai import OpenAI
 from chatbot.models import LLMModel
 import boto3
 import json_repair
@@ -83,20 +83,18 @@ def handle_openai_model(
         stream=False, key_name='OPENAI_API_KEY', is_actual_key=False, tools=None, tool_choice=None, client_choice=None,
         top_p=None, system_prompt=None
 ):
-    if client_choice:
-        client = client_choice
-    else:
-        client = openai
-
     if is_actual_key:
         client_api_key = key_name
     else:
         client_api_key = os.getenv(key_name)
 
-    client.api_key = client_api_key
-
-    if not client.api_key:
+    if not client_api_key:
         raise ValueError(f"No API key found for '{key_name}'. Please set the environment variable correctly.")
+
+    if client_choice:
+        client = client_choice
+    else:
+        client = OpenAI(api_key=client_api_key)
 
     if model_name:
         model_to_use = model_name
@@ -350,6 +348,119 @@ def handle_bedrock_model(
         logger.error('Error processing request: %s', e, exc_info=True)
         print(f'❌ Error processing Bedrock request: {e}')
         return None
+
+
+def handle_openai_response_api(
+        messages, system_prompt=None, max_token=None, temperature=None, company_bot=None,
+        model_name=None, key_name='OPENAI_API_KEY', is_actual_key=False, vector_store_ids=None,
+        top_p=None, tool_choice="auto"
+):
+    """
+    Streaming OpenAI Chat Completions API call.
+    
+    NOTE: @observe() decorator removed to avoid Langfuse import errors with OpenAI SDK.
+    NOTE: file_search with vector stores is NOT supported in Chat Completions API.
+    
+    Args:
+        messages: List of conversation messages in OpenAI format
+        system_prompt: System prompt (string or list format with role/content)
+        max_token: Maximum tokens to generate
+        temperature: Sampling temperature
+        company_bot: CompanyBot instance for configuration
+        model_name: Model to use (default: GPT4_O_MINI)
+        key_name: Environment variable name for API key
+        is_actual_key: If True, key_name is the actual key
+        vector_store_ids: NOT USED - file_search not supported
+        top_p: Top-p sampling parameter
+        tool_choice: NOT USED
+    
+    Yields:
+        dict: Chunks with 'content', 'finish_reason', 'error', 'accumulated' keys
+    """
+    if is_actual_key:
+        client_api_key = key_name
+    else:
+        client_api_key = os.getenv(key_name)
+    
+    if not client_api_key:
+        yield {
+            'error': f"No API key found for '{key_name}'. Please set the environment variable correctly.",
+            'finish_reason': 'error'
+        }
+        return
+    
+    client = OpenAI(api_key=client_api_key)
+    
+    if model_name:
+        model_to_use = model_name
+    elif company_bot:
+        model_to_use = company_bot.llm_model
+    else:
+        model_to_use = LLMModel.GPT4_O_MINI
+    
+    # Prepare messages with system prompt
+    full_messages = []
+    
+    if system_prompt:
+        if isinstance(system_prompt, list):
+            full_messages.extend(system_prompt)
+        elif isinstance(system_prompt, str):
+            full_messages.append({'role': 'system', 'content': system_prompt})
+    
+    full_messages.extend(messages)
+    
+    request_data = {
+        "model": model_to_use,
+        "messages": full_messages,
+        "stream": True
+    }
+    
+    if max_token:
+        request_data["max_tokens"] = max_token
+    if temperature is not None:
+        request_data['temperature'] = temperature
+    if top_p:
+        request_data['top_p'] = top_p
+    
+    logger.info("Chat Completions streaming request: %s", request_data)
+    print("Chat Completions streaming request: ", request_data)
+    
+    try:
+        response_stream = client.chat.completions.create(**request_data)
+        
+        accumulated_content = ""
+        for chunk in response_stream:
+            if hasattr(chunk, 'choices') and len(chunk.choices) > 0:
+                choice = chunk.choices[0]
+                delta = choice.delta
+                
+                content_chunk = ""
+                if hasattr(delta, 'content') and delta.content:
+                    content_chunk = delta.content
+                    accumulated_content += content_chunk
+                
+                finish_reason = choice.finish_reason if hasattr(choice, 'finish_reason') else None
+                
+                yield {
+                    'content': content_chunk,
+                    'finish_reason': finish_reason,
+                    'accumulated': accumulated_content
+                }
+                
+                if finish_reason:
+                    logger.info("Stream finished: %s", finish_reason)
+                    break
+        
+        logger.info("Response length: %d characters", len(accumulated_content))
+        
+    except Exception as e:
+        error_msg = f"Error during streaming: {str(e)}"
+        logger.error('Streaming Error: %s', e, exc_info=True)
+        yield {
+            'content': '',
+            'error': error_msg,
+            'finish_reason': 'error'
+        }
 
 
 @observe()
