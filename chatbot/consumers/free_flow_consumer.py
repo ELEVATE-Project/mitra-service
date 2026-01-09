@@ -177,11 +177,14 @@ class FreeFlowConsumer(AsyncBaseConsumer):
             
             # Prepare vector store IDs for file_search tool
             vector_store_ids = None
-            if self.vector_store_id:
-                vector_store_ids = [self.vector_store_id]
-                logger.info(f"Using vector store for RAG: {self.vector_store_id}")
-            else:
-                logger.warning("⚠️ No vector_store_id provided - responses won't use file_search")
+            # Parse tools from company_bot.tool_context
+            tools = None
+            if self.company_bot and self.company_bot.tool_context:
+                try:
+                    tools = json.loads(self.company_bot.tool_context)
+                    logger.info(f"Loaded tools from company_bot.tool_context")
+                except (json.JSONDecodeError, ValueError) as e:
+                    logger.error(f"Error parsing company_bot.tool_context: {e}")
             
             # Stream response from OpenAI Responses API with file_search
             accumulated_response = ""
@@ -195,10 +198,9 @@ class FreeFlowConsumer(AsyncBaseConsumer):
                     max_token=self.company_bot.max_token if self.company_bot else 2048,
                     temperature=self.company_bot.bot_temperature if self.company_bot else 0.0,  # 0.0 for deterministic retrieval
                     company_bot=self.company_bot,
-                    vector_store_ids=vector_store_ids,
                     top_p=self.company_bot.filter_score if self.company_bot else None,
                     tool_choice="auto",  # Use "required" to force file_search
-                    tools=json.loads(self.company_bot.tool_context) if self.company_bot.tool_context else None
+                    tools=tools
                 )
             
             # Execute streaming in thread pool
