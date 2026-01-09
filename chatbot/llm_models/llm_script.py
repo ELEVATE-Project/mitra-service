@@ -353,7 +353,7 @@ def handle_bedrock_model(
 def handle_openai_response_api(
         messages, system_prompt=None, max_token=None, temperature=None, company_bot=None,
         model_name=None, key_name='OPENAI_API_KEY', is_actual_key=False, vector_store_ids=None,
-        top_p=None, tool_choice="auto"
+        top_p=None, tool_choice="auto", tools=None
 ):
     """
     Streaming OpenAI Responses API with file_search support for vector stores.
@@ -438,12 +438,7 @@ def handle_openai_response_api(
     
     # Add file_search tool if vector_store_ids provided
     if vector_store_ids and len(vector_store_ids) > 0:
-        request_data["tools"] = [
-            {
-                "type": "file_search",
-                "vector_store_ids": vector_store_ids
-            }
-        ]
+        request_data["tools"] = tools
         request_data["tool_choice"] = tool_choice
         logger.info(f"Using file_search with vector stores: {vector_store_ids}")
     else:
@@ -458,48 +453,62 @@ def handle_openai_response_api(
         
         with client.responses.stream(**request_data) as response_stream:
             for event in response_stream:
+
+                print("Event: ", event)
+
+                # if len(event.response.output) > 0:
+                #     context_event = event.response.output[0].text
+                #     print("Context event: ", context_event)
+
                 # Handle different event types from streaming
-                event_type = getattr(event, 'type', None)
+                # event_type = getattr(event, 'type', None)
+
+                if hasattr(event, 'delta') and hasattr(event, 'sequence_number') and hasattr(event, 'snapshot'):
+
+                    yield {
+                        'content': event.snapshot,
+                        'finish_reason': 'stop' if event.type == 'response.output_text.done' else None
+                    }
                 
-                if event_type == 'response.output_item.delta':
-                    # Text content delta
-                    if hasattr(event, 'delta') and hasattr(event.delta, 'text'):
-                        content_chunk = event.delta.text or ""
-                        accumulated_content += content_chunk
+                # if event_type == 'response.output_item.delta':
+                #     # Text content delta
+                #     if hasattr(event, 'delta') and hasattr(event.delta, 'text'):
+                #         content_chunk = event.delta.text or ""
+                #         accumulated_content += content_chunk
                         
-                        yield {
-                            'content': content_chunk,
-                            'finish_reason': None,
-                            'accumulated': accumulated_content
-                        }
+                #         yield {
+                #             'content': content_chunk,
+                #             'finish_reason': None,
+                #             'accumulated': accumulated_content
+                #         }
                 
-                elif event_type == 'response.output_item.done':
-                    # Item completed
-                    logger.info("Output item completed")
+                # elif event_type == 'response.output_item.done':
+                #     # Item completed
+                #     logger.info("Output item completed")
                 
-                elif event_type == 'response.done':
-                    # Full response completed
-                    finish_reason = 'stop'
-                    logger.info(f"Stream finished: {finish_reason}")
+                # elif event_type == 'response.done':
+                #     # Full response completed
+                #     finish_reason = 'stop'
+                #     logger.info(f"Stream finished: {finish_reason}")
                     
-                    yield {
-                        'content': '',
-                        'finish_reason': finish_reason,
-                        'accumulated': accumulated_content
-                    }
-                    break
+                #     yield {
+                #         'content': '',
+                #         'finish_reason': finish_reason,
+                #         'accumulated': accumulated_content
+                #     }
+                #     break
                 
-                elif event_type == 'error':
-                    # Error event
-                    error_msg = getattr(event, 'error', {}).get('message', 'Unknown error')
-                    logger.error(f"Stream error: {error_msg}")
+                # elif event_type == 'error':
+                #     # Error event
+                #     error_msg = getattr(event, 'error', {}).get('message', 'Unknown error')
+                #     logger.error(f"Stream error: {error_msg}")
                     
-                    yield {
-                        'content': '',
-                        'error': error_msg,
-                        'finish_reason': 'error'
-                    }
-                    break
+                #     yield {
+                #         'content': '',
+                #         'error': error_msg,
+                #         'finish_reason': 'error'
+                #     }
+                #     break
         
         logger.info(f"Response completed. Length: {len(accumulated_content)} characters")
         

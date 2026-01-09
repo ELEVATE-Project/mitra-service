@@ -197,7 +197,8 @@ class FreeFlowConsumer(AsyncBaseConsumer):
                     company_bot=self.company_bot,
                     vector_store_ids=vector_store_ids,
                     top_p=self.company_bot.filter_score if self.company_bot else None,
-                    tool_choice="auto"  # Use "required" to force file_search
+                    tool_choice="auto",  # Use "required" to force file_search
+                    tools=json.loads(self.company_bot.tool_context) if self.company_bot.tool_context else None
                 )
             
             # Execute streaming in thread pool
