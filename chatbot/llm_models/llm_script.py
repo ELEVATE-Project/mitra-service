@@ -462,9 +462,9 @@ def handle_openai_response_api(
             request_data["tool_choice"] = tool_choice
             logger.info(f"Using file_search with vector stores: {vector_store_ids}")
         else:
-            logger.warning("⚠️ No vector_store_ids found in tools - responses won't use RAG")
+            logger.info("⚠️ No vector_store_ids found in tools - responses won't use RAG")
     else:
-        logger.warning("⚠️ No tools provided - responses won't use RAG")
+        logger.info("⚠️ No tools provided - responses won't use RAG")
     
     logger.info("Responses API streaming request: %s", request_data)
     print("Responses API streaming request: ", request_data)

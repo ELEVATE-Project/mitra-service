@@ -1,14 +1,12 @@
 import json
 import traceback
-import asyncio
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.async_base_consumer import AsyncBaseConsumer
-from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, CompanyChat
-from chatbot.llm_models.llm_script import handle_openai_response_api
-from chatbot.utils.chat_utils import format_message_as_per_openai_format
+from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot
 import logging
 from channels.db import database_sync_to_async
 import jwt
+from chatbot.celery_tasks.free_flow_tasks import get_free_flow_response
 
 logger = logging.getLogger('django')
 
@@ -87,7 +85,7 @@ class FreeFlowConsumer(AsyncBaseConsumer):
                 # Handle regular chat messages
                 user_message = text_data_json.get('text')
                 if not user_message:
-                    logger.warning("Received empty message")
+                    logger.info("Received empty message")
                     return
                 
                 # Determine chat status
@@ -121,8 +119,14 @@ class FreeFlowConsumer(AsyncBaseConsumer):
                     self.channel_name, self.session_id
                 )
                 
-                # Process the message and stream response
-                await self.process_and_stream_response(user_message)
+                # Launch Celery task for streaming (FIRE AND FORGET)
+                get_free_flow_response.delay(
+                    self.channel_name,
+                    self.session_id,
+                    self.profile_id,
+                    self.route,
+                    self.bot_route
+                )
 
         except Exception as e:
             logger.error('Receive Error: %s', e, exc_info=True)
@@ -143,123 +147,7 @@ class FreeFlowConsumer(AsyncBaseConsumer):
             logger.error('Connect Error: %s', e, exc_info=True)
             traceback.print_exc()
 
-    async def process_and_stream_response(self, user_message):
-        """
-        Process user message and stream LLM response chunks back to client.
-        """
-        try:
-            # Get conversation history
-            company_chats = await self.get_conversation_history()
-            
-            # Format messages for OpenAI
-            messages = await database_sync_to_async(format_message_as_per_openai_format)(
-                chats=company_chats,
-                intro=None  # No intro for free-flow
-            )
-            # Prepare system prompt for retrieval-only behavior
-            system_prompt = None
-            if self.company_bot and self.company_bot.context:
-                system_prompt = self.company_bot.context
-            else:
-                # Default retrieval-only prompt for RAG
-                system_prompt = (
-                    "You are a retrieval-only assistant.\n"
-                    "Answer the user ONLY using information found in the vector store.\n"
-                    "If the answer is not present in the retrieved documents, reply exactly:\n"
-                    "'I do not have enough information in the knowledge base to answer this.'"
-                )
-            
-            # Convert to list format for Responses API
-            system_prompt = [{
-                'role': 'system',
-                'content': system_prompt
-            }]
-            
-            # Prepare vector store IDs for file_search tool
-            vector_store_ids = None
-            # Parse tools from company_bot.tool_context
-            tools = None
-            if self.company_bot and self.company_bot.tool_context:
-                try:
-                    tools = json.loads(self.company_bot.tool_context)
-                    logger.info(f"Loaded tools from company_bot.tool_context")
-                except (json.JSONDecodeError, ValueError) as e:
-                    logger.error(f"Error parsing company_bot.tool_context: {e}")
-            
-            # Stream response from OpenAI Responses API with file_search
-            accumulated_response = ""
-            finish_reason = None
-            
-            # Run streaming in thread pool to avoid blocking
-            def stream_generator():
-                return handle_openai_response_api(
-                    messages=messages,
-                    system_prompt=system_prompt,
-                    max_token=self.company_bot.max_token if self.company_bot else 2048,
-                    temperature=self.company_bot.bot_temperature if self.company_bot else 0.0,  # 0.0 for deterministic retrieval
-                    company_bot=self.company_bot,
-                    top_p=self.company_bot.filter_score if self.company_bot else None,
-                    tool_choice="auto",  # Use "required" to force file_search
-                    tools=tools
-                )
-            
-            # Execute streaming in thread pool
-            for chunk_data in await asyncio.to_thread(stream_generator):
-                content = chunk_data.get('content', '')
-                finish_reason = chunk_data.get('finish_reason')
-                error = chunk_data.get('error')
-                
-                if error:
-                    logger.error('Streaming error: %s', error)
-                    await self.send(text_data=json.dumps({
-                        "text": {
-                            "msg": "I apologize, but I encountered an error processing your request.",
-                            "source": "bot",
-                            "type": "error",
-                            "finish_reason": "error"
-                        }
-                    }))
-                    return
-                
-                if content:
-                    accumulated_response += content
-                    # Send chunk to client
-                    await self.send(text_data=json.dumps({
-                        "text": {
-                            "msg": content,
-                            "source": "bot",
-                            "type": "chunk",
-                            "finish_reason": finish_reason
-                        }
-                    }))
-                
-                if finish_reason:
-                    break
-            
-            # Save complete bot response to database
-            if accumulated_response:
-                await database_sync_to_async(save_in_company_db)(
-                    session_id=self.session_id,
-                    profile_id=self.profile_id,
-                    initiated_by='AI',
-                    message=accumulated_response,
-                    chunks=None,
-                    status=ChatStatus.IN_PROGRESS,
-                    stage='FREE_FLOW'
-                )
-                
-                logger.info('Completed streaming response, length: %d', len(accumulated_response))
-            
-        except Exception as e:
-            logger.error('Error in process_and_stream_response: %s', e, exc_info=True)
-            traceback.print_exc()
-            await self.send(text_data=json.dumps({
-                "text": {
-                    "msg": "I apologize, but I encountered an error. Please try again.",
-                    "source": "bot",
-                    "type": "error"
-                }
-            }))
+
 
     @database_sync_to_async
     def get_profile(self, profile_id):
@@ -317,23 +205,4 @@ class FreeFlowConsumer(AsyncBaseConsumer):
 
         return cs
 
-    @database_sync_to_async
-    def get_conversation_history(self):
-        """
-        Get conversation history limited by company_bot.chat_history_limit.
-        Returns CompanyChat queryset ordered by creation time.
-        """
-        all_chats = CompanyChat.objects.filter(
-            session=self.session_id
-        ).order_by('created_at')
-        
-        # Apply history limit if configured
-        if self.company_bot and self.company_bot.chat_history_limit:
-            # Get last N messages based on history limit
-            chat_count = all_chats.count()
-            if chat_count > self.company_bot.chat_history_limit:
-                # Skip older messages
-                skip_count = chat_count - self.company_bot.chat_history_limit
-                return list(all_chats[skip_count:])
-        
-        return list(all_chats)
+
