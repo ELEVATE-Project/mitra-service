@@ -14,7 +14,7 @@ from asgiref.sync import async_to_sync
 from chatbot.llm_models.llm_script import handle_openai_response_api
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.models import ChatStatus, Profile, CompanyBot, CompanyChat
-from chatbot.utils.chat_utils import format_message_as_per_openai_format
+from chatbot.utils.chat_utils import get_guided_chat
 import logging
 import json
 
@@ -84,9 +84,10 @@ class FreeFlowService:
             
             logger.info(f"Fetched {len(company_chats)} chat messages for history")
             
-            # 2. Format messages for OpenAI
-            messages = format_message_as_per_openai_format(
-                chats=company_chats,
+            # 2. Format messages for OpenAI using get_guided_chat
+            messages = get_guided_chat(
+                company_bot=company_bot,
+                company_chats=company_chats,
                 intro=None  # No intro for free-flow
             )
             

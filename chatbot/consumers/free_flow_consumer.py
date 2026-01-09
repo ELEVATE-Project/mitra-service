@@ -30,7 +30,6 @@ class FreeFlowConsumer(AsyncBaseConsumer):
         self.flow_name = None
         self.ip_address = None
         self.access_token = None
-        self.vector_store_id = None  # For file_search capability with Responses API
 
     async def disconnect(self, code):
         try:
@@ -55,12 +54,11 @@ class FreeFlowConsumer(AsyncBaseConsumer):
                 self.flow_name = text_data_json.get('flow_name', 'free_flow')
                 self.ip_address = text_data_json.get('address')
                 self.access_token = text_data_json.get('access_token')
-                self.vector_store_id = text_data_json.get('vector_store_id')  # Optional
 
                 profile = await self.get_profile(self.profile_id)
                 logger.info(
-                    f"Free-flow channel_name: %s, session_id: %s, profile_id: %s, route: %s, vector_store_id: %s",
-                    self.channel_name, self.session_id, self.profile_id, self.route, self.vector_store_id
+                    f"Free-flow channel_name: %s, session_id: %s, profile_id: %s, route: %s",
+                    self.channel_name, self.session_id, self.profile_id, self.route
                 )
 
                 user_id = await self.handle_access_token(self.access_token)
@@ -70,16 +68,6 @@ class FreeFlowConsumer(AsyncBaseConsumer):
                 await self.create_chat_session(
                     self.session_id, profile, self.company_bot, self.ip_address, user_id
                 )
-                
-                # Send acknowledgment
-                await self.send(text_data=json.dumps({
-                    "text": {
-                        "msg": "Connected to free-flow chat with Responses API file_search",
-                        "source": "system",
-                        "type": "connection_ack",
-                        "vector_store_enabled": bool(self.vector_store_id)
-                    }
-                }))
                 
             else:
                 # Handle regular chat messages
@@ -110,8 +98,7 @@ class FreeFlowConsumer(AsyncBaseConsumer):
                     chunks=None,
                     status=company_chat_status,
                     translated_message=None,
-                    audio_base64=text_data_json.get('asr_audio'),
-                    stage='FREE_FLOW'
+                    audio_base64=text_data_json.get('asr_audio')
                 )
                 
                 logger.info(

@@ -1,6 +1,7 @@
 import requests
 import json
 import os
+from typing import Optional, List, Dict
 from django.core.validators import URLValidator
 from langfuse.decorators import observe
 from openai import OpenAI
@@ -353,7 +354,7 @@ def handle_bedrock_model(
 def handle_openai_response_api(
         messages, system_prompt=None, max_token=None, temperature=None, company_bot=None,
         model_name=None, key_name='OPENAI_API_KEY', is_actual_key=False,
-        top_p=None, tool_choice="auto", tools=None
+        top_p=None, tool_choice="auto", tools: Optional[List[Dict]] = None
 ):
     """
     Streaming OpenAI Responses API with file_search support for vector stores.
@@ -374,10 +375,10 @@ def handle_openai_response_api(
         is_actual_key: If True, key_name is the actual key
         top_p: Top-p sampling parameter
         tool_choice: Tool choice strategy ("auto" or "required")
-        tools: Tools configuration containing file_search with vector_store_ids
+        tools: Already-parsed tools configuration (list of dicts)
     
     Yields:
-        dict: Chunks with 'content', 'finish_reason', 'error', 'accumulated' keys
+        dict: Chunks with 'content', 'finish_reason', 'error' keys
     """
     if is_actual_key:
         client_api_key = key_name
@@ -436,35 +437,13 @@ def handle_openai_response_api(
     if top_p:
         request_data['top_p'] = top_p
     
-    # Extract vector_store_ids from tools and add file_search tool if available
-    vector_store_ids = []
+    # Add tools to request if provided (already parsed by caller)
     if tools:
-        # Parse tools if it's a string
-        if isinstance(tools, str):
-            try:
-                tools = json.loads(tools)
-            except (json.JSONDecodeError, ValueError) as e:
-                logger.error(f"Error parsing tools JSON: {e}")
-                tools = None
-        
-        # Extract vector_store_ids from file_search tool
-        if tools and isinstance(tools, list):
-            for tool in tools:
-                if tool.get('type') == 'file_search':
-                    file_search_config = tool.get('file_search', {})
-                    vector_stores = file_search_config.get('vector_stores', [])
-                    for vs in vector_stores:
-                        if vs.get('id'):
-                            vector_store_ids.append(vs['id'])
-        
-        if vector_store_ids and len(vector_store_ids) > 0:
-            request_data["tools"] = tools
-            request_data["tool_choice"] = tool_choice
-            logger.info(f"Using file_search with vector stores: {vector_store_ids}")
-        else:
-            logger.info("⚠️ No vector_store_ids found in tools - responses won't use RAG")
+        request_data["tools"] = tools
+        request_data["tool_choice"] = tool_choice
+        logger.info(f"Using tools configuration: {len(tools) if isinstance(tools, list) else 'single tool'}")
     else:
-        logger.info("⚠️ No tools provided - responses won't use RAG")
+        logger.info("⚠️ No tools provided")
     
     logger.info("Responses API streaming request: %s", request_data)
     print("Responses API streaming request: ", request_data)
