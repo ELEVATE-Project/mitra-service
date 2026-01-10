@@ -199,6 +199,15 @@ def parse_llm_objective_response(response, filtered_chunks):
             sources = obj.get('sources', [])
             reason = obj.get('reason', '')
 
+            if isinstance(sources, str):
+                if sources.strip() in ("[]", ""):
+                    sources = []
+                else:
+                    try:
+                        sources = json.loads(sources)
+                    except:
+                        sources = []
+
             if sources is None:
                 sources = []
 

@@ -235,6 +235,14 @@ def parse_llm_action_response(response, filtered_chunks):
                     sources = step_data.get('sources', [])
                     if sources is None:
                         sources = []
+                    if isinstance(sources, str):
+                        if sources.strip() in ("[]", ""):
+                            sources = []
+                        else:
+                            try:
+                                sources = json.loads(sources)
+                            except:
+                                sources = []
                     if not isinstance(sources, list):
                         sources = [sources]
 
