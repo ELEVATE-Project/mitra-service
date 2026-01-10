@@ -33,15 +33,12 @@ def generate_objective_utils(user_problem_statement, company_bot):
             )
 
             if chunks_response.get('error'):
-                return {
-                    'status': 'error',
-                    'status_code': chunks_response.get('status_code', 500),
-                    'objective_list': [],
-                    'chunks_response': None,
-                    'message': chunks_response.get('message', 'API request failed')
-                }
+                print(f"Error while fetching chunks: {chunks_response.get('error')}")
+                logger.info(f"Error while fetching chunks: {chunks_response.get('error')}")
 
         except Exception as db_error:
+            print(f"Error while fetching chunks: {db_error}")
+            logger.info(f"Error while fetching chunks: {db_error}")
             return {
                 'status': 'error',
                 'status_code': 500,
@@ -50,40 +47,13 @@ def generate_objective_utils(user_problem_statement, company_bot):
                 'message': f'Database query failed: {str(db_error)}'
             }
 
-        if not chunks_response or not chunks_response.get("results"):
-            return {
-                'status': 'ok',
-                'status_code': 200,
-                'objective_list': [],
-                'total_objectives': 0,
-                'total_chunks_used': 0,
-                'total_chunks_found': 0,
-                'total_results': 0,
-                'chunks_response': chunks_response,
-                'message': 'No chunks found from text-search API'
-            }
-
-        filtered_chunks = filter_and_sort_chunks(
-            chunks_response, company_bot.filter_score, company_bot.top_k
-        )
+        filtered_chunks = []
+        if chunks_response and chunks_response.get("results"):
+            filtered_chunks = filter_and_sort_chunks(
+                chunks_response, company_bot.filter_score, company_bot.top_k
+            )
 
         logger.info(f"filtered_chunks: {filtered_chunks}")
-
-        if not filtered_chunks:
-            total_chunks = len(chunks_response.get("results", []))
-            max_score = max([r.get('score', 0) for r in chunks_response.get("results", [])], default=0)
-
-            return {
-                'status': 'ok',
-                'status_code': 200,
-                'objective_list': [],
-                'total_objectives': 0,
-                'total_chunks_used': 0,
-                'total_chunks_found': total_chunks,
-                'total_results': total_chunks,
-                'chunks_response': chunks_response,
-                'message': f'No chunks met filter criteria. Found {total_chunks} chunks, max score: {max_score:.4f}, threshold: {company_bot.filter_score}'
-            }
 
         try:
             chunks_data = prepare_chunks_for_template(filtered_chunks)

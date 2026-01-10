@@ -9,6 +9,8 @@ logger = logging.getLogger('django')
 
 
 def generate_action_list_utils(query, objective_text, company_bot):
+    chunks_response = None
+
     try:
         from chatbot.utils.chat_query_handler import query_text_search
 
@@ -40,15 +42,13 @@ def generate_action_list_utils(query, objective_text, company_bot):
             )
 
             if chunks_response.get('error'):
-                return {
-                    'status': 'error',
-                    'status_code': chunks_response.get('status_code', 500),
-                    'action_list': [],
-                    'chunks_response': None,
-                    'message': chunks_response.get('message', 'API request failed')
-                }
+                print(f"Error while fetching chunks: {chunks_response.get('error')}")
+                logger.info(f"Error while fetching chunks: {chunks_response.get('error')}")
+
 
         except Exception as db_error:
+            print(f"Error while fetching chunks: {db_error}")
+            logger.info(f"Error while fetching chunks: {db_error}")
             return {
                 'status': 'error',
                 'status_code': 500,
@@ -57,36 +57,11 @@ def generate_action_list_utils(query, objective_text, company_bot):
                 'message': f'Database query failed: {str(db_error)}'
             }
 
-        if not chunks_response or not chunks_response.get("results"):
-            return {
-                'status': 'ok',
-                'status_code': 200,
-                'action_list': [],
-                'total_actions': 0,
-                'total_chunks_used': 0,
-                'total_chunks_found': 0,
-                'total_results': 0,
-                'chunks_response': chunks_response,
-                'message': 'No chunks found from text-search API'
-            }
-
-        filtered_chunks = filter_and_sort_chunks(
-            chunks_response, company_bot.filter_score, company_bot.top_k
-        )
-
-        if not filtered_chunks:
-            total_chunks = len(chunks_response.get("results", []))
-            return {
-                'status': 'ok',
-                'status_code': 200,
-                'action_list': [],
-                'total_actions': 0,
-                'total_chunks_used': 0,
-                'total_chunks_found': total_chunks,
-                'total_results': total_chunks,
-                'chunks_response': chunks_response,
-                'message': f'No chunks met filter criteria'
-            }
+        filtered_chunks = []
+        if chunks_response and chunks_response.get("results"):
+            filtered_chunks = filter_and_sort_chunks(
+                chunks_response, company_bot.filter_score, company_bot.top_k
+            )
 
         try:
             chunks_data = prepare_chunks_for_template(filtered_chunks)
@@ -130,6 +105,9 @@ def generate_action_list_utils(query, objective_text, company_bot):
 
             action_list = parse_llm_action_response(response, filtered_chunks)
             logger.info(f"action_list: {action_list}")
+            if not action_list:
+                raise ValueError("LLM returned empty action list")
+
 
         except Exception as llm_error:
             return {
@@ -328,21 +306,8 @@ def parse_llm_action_response(response, filtered_chunks):
 
 def post_process_actions_with_source(action_list, filtered_chunks, chunks_response):
     try:
-        if not action_list:
-            return {
-                'status': 'ok',
-                'status_code': 200,
-                'action_list': [],
-                'message': 'No actions to process'
-            }
-
-        if not isinstance(action_list, list):
-            return {
-                'status': 'error',
-                'status_code': 400,
-                'action_list': [],
-                'message': 'Invalid action_list: must be a list'
-            }
+        if not action_list or not isinstance(action_list, list):
+            raise ValueError("Error in LLM returned action list")
 
         source_id_to_score = {}
         for chunk in filtered_chunks:
