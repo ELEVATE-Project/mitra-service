@@ -126,6 +126,9 @@ def generate_objective_utils(user_problem_statement, company_bot):
             objective_list = parse_llm_objective_response(response, filtered_chunks)
             logger.info(f"objective_list: {objective_list}")
 
+            if not objective_list:
+                raise ValueError("LLM returned empty objectives list")
+
         except Exception as llm_error:
             return {
                 'status': 'error',
