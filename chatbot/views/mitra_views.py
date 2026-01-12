@@ -8,6 +8,9 @@ from rest_framework.response import Response
 import boto3
 import os
 import time
+from chatbot.utils.knowledge_service.reports_utils import generate_xlsx_from_json
+
+from shikshalokam.models import Project
 
 
 def get_s3_presigned_url_and_upload(file_name, file_content, file_type, project_id, folder_structure):
@@ -130,7 +133,7 @@ def create_project_view(request):
     print("Result: ", result)
     pdf_url = None
     pdf_filename = "Project_Report.pdf"
-
+    project_id = result.get('project_id') if not project_id else project_id
     try:
         # Get author info from profile
         author_name = profile.first_name if profile else ""
@@ -171,9 +174,30 @@ def create_project_view(request):
             session=session
         )
 
+        excel_data = {
+            "Project Title": project_title,
+            "Author": author_name,
+            "Location": location,
+            "Timeline": timeline,
+            "Problem Statement": user_problem_statement,
+            "Objective": project_objective,
+            "Action Steps": (
+                "\n".join(user_action_steps)
+                if isinstance(user_action_steps, list)
+                else user_action_steps
+            ),
+            "Sources": (
+                "\n".join(chunks)
+                if isinstance(chunks, list)
+                else chunks
+            ),
+            "Language": language,
+        }
+
+
         print("PDF report is generated successfully")
 
-        if pdf_content and result.get('project_id'):
+        if pdf_content and result.get('id'):
             # Prepare file name for S3
             pdf_filename = f"{project_title}.pdf" if project_title else "Project_Report.pdf"
             # Clean filename for S3 (remove special characters)
@@ -185,13 +209,68 @@ def create_project_view(request):
                 file_name=pdf_filename,
                 file_content=pdf_content.read(),
                 file_type="application/pdf",
-                project_id=result.get('project_id'),
+                project_id=result.get('id'),
                 folder_structure="shikshagraha_commons/"
             )
 
             if key:
                 base = os.getenv("S3_MEDIA_URL")
                 pdf_url = f"{base}{key}"
+                if pdf_url and result.get("id"):
+                    Project.objects.filter(id=result.get("id")).update(
+                        other_params={
+                            **(Project.objects.filter(id=result.get("id"))
+                               .values_list("other_params", flat=True)
+                               .first() or {}),
+                            "pdf": {
+                                "url": pdf_url,
+                                "file_name": pdf_filename
+                            }
+                        }
+                    )
+
+            excel_url = None
+            excel_filename = "Project_Report.xlsx"
+
+            try:
+                excel_content = generate_xlsx_from_json(excel_data)
+
+                excel_filename = f"{project_title}.xlsx" if project_title else "Project_Report.xlsx"
+                excel_filename = "".join(
+                    c for c in excel_filename if c.isalnum() or c in (' ', '-', '_', '.')
+                ).replace(" ", "_")
+
+                excel_key = get_s3_presigned_url_and_upload(
+                    file_name=excel_filename,
+                    file_content=excel_content.read(),
+                    file_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    project_id=result.get("id"),
+                    folder_structure="shikshagraha_commons/"
+                )
+
+                if excel_key:
+                    base = os.getenv("S3_MEDIA_URL")
+                    excel_url = f"{base}{excel_key}"
+
+                    Project.objects.filter(id=result.get("id")).update(
+                        other_params={
+                            **(
+                                Project.objects.filter(id=result.get("id"))
+                                .values_list("other_params", flat=True)
+                                .first() or {}
+                            ),
+                            "excel": {
+                                "url": excel_url,
+                                "file_name": excel_filename
+                            }
+                        }
+                    )
+
+            except Exception as e:
+                print("Error generating/uploading Excel:", str(e))
+                traceback.print_exc()
+
+
             else:
                 print("Failed to upload PDF to S3")
 
@@ -207,6 +286,14 @@ def create_project_view(request):
             'url': pdf_url,
             'file_name': pdf_filename
         })
+
+    if excel_url:
+        media_response.append({
+        'media_type': MediaTypeChoices.XLSX,
+        'url': excel_url,
+        'file_name': excel_filename
+    })
+
     else:
         # Fallback to default URL if upload failed
         media_response.append({
@@ -218,6 +305,7 @@ def create_project_view(request):
     return Response({
         'status': 'ok',
         'result': response,
+        'project_id': project_id,
         'mitra_result': result,
         'media': media_response
     }, status=200)

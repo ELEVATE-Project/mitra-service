@@ -37,13 +37,13 @@ def get_creation_promt(company_bot, profile):
                 {tag_context}
                 {today_date}
                 {project_data}
-            """
+            """ if context else None
     story_prompt = f"""
                 {end_context}
                 {tag_context}
                 {today_date}
                 {project_data}
-            """
+            """ if end_context else None
     formatted_content_prompt = []
     formatted_story_prompt = []
 
@@ -52,25 +52,25 @@ def get_creation_promt(company_bot, profile):
             {
                 'text': content_prompt
             },
-        ]
+        ] if content_prompt else None
         formatted_story_prompt = [
             {
                 'text': story_prompt
             },
-        ]
+        ] if story_prompt else None
     elif company_bot.provider == LLMProvider.OPENAI:
         formatted_content_prompt = [
             {
                 'role': 'system',
                 'content': content_prompt
             },
-        ]
+        ] if content_prompt else None
         formatted_story_prompt = [
             {
                 'role': 'system',
                 'content': story_prompt
             },
-        ]
+        ] if story_prompt else None
 
     return formatted_content_prompt, formatted_story_prompt, tag_context, project_data
 
@@ -108,7 +108,7 @@ def get_validation_prompt(
                {tag_context}
                 {today_date}
                {project_data}
-           """
+           """ if validate_bot.end_context else None
 
     validate_context_data = {
         "story_json_output": response_json_content,
@@ -127,32 +127,32 @@ def get_validation_prompt(
                {tag_context}
                 {today_date}
                {project_data}
-           """
+           """ if validate_bot.context else None
 
     if validate_bot.provider == LLMProvider.BEDROCK_CONVERSE:
         validate_content_prompt = [
             {
                 'text': validate_content_prompt
             },
-        ]
+        ] if validate_content_prompt else None
         validate_story_prompt = [
             {
                 'text': validate_story_prompt
             },
-        ]
+        ] if validate_story_prompt else None
     elif validate_bot.provider == LLMProvider.OPENAI:
         validate_content_prompt = [
             {
                 'role': 'system',
                 'content': validate_content_prompt
             },
-        ]
+        ] if validate_content_prompt else None
         validate_story_prompt = [
             {
                 'role': 'system',
                 'content': validate_story_prompt
             },
-        ]
+        ] if validate_story_prompt else None
 
     return validate_content_prompt, validate_story_prompt
 

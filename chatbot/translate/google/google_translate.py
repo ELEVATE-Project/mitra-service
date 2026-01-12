@@ -1,6 +1,7 @@
 import traceback
 from google.cloud import translate
 import logging
+from google.oauth2 import service_account
 
 logger = logging.getLogger('django')
 
@@ -14,8 +15,10 @@ def translate_text(
     """Translating Text."""
     try:
 
-        client = translate.TranslationServiceClient()
-
+        credentials = service_account.Credentials.from_service_account_file(
+            '/home/ubuntu/shikshalokam-mohini-service/config/secrets.json'
+        )
+        client = translate.TranslationServiceClient(credentials=credentials)
         location = "global"
 
         parent = f"projects/{project_id}/locations/{location}"
@@ -30,7 +33,7 @@ def translate_text(
             }
         )
 
-        logger.info(f"Response {response}")
+        logger.info(f"Response from Google Text Translate: {response}")
 
         for translation in response.translations:
             return {
@@ -39,7 +42,7 @@ def translate_text(
             }
 
     except Exception as e:
-        logger.error('Error processing: %s', e, exc_info=True)
+        logger.error(f'Error processing Google Text Translate:{e}')
         print(f"Error during translation API call: {str(e)}")
         traceback.print_exc()
         return {

@@ -6,7 +6,7 @@ from shikshalokam.models.project_vernacular_model import ProjectVernacular
 @admin.register(ProjectVernacular)
 class ProjectVernacularAdmin(admin.ModelAdmin):
     list_display = ('project', 'language', 'created_at')
-    list_filter = (CustomAdvanceDateFilter, 'project', 'language',)
+    list_filter = (CustomAdvanceDateFilter, 'project', 'language', 'project__project_id')
 
     raw_id_fields = ('project', 'task')
 
