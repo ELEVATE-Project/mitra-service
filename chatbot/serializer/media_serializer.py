@@ -133,6 +133,8 @@ class MediaSearchResultSerializer(serializers.Serializer, S3UrlMixin):
         db_media_type = None
         db_media_type_display = None
         thumbnail_url = None
+        view_count = 0
+        download_count = 0
 
         if media_id:
             try:
@@ -179,6 +181,9 @@ class MediaSearchResultSerializer(serializers.Serializer, S3UrlMixin):
                 description = media_obj.description
 
                 db_priority = media_obj.priority
+
+                view_count = media_obj.view_count if media_obj.view_count else 0
+                download_count = media_obj.download_count if media_obj.download_count else 0
 
             except Exception as e:
                 file_size = metadata.get('file_size', None)
@@ -228,6 +233,8 @@ class MediaSearchResultSerializer(serializers.Serializer, S3UrlMixin):
             'vector_id': instance.get('id'),
             'score': instance.get('score', 0),
             'field_scores': instance.get('field_scores', {}),
+            'view_count': view_count,
+            'download_count': download_count,
         }
 
     def _get_media_type_display(self, file_type):
