@@ -831,7 +831,7 @@ class MediaSearchV2View(APIView):
             categories=tags if tags else None,
             organizations=organizations if organizations else None,
             resource_type=resource_types if resource_types else None,
-            file_type=media_types if media_types else None
+            file_type=None
         )
         
         if vector_response.get('error'):
