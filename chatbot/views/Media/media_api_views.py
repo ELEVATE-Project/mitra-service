@@ -856,6 +856,10 @@ class MediaSearchV2View(APIView):
         all_results = self._apply_content_exclusion_filter_v2(
             all_results
         )
+
+        if media_types:
+            all_results = self._apply_media_type_filter(all_results, media_types)
+
         total_results = len(all_results)
         
         # Apply ordering
@@ -932,6 +936,51 @@ class MediaSearchV2View(APIView):
         }
         
         return Response(response_data, status=status.HTTP_200_OK)
+
+    def _apply_media_type_filter(self, results, requested_media_types):
+        """
+        Filter results by actual media type, considering source document children.
+        This ensures that when a source document child exists, we filter by the child's
+        media type, not the parent's media type.
+        """
+        filtered_results = []
+
+        for result in results:
+            source_id = result.get('source_id')
+            try:
+                source_id_int = int(source_id) if source_id else None
+            except (ValueError, TypeError):
+                source_id_int = None
+
+            if not source_id_int:
+                continue
+
+            try:
+                media_obj = Media.objects.prefetch_related(
+                    'subdocuments',
+                    'subdocuments__key_values'
+                ).only('id', 'media_type').get(id=source_id_int)
+
+                source_child = media_obj.subdocuments.filter(
+                    key_values__key__iregex=r'^document[_\s]type$',
+                    key_values__value__icontains='source document'
+                ).first()
+
+                # Use source child's media type if exists, otherwise parent's
+                actual_media_type = source_child.media_type if source_child else media_obj.media_type
+
+                # Check if actual media type matches any requested media type
+                if actual_media_type in requested_media_types:
+                    filtered_results.append(result)
+
+            except Media.DoesNotExist:
+                # If media object doesn't exist, skip this result
+                continue
+            except Exception:
+                # If any error occurs, skip this result
+                continue
+
+        return filtered_results
     
     def _apply_content_exclusion_filter_v2(self, results):
         # Exclude source documents, low scores, and non-visible media
