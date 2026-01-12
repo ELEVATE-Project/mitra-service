@@ -491,10 +491,12 @@ class CommonResponseHandler(BaseResponseHandler):
             print(f"DEBUG: Adding reason to other_params: {reason}")
 
         stage = state_machine.name if state_machine else None
-        if not response and not state_machine:
-            message_to_save = extra_content.get("query", 'understood.')
-        else:
+        if response and str(response).strip():
             message_to_save = response
+        elif extra_content and extra_content.get("query") and str(extra_content.get("query")).strip():
+            message_to_save = extra_content["query"]
+        else:
+            message_to_save = "Understood."
 
         self.save_message(
             session_id=session_id, profile_id=profile_id, message=message_to_save, chunks=chunks,

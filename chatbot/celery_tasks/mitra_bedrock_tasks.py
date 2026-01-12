@@ -96,11 +96,13 @@ def get_mitra_bedrock_response(channel_name, session_id, profile_id, route):
                 current_step_number=1, finish_reason="stop", route=route,
                 extra_content=extra_content, company_bot=company_bot
             )
-            if message != '':
-                save_in_company_db(
-                    session_id, profile_id, 'AI', message, None, ChatStatus.IN_PROGRESS,
-                    translated_message
-                )
+            if not message or not str(message).strip():
+                message = "Understood."
+
+            save_in_company_db(
+                session_id, profile_id, 'AI', message, None, ChatStatus.IN_PROGRESS,
+                translated_message
+            )
         return response
     except Exception as e:
         print(e)

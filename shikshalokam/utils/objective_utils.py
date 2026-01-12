@@ -33,15 +33,12 @@ def generate_objective_utils(user_problem_statement, company_bot):
             )
 
             if chunks_response.get('error'):
-                return {
-                    'status': 'error',
-                    'status_code': chunks_response.get('status_code', 500),
-                    'objective_list': [],
-                    'chunks_response': None,
-                    'message': chunks_response.get('message', 'API request failed')
-                }
+                print(f"Error while fetching chunks: {chunks_response.get('error')}")
+                logger.info(f"Error while fetching chunks: {chunks_response.get('error')}")
 
         except Exception as db_error:
+            print(f"Error while fetching chunks: {db_error}")
+            logger.info(f"Error while fetching chunks: {db_error}")
             return {
                 'status': 'error',
                 'status_code': 500,
@@ -50,40 +47,13 @@ def generate_objective_utils(user_problem_statement, company_bot):
                 'message': f'Database query failed: {str(db_error)}'
             }
 
-        if not chunks_response or not chunks_response.get("results"):
-            return {
-                'status': 'ok',
-                'status_code': 200,
-                'objective_list': [],
-                'total_objectives': 0,
-                'total_chunks_used': 0,
-                'total_chunks_found': 0,
-                'total_results': 0,
-                'chunks_response': chunks_response,
-                'message': 'No chunks found from text-search API'
-            }
-
-        filtered_chunks = filter_and_sort_chunks(
-            chunks_response, company_bot.filter_score, company_bot.top_k
-        )
+        filtered_chunks = []
+        if chunks_response and chunks_response.get("results"):
+            filtered_chunks = filter_and_sort_chunks(
+                chunks_response, company_bot.filter_score, company_bot.top_k
+            )
 
         logger.info(f"filtered_chunks: {filtered_chunks}")
-
-        if not filtered_chunks:
-            total_chunks = len(chunks_response.get("results", []))
-            max_score = max([r.get('score', 0) for r in chunks_response.get("results", [])], default=0)
-
-            return {
-                'status': 'ok',
-                'status_code': 200,
-                'objective_list': [],
-                'total_objectives': 0,
-                'total_chunks_used': 0,
-                'total_chunks_found': total_chunks,
-                'total_results': total_chunks,
-                'chunks_response': chunks_response,
-                'message': f'No chunks met filter criteria. Found {total_chunks} chunks, max score: {max_score:.4f}, threshold: {company_bot.filter_score}'
-            }
 
         try:
             chunks_data = prepare_chunks_for_template(filtered_chunks)
@@ -124,6 +94,10 @@ def generate_objective_utils(user_problem_statement, company_bot):
                 }
 
             objective_list = parse_llm_objective_response(response, filtered_chunks)
+            logger.info(f"objective_list: {objective_list}")
+
+            if not objective_list:
+                raise ValueError("LLM returned empty objectives list")
 
         except Exception as llm_error:
             return {
@@ -184,6 +158,7 @@ def parse_llm_objective_response(response, filtered_chunks):
         response = extracted_data
 
     print("\n extracted_data: ", extracted_data)
+    logger.info(f"extracted_data: {extracted_data}")
     objectives_from_response = (
             response.get('objectives') or
             response.get('objective_list') or
@@ -198,6 +173,7 @@ def parse_llm_objective_response(response, filtered_chunks):
             objectives_from_response = objectives_from_response['items']
 
     print("objectives_from_response: ", objectives_from_response)
+    logger.info(f"objectives_from_response: {objectives_from_response}")
 
     if isinstance(objectives_from_response, str):
         try:
@@ -219,11 +195,24 @@ def parse_llm_objective_response(response, filtered_chunks):
     for obj in objectives_from_response:
         if isinstance(obj, dict):
             objective_text = obj.get('objective', obj.get('text', ''))
+            objective_text = objective_text.strip()
             sources = obj.get('sources', [])
             reason = obj.get('reason', '')
 
+            if isinstance(sources, str):
+                if sources.strip() in ("[]", ""):
+                    sources = []
+                else:
+                    try:
+                        sources = json.loads(sources)
+                    except:
+                        sources = []
+
+            if sources is None:
+                sources = []
+
             if not isinstance(sources, list):
-                sources = [sources] if sources else []
+                sources = [sources]
 
             filtered_sources = []
             validated_source_ids = []
@@ -240,13 +229,16 @@ def parse_llm_objective_response(response, filtered_chunks):
                                 "highlight_text": src.get("highlight_text", "")
                             })
                             validated_source_ids.append(normalized_id)
+            has_sources = bool(sources)
+            has_valid_sources = bool(validated_source_ids)
 
-            if objective_text and validated_source_ids:
+            if objective_text and (has_valid_sources or not has_sources):
                 objective_list.append({
                     'objective': objective_text.strip(),
                     'sources': filtered_sources,
                     'source_ids': validated_source_ids,
-                    'reason': reason
+                    'reason': reason,
+                    'is_evidence_optional': not has_sources
                 })
 
     return objective_list

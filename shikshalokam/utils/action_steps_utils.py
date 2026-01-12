@@ -3,9 +3,14 @@ from shikshalokam.utils.chunks_utils import validate_inputs, filter_and_sort_chu
     render_template_with_context, normalize_source_id
 import json_repair
 import json
+import logging
+
+logger = logging.getLogger('django')
 
 
 def generate_action_list_utils(query, objective_text, company_bot):
+    chunks_response = None
+
     try:
         from chatbot.utils.chat_query_handler import query_text_search
 
@@ -37,15 +42,13 @@ def generate_action_list_utils(query, objective_text, company_bot):
             )
 
             if chunks_response.get('error'):
-                return {
-                    'status': 'error',
-                    'status_code': chunks_response.get('status_code', 500),
-                    'action_list': [],
-                    'chunks_response': None,
-                    'message': chunks_response.get('message', 'API request failed')
-                }
+                print(f"Error while fetching chunks: {chunks_response.get('error')}")
+                logger.info(f"Error while fetching chunks: {chunks_response.get('error')}")
+
 
         except Exception as db_error:
+            print(f"Error while fetching chunks: {db_error}")
+            logger.info(f"Error while fetching chunks: {db_error}")
             return {
                 'status': 'error',
                 'status_code': 500,
@@ -54,36 +57,11 @@ def generate_action_list_utils(query, objective_text, company_bot):
                 'message': f'Database query failed: {str(db_error)}'
             }
 
-        if not chunks_response or not chunks_response.get("results"):
-            return {
-                'status': 'ok',
-                'status_code': 200,
-                'action_list': [],
-                'total_actions': 0,
-                'total_chunks_used': 0,
-                'total_chunks_found': 0,
-                'total_results': 0,
-                'chunks_response': chunks_response,
-                'message': 'No chunks found from text-search API'
-            }
-
-        filtered_chunks = filter_and_sort_chunks(
-            chunks_response, company_bot.filter_score, company_bot.top_k
-        )
-
-        if not filtered_chunks:
-            total_chunks = len(chunks_response.get("results", []))
-            return {
-                'status': 'ok',
-                'status_code': 200,
-                'action_list': [],
-                'total_actions': 0,
-                'total_chunks_used': 0,
-                'total_chunks_found': total_chunks,
-                'total_results': total_chunks,
-                'chunks_response': chunks_response,
-                'message': f'No chunks met filter criteria'
-            }
+        filtered_chunks = []
+        if chunks_response and chunks_response.get("results"):
+            filtered_chunks = filter_and_sort_chunks(
+                chunks_response, company_bot.filter_score, company_bot.top_k
+            )
 
         try:
             chunks_data = prepare_chunks_for_template(filtered_chunks)
@@ -126,6 +104,10 @@ def generate_action_list_utils(query, objective_text, company_bot):
                 }
 
             action_list = parse_llm_action_response(response, filtered_chunks)
+            logger.info(f"action_list: {action_list}")
+            if not action_list:
+                raise ValueError("LLM returned empty action list")
+
 
         except Exception as llm_error:
             return {
@@ -186,6 +168,7 @@ def parse_llm_action_response(response, filtered_chunks):
         response = extracted_data
 
     print("\nextracted_data: ", extracted_data)
+    logger.info(f"extracted_data: {extracted_data}")
 
     action_plans = (
             response.get('action_plans') or
@@ -194,6 +177,12 @@ def parse_llm_action_response(response, filtered_chunks):
             response.get('actions') or
             []
     )
+
+    if not action_plans:
+        if response.get('plan_name') and response.get('actionSteps'):
+            action_plans = [response]
+        elif response.get('plan_name') and (response.get('action_steps') or response.get('steps')):
+            action_plans = [response]
 
     if isinstance(action_plans, dict):
         if 'value' in action_plans:
@@ -227,8 +216,13 @@ def parse_llm_action_response(response, filtered_chunks):
     for plan in action_plans:
         if isinstance(plan, dict):
             plan_name = plan.get('plan_name', '')
-            duration_weeks = plan.get('duration_weeks', plan.get('duration', 3))
-            action_steps_data = plan.get('actionSteps', []) or plan.get('action_steps', []) or plan.get('steps', [])
+            duration_weeks = (plan.get('duration_weeks') or
+                              plan.get('overall_duration_weeks') or
+                              plan.get('duration', 13))
+
+            action_steps_data = (plan.get('actionSteps', []) or
+                                 plan.get('action_steps', []) or
+                                 plan.get('steps', []))
 
             processed_steps = []
             all_source_ids = set()
@@ -237,9 +231,25 @@ def parse_llm_action_response(response, filtered_chunks):
             for step_data in action_steps_data:
                 if isinstance(step_data, dict):
                     step_text = step_data.get('step', step_data.get('text', ''))
+
                     sources = step_data.get('sources', [])
+                    if sources is None:
+                        sources = []
+                    if isinstance(sources, str):
+                        if sources.strip() in ("[]", ""):
+                            sources = []
+                        else:
+                            try:
+                                sources = json.loads(sources)
+                            except:
+                                sources = []
+                    if not isinstance(sources, list):
+                        sources = [sources]
+
                     reason = step_data.get('reason', '')
 
+                    has_sources = bool(sources)
+                    has_valid_sources = False
                     step_source_ids = []
                     step_sources = []
 
@@ -251,6 +261,7 @@ def parse_llm_action_response(response, filtered_chunks):
 
                             if normalized_id and normalized_id in valid_source_ids:
                                 original_id = None
+                                has_valid_sources = True
                                 for chunk in filtered_chunks:
                                     if normalize_source_id(chunk.get('source_id')) == normalized_id:
                                         original_id = chunk.get('source_id')
@@ -267,12 +278,17 @@ def parse_llm_action_response(response, filtered_chunks):
                                 print(
                                     f"Warning: source_id '{raw_source_id}' (normalized: '{normalized_id}') not found in valid chunks")
 
-                    processed_steps.append({
-                        'step': step_text,
-                        'sources': step_sources,
-                        'source_ids': step_source_ids,
-                        'reason': reason
-                    })
+                    step_text = step_text.strip()
+
+                    if step_text and (has_valid_sources or not has_sources):
+                        processed_steps.append({
+                            'step': step_text,
+                            'sources': step_sources,
+                            'source_ids': step_source_ids,
+                            'reason': reason,
+                            'is_evidence_optional': not has_sources
+                        })
+
                     all_sources.extend(step_sources)
 
                 elif isinstance(step_data, str):
@@ -298,21 +314,8 @@ def parse_llm_action_response(response, filtered_chunks):
 
 def post_process_actions_with_source(action_list, filtered_chunks, chunks_response):
     try:
-        if not action_list:
-            return {
-                'status': 'ok',
-                'status_code': 200,
-                'action_list': [],
-                'message': 'No actions to process'
-            }
-
-        if not isinstance(action_list, list):
-            return {
-                'status': 'error',
-                'status_code': 400,
-                'action_list': [],
-                'message': 'Invalid action_list: must be a list'
-            }
+        if not action_list or not isinstance(action_list, list):
+            raise ValueError("Error in LLM returned action list")
 
         source_id_to_score = {}
         for chunk in filtered_chunks:
