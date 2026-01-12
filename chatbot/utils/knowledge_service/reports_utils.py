@@ -4,34 +4,38 @@ import requests
 from io import BytesIO
 from openpyxl import Workbook
 import boto3
+import logging
 
+logger = logging.getLogger('django')
 
 def generate_xlsx_from_json(data, sheet_name="Sheet1"):
-    """
-    Generate an Excel file from JSON-like data and return BytesIO
-    """
 
-    if isinstance(data, dict):
-        data = [data]
+    try:
+        if isinstance(data, dict):
+            data = [data]
 
-    if not data or not isinstance(data, list):
-        raise ValueError("Invalid or empty data provided for Excel generation")
+        if not data or not isinstance(data, list):
+            raise ValueError("Invalid or empty data provided for Excel generation")
 
-    wb = Workbook()
-    ws = wb.active
-    ws.title = sheet_name
+        wb = Workbook()
+        ws = wb.active
+        ws.title = sheet_name
 
-    headers = list(data[0].keys())
-    ws.append(headers)
+        headers = list(data[0].keys())
+        ws.append(headers)
 
-    for item in data:
-        ws.append([item.get(header, "") for header in headers])
+        for item in data:
+            ws.append([item.get(header, "") for header in headers])
 
-    excel_file = BytesIO()
-    wb.save(excel_file)
-    excel_file.seek(0)
+        excel_file = BytesIO()
+        wb.save(excel_file)
+        excel_file.seek(0)
 
-    return excel_file
+        return excel_file
+
+    except Exception as e:
+        logger.error('Error: %s', e, exc_info=True)
+        print(f"Error: {e}")
 
 
 def upload_excel_to_s3(

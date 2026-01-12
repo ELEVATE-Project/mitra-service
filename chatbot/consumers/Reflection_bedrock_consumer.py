@@ -58,7 +58,8 @@ class ReflectionBedrockConsumer(BaseConsumer):
                     print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
                           f"route: {self.route}")
                     print(f"Received project_id: {self.project_id} and access_token: {self.access_token}")
-                    if self.access_token:
+                    user_id = None
+                    if self.access_token:   
                         decoded = jwt.decode(
                             self.access_token,
                             PUBLIC_KEY,
@@ -69,10 +70,7 @@ class ReflectionBedrockConsumer(BaseConsumer):
                         print(decoded)
                         if decoded:
                             user_id = decoded.get('data', {}).get('id')
-                        else:
-                            user_id = None
-                    else:
-                        user_id = None
+                            
                     print("User_id: ", user_id)
 
                     # chat session create (session, profile)

@@ -56,6 +56,7 @@ class MitraBedrockConsumer(BaseConsumer):
                     logger.info("Authenticated with session_id: %s, profile_id: %s, route: %s",
                                 self.session_id, self.profile_id, self.route)
                     print(f"Received access_token: {self.access_token}")
+                    user_id = None 
                     if self.access_token:
                         try:
                             decoded = jwt.decode(
@@ -70,8 +71,6 @@ class MitraBedrockConsumer(BaseConsumer):
                         except jwt.InvalidTokenError:
                             logger.error("Invalid JWT token")
                             user_id = None
-                    else:
-                        user_id = None
 
                     print("User_id: ", user_id)
                     logger.info("User_id: %s", user_id)

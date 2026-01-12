@@ -80,8 +80,7 @@ class OneShotBedrockConsumer(BaseConsumer):
                     print(decoded)
                     if decoded:
                         user_id = decoded.get("data", {}).get("id")
-                else:
-                    user_id = None
+    
                 print("User_id: ", user_id)
 
                 # chat session create (session, profile)
