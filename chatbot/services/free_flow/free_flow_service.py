@@ -137,7 +137,9 @@ class FreeFlowService:
                 
                 if content:
                     accumulated_response += content
-                    # Send chunk via channel layer to WebSocket
+                
+                # Send chunk via channel layer to WebSocket (even if content is empty but finish_reason exists)
+                if content or finish_reason:
                     self._send_chunk(channel_name, content, finish_reason)
                 
                 if finish_reason:
