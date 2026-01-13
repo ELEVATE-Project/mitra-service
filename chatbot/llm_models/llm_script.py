@@ -363,23 +363,6 @@ def handle_openai_response_api(
     - file_search tool with vector stores
     - Streaming and non-streaming responses
     - Unified interface for chat + tools
-    
-    Args:
-        messages: List of conversation messages in OpenAI format [{'role': 'user', 'content': '...'}]
-        system_prompt: System instructions (string or list format)
-        max_token: Maximum tokens to generate (maps to max_output_tokens)
-        temperature: Sampling temperature
-        company_bot: CompanyBot instance for configuration
-        model_name: Model to use (default: GPT4_O_MINI)
-        key_name: Environment variable name for API key
-        is_actual_key: If True, key_name is the actual key
-        top_p: Top-p sampling parameter
-        tool_choice: Tool choice strategy ("auto" or "required")
-        tools: Already-parsed tools configuration (list of dicts)
-        stream: If True, streams response chunks; if False, returns complete response (default: True)
-    
-    Yields:
-        dict: Chunks with 'content', 'finish_reason', 'error' keys
     """
     if is_actual_key:
         client_api_key = key_name
@@ -420,6 +403,33 @@ def handle_openai_response_api(
                 'role': 'system',
                 'content': system_prompt
             })
+    
+    # Enforce chat history rules (similar to bedrock)
+    if messages and company_bot and hasattr(company_bot, 'chat_history_limit') and company_bot.chat_history_limit:
+        # Remove trailing assistant message
+        if messages[-1]['role'] == 'assistant':
+            messages = messages[:-1]
+        
+        # Find last user message
+        last_user_idx = None
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i]['role'] == 'user':
+                last_user_idx = i
+                break
+        
+        if last_user_idx is None:
+            messages = []
+        else:
+            start_idx = max(0, last_user_idx - company_bot.chat_history_limit)
+            
+            # Ensure first message is always a user
+            if messages[start_idx]['role'] != 'user':
+                for j in range(start_idx + 1, last_user_idx + 1):
+                    if messages[j]['role'] == 'user':
+                        start_idx = j
+                        break
+            
+            messages = messages[start_idx:last_user_idx + 1]
     
     # Add conversation messages
     input_messages.extend(messages)

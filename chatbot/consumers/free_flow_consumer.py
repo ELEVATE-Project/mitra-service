@@ -1,4 +1,5 @@
 import json
+import os
 import traceback
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.async_base_consumer import AsyncBaseConsumer
@@ -62,6 +63,21 @@ class FreeFlowConsumer(AsyncBaseConsumer):
                 )
 
                 user_id = await self.handle_access_token(self.access_token)
+
+                # If an access_token was provided but verification failed, reject authentication
+                if self.access_token and not user_id:
+                    logger.error(
+                        "Authentication failed: invalid access_token for channel %s session %s",
+                        self.channel_name, self.session_id
+                    )
+                    await self.send(text_data=json.dumps({
+                        "text": {
+                            "msg": "Authentication failed: invalid access token",
+                            "source": "system",
+                            "type": "auth_error"
+                        }
+                    }))
+                    return
                 self.company_bot = await self.get_company_bot(profile, self.bot_route)
 
                 # Create chat session asynchronously
@@ -117,7 +133,6 @@ class FreeFlowConsumer(AsyncBaseConsumer):
 
         except Exception as e:
             logger.error('Receive Error: %s', e, exc_info=True)
-            traceback.print_exc()
             await self.send(text_data=json.dumps({
                 "text": {
                     "msg": "An error occurred processing your message",
@@ -132,7 +147,6 @@ class FreeFlowConsumer(AsyncBaseConsumer):
             await super().connect()
         except Exception as e:
             logger.error('Connect Error: %s', e, exc_info=True)
-            traceback.print_exc()
 
 
 
@@ -147,11 +161,26 @@ class FreeFlowConsumer(AsyncBaseConsumer):
         user_id = None
         try:
             if access_token:
-                decoded = jwt.decode(access_token, options={"verify_signature": False})
+                # Verify with signature using RS256 when access_token is provided
+                PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")
+
+                decoded = jwt.decode(
+                    access_token,
+                    PUBLIC_KEY,
+                    algorithms=["HS256"]
+                )
+                logger.info("Decoded JWT: %s", decoded)
+
                 if decoded:
                     user_id = decoded.get('data', {}).get('id')
+        
+        except jwt.ExpiredSignatureError:
+            logger.error('Access token has expired', exc_info=True)
+        except jwt.InvalidTokenError as e:
+            logger.error('Invalid access token: %s', e, exc_info=True)
         except Exception as e:
             logger.error('Access token Decode Error: %s', e, exc_info=True)
+
         logger.info("User_id: %s", user_id)
         return user_id
 

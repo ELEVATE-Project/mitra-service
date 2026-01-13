@@ -41,13 +41,6 @@ class FreeFlowService:
         3. Calls handle_openai_response_api() synchronously
         4. For each chunk, sends via channel_layer.send() to the WebSocket
         5. Saves complete response to database
-        
-        Args:
-            channel_name: WebSocket channel identifier (e.g., "specific.websocket!abc123")
-            session_id: Chat session ID
-            profile_id: User profile ID
-            route: Language route
-            bot_route: Bot route identifier
         """
         try:
             logger.info(f"Processing free-flow for session {session_id}, channel {channel_name}")
@@ -70,17 +63,7 @@ class FreeFlowService:
             
             # Get conversation history
             all_chats = CompanyChat.objects.filter(session=session_id).order_by('created_at')
-            
-            # Apply history limit if configured
-            if company_bot.chat_history_limit:
-                chat_count = all_chats.count()
-                if chat_count > company_bot.chat_history_limit:
-                    skip_count = chat_count - company_bot.chat_history_limit
-                    company_chats = list(all_chats[skip_count:])
-                else:
-                    company_chats = list(all_chats)
-            else:
-                company_chats = list(all_chats)
+            company_chats = list(all_chats)
             
             logger.info(f"Fetched {len(company_chats)} chat messages for history")
             
@@ -155,12 +138,12 @@ class FreeFlowService:
                     message=accumulated_response,
                     chunks=None,
                     status=ChatStatus.IN_PROGRESS,
-                    stage='FREE_FLOW'
+                    stage= None
                 )
                 
                 logger.info(f'Completed streaming response, length: {len(accumulated_response)} chars')
             else:
-                logger.warning(f'No response accumulated for session {session_id}')
+                logger.info(f'No response accumulated for session {session_id}')
                 
         except Exception as e:
             logger.error(f'Error in process_and_stream: {e}', exc_info=True)
@@ -172,11 +155,6 @@ class FreeFlowService:
         
         Uses async_to_sync wrapper to call the async channel layer from sync code.
         The message type "chat.message" gets converted to chat_message() method call.
-        
-        Args:
-            channel_name: Target WebSocket channel
-            content: Chunk content to send
-            finish_reason: OpenAI finish reason (stop, length, etc.)
         """
         try:
             async_to_sync(channel_layer.send)(
@@ -193,15 +171,11 @@ class FreeFlowService:
             )
         except Exception as e:
             # Don't crash if WebSocket disconnected - log and continue
-            logger.warning(f"Failed to send chunk to channel {channel_name}: {e}")
+            logger.info(f"Failed to send chunk to channel {channel_name}: {e}")
     
     def _send_error(self, channel_name, error_msg):
         """
         Send error message via channel layer to the WebSocket.
-        
-        Args:
-            channel_name: Target WebSocket channel
-            error_msg: Error message to display to user
         """
         try:
             async_to_sync(channel_layer.send)(
