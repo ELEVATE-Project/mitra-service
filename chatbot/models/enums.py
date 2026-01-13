@@ -22,6 +22,9 @@ class ChatType(models.TextChoices):
     YLC = 'YLC', _('YLC')
     listeningActivity = 'listening-activity', _('Listening Activity')
     ParentPerceptionSurvey = 'parent_perception_survey', _('Parent Perception Survey')
+    LCF = 'lcf', _('LCF')
+    LFA = 'lfa', _('LFA')
+    FreeFlow = 'free_flow', _('Free-Flow')
 
 
 class LLMProvider(models.TextChoices):
