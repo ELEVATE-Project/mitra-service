@@ -14,11 +14,7 @@ logger = logging.getLogger('django')
 
 class FreeFlowConsumer(AsyncBaseConsumer):
     """
-    WebSocket consumer for free-flow conversation using OpenAI Responses API.
-    Unlike other consumers, this bypasses the state machine architecture and enables
-    direct streaming conversations with file_search for vector store RAG.
-    
-    Uses OpenAI Responses API (client.responses.create) which supports file_search tool.
+    WebSocket consumer for free-flow conversation.
     """
     
     def __init__(self, *args, **kwargs):

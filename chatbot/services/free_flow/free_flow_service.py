@@ -1,14 +1,3 @@
-"""
-Free Flow Service
-
-Service layer for handling free-flow conversations with OpenAI Responses API.
-This service runs in Celery workers and handles:
-- Fetching conversation history from database
-- Calling LLM with RAG (file_search tool)
-- Streaming responses back via channel layer
-- Saving complete responses to database
-"""
-
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from chatbot.llm_models.llm_script import handle_openai_response_api
@@ -25,22 +14,11 @@ logger = logging.getLogger('django')
 class FreeFlowService:
     """
     Service for handling free-flow streaming responses.
-    
-    This service is called from Celery workers and uses synchronous code
-    (which is fine in Celery). It sends responses back to the WebSocket
-    via the channel layer using the channel_name identifier.
     """
     
     def process_and_stream(self, channel_name, session_id, profile_id, route, bot_route):
         """
         Process user message and stream LLM response back via channel layer.
-        
-        This method:
-        1. Fetches data from database (sync - OK in Celery)
-        2. Formats messages for OpenAI
-        3. Calls handle_openai_response_api() synchronously
-        4. For each chunk, sends via channel_layer.send() to the WebSocket
-        5. Saves complete response to database
         """
         try:
             logger.info(f"Processing free-flow for session {session_id}, channel {channel_name}")
@@ -152,9 +130,6 @@ class FreeFlowService:
     def _send_chunk(self, channel_name, content, finish_reason):
         """
         Send a chunk via channel layer to the WebSocket.
-        
-        Uses async_to_sync wrapper to call the async channel layer from sync code.
-        The message type "chat.message" gets converted to chat_message() method call.
         """
         try:
             async_to_sync(channel_layer.send)(
