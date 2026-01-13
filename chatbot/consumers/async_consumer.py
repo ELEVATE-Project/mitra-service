@@ -147,7 +147,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 decoded = jwt.decode(
                     access_token,
                     PUBLIC_KEY,
-                    algorithms=["RS256"]
+                    algorithms=["HS256"]
                 )
                 print("Decoded JWT: ", decoded)
                 if decoded:

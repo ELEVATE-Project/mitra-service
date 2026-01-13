@@ -5,69 +5,26 @@ from chatbot.pdf.knowledge_service.project_report_pdf import generate_project_pd
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_mitra_project_utils
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-import boto3
+# import boto3
 import os
-import time
-from chatbot.utils.knowledge_service.reports_utils import generate_xlsx_from_json
+# import time
+# from chatbot.utils.knowledge_service.reports_utils import generate_xlsx_from_json
+from chatbot.utils.media_preview.excel_service import generate_and_upload_excel
+# from chatbot.services.s3_service import upload_file_to_s3
+from chatbot.utils.project_formatting_utils import (
+    normalize_sources_from_chunks,
+    format_project_timeline
+)
+from chatbot.utils.media_preview.excel_service import (
+    generate_excel_file,
+)
+from chatbot.utils.S3.s3_service import upload_media
+
+
 
 from shikshalokam.models import Project
 
 
-def get_s3_presigned_url_and_upload(file_name, file_content, file_type, project_id, folder_structure):
-    """Generate presigned URL and upload file to S3"""
-    try:
-        # Prepare S3 key
-        if project_id:
-            id_to_use = f'{project_id}/'
-        else:
-            id_to_use = ''
-
-        key = f"{folder_structure}{id_to_use}{int(time.time())}-{file_name}"
-
-        # Initialize S3 client
-        s3_client = boto3.client(
-            "s3",
-            region_name=os.getenv('AWS_REGION'),
-            aws_access_key_id=os.getenv('AWS_ACCESS_KEY_ID'),
-            aws_secret_access_key=os.getenv('AWS_SECRET_ACCESS_KEY'),
-        )
-
-        # Generate pre-signed URL for upload
-        upload_url = s3_client.generate_presigned_url(
-            "put_object",
-            Params={
-                "Bucket": os.getenv('S3_BUCKET_NAME'),
-                "Key": key,
-            },
-            ExpiresIn=3600,
-        )
-
-        print("Upload URL: ", upload_url)
-        # Public URL for accessing the uploaded file
-        public_url = (
-            f"https://{os.getenv('S3_BUCKET_NAME')}.s3.{os.getenv('AWS_REGION')}.amazonaws.com/{key}"
-        )
-
-        print("public_url: ", public_url)
-        # Upload file to S3 using presigned URL
-        upload_response = requests.put(
-            upload_url,
-            data=file_content,
-            headers={
-                'Content-Type': file_type,
-            }
-        )
-        print("upload_response: ", upload_response)
-        if upload_response.status_code == 200:
-            print(f"File uploaded successfully to S3: {key}")
-            return key
-        else:
-            print(f"Failed to upload file to S3: {upload_response.status_code}")
-            return None
-
-    except Exception as e:
-        print(f"Error in S3 upload: {str(e)}")
-        return None
 
 
 @api_view(['POST'])
@@ -82,34 +39,16 @@ def create_project_view(request):
     project_objective = body.get('user_objective')
     profile_id = body.get('profile_id')
     chunks = body.get('chunks')
-    sources_list = []
-
-    if isinstance(chunks, dict):
-        all_sources = (
-            chunks.get("objective_chunk", []) +
-            chunks.get("action_chunk", [])
-        )
-
-        for src in all_sources:
-            title = src.get("title")
-            url = src.get("url")
-            org = src.get("organization", {}).get("name")
-
-            parts = []
-            if title:
-                parts.append(title)
-            if org:
-                parts.append(f"({org})")
-            if url:
-                parts.append(url)
-
-            if parts:
-                sources_list.append(" ".join(parts))
+    
 
     language = body.get('language')
 
     print("project_title: ", project_title)
     print("profile_id: ", profile_id)
+    # --------- FORMATTED DATA (EXTRACTED UTILS) ---------
+    sources_list = normalize_sources_from_chunks(chunks)
+    timeline = format_project_timeline(project_duration)
+
 
     # if not access_token and profile_id:
     #     return Response({
@@ -163,40 +102,22 @@ def create_project_view(request):
         author_name = profile.first_name if profile else ""
         location = profile.location if profile and hasattr(profile, '') else ""
 
-        # Format timeline with proper week/weeks suffix
-        timeline = ""
-        if project_duration:
-            # Check if it's already a string with "week" or "weeks"
-            duration_str = str(project_duration).strip().lower()
-            if "week" in duration_str:
-                # Already contains "week", use as-is
-                timeline = str(project_duration).strip()
-            else:
-                try:
-                    # Convert to int and add appropriate suffix
-                    duration_value = int(project_duration)
-                    # Add "week" or "weeks" based on the value
-                    if duration_value == 1:
-                        timeline = f"{duration_value} week"
-                    else:
-                        timeline = f"{duration_value} weeks"
-                except (ValueError, TypeError):
-                    # If conversion fails, use the value as-is
-                    timeline = str(project_duration)
+        
 
         # ----------- PDF GENERATION -----------
-        pdf_content = generate_project_pdf(
-            project_title=project_title,
-            author_name=author_name,
-            location=location,
-            problem_statement=user_problem_statement,
-            objective=project_objective,
-            timeline=timeline,
-            action_steps=user_action_steps,
-            sources=chunks,
-            language=language,
-            session=session
-        )
+        # pdf_content = generate_project_pdf(
+        #     project_title=project_title,
+        #     author_name=author_name,
+        #     location=location,
+        #     problem_statement=user_problem_statement,
+        #     objective=project_objective,
+        #     timeline=timeline,
+        #     action_steps=user_action_steps,
+        #     sources=chunks,
+        #     language=language,
+        #     session=session
+        # )
+        pdf_content = None
 
         print("PDF report is generated successfully")
 
@@ -206,96 +127,53 @@ def create_project_view(request):
                 c for c in pdf_filename if c.isalnum() or c in (' ', '-', '_', '.')
             ).replace(' ', '_')
 
-            key = get_s3_presigned_url_and_upload(
-                file_name=pdf_filename,
-                file_content=pdf_content.read(),
-                file_type="application/pdf",
-                project_id=result.get('id'),
-                folder_structure="shikshagraha_commons/"
-            )
+            # ----------- PDF UPLOAD (USING GENERIC MEDIA UPLOADER) -----------
+            pdf_url = None
 
-            if key:
-                base = os.getenv("S3_MEDIA_URL")
-                pdf_url = f"{base}{key}"
-
-                Project.objects.filter(id=result.get("id")).update(
-                    other_params={
-                        **(
-                            Project.objects.filter(id=result.get("id"))
-                            .values_list("other_params", flat=True)
-                            .first() or {}
-                        ),
-                        "pdf": {
-                            "url": pdf_url,
-                            "file_name": pdf_filename
-                        }
-                    }
+            if pdf_content and result.get("id"):
+                pdf_media = upload_media(
+                    project_id=result.get("id"),
+                    media_type="pdf",
+                    file_name=pdf_filename,
+                    file_content=pdf_content.read(),
+                    content_type="application/pdf",
                 )
 
-       # ----------- EXCEL GENERATION -----------
+                if pdf_media:
+                    pdf_url = pdf_media["url"]
+
+
+       # ----------- EXCEL GENERATION (STEP 1: GENERATE) -----------
+
+        excel_generation_result = generate_excel_file(
+            project_title=project_title,
+            author_name=author_name,
+            location=location,
+            timeline=timeline,
+            user_problem_statement=user_problem_statement,
+            project_objective=project_objective,
+            user_action_steps=user_action_steps,
+            sources_list=sources_list,
+        )
+
         excel_url = None
-        excel_filename = "Project_Report.xlsx"
+        excel_filename = None
 
-        excel_data = {
-            "Project Title": project_title,
-            "Author": author_name,
-            "Location": location,
-            "Timeline": timeline,
-            "Problem Statement": user_problem_statement,
-            "Objective": project_objective,
-            "Action Steps": (
-                "\n".join(user_action_steps)
-                if isinstance(user_action_steps, list)
-                else user_action_steps
-            ),
-            "Sources": sources_list,
+        # ----------- EXCEL UPLOAD (STEP 2: UPLOAD) -----------
 
-        }
-
-        try:
-            print("EXCEL SOURCES VALUE:", excel_data.get("Sources"))
-            print("CURRENT CHUNKS:", chunks)
-
-            excel_content = generate_xlsx_from_json(excel_data)
-
-            excel_filename = f"{project_title}.xlsx" if project_title else "Project_Report.xlsx"
-            excel_filename = "".join(
-                c for c in excel_filename if c.isalnum() or c in (' ', '-', '_', '.')
-            ).replace(' ', '_')
-
-            excel_key = get_s3_presigned_url_and_upload(
-                file_name=excel_filename,
-                file_content=excel_content.read(),
-                file_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        if excel_generation_result and result.get("id"):
+            excel_media = upload_media(
                 project_id=result.get("id"),
-                folder_structure="shikshagraha_commons/"
+                media_type="excel",
+                file_name=excel_generation_result["file_name"],
+                file_content=excel_generation_result["file"].read(),
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
 
+            if excel_media:
+                excel_url = excel_media["url"]
+                excel_filename = excel_media["file_name"]
 
-            if excel_key:
-                base = os.getenv("S3_MEDIA_URL")
-                excel_url = f"{base}{excel_key}"
-
-                Project.objects.filter(id=result.get("id")).update(
-                    other_params={
-                        **(
-                            Project.objects.filter(id=result.get("id"))
-                            .values_list("other_params", flat=True)
-                            .first() or {}
-                        ),
-                        "excel": {
-                            "url": excel_url,
-                            "file_name": excel_filename
-                        }
-                    }
-                )
-
-        except Exception as e:
-            print("Error generating/uploading Excel:", str(e))
-            traceback.print_exc()
-
-        else:
-            print("Failed to upload PDF to S3")
 
     except Exception as e:
         print(f"Error generating/uploading PDF: {str(e)}")

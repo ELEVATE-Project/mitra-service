@@ -63,7 +63,7 @@ class ReflectionBedrockConsumer(BaseConsumer):
                         decoded = jwt.decode(
                             self.access_token,
                             PUBLIC_KEY,
-                            algorithms=["RS256"]
+                            algorithms=["HS256"]
                         )
 
 

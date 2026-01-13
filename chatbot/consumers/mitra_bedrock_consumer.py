@@ -62,7 +62,7 @@ class MitraBedrockConsumer(BaseConsumer):
                             decoded = jwt.decode(
                                 self.access_token,
                                 PUBLIC_KEY,
-                                algorithms=["RS256"]
+                                algorithms=["HS256"]
                             )
                             user_id = decoded.get('data', {}).get('id')
                         except jwt.ExpiredSignatureError:

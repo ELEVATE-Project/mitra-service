@@ -75,7 +75,7 @@ class OneShotBedrockConsumer(BaseConsumer):
                     decoded = jwt.decode(
                         self.access_token,
                         PUBLIC_KEY,
-                        algorithms=["RS256"]
+                        algorithms=["HS256"]
                     )
                     print(decoded)
                     if decoded:
