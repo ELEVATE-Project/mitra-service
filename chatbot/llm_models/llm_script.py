@@ -354,14 +354,14 @@ def handle_bedrock_model(
 def handle_openai_response_api(
         messages, system_prompt=None, max_token=None, temperature=None, company_bot=None,
         model_name=None, key_name='OPENAI_API_KEY', is_actual_key=False,
-        top_p=None, tool_choice="auto", tools: Optional[List[Dict]] = None
+        top_p=None, tool_choice="auto", tools: Optional[List[Dict]] = None, stream=False
 ):
     """
-    Streaming OpenAI Responses API with file_search support for vector stores.
+    OpenAI Responses API with file_search support for vector stores.
     
     This uses the new Responses API (client.responses.create) which supports:
     - file_search tool with vector stores
-    - Streaming responses
+    - Streaming and non-streaming responses
     - Unified interface for chat + tools
     
     Args:
@@ -376,6 +376,7 @@ def handle_openai_response_api(
         top_p: Top-p sampling parameter
         tool_choice: Tool choice strategy ("auto" or "required")
         tools: Already-parsed tools configuration (list of dicts)
+        stream: If True, streams response chunks; if False, returns complete response (default: True)
     
     Yields:
         dict: Chunks with 'content', 'finish_reason', 'error' keys
@@ -445,50 +446,79 @@ def handle_openai_response_api(
     else:
         logger.info("⚠️ No tools provided")
     
-    logger.info("Responses API streaming request: %s", request_data)
-    print("Responses API streaming request: ", request_data)
+    logger.info("Responses API %s request: %s", "streaming" if stream else "non-streaming", request_data)
+    print("Responses API %s request: " % ("streaming" if stream else "non-streaming"), request_data)
     
     try:
-        # Use Responses API with streaming context manager
-        with client.responses.stream(**request_data) as response_stream:
-            for event in response_stream:
+        if stream:
+            # Use Responses API with streaming context manager
+            with client.responses.stream(**request_data) as response_stream:
+                for event in response_stream:
 
-                print("Event: ", event)
+                    print("Event: ", event)
 
-                # Handle ResponseTextDeltaEvent - extract incremental delta
-                if event.type == 'response.output_text.delta':
-                    content_chunk = event.delta or ""
-                    yield {
-                        'content': content_chunk,
-                        'finish_reason': None
-                    }
-                
-                # Handle ResponseTextDoneEvent - text output completed
-                elif event.type == 'response.output_text.done':
-                    yield {
-                        'content': '',
-                        'finish_reason': 'stop'
-                    }
-                
-                # Handle ResponseCompletedEvent - full response finished
-                elif event.type == 'response.completed':
-                    logger.info(f"Response completed")
-                    break
-                
-                # Handle error events
-                elif event.type == 'error':
-                    error_msg = getattr(event, 'error', {}).get('message', 'Unknown error')
-                    logger.error(f"Stream error: {error_msg}")
-                    yield {
-                        'content': '',
-                        'error': error_msg,
-                        'finish_reason': 'error'
-                    }
-                    break
+                    # Handle ResponseTextDeltaEvent - extract incremental delta
+                    if event.type == 'response.output_text.delta':
+                        content_chunk = event.delta or ""
+                        yield {
+                            'content': content_chunk,
+                            'finish_reason': None
+                        }
+                    
+                    # Handle ResponseTextDoneEvent - text output completed
+                    elif event.type == 'response.output_text.done':
+                        yield {
+                            'content': '',
+                            'finish_reason': 'stop'
+                        }
+                    
+                    # Handle ResponseCompletedEvent - full response finished
+                    elif event.type == 'response.completed':
+                        logger.info(f"Response completed")
+                        break
+                    
+                    # Handle error events
+                    elif event.type == 'error':
+                        error_msg = getattr(event, 'error', {}).get('message', 'Unknown error')
+                        logger.error(f"Stream error: {error_msg}")
+                        yield {
+                            'content': '',
+                            'error': error_msg,
+                            'finish_reason': 'error'
+                        }
+                        break
+        else:
+            # Non-streaming mode - get complete response at once
+            response = client.responses.create(**request_data)
+            
+            logger.info("Non-streaming response received")
+            
+            # Extract full text from response
+            # The response.output is a list that may contain:
+            # - ResponseFileSearchToolCall (tool calls)
+            # - ResponseOutputMessage (actual text messages)
+            # We need to extract text from ResponseOutputMessage items
+            full_text = ""
+            if hasattr(response, 'output') and response.output:
+                for output_item in response.output:
+                    # Check if this is a ResponseOutputMessage (has 'content' attribute)
+                    if hasattr(output_item, 'content') and output_item.content:
+                        # The content is a list of ResponseOutputText objects
+                        for content_item in output_item.content:
+                            if hasattr(content_item, 'text'):
+                                full_text += content_item.text
+            
+            logger.info(f"Extracted text length: {len(full_text)} chars")
+            
+            # Yield single complete response
+            yield {
+                'content': full_text,
+                'finish_reason': 'stop'
+            }
         
     except Exception as e:
-        error_msg = f"Error during Responses API streaming: {str(e)}"
-        logger.error('Streaming Error: %s', e, exc_info=True)
+        error_msg = f"Error during Responses API {'streaming' if stream else 'call'}: {str(e)}"
+        logger.error('Error: %s', e, exc_info=True)
         print(error_msg)
         yield {
             'content': '',

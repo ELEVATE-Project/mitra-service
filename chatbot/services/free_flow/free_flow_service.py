@@ -109,8 +109,10 @@ class FreeFlowService:
             # 5. Stream response from OpenAI Responses API
             accumulated_response = ""
             finish_reason = None
+
+            stream = company_bot.stream if hasattr(company_bot, 'stream') else True
             
-            logger.info(f"Starting LLM streaming for session {session_id}")
+            logger.info(f"Starting LLM {'streaming' if stream else 'call'} for session {session_id}")
             
             # Call LLM synchronously (this is fine in Celery worker)
             for chunk_data in handle_openai_response_api(
@@ -121,7 +123,8 @@ class FreeFlowService:
                 company_bot=company_bot,
                 top_p=company_bot.filter_score if company_bot.filter_score else None,
                 tool_choice="auto",
-                tools=tools
+                tools=tools,
+                stream=stream
             ):
                 content = chunk_data.get('content', '')
                 finish_reason = chunk_data.get('finish_reason')

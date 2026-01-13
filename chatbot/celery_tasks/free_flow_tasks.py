@@ -8,12 +8,12 @@ logger = logging.getLogger('django')
 @shared_task
 def get_free_flow_response(channel_name, session_id, profile_id, route, bot_route):
     """
-    Celery task for free-flow streaming responses using OpenAI Responses API.
+    Celery task for free-flow responses using OpenAI Responses API.
     
     This task runs in a separate Celery worker process and:
     1. Fetches conversation history and bot configuration from database
     2. Calls OpenAI Responses API with file_search tool for RAG
-    3. Streams response chunks back to the WebSocket via channel layer
+    3. Streams response chunks (or complete response) back to WebSocket via channel layer
     4. Saves complete response to database
     
     Args:
@@ -24,7 +24,8 @@ def get_free_flow_response(channel_name, session_id, profile_id, route, bot_rout
         bot_route: Bot route identifier
     
     Returns:
-        str: Success message when streaming completes
+        str: Success message when task completes
+
     """
     logger.info(f"Free flow task started for session {session_id}, channel {channel_name}")
     
@@ -38,4 +39,4 @@ def get_free_flow_response(channel_name, session_id, profile_id, route, bot_rout
     )
     
     logger.info(f"Free flow task completed for session {session_id}")
-    return "Free flow streaming completed"
+    return "Free flow response completed"
