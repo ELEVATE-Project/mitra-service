@@ -177,6 +177,14 @@ class CommonResponseHandler(BaseResponseHandler):
             if isinstance(response, str):
                 logger.info("DEBUG: Response is string")
 
+                stripped = response.strip()
+                if not (stripped.startswith('{') and stripped.endswith('}')):
+                    # Check if it contains JSON-like key-value pairs
+                    if ('"response"' in stripped or '"reason"' in stripped) and ':' in stripped:
+                        logger.info("DEBUG: String looks like JSON without outer braces, adding them")
+                        response = '{' + stripped + '}'
+                        logger.info(f"DEBUG: Fixed JSON string: {response[:200]}...")
+
                 if not (response.strip().startswith('{') and response.strip().endswith('}')):
                     logger.info("DEBUG: String doesn't look like JSON, treating as plain text response")
                     return response, None
