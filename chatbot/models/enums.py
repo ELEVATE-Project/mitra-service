@@ -96,6 +96,8 @@ class MediaTypeChoices(models.TextChoices):
     WEBP = 'image/webp', _('WEBP')
     HEIF = 'image/heif', _('HEIF')
     HEIC = 'image/heic', _('HEIC')
+    XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', _('XLSX')
+
 
 
 class FileTypeChoices(models.TextChoices):
