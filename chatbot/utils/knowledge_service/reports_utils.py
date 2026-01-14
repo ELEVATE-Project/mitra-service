@@ -12,9 +12,6 @@ def generate_xlsx_from_json(data, sheet_name="Project Report"):
     """
 
     try:
-        # -------------------------------
-        # Normalize input
-        # -------------------------------
         if isinstance(data, dict):
             data = [data]
 

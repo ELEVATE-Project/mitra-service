@@ -1,16 +1,10 @@
 import traceback
-import requests
 from chatbot.models import Profile, MediaTypeChoices
 from chatbot.pdf.knowledge_service.project_report_pdf import generate_project_pdf
 from chatbot.utils.shikshalokam_mitra_utils import create_project_utils, create_mitra_project_utils
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-# import boto3
-import os
-# import time
-# from chatbot.utils.knowledge_service.reports_utils import generate_xlsx_from_json
 from chatbot.utils.media_preview.excel_service import generate_and_upload_excel
-# from chatbot.services.s3_service import upload_file_to_s3
 from chatbot.utils.project_formatting_utils import (
     normalize_sources_from_chunks,
     format_project_timeline
@@ -19,11 +13,7 @@ from chatbot.utils.media_preview.excel_service import (
     generate_excel_file,
 )
 from chatbot.utils.S3.s3_service import upload_media
-
-
-
 from shikshalokam.models import Project
-
 
 
 
@@ -45,7 +35,6 @@ def create_project_view(request):
 
     print("project_title: ", project_title)
     print("profile_id: ", profile_id)
-    # --------- FORMATTED DATA (EXTRACTED UTILS) ---------
     sources_list = normalize_sources_from_chunks(chunks)
     timeline = format_project_timeline(project_duration)
 
@@ -98,26 +87,23 @@ def create_project_view(request):
     pdf_filename = "Project_Report.pdf"
     project_id = result.get('project_id') if not project_id else project_id
     try:
-        # Get author info from profile
         author_name = profile.first_name if profile else ""
         location = profile.location if profile and hasattr(profile, '') else ""
 
         
 
-        # ----------- PDF GENERATION -----------
-        # pdf_content = generate_project_pdf(
-        #     project_title=project_title,
-        #     author_name=author_name,
-        #     location=location,
-        #     problem_statement=user_problem_statement,
-        #     objective=project_objective,
-        #     timeline=timeline,
-        #     action_steps=user_action_steps,
-        #     sources=chunks,
-        #     language=language,
-        #     session=session
-        # )
-        pdf_content = None
+        pdf_content = generate_project_pdf(
+            project_title=project_title,
+            author_name=author_name,
+            location=location,
+            problem_statement=user_problem_statement,
+            objective=project_objective,
+            timeline=timeline,
+            action_steps=user_action_steps,
+            sources=chunks,
+            language=language,
+            session=session
+        )
 
         print("PDF report is generated successfully")
 
@@ -127,7 +113,6 @@ def create_project_view(request):
                 c for c in pdf_filename if c.isalnum() or c in (' ', '-', '_', '.')
             ).replace(' ', '_')
 
-            # ----------- PDF UPLOAD (USING GENERIC MEDIA UPLOADER) -----------
             pdf_url = None
 
             if pdf_content and result.get("id"):
@@ -143,7 +128,6 @@ def create_project_view(request):
                     pdf_url = pdf_media["url"]
 
 
-       # ----------- EXCEL GENERATION (STEP 1: GENERATE) -----------
 
         excel_generation_result = generate_excel_file(
             project_title=project_title,
@@ -159,7 +143,6 @@ def create_project_view(request):
         excel_url = None
         excel_filename = None
 
-        # ----------- EXCEL UPLOAD (STEP 2: UPLOAD) -----------
 
         if excel_generation_result and result.get("id"):
             excel_media = upload_media(
@@ -180,7 +163,6 @@ def create_project_view(request):
         traceback.print_exc()
 
 
-    # Prepare media response
     media_response = []
     if pdf_url:
         media_response.append({

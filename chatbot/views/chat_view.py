@@ -81,7 +81,7 @@ def create_chatsession(request):
         decoded = jwt.decode(
             access_token,
             JWT_PUBLIC_KEY,
-            algorithms=["RS256"]
+            algorithms=["HS256"]
         )
         user_id = decoded.get("data", {}).get("id")
         first_name = decoded.get("data", {}).get("name")

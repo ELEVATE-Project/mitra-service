@@ -14,12 +14,8 @@ def upload_file_to_s3(
     project_id: int | None,
     folder_structure: str
 ) -> str | None:
-    """
-    Uploads a file to S3 using a presigned URL and returns the S3 key.
-    """
 
     try:
-        # Prepare S3 key
         id_prefix = f"{project_id}/" if project_id else ""
         key = f"{folder_structure}{id_prefix}{int(time.time())}-{file_name}"
 
@@ -65,10 +61,6 @@ def upload_media(
     content_type: str,
     folder_structure: str = "shikshagraha_commons/",
 ):
-    """
-    Generic media uploader for any file type (pdf, excel, word, etc).
-    Uploads file to S3 and updates Project.other_params in a single place.
-    """
 
     s3_key = upload_file_to_s3(
         file_name=file_name,
@@ -84,7 +76,6 @@ def upload_media(
     base = os.getenv("S3_MEDIA_URL")
     media_url = f"{base}{s3_key}"
 
-    # Fetch existing other_params safely
     existing_other_params = (
         Project.objects.filter(id=project_id)
         .values_list("other_params", flat=True)
@@ -92,7 +83,6 @@ def upload_media(
         or {}
     )
 
-    # Update media entry dynamically
     existing_other_params[media_type] = {
         "url": media_url,
         "file_name": file_name,

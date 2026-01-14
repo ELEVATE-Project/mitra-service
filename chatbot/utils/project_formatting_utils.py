@@ -1,8 +1,5 @@
 def normalize_sources_from_chunks(chunks):
-    """
-    Normalize sources from chunks into a flat list of strings
-    for Excel / PDF usage.
-    """
+
     sources_list = []
 
     if not isinstance(chunks, dict):
@@ -33,9 +30,7 @@ def normalize_sources_from_chunks(chunks):
 
 
 def format_project_timeline(project_duration):
-    """
-    Formats project duration into 'X week(s)' format.
-    """
+
     if not project_duration:
         return ""
 
