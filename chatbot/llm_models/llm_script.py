@@ -1,9 +1,10 @@
 import requests
 import json
 import os
+from typing import Optional, List, Dict
 from django.core.validators import URLValidator
 from langfuse.decorators import observe
-from langfuse.openai import openai
+from openai import OpenAI
 from chatbot.models import LLMModel
 import boto3
 import json_repair
@@ -83,20 +84,18 @@ def handle_openai_model(
         stream=False, key_name='OPENAI_API_KEY', is_actual_key=False, tools=None, tool_choice=None, client_choice=None,
         top_p=None, system_prompt=None
 ):
-    if client_choice:
-        client = client_choice
-    else:
-        client = openai
-
     if is_actual_key:
         client_api_key = key_name
     else:
         client_api_key = os.getenv(key_name)
 
-    client.api_key = client_api_key
-
-    if not client.api_key:
+    if not client_api_key:
         raise ValueError(f"No API key found for '{key_name}'. Please set the environment variable correctly.")
+
+    if client_choice:
+        client = client_choice
+    else:
+        client = OpenAI(api_key=client_api_key)
 
     if model_name:
         model_to_use = model_name
@@ -350,6 +349,192 @@ def handle_bedrock_model(
         logger.error('Error processing request: %s', e, exc_info=True)
         print(f'❌ Error processing Bedrock request: {e}')
         return None
+
+@observe()
+def handle_openai_response_api(
+        messages, system_prompt=None, max_token=None, temperature=None, company_bot=None,
+        model_name=None, key_name='OPENAI_API_KEY', is_actual_key=False,
+        top_p=None, tool_choice="auto", tools: Optional[List[Dict]] = None, stream=False
+):
+    """
+    OpenAI Responses API with file_search support for vector stores.
+    
+    This uses the new Responses API (client.responses.create) which supports:
+    - file_search tool with vector stores
+    - Streaming and non-streaming responses
+    - Unified interface for chat + tools
+    """
+    if is_actual_key:
+        client_api_key = key_name
+    else:
+        client_api_key = os.getenv(key_name)
+    
+    if not client_api_key:
+        yield {
+            'error': f"No API key found for '{key_name}'. Please set the environment variable correctly.",
+            'finish_reason': 'error'
+        }
+        return
+    
+    client = OpenAI(api_key=client_api_key)
+    
+    if model_name:
+        model_to_use = model_name
+    elif company_bot:
+        model_to_use = company_bot.llm_model
+    else:
+        model_to_use = LLMModel.GPT4_O_MINI
+    
+    # Build input array for Responses API (includes system + conversation messages)
+    input_messages = []
+    
+    # Add system prompt as first message
+    if system_prompt:
+        if isinstance(system_prompt, list):
+            # Extract system content from list format
+            for msg in system_prompt:
+                if msg.get('role') == 'system':
+                    input_messages.append({
+                        'role': 'system',
+                        'content': msg.get('content', '')
+                    })
+        elif isinstance(system_prompt, str):
+            input_messages.append({
+                'role': 'system',
+                'content': system_prompt
+            })
+    
+    # Enforce chat history rules (similar to bedrock)
+    if messages and company_bot and hasattr(company_bot, 'chat_history_limit') and company_bot.chat_history_limit:
+        # Remove trailing assistant message
+        if messages[-1]['role'] == 'assistant':
+            messages = messages[:-1]
+        
+        # Find last user message
+        last_user_idx = None
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i]['role'] == 'user':
+                last_user_idx = i
+                break
+        
+        if last_user_idx is None:
+            messages = []
+        else:
+            start_idx = max(0, last_user_idx - company_bot.chat_history_limit)
+            
+            # Ensure first message is always a user
+            if messages[start_idx]['role'] != 'user':
+                for j in range(start_idx + 1, last_user_idx + 1):
+                    if messages[j]['role'] == 'user':
+                        start_idx = j
+                        break
+            
+            messages = messages[start_idx:last_user_idx + 1]
+    
+    # Add conversation messages
+    input_messages.extend(messages)
+    
+    # Build request data for Responses API
+    # Note: client.responses.stream() doesn't take 'stream' parameter - it streams by default
+    request_data = {
+        "model": model_to_use,
+        "input": input_messages
+    }
+    
+    if max_token:
+        request_data["max_output_tokens"] = max_token
+    if temperature is not None:
+        request_data['temperature'] = temperature
+    if top_p:
+        request_data['top_p'] = top_p
+    
+    # Add tools to request if provided (already parsed by caller)
+    if tools:
+        request_data["tools"] = tools
+        request_data["tool_choice"] = tool_choice
+        logger.info(f"Using tools configuration: {len(tools) if isinstance(tools, list) else 'single tool'}")
+    else:
+        logger.info("⚠️ No tools provided")
+    
+    logger.info("Responses API %s request: %s", "streaming" if stream else "non-streaming", request_data)
+    print("Responses API %s request: " % ("streaming" if stream else "non-streaming"), request_data)
+    
+    try:
+        if stream:
+            # Use Responses API with streaming context manager
+            with client.responses.stream(**request_data) as response_stream:
+                for event in response_stream:
+
+                    print("Event: ", event)
+
+                    # Handle ResponseTextDeltaEvent - extract incremental delta
+                    if event.type == 'response.output_text.delta':
+                        content_chunk = event.delta or ""
+                        yield {
+                            'content': content_chunk,
+                            'finish_reason': None
+                        }
+                    
+                    # Handle ResponseTextDoneEvent - text output completed
+                    elif event.type == 'response.output_text.done':
+                        yield {
+                            'content': '',
+                            'finish_reason': 'stop'
+                        }
+                    
+                    # Handle ResponseCompletedEvent - full response finished
+                    elif event.type == 'response.completed':
+                        logger.info(f"Response completed")
+                        break
+                    
+                    # Handle error events
+                    elif event.type == 'error':
+                        error_msg = getattr(event, 'error', {}).get('message', 'Unknown error')
+                        logger.error(f"Stream error: {error_msg}")
+                        yield {
+                            'content': '',
+                            'error': error_msg,
+                            'finish_reason': 'error'
+                        }
+                        break
+        else:
+            # Non-streaming mode - get complete response at once
+            response = client.responses.create(**request_data)
+            
+            logger.info("Non-streaming response received")
+            
+            # Extract full text from response
+            # The response.output is a list that may contain:
+            # - ResponseFileSearchToolCall (tool calls)
+            # - ResponseOutputMessage (actual text messages)
+            # We need to extract text from ResponseOutputMessage items
+            full_text = ""
+            if hasattr(response, 'output') and response.output:
+                for output_item in response.output:
+                    # Check if this is a ResponseOutputMessage (has 'content' attribute)
+                    if hasattr(output_item, 'content') and output_item.content:
+                        # The content is a list of ResponseOutputText objects
+                        for content_item in output_item.content:
+                            if hasattr(content_item, 'text'):
+                                full_text += content_item.text
+            
+            logger.info(f"Extracted text length: {len(full_text)} chars")
+            
+            # Yield single complete response
+            yield {
+                'content': full_text,
+                'finish_reason': 'stop'
+            }
+        
+    except Exception as e:
+        error_msg = f"Error during Responses API {'streaming' if stream else 'call'}: {str(e)}"
+        logger.error('Error: %s', e, exc_info=True)
+        print(error_msg)
+        yield {
+            'content': '',
+            'error': error_msg,
+            'finish_reason': 'error'
+        }
 
 
 @observe()

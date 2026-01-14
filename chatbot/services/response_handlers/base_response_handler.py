@@ -49,25 +49,6 @@ class BaseResponseHandler(ABC):
             logger.error(f"Error getting state machine: {e}")
             state_machine = None
 
-        # Prepare original prompt
-        original_prompt = kwargs.get('system_prompt', [])
-
-        # Execute preprocessing if state machine exists
-        preprocessing_result = {'action': 'continue', 'prompt': original_prompt}
-        if state_machine:
-            preprocessing_result = self.preprocessing_service.execute_preprocessing(
-                state_machine, original_prompt, **kwargs
-            )
-
-        # Handle preprocessing results
-        if preprocessing_result['action'] == 'skip':
-            # Skip the current stage - move to next stage
-            kwargs['skip_llm'] = True
-            kwargs['skip_reason'] = 'preprocessing'
-        elif preprocessing_result['action'] == 'continue':
-            # Update prompt if it was enriched
-            kwargs['system_prompt'] = preprocessing_result.get('prompt', original_prompt)
-
         response = None
         # Get LLM response
         if not kwargs.get('skip_llm', False):
@@ -98,6 +79,38 @@ class BaseResponseHandler(ABC):
                 kwargs['skip_next_stage'] = True
                 kwargs['target_stage'] = state_machine.skip_to_step
                 logger.info("Postprocessing will skip next stage")
+
+                next_stage_number = kwargs['target_stage']
+                try:
+                    next_state_machine = CompanyStateMachine.objects.get(
+                        company_bot=company_bot, step=next_stage_number
+                    )
+
+                    next_stage_preprocessing_result = self.preprocessing_service.execute_preprocessing(
+                        next_state_machine, kwargs.get('system_prompt', []), **kwargs
+                    )
+
+                    if next_stage_preprocessing_result['action'] == 'skip':
+                        kwargs['skip_next_stage_preprocessing'] = True
+
+                except CompanyStateMachine.DoesNotExist:
+                    logger.error(f"Next state machine {next_stage_number} not found for preprocessing")
+            else:
+                next_stage_number = chat_session.current_step + 1
+                try:
+                    next_state_machine = CompanyStateMachine.objects.get(
+                        company_bot=company_bot, step=next_stage_number
+                    )
+
+                    next_stage_preprocessing_result = self.preprocessing_service.execute_preprocessing(
+                        next_state_machine, kwargs.get('system_prompt', []), **kwargs
+                    )
+
+                    if next_stage_preprocessing_result['action'] == 'skip':
+                        kwargs['skip_next_stage_preprocessing'] = True
+
+                except CompanyStateMachine.DoesNotExist:
+                    logger.info(f"Next state machine {next_stage_number} not found, likely at end of flow")
 
         # Process the response
         return self.process_response(
@@ -211,7 +224,7 @@ class BaseResponseHandler(ABC):
 
     def get_tools_config(self):
         """Deprecated - use get_default_tools_config() or PromptBuilder.get_tools_from_state_machine()"""
-        logger.warning("get_tools_config() is deprecated, use get_default_tools_config() instead")
+        logger.info("get_tools_config() is deprecated, use get_default_tools_config() instead")
         return self.get_default_tools_config()
 
     def is_function_call(self, response):

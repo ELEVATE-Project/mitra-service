@@ -22,6 +22,9 @@ class ChatType(models.TextChoices):
     YLC = 'YLC', _('YLC')
     listeningActivity = 'listening-activity', _('Listening Activity')
     ParentPerceptionSurvey = 'parent_perception_survey', _('Parent Perception Survey')
+    LCF = 'lcf', _('LCF')
+    LFA = 'lfa', _('LFA')
+    FreeFlow = 'free_flow', _('Free-Flow')
 
 
 class LLMProvider(models.TextChoices):
@@ -296,8 +299,6 @@ class PreProcessType(models.TextChoices):
 class PreProcessOutputMode(models.TextChoices):
     NONE = 'NONE', 'None'
     SKIP = 'SKIP', 'Skip This Stage'
-    ENRICH = 'ENRICH', 'Add Output to Prompt'
-    CUSTOM = 'CUSTOM', 'Run Custom Logic'
 
 
 class PostProcessType(models.TextChoices):
