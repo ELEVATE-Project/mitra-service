@@ -19,5 +19,5 @@ websocket_urlpatterns = [
     re_path(r"ws/mitra/$", MitraBedrockConsumer.as_asgi()),
     re_path(r"ws/shikshalokam_chaupal/$", AsyncShikshalokamChaupalConsumer.as_asgi()),
     re_path(r"ws/common/$", AsyncSocketConsumer.as_asgi()),
-    re_path(r"ws/free-flow/$", FreeFlowConsumer.as_asgi())
+    re_path(r"ws/free_flow/$", FreeFlowConsumer.as_asgi())
 ]
