@@ -146,6 +146,7 @@ class CommonResponseHandler(BaseResponseHandler):
         profile_id = kwargs['profile_id']
         channel_name = kwargs['channel_name']
         skip_next_stage = kwargs.get('skip_next_stage', False)
+        skip_next_stage_preprocessing = kwargs.get('skip_next_stage_preprocessing', False)
         target_stage = kwargs.get('target_stage', False)
         chat_messages = self.get_messages_for_llm(**kwargs)
 
@@ -155,7 +156,8 @@ class CommonResponseHandler(BaseResponseHandler):
             return self._handle_function_call(
                 response=response, chat_session=chat_session, company_bot=company_bot,
                 session_id=session_id, channel_name=channel_name, language=language, profile_id=profile_id,
-                chunks=chunks, messages=chat_messages, skip_next_stage=skip_next_stage, target_stage=target_stage
+                chunks=chunks, messages=chat_messages, skip_next_stage=skip_next_stage, target_stage=target_stage,
+                skip_next_stage_preprocessing=skip_next_stage_preprocessing
             )
         else:
             print("DEBUG: Processing as regular response")
@@ -435,13 +437,23 @@ class CommonResponseHandler(BaseResponseHandler):
 
     def _handle_function_call(self, response, chat_session, company_bot,
                               session_id, channel_name, language, profile_id, chunks, messages, skip_next_stage,
-                              target_stage):
+                              skip_next_stage_preprocessing, target_stage):
         """Handle function call for guided guest"""
         if skip_next_stage:
             if target_stage and isinstance(target_stage, int):
-                chat_session.current_step = target_stage
+                if skip_next_stage_preprocessing:
+                    chat_session.current_step = target_stage + 1
+                    logger.info(
+                        f"Skipping target stage {target_stage} due to preprocessing, moving to {target_stage + 1}")
+                else:
+                    chat_session.current_step = target_stage
             else:
                 chat_session.current_step += 2
+
+        elif skip_next_stage_preprocessing:
+            chat_session.current_step += 2
+            logger.info(f"Skipping next stage {chat_session.current_step - 1} due to preprocessing")
+
         else:
             chat_session.current_step += 1
         chat_session.save()

@@ -297,8 +297,6 @@ class PreProcessType(models.TextChoices):
 class PreProcessOutputMode(models.TextChoices):
     NONE = 'NONE', 'None'
     SKIP = 'SKIP', 'Skip This Stage'
-    ENRICH = 'ENRICH', 'Add Output to Prompt'
-    CUSTOM = 'CUSTOM', 'Run Custom Logic'
 
 
 class PostProcessType(models.TextChoices):
