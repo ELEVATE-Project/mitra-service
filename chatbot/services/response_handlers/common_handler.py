@@ -118,10 +118,13 @@ class CommonResponseHandler(BaseResponseHandler):
         is_function_call, _, _ = self._analyze_response(response)
         return is_function_call
 
-    def process_response(self, response, chat_session, chunks, **kwargs):
+    def process_response(self, response, chat_session, chunks, streaming_completed=False, **kwargs):
         """Process common response"""
         print(f"DEBUG: Starting process_response with response type: {type(response)}")
         print(f"DEBUG: Response preview: {str(response)[:200]}...")
+        print(f"DEBUG: kwargs keys: {list(kwargs.keys())}")
+        print(f"DEBUG: streaming_completed in kwargs: {'streaming_completed' in kwargs}")
+        print(f"DEBUG: streaming_completed value: {kwargs.get('streaming_completed', 'NOT SET')}")
 
         skip_llm_call = kwargs.get('skip_llm', False)
         print(f"DEBUG: skip_llm_call: {skip_llm_call}")
@@ -165,9 +168,8 @@ class CommonResponseHandler(BaseResponseHandler):
             final_response = expected_output_response if (
                     expected_output_response is not None and expected_output_response != "") else response
             return self._handle_regular_response(
-                response=final_response, chat_session=chat_session, company_bot=company_bot,
-                session_id=session_id, channel_name=channel_name, language=language, profile_id=profile_id,
-                chunks=chunks, current_step=current_step, reason=reason_text
+                response=final_response, chat_session=chat_session, chunks=chunks, current_step=current_step,
+                streaming_completed=streaming_completed, reason=reason_text, **kwargs
             )
 
     def _extract_response_and_reason(self, response):
@@ -486,7 +488,8 @@ class CommonResponseHandler(BaseResponseHandler):
 
     def _handle_regular_response(self, response, chat_session, company_bot,
                                  session_id, channel_name, language, profile_id,
-                                 chunks, current_step, reason=None):
+                                 chunks, current_step, reason=None,
+                                 streaming_completed=False, **kwargs):
         """Handle regular response for guided guest"""
         state_machine = CompanyStateMachine.objects.filter(
             company_bot=company_bot, step=chat_session.current_step
@@ -498,6 +501,11 @@ class CommonResponseHandler(BaseResponseHandler):
         response, extra_content = self._handle_response_extra_content(
             response=response, company_bot=company_bot
         )
+
+        if streaming_completed:
+            print("Streaming already completed - skipping duplicate processing")
+            logger.info("Streaming already completed - skipping duplicate processing")
+            return None
 
         translated_message = self.translate_message(
             message=response, channel_name=channel_name, step_number=current_step,

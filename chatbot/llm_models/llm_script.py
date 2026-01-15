@@ -426,7 +426,7 @@ def handle_openai_response_api(
 ):
     """
     OpenAI Responses API with file_search support for vector stores.
-    
+
     This uses the new Responses API (client.responses.create) which supports:
     - file_search tool with vector stores
     - Streaming and non-streaming responses
@@ -436,26 +436,26 @@ def handle_openai_response_api(
         client_api_key = key_name
     else:
         client_api_key = os.getenv(key_name)
-    
+
     if not client_api_key:
         yield {
             'error': f"No API key found for '{key_name}'. Please set the environment variable correctly.",
             'finish_reason': 'error'
         }
         return
-    
+
     client = OpenAI(api_key=client_api_key)
-    
+
     if model_name:
         model_to_use = model_name
     elif company_bot:
         model_to_use = company_bot.llm_model
     else:
         model_to_use = LLMModel.GPT4_O_MINI
-    
+
     # Build input array for Responses API (includes system + conversation messages)
     input_messages = []
-    
+
     # Add system prompt as first message
     if system_prompt:
         if isinstance(system_prompt, list):
@@ -471,51 +471,51 @@ def handle_openai_response_api(
                 'role': 'system',
                 'content': system_prompt
             })
-    
+
     # Enforce chat history rules (similar to bedrock)
     if messages and company_bot and hasattr(company_bot, 'chat_history_limit') and company_bot.chat_history_limit:
         # Remove trailing assistant message
         if messages[-1]['role'] == 'assistant':
             messages = messages[:-1]
-        
+
         # Find last user message
         last_user_idx = None
         for i in range(len(messages) - 1, -1, -1):
             if messages[i]['role'] == 'user':
                 last_user_idx = i
                 break
-        
+
         if last_user_idx is None:
             messages = []
         else:
             start_idx = max(0, last_user_idx - company_bot.chat_history_limit)
-            
+
             # Ensure first message is always a user
             if messages[start_idx]['role'] != 'user':
                 for j in range(start_idx + 1, last_user_idx + 1):
                     if messages[j]['role'] == 'user':
                         start_idx = j
                         break
-            
+
             messages = messages[start_idx:last_user_idx + 1]
-    
+
     # Add conversation messages
     input_messages.extend(messages)
-    
+
     # Build request data for Responses API
     # Note: client.responses.stream() doesn't take 'stream' parameter - it streams by default
     request_data = {
         "model": model_to_use,
         "input": input_messages
     }
-    
+
     if max_token:
         request_data["max_output_tokens"] = max_token
     if temperature is not None:
         request_data['temperature'] = temperature
     if top_p:
         request_data['top_p'] = top_p
-    
+
     # Add tools to request if provided (already parsed by caller)
     if tools:
         request_data["tools"] = tools
@@ -523,17 +523,17 @@ def handle_openai_response_api(
         logger.info(f"Using tools configuration: {len(tools) if isinstance(tools, list) else 'single tool'}")
     else:
         logger.info("⚠️ No tools provided")
-    
+
     logger.info("Responses API %s request: %s", "streaming" if stream else "non-streaming", request_data)
     print("Responses API %s request: " % ("streaming" if stream else "non-streaming"), request_data)
-    
+
     # Extract vector_store_ids from tools for metadata fetching
     vector_store_ids = []
     if tools:
         for tool in (tools if isinstance(tools, list) else [tools]):
             if tool.get('type') == 'file_search' and tool.get('vector_store_ids'):
                 vector_store_ids.extend(tool.get('vector_store_ids'))
-    
+
     try:
         if stream:
             # Use Responses API with streaming context manager
@@ -544,20 +544,21 @@ def handle_openai_response_api(
 
                     print("Event: ", event)
 
-                    if event.type == 'response.output_text.annotation.added' and event.annotation["type"] == 'file_citation':
+                    if event.type == 'response.output_text.annotation.added' and event.annotation[
+                        "type"] == 'file_citation':
                         file_id = event.annotation["file_id"]
                         if file_id not in seen_file_ids:
                             source_entry = {
                                 "source_id": file_id,
                                 "title": event.annotation["filename"]
                             }
-                            
+
                             # Fetch metadata from vector store
                             metadata = get_file_metadata_from_vector_store(client, vector_store_ids, file_id)
-                            
+
                             # Enrich source with organization info
                             source_entry = add_source_with_organization(source_entry, metadata)
-                            
+
                             sources.append(source_entry)
                             seen_file_ids.add(file_id)
 
@@ -568,7 +569,7 @@ def handle_openai_response_api(
                             'content': content_chunk,
                             'finish_reason': None
                         }
-                    
+
                     # Handle ResponseTextDoneEvent - text output completed
                     elif event.type == 'response.output_text.done':
                         yield {
@@ -578,12 +579,12 @@ def handle_openai_response_api(
                                 "sources": sources
                             }
                         }
-                    
+
                     # Handle ResponseCompletedEvent - full response finished
                     elif event.type == 'response.completed':
                         logger.info(f"Response completed")
                         break
-                    
+
                     # Handle error events
                     elif event.type == 'error':
                         error_msg = getattr(event, 'error', {}).get('message', 'Unknown error')
@@ -599,9 +600,7 @@ def handle_openai_response_api(
             response = client.responses.create(**request_data)
 
             logger.info(f"free-flows response: {response}")
-            
             logger.info("Non-streaming response received")
-            
             # Extract full text from response
             # The response.output is a list that may contain:
             # - ResponseFileSearchToolCall (tool calls)
@@ -611,7 +610,6 @@ def handle_openai_response_api(
             full_text = ""
             sources = []
             seen_file_ids = set()
-            
             if hasattr(response, 'output') and response.output:
                 for output_item in response.output:
                     # Check if this is a ResponseOutputMessage (has 'content' attribute)
@@ -620,7 +618,7 @@ def handle_openai_response_api(
                         for content_item in output_item.content:
                             if hasattr(content_item, 'text'):
                                 full_text += content_item.text
-                            
+
                             # Extract sources from annotations (deduplicate by file_id)
                             if hasattr(content_item, 'annotations') and content_item.annotations:
                                 for annotation in content_item.annotations:
@@ -629,18 +627,15 @@ def handle_openai_response_api(
                                             "source_id": annotation.file_id,
                                             "title": annotation.filename
                                         }
-                                        
                                         # Fetch metadata from vector store
-                                        metadata = get_file_metadata_from_vector_store(client, vector_store_ids, annotation.file_id)
-                                        
+                                        metadata = get_file_metadata_from_vector_store(client, vector_store_ids,
+                                                                                       annotation.file_id)
+
                                         # Enrich source with organization info
                                         source_entry = add_source_with_organization(source_entry, metadata)
-                                        
                                         sources.append(source_entry)
                                         seen_file_ids.add(annotation.file_id)
-            
             logger.info(f"Extracted text length: {len(full_text)} chars, unique sources: {len(sources)}")
-            
             # Yield single complete response
             yield {
                 'content': full_text,
