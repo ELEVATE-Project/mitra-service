@@ -90,6 +90,7 @@ class FreeFlowService:
                 content = chunk_data.get('content', '')
                 finish_reason = chunk_data.get('finish_reason')
                 error = chunk_data.get('error')
+                extra_content = chunk_data.get('extra_content')
                 
                 if error:
                     logger.error(f'Streaming error: {error}')
@@ -101,7 +102,7 @@ class FreeFlowService:
                 
                 # Send chunk via channel layer to WebSocket (even if content is empty but finish_reason exists)
                 if content or finish_reason:
-                    self._send_chunk(channel_name, content, finish_reason)
+                    self._send_chunk(channel_name, content, finish_reason, extra_content)
                 
                 if finish_reason:
                     logger.info(f"Streaming completed with finish_reason: {finish_reason}")
@@ -127,22 +128,28 @@ class FreeFlowService:
             logger.error(f'Error in process_and_stream: {e}', exc_info=True)
             self._send_error(channel_name, "An error occurred processing your message")
     
-    def _send_chunk(self, channel_name, content, finish_reason):
+    def _send_chunk(self, channel_name, content, finish_reason, extra_content=None):
         """
         Send a chunk via channel layer to the WebSocket.
         """
         try:
+            message_data = {
+                "type": "chat.message",  # → calls chat_message() in consumer
+                "text": {
+                    "msg": content,
+                    "source": "bot",
+                    "type": "chunk",
+                    "finish_reason": finish_reason
+                },
+            }
+            
+            # Add extra_content (like citations) if present
+            if extra_content:
+                message_data["text"]["extra_content"] = extra_content
+            
             async_to_sync(channel_layer.send)(
                 channel_name,
-                {
-                    "type": "chat.message",  # → calls chat_message() in consumer
-                    "text": {
-                        "msg": content,
-                        "source": "bot",
-                        "type": "chunk",
-                        "finish_reason": finish_reason
-                    },
-                },
+                message_data,
             )
         except Exception as e:
             # Don't crash if WebSocket disconnected - log and continue

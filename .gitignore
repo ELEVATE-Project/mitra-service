@@ -8,5 +8,6 @@ build/
 .envrc
 dist/
 **__pycache__/
+.vscode/
 .sonar_lock
 report-task.txt
