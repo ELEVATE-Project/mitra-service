@@ -399,7 +399,7 @@ def add_source_with_organization(source_entry, metadata):
         source_entry['url'] = metadata['url']
     
     # Check for company slug in metadata
-    company_slug = metadata.get('company')
+    company_slug = metadata.get('company', 'shikshalokamstaging')
     if company_slug:
         try:
             # Fetch company from database
