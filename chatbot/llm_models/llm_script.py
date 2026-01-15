@@ -462,10 +462,18 @@ def handle_openai_response_api(
     try:
         if stream:
             # Use Responses API with streaming context manager
+            citations = []
             with client.responses.stream(**request_data) as response_stream:
                 for event in response_stream:
 
                     print("Event: ", event)
+
+                    if event.type == 'response.output_text.annotation.added' and event.annotation["type"] == 'file_citation':
+                        citations.append({
+                            "file_name": event.annotation["filename"],
+                            "file_id": event.annotation["file_id"],
+                            "index": event.annotation["index"],
+                        })
 
                     # Handle ResponseTextDeltaEvent - extract incremental delta
                     if event.type == 'response.output_text.delta':
@@ -479,7 +487,10 @@ def handle_openai_response_api(
                     elif event.type == 'response.output_text.done':
                         yield {
                             'content': '',
-                            'finish_reason': 'stop'
+                            'finish_reason': 'stop',
+                            'extra_content': {
+                                "citations": citations
+                            }
                         }
                     
                     # Handle ResponseCompletedEvent - full response finished
@@ -576,8 +587,6 @@ def handle_bedrock_invoke_model(
         )
 
         a = response.get('body').read()
-        # print(a)
-        # print(type(a))
         b = a.decode('utf-8')
         response_body = json.loads(b)
         print(response_body)
