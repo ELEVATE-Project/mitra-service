@@ -5,7 +5,7 @@ from typing import Optional, List, Dict
 from django.core.validators import URLValidator
 from langfuse.decorators import observe
 from openai import OpenAI
-from chatbot.models import LLMModel
+from chatbot.models import LLMModel, Company
 import boto3
 import json_repair
 from retrying import retry, RetryError
@@ -350,6 +350,74 @@ def handle_bedrock_model(
         print(f'❌ Error processing Bedrock request: {e}')
         return None
 
+
+def get_file_metadata_from_vector_store(client, vector_store_ids, file_id):
+    """
+    Fetch file metadata (attributes) from vector store.
+    Returns attributes dict or None if not found.
+    """
+    if not vector_store_ids:
+        return None
+    
+    try:
+        # Try each vector store until we find the file
+        for vs_id in vector_store_ids:
+            try:
+                # Retrieve the vector store file object
+                vs_file = client.vector_stores.files.retrieve(
+                    vector_store_id=vs_id,
+                    file_id=file_id
+                )
+                
+                # Check if attributes exist
+                if hasattr(vs_file, 'attributes') and vs_file.attributes:
+                    logger.info(f"Found metadata for file {file_id} in vector store {vs_id}")
+                    return vs_file.attributes
+                    
+            except Exception as e:
+                # File not in this vector store, try next
+                logger.error(f"File {file_id} not found in vector store {vs_id}: {e}")
+                continue
+        
+        logger.info(f"No metadata found for file {file_id} in any vector store")
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error fetching file metadata for {file_id}: {e}")
+        return None
+
+
+def add_source_with_organization(source_entry, metadata):
+    """
+    Adds 'url' and conditionally adds 'organization' if company exists in DB.
+    """
+    if not metadata:
+        return source_entry
+    
+    # Add URL if present in metadata
+    if 'url' in metadata:
+        source_entry['url'] = metadata['url']
+    
+    # Check for company slug in metadata
+    company_slug = metadata.get('company')
+    if company_slug:
+        try:
+            # Fetch company from database
+            company = Company.objects.filter(slug=company_slug).first()
+            if company:
+                source_entry['organization'] = {
+                    'name': company.name,
+                    'slug': company.slug
+                }
+                logger.info(f"Added organization info for company: {company.name}")
+            else:
+                logger.info(f"Company with slug '{company_slug}' not found in database")
+        except Exception as e:
+            logger.error(f"Error fetching company with slug '{company_slug}': {e}")
+    
+    return source_entry
+
+
 @observe()
 def handle_openai_response_api(
         messages, system_prompt=None, max_token=None, temperature=None, company_bot=None,
@@ -459,21 +527,39 @@ def handle_openai_response_api(
     logger.info("Responses API %s request: %s", "streaming" if stream else "non-streaming", request_data)
     print("Responses API %s request: " % ("streaming" if stream else "non-streaming"), request_data)
     
+    # Extract vector_store_ids from tools for metadata fetching
+    vector_store_ids = []
+    if tools:
+        for tool in (tools if isinstance(tools, list) else [tools]):
+            if tool.get('type') == 'file_search' and tool.get('vector_store_ids'):
+                vector_store_ids.extend(tool.get('vector_store_ids'))
+    
     try:
         if stream:
             # Use Responses API with streaming context manager
-            citations = []
+            sources = []
+            seen_file_ids = set()
             with client.responses.stream(**request_data) as response_stream:
                 for event in response_stream:
 
                     print("Event: ", event)
 
                     if event.type == 'response.output_text.annotation.added' and event.annotation["type"] == 'file_citation':
-                        citations.append({
-                            "file_name": event.annotation["filename"],
-                            "file_id": event.annotation["file_id"],
-                            "index": event.annotation["index"],
-                        })
+                        file_id = event.annotation["file_id"]
+                        if file_id not in seen_file_ids:
+                            source_entry = {
+                                "source_id": file_id,
+                                "title": event.annotation["filename"]
+                            }
+                            
+                            # Fetch metadata from vector store
+                            metadata = get_file_metadata_from_vector_store(client, vector_store_ids, file_id)
+                            
+                            # Enrich source with organization info
+                            source_entry = add_source_with_organization(source_entry, metadata)
+                            
+                            sources.append(source_entry)
+                            seen_file_ids.add(file_id)
 
                     # Handle ResponseTextDeltaEvent - extract incremental delta
                     if event.type == 'response.output_text.delta':
@@ -489,7 +575,7 @@ def handle_openai_response_api(
                             'content': '',
                             'finish_reason': 'stop',
                             'extra_content': {
-                                "citations": citations
+                                "sources": sources
                             }
                         }
                     
@@ -511,6 +597,8 @@ def handle_openai_response_api(
         else:
             # Non-streaming mode - get complete response at once
             response = client.responses.create(**request_data)
+
+            print("free-flows response:", response)
             
             logger.info("Non-streaming response received")
             
@@ -520,6 +608,10 @@ def handle_openai_response_api(
             # - ResponseOutputMessage (actual text messages)
             # We need to extract text from ResponseOutputMessage items
             full_text = ""
+            full_text = ""
+            sources = []
+            seen_file_ids = set()
+            
             if hasattr(response, 'output') and response.output:
                 for output_item in response.output:
                     # Check if this is a ResponseOutputMessage (has 'content' attribute)
@@ -528,15 +620,35 @@ def handle_openai_response_api(
                         for content_item in output_item.content:
                             if hasattr(content_item, 'text'):
                                 full_text += content_item.text
+                            
+                            # Extract sources from annotations (deduplicate by file_id)
+                            if hasattr(content_item, 'annotations') and content_item.annotations:
+                                for annotation in content_item.annotations:
+                                    if annotation.type == 'file_citation' and annotation.file_id not in seen_file_ids:
+                                        source_entry = {
+                                            "source_id": annotation.file_id,
+                                            "title": annotation.filename
+                                        }
+                                        
+                                        # Fetch metadata from vector store
+                                        metadata = get_file_metadata_from_vector_store(client, vector_store_ids, annotation.file_id)
+                                        
+                                        # Enrich source with organization info
+                                        source_entry = add_source_with_organization(source_entry, metadata)
+                                        
+                                        sources.append(source_entry)
+                                        seen_file_ids.add(annotation.file_id)
             
-            logger.info(f"Extracted text length: {len(full_text)} chars")
+            logger.info(f"Extracted text length: {len(full_text)} chars, unique sources: {len(sources)}")
             
             # Yield single complete response
             yield {
                 'content': full_text,
-                'finish_reason': 'stop'
+                'finish_reason': 'stop',
+                'extra_content': {
+                    "sources": sources
+                }
             }
-        
     except Exception as e:
         error_msg = f"Error during Responses API {'streaming' if stream else 'call'}: {str(e)}"
         logger.error('Error: %s', e, exc_info=True)
