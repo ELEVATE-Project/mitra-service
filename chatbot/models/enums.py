@@ -96,6 +96,8 @@ class MediaTypeChoices(models.TextChoices):
     WEBP = 'image/webp', _('WEBP')
     HEIF = 'image/heif', _('HEIF')
     HEIC = 'image/heic', _('HEIC')
+    XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', _('XLSX')
+
 
 
 class FileTypeChoices(models.TextChoices):
@@ -297,8 +299,6 @@ class PreProcessType(models.TextChoices):
 class PreProcessOutputMode(models.TextChoices):
     NONE = 'NONE', 'None'
     SKIP = 'SKIP', 'Skip This Stage'
-    ENRICH = 'ENRICH', 'Add Output to Prompt'
-    CUSTOM = 'CUSTOM', 'Run Custom Logic'
 
 
 class PostProcessType(models.TextChoices):
