@@ -391,6 +391,8 @@ def add_source_with_organization(source_entry, metadata):
     """
     Adds 'url' and conditionally adds 'organization' if company exists in DB.
     """
+    if not metadata:
+        metadata = {}
     # Add URL if present in metadata
     if metadata and 'url' in metadata:
         source_entry['url'] = metadata['url']
