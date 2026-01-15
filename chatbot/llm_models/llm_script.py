@@ -598,7 +598,7 @@ def handle_openai_response_api(
             # Non-streaming mode - get complete response at once
             response = client.responses.create(**request_data)
 
-            print("free-flows response:", response)
+            logger.info(f"free-flows response: {response}")
             
             logger.info("Non-streaming response received")
             
