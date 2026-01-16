@@ -1,21 +1,10 @@
-"""
-Main script to upload all media files from database to OpenAI Vector Store
-
-Usage:
-    python uploader.py
-
-Requirements:
-    - OPENAI_API_KEY must be set in environment
-    - OPENAI_VECTOR_STORE_ID must be set in environment
-    - Django must be properly configured
-"""
-
 import os
 import sys
 import logging
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Django setup
 import django
@@ -50,9 +39,12 @@ class MediaVectorStoreUploader:
     Orchestrator for uploading all media files to OpenAI Vector Store
     """
     
-    def __init__(self):
-        """Initialize uploader with OpenAI client"""
+    def __init__(self, max_workers: int = 4):
+        """
+        Initialize uploader with OpenAI client
+        """
         self.client = OpenAIClient()
+        self.max_workers = max_workers
         self.stats = {
             'total': 0,
             'successful': 0,
@@ -63,15 +55,6 @@ class MediaVectorStoreUploader:
     def _get_media_info(self, media: Media) -> Dict[str, Any]:
         """
         Extract required information from media object
-        
-        Args:
-            media: Media model instance
-            
-        Returns:
-            dict: Contains organization slug, s3_url, and filename
-            
-        Raises:
-            InvalidMediaError: If media is missing required data
         """
         try:
             # Get organization slug
@@ -100,7 +83,7 @@ class MediaVectorStoreUploader:
         except Exception as e:
             raise InvalidMediaError(f"Failed to extract info from media ID {media.id}: {str(e)}")
     
-    def _upload_single_media(self, media: Media) -> bool:
+    def _upload_single_media(self, media: Media) -> Tuple[int, bool, str]:
         """
         Upload a single media file to OpenAI vector store
         """
@@ -120,38 +103,70 @@ class MediaVectorStoreUploader:
                 filename=media_info['filename']
             )
             
-            logger.info(
+            success_msg = (
                 f"[SUCCESS] Media ID: {media.id}, Name: {media.name}, "
                 f"File ID: {result['file_id']}, Company: {media_info['organization']}, "
                 f"URL: {media_info['s3_url']}"
             )
+            logger.info(success_msg)
             
-            self.stats['successful'] += 1
-            return True
+            return (media.id, True, 'success')
             
         except InvalidMediaError as e:
-            logger.warning(
+            skip_msg = (
                 f"[SKIPPED] Media ID: {media.id}, Name: {media.name}, "
                 f"Reason: {str(e)}"
             )
-            self.stats['skipped'] += 1
-            return False
+            logger.warning(skip_msg)
+            return (media.id, False, 'skipped')
             
         except OpenAIVectorStoreError as e:
-            logger.error(
+            error_msg = (
                 f"[FAILED] Media ID: {media.id}, Name: {media.name}, "
                 f"Error: {str(e)}"
             )
-            self.stats['failed'] += 1
-            return False
+            logger.error(error_msg)
+            return (media.id, False, 'failed')
             
         except Exception as e:
-            logger.error(
+            error_msg = (
                 f"[FAILED] Media ID: {media.id}, Name: {media.name}, "
                 f"Unexpected error: {str(e)}"
             )
-            self.stats['failed'] += 1
-            return False
+            logger.error(error_msg)
+            return (media.id, False, 'failed')
+    
+    def _upload_media_parallel(self, all_media):
+        """
+        Upload media files in parallel using ThreadPoolExecutor
+        """
+        logger.info(f"Running with ThreadPoolExecutor (workers={self.max_workers})")
+        
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # Submit all tasks
+            futures = [
+                executor.submit(self._upload_single_media, media)
+                for media in all_media
+            ]
+            
+            # Process completed tasks
+            completed = 0
+            for future in as_completed(futures):
+                completed += 1
+                media_id, success, status = future.result()
+                
+                # Update stats based on status
+                if status == 'success':
+                    self.stats['successful'] += 1
+                elif status == 'skipped':
+                    self.stats['skipped'] += 1
+                elif status == 'failed':
+                    self.stats['failed'] += 1
+                
+                # Log progress
+                if completed % 10 == 0 or completed == self.stats['total']:
+                    logger.info(f"Progress: {completed}/{self.stats['total']} completed")
+                    print(f"[INFO] Progress: {completed}/{self.stats['total']} completed")
     
     def run(self):
         """
@@ -166,17 +181,14 @@ class MediaVectorStoreUploader:
         logger.info("=" * 80)
         
         # Query all media from database
-        all_media = Media.objects.all()
-        self.stats['total'] = all_media.count()
+        all_media = list(Media.objects.all())
+        self.stats['total'] = len(all_media)
         
         logger.info(f"Total media files to process: {self.stats['total']}")
         logger.info("-" * 80)
         
-        # Process each media file
-        for index, media in enumerate(all_media, start=1):
-            logger.info(f"Processing {index}/{self.stats['total']}...")
-            self._upload_single_media(media)
-            logger.info("-" * 80)
+        # Process media files in parallel
+        self._upload_media_parallel(all_media)
         
         # Log final summary
         end_time = datetime.now()
@@ -204,7 +216,8 @@ class MediaVectorStoreUploader:
 def main():
     """Main entry point"""
     try:
-        uploader = MediaVectorStoreUploader()
+        # Can adjust max_workers here if needed
+        uploader = MediaVectorStoreUploader(max_workers=4)
         uploader.run()
     except Exception as e:
         logger.error(f"Fatal error: {str(e)}")

@@ -18,10 +18,6 @@ class OpenAIClient:
     def __init__(self, api_key: Optional[str] = None, vector_store_id: Optional[str] = None):
         """
         Initialize OpenAI client
-        
-        Args:
-            api_key: OpenAI API key (defaults to environment variable)
-            vector_store_id: Vector store ID (defaults to environment variable)
         """
         self.api_key = api_key or os.getenv('OPENAI_API_KEY')
         self.vector_store_id = vector_store_id or os.getenv('OPENAI_VECTOR_STORE_ID')
@@ -112,14 +108,6 @@ class OpenAIClient:
     ) -> Dict[str, Any]:
         """
         Complete workflow: Upload file to OpenAI and add to vector store
-        
-        Args:
-            s3_url: Full S3 URL of the file
-            company: Company/organization slug
-            filename: Optional filename
-            
-        Returns:
-            dict: Combined result with file_id and vector store response
         """
         # Step 1: Upload file to OpenAI
         upload_response = self.upload_file_to_openai(s3_url, filename)
