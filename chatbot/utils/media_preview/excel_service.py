@@ -1,6 +1,37 @@
 from chatbot.utils.knowledge_service.reports_utils import generate_xlsx_from_json
 from chatbot.utils.S3.s3_service import upload_media
 
+
+def handle_duplicate_links(sources_list: list) -> list:
+    """
+    Removes duplicate sources.
+    - If source is dict → dedupe by URL
+    - If source is string → dedupe by full string
+    """
+    if not sources_list or not isinstance(sources_list, list):
+        return []
+
+    seen = set()
+    unique_sources = []
+
+    for source in sources_list:
+        # Case 1: dict source (future / structured)
+        if isinstance(source, dict):
+            key = source.get("url")
+            if key and key not in seen:
+                seen.add(key)
+                unique_sources.append(source)
+
+        # Case 2: string source (current working behaviour)
+        elif isinstance(source, str):
+            key = source.strip()
+            if key and key not in seen:
+                seen.add(key)
+                unique_sources.append(source)
+
+    return unique_sources
+
+
 def generate_excel_file(
     *,
     project_title: str,
@@ -12,6 +43,8 @@ def generate_excel_file(
     user_action_steps,
     sources_list: list,
 ):
+    # ✅ NEW: handle duplicate links (PDF-aligned)
+    cleaned_sources = handle_duplicate_links(sources_list)
 
     excel_data = {
         "Project Title": project_title,
@@ -25,7 +58,7 @@ def generate_excel_file(
             if isinstance(user_action_steps, list)
             else user_action_steps
         ),
-        "Sources": sources_list,
+        "Sources": cleaned_sources,
     }
 
     excel_file = generate_xlsx_from_json(excel_data)
@@ -53,7 +86,6 @@ def generate_and_upload_excel(
     user_action_steps,
     sources_list: list,
 ):
-
     excel_generation_result = generate_excel_file(
         project_title=project_title,
         author_name=author_name,
