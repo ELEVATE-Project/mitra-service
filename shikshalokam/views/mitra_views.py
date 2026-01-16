@@ -4,9 +4,11 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.http import JsonResponse
-from chatbot.models import (CompanyBot, Voice, VoiceType, Profile, BotVernacular, StoryMedia, MediaTypeChoices,
-                            SessionFlowName)
+from chatbot.models import (CompanyBot, Voice, VoiceType, Profile,
+BotVernacular, StoryMedia, MediaTypeChoices, SessionFlowName, ChatSession,
+CompanyChat)
 from chatbot.serializer.story_serializer import StoryMediaRetrieveSerializer
+from chatbot.utils.chat_utils import get_guided_chat
 from shikshalokam.utils.action_steps_utils import generate_action_list_utils, post_process_actions_with_source
 from shikshalokam.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_title_utils
 from chatbot.utils.story_llama_utils import translate_field
@@ -24,39 +26,53 @@ logger = logging.getLogger('django')
 
 @api_view(['POST'])
 def paraphrase_view(request):
-    body = request.data
-    user_input = body.get('user_input')
-    language = body.get('language')
-    should_paraphrase_text = body.get('paraphrase_text')
-    print("User Input: ", user_input)
+    try:
+        body = request.data
+        user_input = body.get('user_input')
+        session_id = body.get('session_id')
 
-    company_bot = CompanyBot.objects.get(route='/paraphrase')
-    voice_provider = Voice.objects.filter(
-        company_bot=company_bot, type=VoiceType.TextToText, language=language
-    ).first()
-    if language != 'en':
-        user_input = translate_field(
-            voice_provider=voice_provider, message_body=user_input, source_language=language,
-            target_language='en'
-        )
-        print("user_translated_message: ", user_input)
+        if not session_id:
+            raise ValueError("Session ID is required")
 
-    paraphrased_output = get_mitra_paraphrase_utils(
-        paraphrase_problem=user_input, should_paraphrase_text=should_paraphrase_text, company_bot=company_bot
-    )
+        company_bot = CompanyBot.objects.get(route='/paraphrase')
 
-    if language != 'en' and isinstance(paraphrased_output, str) and paraphrased_output.lower() != 'no':
-        paraphrased_output = translate_field(
-            voice_provider=voice_provider, message_body=user_input, target_language=paraphrased_output,
-            source_language='en'
-        )
-        print("llm_translated_message: ", paraphrased_output)
+        session_data = ChatSession.objects.values('language').get(session=session_id)
+        company_chats = CompanyChat.objects.filter(session=session_id).order_by('created_at')
+        language = session_data["language"]
 
-    print("\n\nParaphrased Output: ", paraphrased_output)
-    return Response({
-        'status': 'ok',
-        'paraphrased_output': paraphrased_output
-    }, status=200)
+        formatted_chats = get_guided_chat(company_bot=company_bot, company_chats=company_chats)
+
+        voice_provider = Voice.objects.filter(
+            company_bot=company_bot, type=VoiceType.TextToText, language=language
+        ).first()
+
+        if language != 'en':
+            user_input = translate_field(
+                voice_provider=voice_provider, message_body=user_input, source_language=language,
+                target_language='en'
+            )
+            print("user_translated_message: ", user_input)
+
+        paraphrased_output = get_mitra_paraphrase_utils(messages=formatted_chats, company_bot=company_bot)
+
+        # if language != 'en' and isinstance(paraphrased_output, str) and paraphrased_output.lower() != 'no':
+        #     paraphrased_output = translate_field(
+        #         voice_provider=voice_provider, message_body=user_input, target_language=paraphrased_output,
+        #         source_language='en'
+        #     )
+        #     print("llm_translated_message: ", paraphrased_output)
+
+        print("\n\nParaphrased Output: ", paraphrased_output)
+        return Response({
+            'status': 'ok',
+            'paraphrased_output': paraphrased_output
+        }, status=200)
+    except Exception as e:
+        logger.error(f"[paraphrase_view] Unhandled exception: {str(e)}", exc_info=True)
+        return Response({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
 
 
 @api_view(['POST'])
