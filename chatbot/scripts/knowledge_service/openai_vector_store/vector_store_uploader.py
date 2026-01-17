@@ -1,14 +1,6 @@
 """
 Standalone Media to OpenAI Vector Store Uploader
 All-in-one script that can be run directly or pasted into terminal
-
-Usage:
-    python vector_store_uploader.py
-    
-    OR paste entire script into Django shell:
-    python manage.py shell
-    >>> # paste entire script here
-
 Requirements:
     - OPENAI_API_KEY must be set in environment
     - OPENAI_VECTOR_STORE_ID must be set in environment
@@ -411,7 +403,3 @@ def main():
         logger.error(f"Fatal error: {str(e)}")
         print(f"❌ Fatal error occurred: {str(e)}")
         sys.exit(1)
-
-
-if __name__ == '__main__':
-    main()

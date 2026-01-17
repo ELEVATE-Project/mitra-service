@@ -153,6 +153,13 @@ class Media(models.Model):
     description = models.TextField(null=True, blank=True)
     extracted_text = models.TextField(null=True, blank=True)
     tags = models.ManyToManyField(Tag, related_name="medias")
+    external_file_id = models.CharField(
+        max_length=300, null=True, blank=True,
+        help_text=(
+            "External provider file identifier used for vector indexing "
+            "(e.g. OpenAI Files API file_id)"
+        )
+    )
     parent = models.ForeignKey(
         'self', on_delete=models.CASCADE, null=True, blank=True, related_name='subdocuments'
     )
