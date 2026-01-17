@@ -148,7 +148,7 @@ class BaseResponseHandler(ABC):
         system_prompt = kwargs['system_prompt']
         response = None
         message_to_send = self.get_messages_for_llm(**kwargs)
-
+        print("message_to_send: ", message_to_send)
         session_id = kwargs['session_id']
         profile_id = kwargs.get('profile_id')
         channel_name = kwargs['channel_name']
