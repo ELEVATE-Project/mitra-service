@@ -9,13 +9,15 @@ BotVernacular, StoryMedia, MediaTypeChoices, SessionFlowName, ChatSession,
 CompanyChat)
 from chatbot.serializer.story_serializer import StoryMediaRetrieveSerializer
 from chatbot.utils.chat_utils import get_guided_chat
-from shikshalokam.utils.action_steps_utils import generate_action_list_utils, post_process_actions_with_source
+from shikshalokam.utils.action_list.action_processor import post_process_actions_with_source
+from shikshalokam.utils.action_list.action_steps_utils import generate_action_list_utils
 from shikshalokam.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_title_utils
 from chatbot.utils.story_llama_utils import translate_field
 from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf
 from shikshalokam.models import Project
-from shikshalokam.utils.objective_utils import generate_objective_utils, post_process_objectives_with_source
+from shikshalokam.utils.objective_list.objective_processor import post_process_objectives_with_source
+from shikshalokam.utils.objective_list.objective_utils import generate_objective_utils
 from shikshalokam.utils.project_utils import update_project_status_utils
 import json_repair
 
