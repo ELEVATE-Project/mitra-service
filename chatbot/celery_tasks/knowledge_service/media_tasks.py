@@ -77,6 +77,7 @@ def save_in_vector_db(media_id, company_slug=None):
         Media.objects.filter(id=media.id).update(
             external_file_id=file_id
         )
+        media.refresh_from_db()
 
         status_code, vector_response = add_file_to_vector_store(
             media=media, metadata=metadata
