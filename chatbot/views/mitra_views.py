@@ -105,6 +105,7 @@ def create_project_view(request):
             session=session
         )
 
+
         print("PDF report is generated successfully")
 
         if pdf_content and result.get('id'):
