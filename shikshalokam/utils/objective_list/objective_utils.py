@@ -1,4 +1,5 @@
 from chatbot.llm_models.llm_script import handle_bedrock_model
+from chatbot.models import CompanyBot
 from shikshalokam.utils.action_list.action_validator import validate_and_fix_action_list
 from shikshalokam.utils.chunks_utils import validate_inputs, filter_and_sort_chunks, prepare_chunks_for_template, \
     render_template_with_context
@@ -84,10 +85,20 @@ def generate_objective_utils(user_problem_statement, company_bot):
                 tools=tool_context, top_p=company_bot.filter_score,
             )
 
-            if company_bot and company_bot.end_context:
-                response = validate_and_fix_action_list(
-                    messages=messages, response_json=response, company_bot=company_bot
-                )
+            try:
+                validate_bot = CompanyBot.objects.filter(route='/validate_objective_list').first()
+                if validate_bot:
+                    response = validate_and_fix_action_list(
+                        messages=messages, response_json=response, company_bot=validate_bot
+                    )
+                    logger.info("Validation applied using validate_bot")
+                else:
+                    logger.info("No validate_bot found with route='/validate_objective_list', skipping validation")
+
+            except CompanyBot.DoesNotExist:
+                logger.error("validate_bot not found, proceeding without validation")
+            except Exception as validation_error:
+                logger.error(f"Validation failed: {validation_error}, proceeding with original response")
 
             if not response:
                 return {
