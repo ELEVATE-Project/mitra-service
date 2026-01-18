@@ -124,7 +124,7 @@ importlib_metadata==8.5.0
 importlib_resources==6.5.2
 incremental==24.7.2
 iniconfig==2.0.0
-instructor==1.7.2
+instructor==1.14.1
 ipython==8.32.0
 itypes==1.2.0
 jedi==0.19.2
@@ -190,7 +190,7 @@ nodeenv==1.9.1
 numpy==1.26.4
 oauthlib==3.2.2
 onnxruntime==1.20.1
-openai==1.63.2
+openai==2.14.0
 openpyxl==3.1.5
 opentelemetry-api==1.30.0
 opentelemetry-exporter-otlp-proto-common==1.30.0
@@ -319,3 +319,4 @@ yarl==1.18.3
 zipp==3.21.0
 zope.interface==7.1.1
 pdf2image==1.17.0
+Markdown==3.10

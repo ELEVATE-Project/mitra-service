@@ -1,3 +1,5 @@
+import os
+from jwt import ExpiredSignatureError, InvalidTokenError
 from django.http import JsonResponse
 
 from chatbot.models import Profile
@@ -6,6 +8,7 @@ from rest_framework.decorators import api_view
 from shikshalokam.utils.wishlist_utils import add_project_wishlist, remove_project_wishlist
 import jwt
 
+PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")
 
 @api_view(['POST'])
 def wishlist_project_view(request):
@@ -21,12 +24,52 @@ def wishlist_project_view(request):
                 'error': 'Both "id" and "in_wishlist" fields are required.'
             }, status=400, safe=False)
 
-        if access_token:
-            decoded = jwt.decode(access_token, options={"verify_signature": False})
-            print(decoded)
-            if decoded:
-                user_id = decoded.get('data', {}).get('id')
-                profile = Profile.objects.get(userid=user_id)
+        if not access_token:
+            return JsonResponse(
+                {'error': 'Access token missing'},
+                status=401,
+                safe=False
+            )
+
+        try:
+            decoded = jwt.decode(
+                access_token,
+                PUBLIC_KEY,
+                algorithms=["HS256"]
+            )
+
+            user_id = decoded.get("data", {}).get("id")
+
+            if not user_id:
+                return JsonResponse(
+                    {'error': 'Invalid token'},
+                    status=401,
+                    safe=False
+                )
+
+            profile = Profile.objects.get(userid=user_id)
+
+        except ExpiredSignatureError:
+            return JsonResponse(
+                {'error': 'Token expired'},
+                status=401,
+                safe=False
+            )
+
+        except InvalidTokenError:
+            return JsonResponse(
+                {'error': 'Invalid token'},
+                status=401,
+                safe=False
+            )
+
+        except Profile.DoesNotExist:
+            return JsonResponse(
+                {'error': 'User not found'},
+                status=404,
+                safe=False
+            )
+
 
         project = Project.objects.filter(id=project_id).first()
         if not project:

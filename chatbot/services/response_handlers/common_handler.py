@@ -118,10 +118,13 @@ class CommonResponseHandler(BaseResponseHandler):
         is_function_call, _, _ = self._analyze_response(response)
         return is_function_call
 
-    def process_response(self, response, chat_session, chunks, **kwargs):
+    def process_response(self, response, chat_session, chunks, streaming_completed=False, **kwargs):
         """Process common response"""
         print(f"DEBUG: Starting process_response with response type: {type(response)}")
         print(f"DEBUG: Response preview: {str(response)[:200]}...")
+        print(f"DEBUG: kwargs keys: {list(kwargs.keys())}")
+        print(f"DEBUG: streaming_completed in kwargs: {'streaming_completed' in kwargs}")
+        print(f"DEBUG: streaming_completed value: {kwargs.get('streaming_completed', 'NOT SET')}")
 
         skip_llm_call = kwargs.get('skip_llm', False)
         print(f"DEBUG: skip_llm_call: {skip_llm_call}")
@@ -146,6 +149,7 @@ class CommonResponseHandler(BaseResponseHandler):
         profile_id = kwargs['profile_id']
         channel_name = kwargs['channel_name']
         skip_next_stage = kwargs.get('skip_next_stage', False)
+        skip_next_stage_preprocessing = kwargs.get('skip_next_stage_preprocessing', False)
         target_stage = kwargs.get('target_stage', False)
         chat_messages = self.get_messages_for_llm(**kwargs)
 
@@ -155,7 +159,8 @@ class CommonResponseHandler(BaseResponseHandler):
             return self._handle_function_call(
                 response=response, chat_session=chat_session, company_bot=company_bot,
                 session_id=session_id, channel_name=channel_name, language=language, profile_id=profile_id,
-                chunks=chunks, messages=chat_messages, skip_next_stage=skip_next_stage, target_stage=target_stage
+                chunks=chunks, messages=chat_messages, skip_next_stage=skip_next_stage, target_stage=target_stage,
+                skip_next_stage_preprocessing=skip_next_stage_preprocessing
             )
         else:
             print("DEBUG: Processing as regular response")
@@ -163,9 +168,8 @@ class CommonResponseHandler(BaseResponseHandler):
             final_response = expected_output_response if (
                     expected_output_response is not None and expected_output_response != "") else response
             return self._handle_regular_response(
-                response=final_response, chat_session=chat_session, company_bot=company_bot,
-                session_id=session_id, channel_name=channel_name, language=language, profile_id=profile_id,
-                chunks=chunks, current_step=current_step, reason=reason_text
+                response=final_response, chat_session=chat_session, chunks=chunks, current_step=current_step,
+                streaming_completed=streaming_completed, reason=reason_text, **kwargs
             )
 
     def _extract_response_and_reason(self, response):
@@ -176,6 +180,14 @@ class CommonResponseHandler(BaseResponseHandler):
         try:
             if isinstance(response, str):
                 logger.info("DEBUG: Response is string")
+
+                stripped = response.strip()
+                if not (stripped.startswith('{') and stripped.endswith('}')):
+                    # Check if it contains JSON-like key-value pairs
+                    if ('"response"' in stripped or '"reason"' in stripped) and ':' in stripped:
+                        logger.info("DEBUG: String looks like JSON without outer braces, adding them")
+                        response = '{' + stripped + '}'
+                        logger.info(f"DEBUG: Fixed JSON string: {response[:200]}...")
 
                 if not (response.strip().startswith('{') and response.strip().endswith('}')):
                     logger.info("DEBUG: String doesn't look like JSON, treating as plain text response")
@@ -427,13 +439,23 @@ class CommonResponseHandler(BaseResponseHandler):
 
     def _handle_function_call(self, response, chat_session, company_bot,
                               session_id, channel_name, language, profile_id, chunks, messages, skip_next_stage,
-                              target_stage):
+                              skip_next_stage_preprocessing, target_stage):
         """Handle function call for guided guest"""
         if skip_next_stage:
             if target_stage and isinstance(target_stage, int):
-                chat_session.current_step = target_stage
+                if skip_next_stage_preprocessing:
+                    chat_session.current_step = target_stage + 1
+                    logger.info(
+                        f"Skipping target stage {target_stage} due to preprocessing, moving to {target_stage + 1}")
+                else:
+                    chat_session.current_step = target_stage
             else:
                 chat_session.current_step += 2
+
+        elif skip_next_stage_preprocessing:
+            chat_session.current_step += 2
+            logger.info(f"Skipping next stage {chat_session.current_step - 1} due to preprocessing")
+
         else:
             chat_session.current_step += 1
         chat_session.save()
@@ -466,7 +488,8 @@ class CommonResponseHandler(BaseResponseHandler):
 
     def _handle_regular_response(self, response, chat_session, company_bot,
                                  session_id, channel_name, language, profile_id,
-                                 chunks, current_step, reason=None):
+                                 chunks, current_step, reason=None,
+                                 streaming_completed=False, **kwargs):
         """Handle regular response for guided guest"""
         state_machine = CompanyStateMachine.objects.filter(
             company_bot=company_bot, step=chat_session.current_step
@@ -478,6 +501,11 @@ class CommonResponseHandler(BaseResponseHandler):
         response, extra_content = self._handle_response_extra_content(
             response=response, company_bot=company_bot
         )
+
+        if streaming_completed:
+            print("Streaming already completed - skipping duplicate processing")
+            logger.info("Streaming already completed - skipping duplicate processing")
+            return None
 
         translated_message = self.translate_message(
             message=response, channel_name=channel_name, step_number=current_step,
@@ -491,10 +519,12 @@ class CommonResponseHandler(BaseResponseHandler):
             print(f"DEBUG: Adding reason to other_params: {reason}")
 
         stage = state_machine.name if state_machine else None
-        if not response and not state_machine:
-            message_to_save = extra_content.get("query", 'understood.')
-        else:
+        if response and str(response).strip():
             message_to_save = response
+        elif extra_content and extra_content.get("query") and str(extra_content.get("query")).strip():
+            message_to_save = extra_content["query"]
+        else:
+            message_to_save = "Understood."
 
         self.save_message(
             session_id=session_id, profile_id=profile_id, message=message_to_save, chunks=chunks,

@@ -3,8 +3,8 @@ import django
 import sys
 from pathlib import Path
 
-project_root = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(project_root))
+# project_root = Path(__file__).resolve().parent.parent
+# sys.path.insert(0, str(project_root))
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'shikshalokam.settings')
 django.setup()
@@ -171,5 +171,5 @@ def generate_markdown_files():
     print("=" * 50)
 
 
-if __name__ == "__main__":
-    generate_markdown_files()
+# if __name__ == "__main__":
+#     generate_markdown_files()

@@ -1,10 +1,11 @@
 import requests
 import json
 import os
+from typing import Optional, List, Dict
 from django.core.validators import URLValidator
 from langfuse.decorators import observe
-from langfuse.openai import openai
-from chatbot.models import LLMModel
+from openai import OpenAI
+from chatbot.models import LLMModel, Company
 import boto3
 import json_repair
 from retrying import retry, RetryError
@@ -83,20 +84,18 @@ def handle_openai_model(
         stream=False, key_name='OPENAI_API_KEY', is_actual_key=False, tools=None, tool_choice=None, client_choice=None,
         top_p=None, system_prompt=None
 ):
-    if client_choice:
-        client = client_choice
-    else:
-        client = openai
-
     if is_actual_key:
         client_api_key = key_name
     else:
         client_api_key = os.getenv(key_name)
 
-    client.api_key = client_api_key
-
-    if not client.api_key:
+    if not client_api_key:
         raise ValueError(f"No API key found for '{key_name}'. Please set the environment variable correctly.")
+
+    if client_choice:
+        client = client_choice
+    else:
+        client = OpenAI(api_key=client_api_key)
 
     if model_name:
         model_to_use = model_name
@@ -352,6 +351,309 @@ def handle_bedrock_model(
         return None
 
 
+def get_file_metadata_from_vector_store(client, vector_store_ids, file_id):
+    """
+    Fetch file metadata (attributes) from vector store.
+    Returns attributes dict or None if not found.
+    """
+    if not vector_store_ids:
+        return None
+    
+    try:
+        # Try each vector store until we find the file
+        for vs_id in vector_store_ids:
+            try:
+                # Retrieve the vector store file object
+                vs_file = client.vector_stores.files.retrieve(
+                    vector_store_id=vs_id,
+                    file_id=file_id
+                )
+                
+                # Check if attributes exist
+                if hasattr(vs_file, 'attributes') and vs_file.attributes:
+                    logger.info(f"Found metadata for file {file_id} in vector store {vs_id}")
+                    return vs_file.attributes
+                    
+            except Exception as e:
+                # File not in this vector store, try next
+                logger.error(f"File {file_id} not found in vector store {vs_id}: {e}")
+                continue
+        
+        logger.info(f"No metadata found for file {file_id} in any vector store")
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error fetching file metadata for {file_id}: {e}")
+        return None
+
+
+def add_source_with_organization(source_entry, metadata):
+    """
+    Adds 'url' and conditionally adds 'organization' if company exists in DB.
+    """
+    if not metadata:
+        metadata = {}
+    # Add URL if present in metadata
+    if metadata and 'url' in metadata:
+        source_entry['url'] = metadata['url']
+    
+    # Check for company slug in metadata
+    company_slug = metadata.get('company', 'shikshalokamstaging')
+    if company_slug:
+        try:
+            # Fetch company from database
+            company = Company.objects.filter(slug=company_slug).first()
+            if company:
+                source_entry['organization'] = {
+                    'name': company.name,
+                    'slug': company.slug
+                }
+                logger.info(f"Added organization info for company: {company.name}")
+            else:
+                logger.info(f"Company with slug '{company_slug}' not found in database")
+        except Exception as e:
+            logger.error(f"Error fetching company with slug '{company_slug}': {e}")
+    
+    return source_entry
+
+
+@observe()
+def handle_openai_response_api(
+        messages, system_prompt=None, max_token=None, temperature=None, company_bot=None,
+        model_name=None, key_name='OPENAI_API_KEY', is_actual_key=False,
+        top_p=None, tool_choice="auto", tools: Optional[List[Dict]] = None, stream=False
+):
+    """
+    OpenAI Responses API with file_search support for vector stores.
+
+    This uses the new Responses API (client.responses.create) which supports:
+    - file_search tool with vector stores
+    - Streaming and non-streaming responses
+    - Unified interface for chat + tools
+    """
+    if is_actual_key:
+        client_api_key = key_name
+    else:
+        client_api_key = os.getenv(key_name)
+
+    if not client_api_key:
+        yield {
+            'error': f"No API key found for '{key_name}'. Please set the environment variable correctly.",
+            'finish_reason': 'error'
+        }
+        return
+
+    client = OpenAI(api_key=client_api_key)
+
+    if model_name:
+        model_to_use = model_name
+    elif company_bot:
+        model_to_use = company_bot.llm_model
+    else:
+        model_to_use = LLMModel.GPT4_O_MINI
+
+    # Build input array for Responses API (includes system + conversation messages)
+    input_messages = []
+
+    # Add system prompt as first message
+    if system_prompt:
+        if isinstance(system_prompt, list):
+            # Extract system content from list format
+            for msg in system_prompt:
+                if msg.get('role') == 'system':
+                    input_messages.append({
+                        'role': 'system',
+                        'content': msg.get('content', '')
+                    })
+        elif isinstance(system_prompt, str):
+            input_messages.append({
+                'role': 'system',
+                'content': system_prompt
+            })
+
+    # Enforce chat history rules (similar to bedrock)
+    if messages and company_bot and hasattr(company_bot, 'chat_history_limit') and company_bot.chat_history_limit:
+        # Remove trailing assistant message
+        if messages[-1]['role'] == 'assistant':
+            messages = messages[:-1]
+
+        # Find last user message
+        last_user_idx = None
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i]['role'] == 'user':
+                last_user_idx = i
+                break
+
+        if last_user_idx is None:
+            messages = []
+        else:
+            start_idx = max(0, last_user_idx - company_bot.chat_history_limit)
+
+            # Ensure first message is always a user
+            if messages[start_idx]['role'] != 'user':
+                for j in range(start_idx + 1, last_user_idx + 1):
+                    if messages[j]['role'] == 'user':
+                        start_idx = j
+                        break
+
+            messages = messages[start_idx:last_user_idx + 1]
+
+    # Add conversation messages
+    input_messages.extend(messages)
+
+    # Build request data for Responses API
+    # Note: client.responses.stream() doesn't take 'stream' parameter - it streams by default
+    request_data = {
+        "model": model_to_use,
+        "input": input_messages
+    }
+
+    if max_token:
+        request_data["max_output_tokens"] = max_token
+    if temperature is not None:
+        request_data['temperature'] = temperature
+    if top_p:
+        request_data['top_p'] = top_p
+
+    # Add tools to request if provided (already parsed by caller)
+    if tools:
+        request_data["tools"] = tools
+        request_data["tool_choice"] = tool_choice
+        logger.info(f"Using tools configuration: {len(tools) if isinstance(tools, list) else 'single tool'}")
+    else:
+        logger.info("⚠️ No tools provided")
+
+    logger.info("Responses API %s request: %s", "streaming" if stream else "non-streaming", request_data)
+    print("Responses API %s request: " % ("streaming" if stream else "non-streaming"), request_data)
+
+    # Extract vector_store_ids from tools for metadata fetching
+    vector_store_ids = []
+    if tools:
+        for tool in (tools if isinstance(tools, list) else [tools]):
+            if tool.get('type') == 'file_search' and tool.get('vector_store_ids'):
+                vector_store_ids.extend(tool.get('vector_store_ids'))
+
+    try:
+        if stream:
+            # Use Responses API with streaming context manager
+            sources = []
+            seen_file_ids = set()
+            with client.responses.stream(**request_data) as response_stream:
+                for event in response_stream:
+
+                    print("Event: ", event)
+
+                    if event.type == 'response.output_text.annotation.added' and event.annotation[
+                        "type"] == 'file_citation':
+                        file_id = event.annotation["file_id"]
+                        if file_id not in seen_file_ids:
+                            source_entry = {
+                                "source_id": file_id,
+                                "title": event.annotation["filename"]
+                            }
+
+                            # Fetch metadata from vector store
+                            metadata = get_file_metadata_from_vector_store(client, vector_store_ids, file_id)
+
+                            # Enrich source with organization info
+                            source_entry = add_source_with_organization(source_entry, metadata)
+
+                            sources.append(source_entry)
+                            seen_file_ids.add(file_id)
+
+                    # Handle ResponseTextDeltaEvent - extract incremental delta
+                    if event.type == 'response.output_text.delta':
+                        content_chunk = event.delta or ""
+                        yield {
+                            'content': content_chunk,
+                            'finish_reason': None
+                        }
+
+                    # Handle ResponseTextDoneEvent - text output completed
+                    elif event.type == 'response.output_text.done':
+                        yield {
+                            'content': '',
+                            'finish_reason': 'stop',
+                            'extra_content': {
+                                "sources": sources
+                            }
+                        }
+
+                    # Handle ResponseCompletedEvent - full response finished
+                    elif event.type == 'response.completed':
+                        logger.info(f"Response completed")
+                        break
+
+                    # Handle error events
+                    elif event.type == 'error':
+                        error_msg = getattr(event, 'error', {}).get('message', 'Unknown error')
+                        logger.error(f"Stream error: {error_msg}")
+                        yield {
+                            'content': '',
+                            'error': error_msg,
+                            'finish_reason': 'error'
+                        }
+                        break
+        else:
+            # Non-streaming mode - get complete response at once
+            response = client.responses.create(**request_data)
+
+            logger.info(f"free-flows response: {response}")
+            logger.info("Non-streaming response received")
+            # Extract full text from response
+            # The response.output is a list that may contain:
+            # - ResponseFileSearchToolCall (tool calls)
+            # - ResponseOutputMessage (actual text messages)
+            # We need to extract text from ResponseOutputMessage items
+            full_text = ""
+            full_text = ""
+            sources = []
+            seen_file_ids = set()
+            if hasattr(response, 'output') and response.output:
+                for output_item in response.output:
+                    # Check if this is a ResponseOutputMessage (has 'content' attribute)
+                    if hasattr(output_item, 'content') and output_item.content:
+                        # The content is a list of ResponseOutputText objects
+                        for content_item in output_item.content:
+                            if hasattr(content_item, 'text'):
+                                full_text += content_item.text
+
+                            # Extract sources from annotations (deduplicate by file_id)
+                            if hasattr(content_item, 'annotations') and content_item.annotations:
+                                for annotation in content_item.annotations:
+                                    if annotation.type == 'file_citation' and annotation.file_id not in seen_file_ids:
+                                        source_entry = {
+                                            "source_id": annotation.file_id,
+                                            "title": annotation.filename
+                                        }
+                                        # Fetch metadata from vector store
+                                        metadata = get_file_metadata_from_vector_store(client, vector_store_ids,
+                                                                                       annotation.file_id)
+
+                                        # Enrich source with organization info
+                                        source_entry = add_source_with_organization(source_entry, metadata)
+                                        sources.append(source_entry)
+                                        seen_file_ids.add(annotation.file_id)
+            logger.info(f"Extracted text length: {len(full_text)} chars, unique sources: {len(sources)}")
+            # Yield single complete response
+            yield {
+                'content': full_text,
+                'finish_reason': 'stop',
+                'extra_content': {
+                    "sources": sources
+                }
+            }
+    except Exception as e:
+        error_msg = f"Error during Responses API {'streaming' if stream else 'call'}: {str(e)}"
+        logger.error('Error: %s', e, exc_info=True)
+        print(error_msg)
+        yield {
+            'content': '',
+            'error': error_msg,
+            'finish_reason': 'error'
+        }
+
+
 @observe()
 def handle_bedrock_invoke_model(
         messages=None, max_token=None, temperature=None, top_p=None,
@@ -391,8 +693,6 @@ def handle_bedrock_invoke_model(
         )
 
         a = response.get('body').read()
-        # print(a)
-        # print(type(a))
         b = a.decode('utf-8')
         response_body = json.loads(b)
         print(response_body)

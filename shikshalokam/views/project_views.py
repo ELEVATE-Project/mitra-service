@@ -1,3 +1,6 @@
+import os
+from jwt import ExpiredSignatureError, InvalidTokenError
+from django.conf import settings
 import traceback
 import django_filters
 from rest_framework import generics
@@ -14,6 +17,7 @@ from rest_framework.response import Response
 import jwt
 from rest_framework.exceptions import AuthenticationFailed
 
+PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")
 
 class ProjectListCreateView(generics.ListCreateAPIView):
     queryset = Project.objects.prefetch_related('task__evidence', 'evidence', 'learning_resource').select_related(
@@ -26,21 +30,32 @@ class ProjectListCreateView(generics.ListCreateAPIView):
 
     def get_user_from_token(self, request):
         access_token = request.headers.get("X-auth-token")
-        if access_token:
-            decoded = jwt.decode(access_token, options={"verify_signature": False})
-            print(decoded)
-            if decoded:
-                try:
-                    user_id = decoded.get('data', {}).get('id')
-                    if not user_id:
-                        raise AuthenticationFailed('Invalid token: user_id missing')
-                    return Profile.objects.get(userid=user_id)
-                except jwt.ExpiredSignatureError:
-                    raise AuthenticationFailed('Token has expired')
-                except jwt.InvalidTokenError:
-                    raise AuthenticationFailed('Invalid token')
-                except Profile.DoesNotExist:
-                    raise AuthenticationFailed('User not found')
+
+        if not access_token:
+            raise AuthenticationFailed("Access token missing")
+
+        try:
+            decoded = jwt.decode(
+                access_token,
+                PUBLIC_KEY,
+                algorithms=["HS256"]
+            )
+
+            user_id = decoded.get("data", {}).get("id")
+
+            if not user_id:
+                raise AuthenticationFailed("Invalid token: user_id missing")
+
+            return Profile.objects.get(userid=user_id)
+
+        except ExpiredSignatureError:
+            raise AuthenticationFailed("Token has expired")
+
+        except InvalidTokenError:
+            raise AuthenticationFailed("Invalid token")
+
+        except Profile.DoesNotExist:
+            raise AuthenticationFailed("User not found")
 
 
     def list(self, request, *args, **kwargs):
@@ -67,12 +82,24 @@ def duplicate_project_view(request):
     project_id = body.get("id")
 
     access_token = request.headers.get("X-auth-token")
-    decoded = jwt.decode(access_token, options={"verify_signature": False})
-    print(decoded)
-    if decoded:
-        user_id = decoded.get('data', {}).get('id')
-    else:
-        return JsonResponse({'message': f"Invalid access token"}, status=500)
+
+    try:
+        decoded = jwt.decode(
+            access_token,
+            PUBLIC_KEY,
+            algorithms=["HS256"]
+        )
+        user_id = decoded.get("data", {}).get("id")
+
+        if not user_id:
+            return JsonResponse({'message': "Invalid access token"}, status=401)
+
+    except ExpiredSignatureError:
+        return JsonResponse({'message': "Token expired"}, status=401)
+
+    except InvalidTokenError:
+        return JsonResponse({'message': "Invalid token"}, status=401)
+
 
     try:
         new_author = Profile.objects.get(userid=user_id)
