@@ -1,7 +1,6 @@
 import os
 import django
-import sys
-from pathlib import Path
+from django.db.models import Q
 
 # project_root = Path(__file__).resolve().parent.parent
 # sys.path.insert(0, str(project_root))
@@ -20,7 +19,9 @@ def get_xlsx_stats():
     """
     xlsx_media = Media.objects.filter(media_type=FileTypeChoices.XLSX)
     total_xlsx = xlsx_media.count()
-    without_md = xlsx_media.filter(markdown_file='').count()
+    without_md = xlsx_media.filter(
+        Q(markdown_file__isnull=True) | Q(markdown_file='')
+    ).count()
 
     return {
         'total': total_xlsx,
@@ -131,8 +132,9 @@ def generate_markdown_files():
 
     extractor = MarkdownExtractor()
     media_without_md = Media.objects.filter(
-        media_type=FileTypeChoices.XLSX,
-        markdown_file=''
+        media_type=FileTypeChoices.XLSX
+    ).filter(
+        Q(markdown_file__isnull=True) | Q(markdown_file='')
     )
 
     success_list = []
