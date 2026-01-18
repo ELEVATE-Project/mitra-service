@@ -141,27 +141,37 @@ class OpenAIClient:
                 vector_store_id=self.vector_store_id
             )
 
-            # Convert all metadata values to strings for OpenAI
-            # This matches your working implementation
-            attributes = {
-                str(k): str(v)
-                for k, v in metadata.items()
-                if v is not None
-            }
+            # Keep only specific fields
+            ALLOWED_FIELDS = ['company', 'url', 'tags', 'TITLE', 'type', 'DOCUMENT TYPE']
+
+            attributes = {}
+            for k, v in metadata.items():
+                if k in ALLOWED_FIELDS and v is not None:
+                    # Stringify tags if it's a list
+                    if k == 'tags' and isinstance(v, list):
+                        attributes[str(k)] = ', '.join(str(tag) for tag in v)
+                    else:
+                        attributes[str(k)] = str(v)
+
+            logger.info(f"Metadata: {len(attributes)} fields - {list(attributes.keys())}")
 
             payload = {
                 "file_id": file_id,
-                "attributes": attributes,  # ✅ Include metadata attributes
+                "attributes": attributes,
             }
 
             response = requests.post(
                 vector_store_url,
-                headers={**self.headers, "Content-Type": "application/json", "OpenAI-Beta": "assistants=v2"},
+                headers={**self.headers, "Content-Type": "application/json"},
                 json=payload,
                 timeout=60
             )
 
-            response.raise_for_status()
+            if not response.ok:
+                error_body = response.text
+                logger.error(f"OpenAI Error ({response.status_code}): {error_body}")
+                response.raise_for_status()
+
             return response.json()
 
         except Exception as e:
@@ -195,7 +205,13 @@ logger = logging.getLogger(__name__)
 class MediaVectorStoreUploader:
     """Orchestrator for uploading all media files to OpenAI Vector Store"""
 
-    def __init__(self, max_workers: int = 4, bot_route: Optional[str] = None, vector_store_id: Optional[str] = None):
+    def __init__(
+        self,
+        max_workers: int = 4,
+        bot_route: Optional[str] = None,
+        vector_store_id: Optional[str] = None,
+        limit: Optional[int] = None
+    ):
         """
         Initialize uploader with OpenAI client
 
@@ -203,9 +219,11 @@ class MediaVectorStoreUploader:
             max_workers: Number of parallel workers
             bot_route: Route of CompanyBot to get vector store ID from (e.g., "/free-flow-bot")
             vector_store_id: Direct vector store ID (alternative to bot_route)
+            limit: Number of media files to process (None = process all)
         """
         self.client = OpenAIClient(bot_route=bot_route, vector_store_id=vector_store_id)
         self.max_workers = max_workers
+        self.limit = limit
         self.stats = {
             'total': 0,
             'successful': 0,
@@ -379,10 +397,19 @@ class MediaVectorStoreUploader:
         logger.info("Starting OpenAI Vector Store Upload Process")
         logger.info(f"Start Time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
         logger.info(f"Vector Store ID: {self.client.vector_store_id}")
+        if self.limit:
+            logger.info(f"Limit: Processing only {self.limit} media file(s)")
         logger.info("=" * 80)
 
         # Query all media from database
-        all_media = list(Media.objects.all())
+        all_media = Media.objects.all()
+
+        # Apply limit if specified
+        if self.limit:
+            all_media = all_media[:self.limit]
+            print(f"⚠️  LIMIT ACTIVE: Processing only {self.limit} media file(s)")
+
+        all_media = list(all_media)
         self.stats['total'] = len(all_media)
 
         logger.info(f"Total media files to process: {self.stats['total']}")
@@ -442,9 +469,32 @@ def main():
         sys.exit(1)
 
 
-# Ensure both env are there and then run
+# if __name__ == "__main__":
+    # main()
+
+
+# ============================================================================
+# USAGE EXAMPLES
+# ============================================================================
+
+# Example 1: Test with 1 media file using bot_route
+uploader = MediaVectorStoreUploader(
+    max_workers=4,
+    bot_route="/free-flow-bot",
+)
+uploader.run()
+
+# Example 2: Process all media files using bot_route
 # uploader = MediaVectorStoreUploader(
 #     max_workers=4,
-#     bot_route="/free-flow-bot"
+#     bot_route="/free-flow-bot",
+#     limit=None  # or just omit this parameter
+# )
+# uploader.run()
+
+# Example 3: Test with 5 media files using env variables
+# uploader = MediaVectorStoreUploader(
+#     max_workers=4,
+#     limit=5
 # )
 # uploader.run()

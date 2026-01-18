@@ -449,4 +449,15 @@ def main():
 #     max_retries=3,
 #     skip_errors=True
 # )
-# stats = syncer.sync_all()
+
+# Run on specific media IDs
+syncer = MediaVectorDBSync(
+    media_ids=[312, 315, 316, 626],
+    batch_size=10,
+    dry_run=False,
+    skip_errors=True,
+    sleep_time=2.0,
+    max_retries=3
+)
+
+stats = syncer.sync_all()
