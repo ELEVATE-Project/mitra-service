@@ -13,7 +13,7 @@ import logging
 import requests
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Django setup
@@ -210,7 +210,8 @@ class MediaVectorStoreUploader:
         max_workers: int = 4,
         bot_route: Optional[str] = None,
         vector_store_id: Optional[str] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        media_ids: Optional[List[int]] = None
     ):
         """
         Initialize uploader with OpenAI client
@@ -220,17 +221,19 @@ class MediaVectorStoreUploader:
             bot_route: Route of CompanyBot to get vector store ID from (e.g., "/free-flow-bot")
             vector_store_id: Direct vector store ID (alternative to bot_route)
             limit: Number of media files to process (None = process all)
+            media_ids: List of specific media IDs to process (None = process all)
         """
         self.client = OpenAIClient(bot_route=bot_route, vector_store_id=vector_store_id)
         self.max_workers = max_workers
         self.limit = limit
+        self.media_ids = media_ids
         self.stats = {
             'total': 0,
             'successful': 0,
             'failed': 0,
             'skipped': 0
         }
-        self.results = []  # ✅ Store all results
+        self.results = []
 
     def _get_media_info(self, media: Media) -> Dict[str, Any]:
         """Extract required information from media object using prepare_vector_db_data"""
@@ -290,7 +293,7 @@ class MediaVectorStoreUploader:
             if not file_id:
                 raise OpenAIUploadError(f"No file_id returned from OpenAI for media {media.id}")
 
-            # Add to vector store with ALL metadata
+            # Add to vector store with metadata
             vector_store_response = self.client.add_file_to_vector_store(
                 file_id=file_id,
                 metadata=media_info['metadata']
@@ -399,13 +402,21 @@ class MediaVectorStoreUploader:
         logger.info(f"Vector Store ID: {self.client.vector_store_id}")
         if self.limit:
             logger.info(f"Limit: Processing only {self.limit} media file(s)")
+        if self.media_ids:
+            logger.info(f"Processing specific media IDs: {self.media_ids}")
         logger.info("=" * 80)
 
-        # Query all media from database
-        all_media = Media.objects.all()
+        # Query media from database
+        if self.media_ids:
+            # Filter by specific media IDs
+            all_media = Media.objects.filter(id__in=self.media_ids)
+            print(f"🔍 Processing specific media IDs: {self.media_ids}")
+        else:
+            # Get all media
+            all_media = Media.objects.all()
 
-        # Apply limit if specified
-        if self.limit:
+        # Apply limit if specified (only if not using media_ids)
+        if self.limit and not self.media_ids:
             all_media = all_media[:self.limit]
             print(f"⚠️  LIMIT ACTIVE: Processing only {self.limit} media file(s)")
 
@@ -469,32 +480,37 @@ def main():
         sys.exit(1)
 
 
-# if __name__ == "__main__":
-    # main()
-
-
 # ============================================================================
 # USAGE EXAMPLES
 # ============================================================================
 
-# Example 1: Test with 1 media file using bot_route
-uploader = MediaVectorStoreUploader(
-    max_workers=4,
-    bot_route="/free-flow-bot",
-)
-uploader.run()
-
-# Example 2: Process all media files using bot_route
+# Example 1: Test with 1 specific media file
 # uploader = MediaVectorStoreUploader(
 #     max_workers=4,
 #     bot_route="/free-flow-bot",
-#     limit=None  # or just omit this parameter
+#     media_ids=[340]
 # )
 # uploader.run()
 
-# Example 3: Test with 5 media files using env variables
+# Example 2: Process multiple specific media files
 # uploader = MediaVectorStoreUploader(
 #     max_workers=4,
+#     bot_route="/free-flow-bot",
+#     media_ids=[704, 705, 706, 707, 708]
+# )
+# uploader.run()
+
+# Example 3: Process all media files
+# uploader = MediaVectorStoreUploader(
+#     max_workers=4,
+#     bot_route="/free-flow-bot"
+# )
+# uploader.run()
+
+# Example 4: Test with first 5 media files using limit
+# uploader = MediaVectorStoreUploader(
+#     max_workers=4,
+#     bot_route="/free-flow-bot",
 #     limit=5
 # )
 # uploader.run()
