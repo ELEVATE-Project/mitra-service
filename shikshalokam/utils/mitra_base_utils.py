@@ -1,10 +1,12 @@
 from chatbot.llm_models.llm_script import handle_bedrock_model
+from chatbot.models import CompanyBot
 from chatbot.utils.chat_query_handler import ask
 from jinja2 import Template
 import json
 import logging
 
 from shikshalokam.utils.action_list.action_parser import unwrap_tool_values
+from shikshalokam.utils.action_list.action_validator import validate_and_fix_action_list
 
 logger = logging.getLogger('django')
 
@@ -18,6 +20,21 @@ def get_mitra_paraphrase_utils(messages, company_bot):
     )
 
     logger.info("Paraphrased response: %s", json.dumps(paraphrase_response))
+
+    # try:
+    #     validate_bot = CompanyBot.objects.filter(route='/paraphrase_bot').first()
+    #     if validate_bot:
+    #         paraphrase_response = validate_and_fix_action_list(
+    #             messages=messages, response_json=paraphrase_response, company_bot=validate_bot
+    #         )
+    #         logger.info("Validation applied using validate_bot for paraphrase")
+    #     else:
+    #         logger.info("No validate_bot found with route='/paraphrase_bot', skipping validation")
+
+    # except CompanyBot.DoesNotExist:
+    #     logger.error("validate_bot not found, proceeding without validation")
+    # except Exception as validation_error:
+    #     logger.error(f"Validation failed: {validation_error}, proceeding with original response")
 
     if 'output' in paraphrase_response:
         content = (
