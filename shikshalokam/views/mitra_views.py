@@ -361,9 +361,10 @@ def generate_action_list_view(request):
             f"user_objective: {user_objective}, language: {language}, profile_id: {profile_id}")
 
         if isinstance(user_objective, list):
-            user_objective = " and ".join(
-                str(obj).strip() for obj in user_objective if obj
-            )
+            user_objective_formatted = ""
+
+            for obj in range(len(user_objective)):
+                user_objective_formatted += f"{obj + 1}. {user_objective[obj]}\n"
 
         profile = Profile.objects.filter(id=profile_id).first()
         if profile:
@@ -382,16 +383,16 @@ def generate_action_list_view(request):
                 target_language='en'
             )
             user_objective = translate_field(
-                voice_provider=voice_provider, message_body=user_objective, source_language=language,
+                voice_provider=voice_provider, message_body=user_objective_formatted, source_language=language,
                 target_language='en'
             )
             logger.info(f"[generate_action_list_view] Translated problem statement: {user_problem_statement}")
-            logger.info(f"[generate_action_list_view] Translated objective: {user_objective}")
+            logger.info(f"[generate_action_list_view] Translated objective: {user_objective_formatted}")
 
         logger.info(f"[generate_action_list_view] Calling generate_action_list_utils")
         gen_result = generate_action_list_utils(
             query=user_problem_statement,
-            objective_text=user_objective,
+            objective_text=user_objective_formatted,
             company_bot=company_bot
         )
         logger.info(
