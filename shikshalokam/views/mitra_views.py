@@ -55,7 +55,7 @@ def paraphrase_view(request):
             )
             print("user_translated_message: ", user_input)
 
-        paraphrased_output = get_mitra_paraphrase_utils(messages=formatted_chats, company_bot=company_bot)
+        paraphrased_output = get_mitra_paraphrase_utils(messages=formatted_chats, company_bot=company_bot, session_id=session_id)
 
         # if language != 'en' and isinstance(paraphrased_output, str) and paraphrased_output.lower() != 'no':
         #     paraphrased_output = translate_field(

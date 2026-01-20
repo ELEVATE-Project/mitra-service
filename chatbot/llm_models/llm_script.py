@@ -269,6 +269,8 @@ def handle_bedrock_model(
         # logger.info('Bedrock response: %s', response)
         print('Bedrock response: ', response)
 
+        logger.info('Conversation Bedrock response: %s', json.dumps(response))
+
         usage_metrics = response.get('usage', {})
         if usage_metrics:
             logger.info("--------------USAGE METRICS-------------")
