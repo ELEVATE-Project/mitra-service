@@ -96,7 +96,6 @@ def validate_actions_utils(user_input, user_objective, problem_statement, compan
         template = Template(company_bot.tag_context)
         tag_context = template.render(context_data)
 
-
         messages = [{
             'role': 'user',
             'content': [{'text': f"{tag_context}"}]
@@ -111,13 +110,64 @@ def validate_actions_utils(user_input, user_objective, problem_statement, compan
             temperature=company_bot.bot_temperature, max_token=company_bot.max_token, company_bot=company_bot,
             tools=tool_context, top_p=company_bot.filter_score,
         )
-        parsed_response = parse_llm_response(response)
 
-        response = parsed_response.get('within_scope')
-        return response
+        tool_response = None
+
+        if 'output' in response:
+            content = response.get('output', {}).get('message', {}).get('content', [])
+            if content and isinstance(content, list):
+                for item in content:
+                    if 'toolUse' in item:
+                        tool_input = item['toolUse'].get('input', {})
+                        if tool_input:
+                            tool_response = tool_input
+                            break
+
+        if not tool_response and 'content' in response:
+            for content_block in response['content']:
+                if content_block.get('toolUse'):
+                    tool_response = content_block['toolUse'].get('input', {})
+                    break
+
+        if not tool_response:
+            tool_response = parse_llm_response(response)
+
+        extracted_data = tool_response.pop("parameters", tool_response.pop("input", None))
+        if extracted_data:
+            from shikshalokam.utils.action_list.action_parser import unwrap_tool_values
+            extracted_data = unwrap_tool_values(extracted_data)
+            tool_response = extracted_data
+
+        if isinstance(tool_response.get('valid'), str):
+            tool_response['valid'] = tool_response['valid'].lower() == 'true'
+
+        if isinstance(tool_response.get('problem_statement_in_scope'), str):
+            tool_response['problem_statement_in_scope'] = tool_response['problem_statement_in_scope'].lower() == 'true'
+
+        if isinstance(tool_response.get('objective_in_scope'), str):
+            tool_response['objective_in_scope'] = tool_response['objective_in_scope'].lower() == 'true'
+
+        if isinstance(tool_response.get('actions_validation'), str):
+            import json
+            tool_response['actions_validation'] = json.loads(tool_response['actions_validation'])
+            for action in tool_response['actions_validation']:
+                if isinstance(action.get('aligned_with_objective'), str):
+                    action['aligned_with_objective'] = action['aligned_with_objective'].lower() == 'true'
+                if isinstance(action.get('aligned_with_problem'), str):
+                    action['aligned_with_problem'] = action['aligned_with_problem'].lower() == 'true'
+                if isinstance(action.get('within_scope'), str):
+                    action['within_scope'] = action['within_scope'].lower() == 'true'
+
+        return {
+            'success': True,
+            'data': tool_response
+        }
     except Exception as e:
         print("Got error : ", e)
-        return False
+        return {
+            'success': False,
+            'error': str(e)
+        }
 
 
 def validate_title_utils(user_input, user_objective, problem_statement, user_actions, company_bot):
