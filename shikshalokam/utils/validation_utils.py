@@ -4,12 +4,19 @@ import json
 from jinja2 import Template
 
 
-def validate_objective_utils(user_input, company_bot):
+def validate_objective_utils(user_input, user_problem_statement, company_bot):
     try:
         prompt = company_bot.context
+        context_data = {
+            "objectives": user_input,
+            "problem_statement": user_problem_statement
+        }
+        template = Template(company_bot.tag_context)
+        tag_context = template.render(context_data)
+
         messages = [{
             'role': 'user',
-            'content': [{'text': f"{user_input}"}]
+            'content': [{'text': f"{tag_context}"}]
         }]
 
         prompt = [{'text': prompt}]

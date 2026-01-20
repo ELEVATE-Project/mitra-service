@@ -209,6 +209,7 @@ def validate_objectives_view(request):
     try:
         body = request.data
         user_input = body.get('user_input')
+        user_problem_statement = body.get('user_problem_statement')
         language = body.get('language')
         profile_id = body.get('profile_id')
 
@@ -240,10 +241,16 @@ def validate_objectives_view(request):
                 voice_provider=voice_provider, message_body=user_input, source_language=language,
                 target_language='en'
             )
+            user_problem_statement = translate_field(
+                voice_provider=voice_provider, message_body=user_problem_statement, source_language=language,
+                target_language='en'
+            )
             logger.info(f"[validate_objectives_view] Translated user input: {user_input}")
 
         logger.info(f"[validate_objectives_view] Calling validate_objective_utils")
-        response = validate_objective_utils(user_input=user_input, company_bot=company_bot)
+        response = validate_objective_utils(
+            user_input=user_input, user_problem_statement=user_problem_statement, company_bot=company_bot
+        )
         logger.info(f"[validate_objectives_view] Validation result: {response}")
 
         logger.info(f"[validate_objectives_view] Returning validation result successfully")
