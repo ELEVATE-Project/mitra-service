@@ -30,11 +30,16 @@ def validate_objective_utils(user_input, user_problem_statement, company_bot):
         )
         parsed_response = parse_llm_response(response)
 
-        response = parsed_response.get('within_scope')
-        return response
+        return {
+            'success': True,
+            'data': parsed_response
+        }
     except Exception as e:
         print("Got error : ", e)
-        return False
+        return {
+            'success': False,
+            'error': str(e)
+        }
 
 
 def validate_actions_utils(user_input, user_objective, problem_statement, company_bot):

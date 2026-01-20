@@ -206,6 +206,7 @@ def generate_objectives_view(request):
 
 @api_view(['POST'])
 def validate_objectives_view(request):
+    error_message = "Please try again!"
     try:
         body = request.data
         user_input = body.get('user_input')
@@ -248,24 +249,42 @@ def validate_objectives_view(request):
             logger.info(f"[validate_objectives_view] Translated user input: {user_input}")
 
         logger.info(f"[validate_objectives_view] Calling validate_objective_utils")
-        response = validate_objective_utils(
+        validation_result = validate_objective_utils(
             user_input=user_input, user_problem_statement=user_problem_statement, company_bot=company_bot
         )
-        logger.info(f"[validate_objectives_view] Validation result: {response}")
+
+        if not validation_result.get('success'):
+            logger.error(f"[validate_objectives_view] Validation utility failed: {validation_result.get('error')}")
+            return Response({
+                'status': 'error',
+                'result': None,
+                'error_message': error_message
+            }, status=500)
+
+        llm_data = validation_result.get('data', {})
+        valid = llm_data.get('valid', False)
+
+        response_data = {
+            'status': 'ok',
+            'result': valid,
+        }
+
+        if not valid:
+            response_data['error_message'] = llm_data.get('overall_message', error_message)
+            if 'objectives_validation' in llm_data:
+                response_data['validation_details'] = llm_data.get('objectives_validation')
+            if 'reason' in llm_data:
+                response_data['reason'] = llm_data.get('reason')
 
         logger.info(f"[validate_objectives_view] Returning validation result successfully")
-        return Response({
-            'status': 'ok',
-            'result': response,
-            'error_message': error_message
-        }, status=200)
+        return Response(response_data, status=200)
 
     except Exception as e:
         logger.error(f"[validate_objectives_view] Unhandled exception: {str(e)}", exc_info=True)
         return Response({
             'status': 'error',
             'result': None,
-            'error_message': "Please try again!"
+            'error_message': error_message
         }, status=500)
 
 
