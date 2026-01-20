@@ -28,11 +28,52 @@ def validate_objective_utils(user_input, user_problem_statement, company_bot):
             temperature=company_bot.bot_temperature, max_token=company_bot.max_token, company_bot=company_bot,
             tools=tool_context, top_p=company_bot.filter_score,
         )
-        parsed_response = parse_llm_response(response)
+
+        tool_response = None
+
+        if 'output' in response:
+            content = response.get('output', {}).get('message', {}).get('content', [])
+            if content and isinstance(content, list):
+                for item in content:
+                    if 'toolUse' in item:
+                        tool_input = item['toolUse'].get('input', {})
+                        if tool_input:
+                            tool_response = tool_input
+                            break
+
+        if not tool_response and 'content' in response:
+            for content_block in response['content']:
+                if content_block.get('toolUse'):
+                    tool_response = content_block['toolUse'].get('input', {})
+                    break
+
+        if not tool_response:
+            tool_response = parse_llm_response(response)
+
+        extracted_data = tool_response.pop("parameters", tool_response.pop("input", None))
+        if extracted_data:
+            from shikshalokam.utils.action_list.action_parser import unwrap_tool_values
+            extracted_data = unwrap_tool_values(extracted_data)
+            tool_response = extracted_data
+
+        if isinstance(tool_response.get('valid'), str):
+            tool_response['valid'] = tool_response['valid'].lower() == 'true'
+
+        if isinstance(tool_response.get('problem_statement_in_scope'), str):
+            tool_response['problem_statement_in_scope'] = tool_response['problem_statement_in_scope'].lower() == 'true'
+
+        if isinstance(tool_response.get('objectives_validation'), str):
+            import json
+            tool_response['objectives_validation'] = json.loads(tool_response['objectives_validation'])
+            for obj in tool_response['objectives_validation']:
+                if isinstance(obj.get('aligned'), str):
+                    obj['aligned'] = obj['aligned'].lower() == 'true'
+                if isinstance(obj.get('within_scope'), str):
+                    obj['within_scope'] = obj['within_scope'].lower() == 'true'
 
         return {
             'success': True,
-            'data': parsed_response
+            'data': tool_response
         }
     except Exception as e:
         print("Got error : ", e)
