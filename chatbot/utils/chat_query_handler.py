@@ -118,6 +118,7 @@ def query_text_search(query: str, priority: str = "P1", limit: int = 10):
 def query_database_with_metadata(
     query: str = None,
     top_k: int = 20,
+    filter_score: int = 0,
     categories: List[str] = None,
     organizations: List[str] = None,
     resource_type: List[str] = None,
@@ -148,6 +149,7 @@ def query_database_with_metadata(
     # Build request payload
     data = {
         "top_k": top_k,
+        "filter_score": filter_score
     }
     
     # Add query only if provided

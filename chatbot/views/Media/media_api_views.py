@@ -823,11 +823,15 @@ class MediaSearchV2View(APIView):
         
         # Fetch large batch for proper sorting and pagination
         top_k = max(1000, offset + limit * 2)
-        
+        from chatbot.models import CompanyBot
+        company_bot = CompanyBot.objects.filter(route='/sg_search_bot').first()
+        filter_score = company_bot.filter_score if company_bot else 0
+
         # Query vector database
         vector_response = query_database_with_metadata(
             query=query if query else None,
             top_k=top_k,
+            filter_score=filter_score,
             categories=tags if tags else None,
             organizations=organizations if organizations else None,
             resource_type=resource_types if resource_types else None,

@@ -55,7 +55,7 @@ def paraphrase_view(request):
             )
             print("user_translated_message: ", user_input)
 
-        paraphrased_output = get_mitra_paraphrase_utils(messages=formatted_chats, company_bot=company_bot)
+        paraphrased_output = get_mitra_paraphrase_utils(messages=formatted_chats, company_bot=company_bot, session_id=session_id)
 
         # if language != 'en' and isinstance(paraphrased_output, str) and paraphrased_output.lower() != 'no':
         #     paraphrased_output = translate_field(
@@ -206,9 +206,11 @@ def generate_objectives_view(request):
 
 @api_view(['POST'])
 def validate_objectives_view(request):
+    error_message = "Please try again!"
     try:
         body = request.data
         user_input = body.get('user_input')
+        user_problem_statement = body.get('user_problem_statement')
         language = body.get('language')
         profile_id = body.get('profile_id')
 
@@ -240,30 +242,55 @@ def validate_objectives_view(request):
                 voice_provider=voice_provider, message_body=user_input, source_language=language,
                 target_language='en'
             )
+            user_problem_statement = translate_field(
+                voice_provider=voice_provider, message_body=user_problem_statement, source_language=language,
+                target_language='en'
+            )
             logger.info(f"[validate_objectives_view] Translated user input: {user_input}")
 
         logger.info(f"[validate_objectives_view] Calling validate_objective_utils")
-        response = validate_objective_utils(user_input=user_input, company_bot=company_bot)
-        logger.info(f"[validate_objectives_view] Validation result: {response}")
+        validation_result = validate_objective_utils(
+            user_input=user_input, user_problem_statement=user_problem_statement, company_bot=company_bot
+        )
+
+        if not validation_result.get('success'):
+            logger.error(f"[validate_objectives_view] Validation utility failed: {validation_result.get('error')}")
+            return Response({
+                'status': 'error',
+                'result': None,
+                'error_message': error_message
+            }, status=500)
+
+        llm_data = validation_result.get('data', {})
+        valid = llm_data.get('valid', False)
+
+        response_data = {
+            'status': 'ok',
+            'result': valid,
+        }
+
+        if not valid:
+            response_data['error_message'] = llm_data.get('overall_message', error_message)
+            if 'objectives_validation' in llm_data:
+                response_data['validation_details'] = llm_data.get('objectives_validation')
+            if 'reason' in llm_data:
+                response_data['reason'] = llm_data.get('reason')
 
         logger.info(f"[validate_objectives_view] Returning validation result successfully")
-        return Response({
-            'status': 'ok',
-            'result': response,
-            'error_message': error_message
-        }, status=200)
+        return Response(response_data, status=200)
 
     except Exception as e:
         logger.error(f"[validate_objectives_view] Unhandled exception: {str(e)}", exc_info=True)
         return Response({
             'status': 'error',
             'result': None,
-            'error_message': "Please try again!"
+            'error_message': error_message
         }, status=500)
 
 
 @api_view(['POST'])
 def validate_actions_view(request):
+    error_message = "Please try again!"
     try:
         body = request.data
         user_input = body.get('user_input')
@@ -324,25 +351,43 @@ def validate_actions_view(request):
             logger.info(f"[validate_actions_view] Translated problem statement: {problem_statement}")
 
         logger.info(f"[validate_actions_view] Calling validate_actions_utils")
-        response = validate_actions_utils(
+        validation_result = validate_actions_utils(
             user_input=user_input, user_objective=user_objective, problem_statement=problem_statement,
             company_bot=company_bot
         )
-        logger.info(f"[validate_actions_view] Validation result: {response}")
+
+        if not validation_result.get('success'):
+            logger.error(f"[validate_actions_view] Validation utility failed: {validation_result.get('error')}")
+            return Response({
+                'status': 'error',
+                'result': None,
+                'error_message': error_message
+            }, status=500)
+
+        llm_data = validation_result.get('data', {})
+        valid = llm_data.get('valid', False)
+
+        response_data = {
+            'status': 'ok',
+            'result': valid,
+        }
+
+        if not valid:
+            response_data['error_message'] = llm_data.get('overall_message', error_message)
+            if 'actions_validation' in llm_data:
+                response_data['validation_details'] = llm_data.get('actions_validation')
+            if 'reason' in llm_data:
+                response_data['reason'] = llm_data.get('reason')
 
         logger.info(f"[validate_actions_view] Returning validation result successfully")
-        return Response({
-            'status': 'ok',
-            'result': response,
-            'error_message': error_message
-        }, status=200)
+        return Response(response_data, status=200)
 
     except Exception as e:
         logger.error(f"[validate_actions_view] Unhandled exception: {str(e)}", exc_info=True)
         return Response({
             'status': 'error',
             'result': None,
-            'error_message': "Please try again!"
+            'error_message': error_message
         }, status=500)
 
 
@@ -361,9 +406,10 @@ def generate_action_list_view(request):
             f"user_objective: {user_objective}, language: {language}, profile_id: {profile_id}")
 
         if isinstance(user_objective, list):
-            user_objective = " and ".join(
-                str(obj).strip() for obj in user_objective if obj
-            )
+            user_objective_formatted = ""
+
+            for obj in range(len(user_objective)):
+                user_objective_formatted += f"{obj + 1}. {user_objective[obj]}\n"
 
         profile = Profile.objects.filter(id=profile_id).first()
         if profile:
@@ -382,16 +428,16 @@ def generate_action_list_view(request):
                 target_language='en'
             )
             user_objective = translate_field(
-                voice_provider=voice_provider, message_body=user_objective, source_language=language,
+                voice_provider=voice_provider, message_body=user_objective_formatted, source_language=language,
                 target_language='en'
             )
             logger.info(f"[generate_action_list_view] Translated problem statement: {user_problem_statement}")
-            logger.info(f"[generate_action_list_view] Translated objective: {user_objective}")
+            logger.info(f"[generate_action_list_view] Translated objective: {user_objective_formatted}")
 
         logger.info(f"[generate_action_list_view] Calling generate_action_list_utils")
         gen_result = generate_action_list_utils(
             query=user_problem_statement,
-            objective_text=user_objective,
+            objective_text=user_objective_formatted,
             company_bot=company_bot
         )
         logger.info(

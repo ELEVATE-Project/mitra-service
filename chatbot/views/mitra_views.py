@@ -29,22 +29,10 @@ def create_project_view(request):
     project_objective = body.get('user_objective')
     profile_id = body.get('profile_id')
     chunks = body.get('chunks')
-    
-
     language = body.get('language')
 
-    print("project_title: ", project_title)
-    print("profile_id: ", profile_id)
     sources_list = normalize_sources_from_chunks(chunks)
     timeline = format_project_timeline(project_duration)
-
-
-    # if not access_token and profile_id:
-    #     return Response({
-    #         'status': 'ok',
-    #         'message': 'Skipping api call',
-    #     }, status=200)
-
 
     project_id = None
     program_id = None
