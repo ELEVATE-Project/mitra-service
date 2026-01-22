@@ -419,6 +419,57 @@ def add_source_with_organization(source_entry, metadata):
     return source_entry
 
 
+def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
+    """
+    Calculates and logs OpenAI cost using Responses API usage.
+    Works for both streaming and non-streaming responses.
+    """
+
+    if not response or not company_bot:
+        return None
+
+    usage = getattr(response, "usage", None)
+    if not usage:
+        logger.info("⚠️ OpenAI response has no usage data")
+        return None
+
+    input_tokens = usage.input_tokens or 0
+    output_tokens = usage.output_tokens or 0
+    total_tokens = usage.total_tokens or (input_tokens + output_tokens)
+
+    logger.info(
+        f"💰 OpenAI Tokens — Input: {input_tokens}, "
+        f"Output: {output_tokens}, Total: {total_tokens}"
+    )
+
+    pricing = get_pricing_from_company_bot(
+        company_bot=company_bot,
+        model_id=model_id
+    )
+
+    if not pricing:
+        logger.info(f"💵 No pricing configured for OpenAI model: {model_id}")
+        return None
+
+    input_cost = (input_tokens / 1000) * pricing["input"]
+    output_cost = (output_tokens / 1000) * pricing["output"]
+    total_cost = input_cost + output_cost
+
+    logger.info(
+        f"💵 OpenAI Cost — Input: ${input_cost:.6f}, Output: ${output_cost:.6f}, Total: ${total_cost:.6f}"
+    )
+
+    return {
+        "model_id": model_id,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+        "input_cost": input_cost,
+        "output_cost": output_cost,
+        "total_cost": total_cost,
+    }
+
+
 @observe()
 def handle_openai_response_api(
         messages, system_prompt=None, max_token=None, temperature=None, company_bot=None,
@@ -584,6 +635,9 @@ def handle_openai_response_api(
                     # Handle ResponseCompletedEvent - full response finished
                     elif event.type == 'response.completed':
                         logger.info(f"Response completed")
+                        price = calculate_and_log_openai_cost(
+                            response=event.response, model_id=model_to_use, company_bot=company_bot
+                        )
                         break
 
                     # Handle error events
@@ -599,6 +653,10 @@ def handle_openai_response_api(
         else:
             # Non-streaming mode - get complete response at once
             response = client.responses.create(**request_data)
+
+            price = calculate_and_log_openai_cost(
+                response=response, model_id=model_to_use, company_bot=company_bot
+            )
 
             logger.info(f"free-flows response: {response}")
             logger.info("Non-streaming response received")
