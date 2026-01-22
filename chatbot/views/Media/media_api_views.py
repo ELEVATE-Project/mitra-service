@@ -999,16 +999,16 @@ class MediaSearchV2View(APIView):
         company_bot = CompanyBot.objects.get(route='/sg_search_bot')
         
         # Filter by relevance score
-        score_filtered_results = []
+        score_filtered_results = results
         
-        for result in results:
-            if not isinstance(result, dict):
-                continue
-            
-            relevance_score = result.get('score', 0)
-            
-            if relevance_score >= company_bot.filter_score:
-                score_filtered_results.append(result)
+        # for result in results:
+        #     if not isinstance(result, dict):
+        #         continue
+        #
+        #     relevance_score = result.get('score', 0)
+        #
+        #     if relevance_score >= company_bot.filter_score:
+        #         score_filtered_results.append(result)
         
         # Get source document media IDs
         source_document_media_ids = set(
