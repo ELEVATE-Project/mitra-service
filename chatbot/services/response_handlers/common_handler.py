@@ -1,4 +1,4 @@
-from chatbot.models import ChatStatus, CompanyChat, CompanyBotTypeChoices, LLMProvider
+from chatbot.models import ChatStatus, CompanyChat, CompanyBotTypeChoices, LLMProvider, BotVernacular
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.services.response_handlers.base_response_handler import BaseResponseHandler
 from chatbot.utils.shiksha_chaupal.date_utils import handle_date_prompt
@@ -20,7 +20,6 @@ class CommonResponseHandler(BaseResponseHandler):
             state_machine = CompanyStateMachine.objects.filter(
                 company_bot=company_bot, step=chat_session.current_step
             ).first()
-            # Special handling for EVENT state
             if state_machine and state_machine.name == 'EVENT_DATE':
                 print("Here inside")
                 return self._handle_event_state(chat_session=chat_session, state_machine=state_machine, **kwargs)
@@ -53,10 +52,8 @@ class CommonResponseHandler(BaseResponseHandler):
             bot_question = self.default_error_message
 
         if bot_question == '':
-            # Return special flag to skip LLM call
             return {'skip_llm': True}
         else:
-            # Send the date prompt response
             translated_message = self.translate_message(
                 message=bot_question, channel_name=channel_name, step_number=chat_session.current_step,
                 language=language, company_bot=company_bot
@@ -79,11 +76,9 @@ class CommonResponseHandler(BaseResponseHandler):
 
     def is_function_call(self, response):
         """Override to handle empty responses as function calls"""
-        # First check parent logic for actual function calls
         if super().is_function_call(response):
             return True
 
-        # If not an actual function call, check for empty responses after extraction
         try:
             extracted_response, _ = self._extract_response_and_reason(response)
             if extracted_response == '':
@@ -119,12 +114,15 @@ class CommonResponseHandler(BaseResponseHandler):
         return is_function_call
 
     def process_response(self, response, chat_session, chunks, streaming_completed=False, **kwargs):
-        """Process common response"""
+        """Process common response with retry logic for short responses"""
         print(f"DEBUG: Starting process_response with response type: {type(response)}")
         print(f"DEBUG: Response preview: {str(response)[:200]}...")
         print(f"DEBUG: kwargs keys: {list(kwargs.keys())}")
         print(f"DEBUG: streaming_completed in kwargs: {'streaming_completed' in kwargs}")
         print(f"DEBUG: streaming_completed value: {kwargs.get('streaming_completed', 'NOT SET')}")
+
+        retry_attempt = kwargs.get('retry_attempt', 0)
+        print(f"DEBUG: Current retry attempt: {retry_attempt}")
 
         skip_llm_call = kwargs.get('skip_llm', False)
         print(f"DEBUG: skip_llm_call: {skip_llm_call}")
@@ -137,11 +135,56 @@ class CommonResponseHandler(BaseResponseHandler):
             reason_text = None
             print("DEBUG: Skipping LLM call, treating as function call")
         else:
-            # Use unified analysis - this handles everything including empty responses
             is_function_call, expected_output_response, reason_text = self._analyze_response(response)
             print(f"DEBUG: Analysis result - is_function_call: {is_function_call}")
             print(f"DEBUG: expected_output_response: '{expected_output_response}'")
             print(f"DEBUG: reason_text: '{reason_text}'")
+
+            if not is_function_call and retry_attempt < self.max_retry_attempts:
+                response_to_check = expected_output_response if expected_output_response is not None else response
+
+                if self._is_response_too_short(response_to_check):
+                    logger.info(
+                        f"Response too short, retrying LLM call (attempt {retry_attempt + 1}/{self.max_retry_attempts})")
+                    print(
+                        f"DEBUG: Response too short, retrying LLM call (attempt {retry_attempt + 1}/{self.max_retry_attempts})")
+
+                    kwargs['retry_attempt'] = retry_attempt + 1
+
+                    try:
+                        result = self.get_llm_response(**kwargs)
+
+                        if isinstance(result, tuple):
+                            new_response, extra_content, finish_reason = result
+                        else:
+                            new_response = result
+                            finish_reason = None
+
+                        if new_response:
+                            logger.info("Successfully got new response from LLM on retry")
+                            print("DEBUG: Successfully got new response from LLM on retry")
+
+                            return self.process_response(
+                                new_response, chat_session, chunks,
+                                streaming_completed=streaming_completed,
+                                **kwargs
+                            )
+                        else:
+                            logger.info("LLM returned None on retry, will use error message")
+                            print("DEBUG: LLM returned None on retry, will use error message")
+                            kwargs['use_error_message'] = True
+
+                    except Exception as e:
+                        logger.error(f"Error during LLM retry: {e}")
+                        print(f"DEBUG: Error during LLM retry: {e}")
+                        kwargs['use_error_message'] = True
+
+            if not is_function_call and retry_attempt >= self.max_retry_attempts:
+                response_to_check = expected_output_response if expected_output_response is not None else response
+                if self._is_response_too_short(response_to_check):
+                    logger.info("Exhausted all retries, response still too short, will use error message")
+                    print("DEBUG: Exhausted all retries, response still too short, will use error message")
+                    kwargs['use_error_message'] = True
 
         company_bot = kwargs['company_bot']
         session_id = kwargs['session_id']
@@ -153,7 +196,15 @@ class CommonResponseHandler(BaseResponseHandler):
         target_stage = kwargs.get('target_stage', False)
         chat_messages = self.get_messages_for_llm(**kwargs)
 
-        # Process based on response type
+        if kwargs.get('use_error_message', False) and not is_function_call:
+            bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
+            error_message = bot_vernacular.error_message if (
+                    bot_vernacular and bot_vernacular.error_message) else "Please try again!"
+            logger.info(f"Using error message: {error_message}")
+            print(f"DEBUG: Using error message: {error_message}")
+            expected_output_response = error_message
+            response = error_message
+
         if is_function_call and company_bot and company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
             print("DEBUG: Processing as function call")
             return self._handle_function_call(
@@ -164,7 +215,6 @@ class CommonResponseHandler(BaseResponseHandler):
             )
         else:
             print("DEBUG: Processing as regular response")
-            # For non-function calls, use extracted response if available and not empty, otherwise original response
             final_response = expected_output_response if (
                     expected_output_response is not None and expected_output_response != "") else response
             return self._handle_regular_response(
@@ -183,7 +233,6 @@ class CommonResponseHandler(BaseResponseHandler):
 
                 stripped = response.strip()
                 if not (stripped.startswith('{') and stripped.endswith('}')):
-                    # Check if it contains JSON-like key-value pairs
                     if ('"response"' in stripped or '"reason"' in stripped) and ':' in stripped:
                         logger.info("DEBUG: String looks like JSON without outer braces, adding them")
                         response = '{' + stripped + '}'
@@ -195,18 +244,15 @@ class CommonResponseHandler(BaseResponseHandler):
 
                 logger.info("DEBUG: String looks like JSON, attempting parsing")
                 try:
-                    # First try regular json parsing
                     parsed_response = json.loads(response)
                     logger.info("DEBUG: Successfully parsed JSON from string")
                 except json.JSONDecodeError:
                     try:
-                        # If that fails, try json_repair
                         repaired_json = repair_json(response)
                         parsed_response = json.loads(repaired_json)
                         logger.info("DEBUG: Successfully repaired and parsed JSON")
                     except Exception as repair_error:
                         logger.info(f"DEBUG: JSON repair failed: {repair_error}")
-                        # If all parsing fails, use the string as response
                         return response, None
 
                 response = parsed_response
@@ -215,33 +261,26 @@ class CommonResponseHandler(BaseResponseHandler):
                 logger.info("DEBUG: Processing dict response")
                 logger.info(f"DEBUG: Dict keys: {list(response.keys())}")
 
-                # IMPORTANT: Work on a copy to avoid modifying the original response
                 response_copy = response.copy()
                 extracted_data = None
 
-                # Handle different formats - USE GET() NOT POP() to preserve original
                 if 'toolUseId' in response_copy and 'input' in response_copy:
-                    # Direct tool use format (Bedrock/Claude)
                     logger.info("DEBUG: Found direct tool use format (toolUseId + input)")
-                    extracted_data = response_copy.get('input')  # Use get() not pop()
+                    extracted_data = response_copy.get('input')
 
                 elif 'name' in response_copy and 'parameters' in response_copy:
-                    # Simple function call format
                     logger.info("DEBUG: Found simple function call format (name + parameters)")
-                    extracted_data = response_copy.get('parameters')  # Use get() not pop()
+                    extracted_data = response_copy.get('parameters')
 
                 elif 'parameters' in response_copy:
-                    # Parameters format
                     logger.info("DEBUG: Found parameters format")
-                    extracted_data = response_copy.get('parameters')  # Use get() not pop()
+                    extracted_data = response_copy.get('parameters')
 
                 elif 'input' in response_copy:
-                    # Input format
                     logger.info("DEBUG: Found input format")
-                    extracted_data = response_copy.get('input')  # Use get() not pop()
+                    extracted_data = response_copy.get('input')
 
                 elif 'output' in response_copy and 'message' in response_copy['output']:
-                    # Bedrock nested response format
                     logger.info("DEBUG: Found Bedrock nested response format")
                     content = response_copy['output']['message'].get('content', [])
                     for item in content:
@@ -250,7 +289,6 @@ class CommonResponseHandler(BaseResponseHandler):
                             break
 
                 elif 'function_call' in response_copy:
-                    # OpenAI function_call format
                     logger.info("DEBUG: Found OpenAI function_call format")
                     arguments = response_copy['function_call'].get('arguments', {})
                     if isinstance(arguments, str):
@@ -266,11 +304,10 @@ class CommonResponseHandler(BaseResponseHandler):
                         extracted_data = arguments
 
                 elif 'tool_calls' in response_copy:
-                    # OpenAI tool_calls format
                     logger.info("DEBUG: Found OpenAI tool_calls format")
                     tool_calls = response_copy['tool_calls']
                     if tool_calls and len(tool_calls) > 0:
-                        tool_call = tool_calls[0]  # Take the first tool call
+                        tool_call = tool_calls[0]
                         if 'function' in tool_call:
                             arguments = tool_call['function'].get('arguments', {})
                             if isinstance(arguments, str):
@@ -285,7 +322,6 @@ class CommonResponseHandler(BaseResponseHandler):
                             else:
                                 extracted_data = arguments
                 else:
-                    # Direct format - check if response and reason are directly in the dict
                     logger.info("DEBUG: Checking if response/reason are directly in dict")
                     if 'response' in response_copy or 'reason' in response_copy:
                         extracted_data = response_copy
@@ -295,18 +331,14 @@ class CommonResponseHandler(BaseResponseHandler):
                     logger.info(
                         f"DEBUG: Extracted data keys: {list(extracted_data.keys()) if isinstance(extracted_data, dict) else 'Not a dict'}")
 
-                # Now extract response and reason from extracted_data
                 if extracted_data and isinstance(extracted_data, dict):
-                    # Check if we got an empty input/parameters dictionary FIRST (applies to all formats)
                     if len(extracted_data) == 0:
                         print(
                             f"DEBUG: Empty extracted_data detected from LLM (input/parameters) - treating as function call")
                         logger.info(
                             f"Empty extracted_data detected from LLM (input/parameters) - treating as function call: {response}")
-                        # Return empty strings to trigger function call behavior
                         return '', 'LLM returned empty input/parameters - treating as function call to proceed to next state'
 
-                    # If not empty, extract normally
                     response_text = extracted_data.get('response', '')
                     reason_text = extracted_data.get('reason', '')
                     logger.info(
@@ -314,7 +346,6 @@ class CommonResponseHandler(BaseResponseHandler):
                     return response_text, reason_text
 
                 elif extracted_data and isinstance(extracted_data, str):
-                    # If extracted_data is a string, try to parse it as JSON
                     logger.info("DEBUG: Extracted data is string, trying to parse as JSON")
                     try:
                         parsed_data = json.loads(extracted_data)
@@ -334,7 +365,6 @@ class CommonResponseHandler(BaseResponseHandler):
                             f"DEBUG: Parsed string data - response: '{response_text[:100]}...', reason: '{reason_text[:100]}...'")
                         return response_text, reason_text
 
-                # If no extraction worked, treat the original dict as the data
                 logger.info("DEBUG: No specific format matched, checking original dict for response/reason")
                 response_text = response_copy.get('response', '')
                 reason_text = response_copy.get('reason', '')
@@ -347,7 +377,6 @@ class CommonResponseHandler(BaseResponseHandler):
             logger.info(f"DEBUG: Error extracting response and reason: {e}")
             logger.error(f"Error extracting response and reason: {e}")
 
-        # Fallback - return original response as string
         logger.info("DEBUG: Fallback - returning original response as string")
         final_response = str(response) if not isinstance(response, str) else response
         return final_response, None
@@ -372,19 +401,16 @@ class CommonResponseHandler(BaseResponseHandler):
 
         try:
             if isinstance(response, dict):
-                # Handle simple function call format (NEW format)
                 if 'name' in response and 'parameters' in response:
                     print("DEBUG: Found simple function call format (NEW)")
                     expected_output = response['parameters'].get('expected_output', '')
                     return _extract_and_return(expected_output, "simple function call")
 
-                # Handle direct tool use format (OLD format)
                 elif 'toolUseId' in response and 'input' in response:
                     print("DEBUG: Found direct tool use format (OLD)")
                     expected_output = response['input'].get('expected_output', '')
                     return _extract_and_return(expected_output, "direct tool use")
 
-                # Handle Bedrock response format
                 elif 'output' in response and 'message' in response['output']:
                     print("DEBUG: Found Bedrock response format")
                     content = response['output']['message'].get('content', [])
@@ -393,11 +419,9 @@ class CommonResponseHandler(BaseResponseHandler):
                             expected_output = item['toolUse'].get('input', {}).get('expected_output', '')
                             return _extract_and_return(expected_output, "Bedrock format")
 
-                # Handle OpenAI-style function call formats
                 elif 'function_call' in response or 'tool_calls' in response:
                     print("DEBUG: Found OpenAI-style function call format")
 
-                    # Handle tool_calls format
                     if 'tool_calls' in response:
                         for tool_call in response['tool_calls']:
                             if 'function' in tool_call:
@@ -408,7 +432,6 @@ class CommonResponseHandler(BaseResponseHandler):
                                     expected_output = arguments.get('expected_output', '')
                                     return _extract_and_return(expected_output, "OpenAI tool_calls")
 
-                    # Handle function_call format
                     elif 'function_call' in response:
                         arguments = response['function_call'].get('arguments', {})
                         if isinstance(arguments, str):
@@ -419,10 +442,8 @@ class CommonResponseHandler(BaseResponseHandler):
 
             elif isinstance(response, str):
                 print("DEBUG: Found string response, trying to parse JSON")
-                # Look for function call patterns in string
                 if 'get_state_information' in response:
                     import re
-                    # Try to extract JSON from the string
                     json_match = re.search(r'\{.*\}', response, re.DOTALL)
                     if json_match:
                         parsed = _parse_json_string(json_match.group())
@@ -474,7 +495,6 @@ class CommonResponseHandler(BaseResponseHandler):
             language=language, company_bot=company_bot
         )
 
-        # Prepare other_params with the whole function call response
         other_params = {'function_call_response': response}
         print(f"DEBUG: Saving whole function call response in other_params: {response}")
         stage = state_machine.name if state_machine else None
@@ -512,7 +532,6 @@ class CommonResponseHandler(BaseResponseHandler):
             language=language, company_bot=company_bot, extra_content=extra_content
         )
 
-        # Prepare other_params with reason if available
         other_params = {}
         if reason:
             other_params['reason'] = reason
