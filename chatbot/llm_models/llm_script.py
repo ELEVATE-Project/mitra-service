@@ -144,19 +144,25 @@ def handle_openai_model(
         return response.choices[0].message.content if response.choices else response
 
 def get_pricing_from_company_bot(company_bot, model_id):
-    """Extract pricing from company_bot.other_params"""
     try:
-        if not company_bot.other_params:
+        # Determine if company_bot is dict-like or an object (model instance)
+        if isinstance(company_bot, dict):
+            other_params = company_bot.get('other_params')
+        else:
+            # Model instance, has attribute
+            other_params = getattr(company_bot, 'other_params', None)
+
+        if not other_params:
             return None
 
-        # Parse other_params
-        if isinstance(company_bot.other_params, str):
-            other_params = json.loads(company_bot.other_params)
+        # Parse other_params if it is a string
+        if isinstance(other_params, str):
+            other_params_parsed = json.loads(other_params)
         else:
-            other_params = company_bot.other_params
+            other_params_parsed = other_params
 
         # Check if pricing data exists
-        pricing_data = other_params.get('model_pricing')
+        pricing_data = other_params_parsed.get('model_pricing')
         if not pricing_data:
             logger.info(f"❌ No pricing_data key found in company bot other params.")
             return None
@@ -192,8 +198,15 @@ def handle_bedrock_model(
         model_name=None, region_name='us-west-2', tools=None, is_json_response=False, aws_key=None,
         aws_secret_key=None
 ):
-    connect_timeout = company_bot.connect_timeout
-    read_timeout = company_bot.read_timeout
+    # Support company_bot as either dict or model instance
+    if isinstance(company_bot, dict):
+        connect_timeout = company_bot.get('connect_timeout', 5.0)
+        read_timeout = company_bot.get('read_timeout', 10.0)
+        chat_history_limit = company_bot.get('chat_history_limit', 1000)
+    else:
+        connect_timeout = getattr(company_bot, 'connect_timeout', 5.0)
+        read_timeout = getattr(company_bot, 'read_timeout', 10.0)
+        chat_history_limit = getattr(company_bot, 'chat_history_limit', 1000)
 
     boto_config = BotoConfig(
         connect_timeout=connect_timeout,
@@ -213,8 +226,6 @@ def handle_bedrock_model(
         model_id = model_name
     else:
         model_id = 'meta.llama3-1-8b-instruct-v1:0'
-
-        # 'meta.llama3-1-70b-instruct-v1:0'
 
     inference_config = {}
     additional_model_fields = {}
@@ -240,7 +251,7 @@ def handle_bedrock_model(
         if last_user_idx is None:
             messages = []
         else:
-            start_idx = max(0, last_user_idx - company_bot.chat_history_limit)
+            start_idx = max(0, last_user_idx - chat_history_limit)
 
             # Ensure first message is always a user
             if messages[start_idx]['role'] != 'user':
@@ -266,7 +277,6 @@ def handle_bedrock_model(
         logger.info('Bedrock request payload: %s', request_payload)
         print('Conversation Bedrock request payload: ', request_payload)
         response = bedrock_runtime.converse(**request_payload)
-        # logger.info('Bedrock response: %s', response)
         print('Bedrock response: ', response)
 
         logger.info('Conversation Bedrock response: %s', json.dumps(response))
@@ -328,7 +338,6 @@ def handle_bedrock_model(
                     print(f"Loads final_output: {final_output}")
                     logger.info('Loads final_output: %s', final_output)
                 except json.JSONDecodeError as e:
-                    # logger.error('Error decoding JSON: %s', e, exc_info=True)
                     return None
             elif is_json_response:
                 return None
@@ -337,16 +346,15 @@ def handle_bedrock_model(
 
         return final_output
     except ClientError as e:
-            error_response = e.response
-            logger.error("❌ Bedrock ClientError:")
-            logger.error(f"Error Code: {error_response['Error']['Code']}")
-            logger.error(f"Error Message: {error_response['Error']['Message']}")
-            logger.error(f"Request ID: {error_response.get('ResponseMetadata', {}).get('RequestId')}")
-            print("❌ ClientError:")
-            print("Error Code:", error_response["Error"]["Code"])
-            print("Error Message:", error_response["Error"]["Message"])
-            print("Request ID:", error_response.get("ResponseMetadata", {}).get("RequestId"))
-            # return None
+        error_response = e.response
+        logger.error("❌ Bedrock ClientError:")
+        logger.error(f"Error Code: {error_response['Error']['Code']}")
+        logger.error(f"Error Message: {error_response['Error']['Message']}")
+        logger.error(f"Request ID: {error_response.get('ResponseMetadata', {}).get('RequestId')}")
+        print("❌ ClientError:")
+        print("Error Code:", error_response["Error"]["Code"])
+        print("Error Message:", error_response["Error"]["Message"])
+        print("Request ID:", error_response.get("ResponseMetadata", {}).get("RequestId"))
     except Exception as e:
         logger.error('Error processing request: %s', e, exc_info=True)
         print(f'❌ Error processing Bedrock request: {e}')
