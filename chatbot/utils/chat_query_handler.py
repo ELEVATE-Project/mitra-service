@@ -1,6 +1,6 @@
 import requests
 import os
-from typing import List
+from typing import List, Dict, Any, Optional
 from chatbot.llm_models.llm_script import handle_bedrock_model
 
 DATABASE_INTERFACE_BEARER_TOKEN = os.getenv('DATABASE_INTERFACE_BEARER_TOKEN')
@@ -119,6 +119,7 @@ def query_database_with_metadata(
     query: str = None,
     top_k: int = 20,
     filter_score: int = 0,
+    detail_filter_score: Optional[Dict[str, Any]] = None,
     categories: List[str] = None,
     organizations: List[str] = None,
     resource_type: List[str] = None,
@@ -126,17 +127,6 @@ def query_database_with_metadata(
 ):
     """
     Query vector database with metadata filters for media search v2.
-    
-    Args:
-        query: Search query string (optional - if not provided, returns all documents with filters)
-        top_k: Number of results to return
-        categories: List of category filters (tags)
-        organizations: List of organization filters
-        resource_type: List of resource type filters (document types)
-        file_type: List of file type filters (MIME types)
-    
-    Returns:
-        dict: Response from vector database API or error dict
     """
     url = f"{base_url}/api/documents/search"
     print(f"[query_database_with_metadata] URL: {url}")
@@ -149,7 +139,8 @@ def query_database_with_metadata(
     # Build request payload
     data = {
         "top_k": top_k,
-        "filter_score": filter_score
+        "filter_score": filter_score,
+        "detail_filter_score": detail_filter_score
     }
     
     # Add query only if provided

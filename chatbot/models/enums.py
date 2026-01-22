@@ -56,6 +56,9 @@ class LLMModel(models.TextChoices):
     GPT4_O = 'gpt-4o', _('GPT4_O')
     GPT4_O_MINI = 'gpt-4o-mini', _('GPT4_O_MINI')
     LLAMA_3_1_8B_OPS = 'meta-llama/Meta-Llama-3.1-8B-Instruct', _('meta-llama/Meta-Llama-3.1-8B-Instruct')
+    GPT5_2 = 'gpt-5.2', _('GPT_5_2')
+    GPT5_2_PRO = 'gpt-5.2-pro', _('GPT_5_2_PRO')
+    GPT5_MINI = 'gpt-5-mini', _('GPT_5_MINI')
 
 
 class EntityStatus(models.TextChoices):
