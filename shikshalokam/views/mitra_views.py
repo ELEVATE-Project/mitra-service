@@ -386,6 +386,7 @@ def validate_actions_view(request):
 
 @api_view(['POST'])
 def generate_action_list_view(request):
+    error_message = "Please try again!"
     try:
         body = request.data
         user_problem_statement = body.get('user_problem_statement')
@@ -422,86 +423,65 @@ def generate_action_list_view(request):
             voice_provider=voice_provider
         )
 
-        # logger.info(f"gen_result: {json.dumps(gen_result)}")
-        # logger.info(
-        #     f"[generate_action_list_view] Generation result status: {gen_result['status']}, action plans count: "
-        #     f"{len(gen_result.get('action_list', []))}")
+        bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
+        error_message = bot_vernacular.error_message if bot_vernacular and bot_vernacular.error_message \
+            else "Please try again!"
+        if voice_provider and language != 'en':
+            error_message = translate_field(voice_provider=voice_provider, message_body=error_message, target_language=language)
+            logger.info(f"[generate_action_list_view] No action plans generated, error message: {error_message}")
 
-        # if gen_result['action_list'] == [] or not gen_result['action_list']:
-        #     bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
-        #     error_message = bot_vernacular.error_message if bot_vernacular and bot_vernacular.error_message \
-        #         else "Please try again!"
-        #     if voice_provider and language != 'en':
-        #         error_message = translate_field(
-        #             voice_provider=voice_provider, message_body=error_message, target_language=language
-        #         )
-        #     logger.info(f"[generate_action_list_view] No action plans generated, error message: {error_message}")
+        action_list = gen_result['action_list']
+        chunk_response = gen_result.get('chunks_response', None)
+        filtered_chunks = gen_result.get('filtered_chunks', [])
 
-        # if gen_result['status'] != 'ok':
-        #     logger.error(
-        #         f"[generate_action_list_view] Generation failed with status: {gen_result['status']}, message: "
-        #         f"{gen_result.get('message')}")
-        #     return Response({
-        #         'status': gen_result['status'],
-        #         'message': error_message,
-        #         'action_list': []
-        #     }, status=gen_result['status_code'])
+        if not action_list:
+            logger.info(f"[generate_action_list_view] Empty action list, returning early")
+            return Response({
+                'status': 'error',
+                'message': error_message,
+                'action_list': []
+            }, status=500)
 
-        # action_list = gen_result['action_list']
-        # chunk_response = gen_result.get('chunks_response', None)
-        # filtered_chunks = gen_result['filtered_chunks']
+        post_result = post_process_actions_with_source(action_list, filtered_chunks, chunk_response)
 
-        # logger.info(
-        #     f"[generate_action_list_view] Action plans parsed: {len(action_list)}, filtered chunks: "
-        #     f"{len(filtered_chunks)}")
+        if post_result['status'] != 'ok':
+            logger.error(f"[generate_action_list_view] Post-processing failed: {post_result.get('message')}")
+            return Response({
+                'status': post_result['status'],
+                'message': error_message,
+                'action_list': []
+            }, status=post_result['status_code'])
 
-        # if not action_list:
-        #     logger.info(f"[generate_action_list_view] Empty action list, returning early")
-        #     return Response({
-        #         'status': 'ok',
-        #         'message': error_message,
-        #         'action_list': []
-        #     }, status=200)
+        action_list = post_result['action_list']
 
-        # logger.info(f"[generate_action_list_view] Calling post_process_actions_with_source")
-        # post_result = post_process_actions_with_source(action_list, filtered_chunks, chunk_response)
-        # logger.info(f"[generate_action_list_view] Post-processing result status: {post_result['status']}")
+        if language != 'en':
+            logger.info(f"[generate_action_list_view] Translating action steps to {language}")
+            for idx, action_item in enumerate(action_list):
+                action_steps = action_item.get('actionSteps', [])
+                if action_steps:
+                    translated_steps = translate_field(
+                        voice_provider=voice_provider, message_body=json.dumps(action_steps), target_language=language,
+                        source_language='en'
+                    )
 
-        # if post_result['status'] != 'ok':
-        #     logger.error(f"[generate_action_list_view] Post-processing failed: {post_result.get('message')}")
-        #     return Response({
-        #         'status': post_result['status'],
-        #         'message': error_message,
-        #         'action_list': []
-        #     }, status=post_result['status_code'])
+                    if isinstance(translated_steps, str):
+                        try:
+                            translated_steps = json_repair.repair_json(translated_steps, return_objects=True)
+                            logger.info(
+                                f"[generate_action_list_view] Successfully translated action steps for plan {idx + 1}")
+                        except Exception as e:
+                            logger.error(
+                                f"[generate_action_list_view] Error parsing translated steps for plan {idx + 1}: {e}")
+                            translated_steps = action_steps
 
-        # action_list = post_result['action_list']
-        # logger.info(f"[generate_action_list_view] Post-processed action plans count: {len(action_list)}")
-
-        # if language != 'en':
-        #     logger.info(f"[generate_action_list_view] Translating action steps to {language}")
-        #     for idx, action_item in enumerate(action_list):
-        #         action_steps = action_item.get('actionSteps', [])
-        #         if action_steps:
-        #             translated_steps = translate_field(
-        #                 voice_provider=voice_provider, message_body=json.dumps(action_steps), target_language=language,
-        #                 source_language='en'
-        #             )
-
-        #             if isinstance(translated_steps, str):
-        #                 try:
-        #                     translated_steps = json_repair.repair_json(translated_steps, return_objects=True)
-        #                     logger.info(
-        #                         f"[generate_action_list_view] Successfully translated action steps for plan {idx + 1}")
-        #                 except Exception as e:
-        #                     logger.error(
-        #                         f"[generate_action_list_view] Error parsing translated steps for plan {idx + 1}: {e}")
-        #                     translated_steps = action_steps
-
-        #             action_item['actionSteps'] = translated_steps
+                    action_item['actionSteps'] = translated_steps
 
         # logger.info(f"[generate_action_list_view] Returning {len(action_list)} action plans successfully")
-        return Response(gen_result, status=200)
+        return Response({
+            'status': 'ok',
+            'message': error_message,
+            'action_list': action_list
+        }, status=200)
 
     except Exception as e:
         logger.error(f"[generate_action_list_view_v2] Unhandled exception: {str(e)}", exc_info=True)

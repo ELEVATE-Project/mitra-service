@@ -7,9 +7,9 @@ from shikshalokam.utils.action_list.action_parser import parse_llm_action_respon
 from shikshalokam.utils.action_list.action_validator import parse_validator_response, validate_and_fix_action_list
 from shikshalokam.utils.chunks_utils import validate_inputs, filter_and_sort_chunks, prepare_chunks_for_template, render_template_with_context
 import asyncio
+import json
 import json_repair
 import logging
-import json
 
 logger = logging.getLogger('django')
 
@@ -43,33 +43,60 @@ async def generate_action_list_parallel(query, objectives, company_bot, language
     master_plan_name = []
     total_duration = 0
     action_steps = []
+    chunks_response_master = None
+    filtered_chunks_master = []
+
+    step_id_to_actionstep = {}
 
     for result in results:
-        if result['status'] != 'ok':
-            logger.error(f"[generate_action_list_view] Generation failed with status: {result['status']}, message: {result.get('message')}")
+        if result.get('status') != 'ok':
+            logger.error(
+                "[generate_action_list_view] Generation failed with status: %s, message: %s",
+                result.get('status'),
+                result.get('message')
+            )
             raise ValueError(f"Generation failed with status: {result.get('status')}, message: {result.get('message')}")
 
-        else:
-            for item in result.get("action_list", []):
-                duration_in_weeks = item.get('duration_weeks')
+        if result.get("filtered_chunks", []):
+            filtered_chunks_master.extend(result.get("filtered_chunks", []))
 
-                if isinstance(duration_in_weeks, str):
+        if chunks_response_master is None:
+            chunks_response_master = result.get("chunks_response", None)
+
+        elif chunks_response_master and chunks_response_master.get("results", []):
+            chunks_response_master.get("results", []).extend(result.get("chunks_response", {}).get("results", []))
+
+        action_list = result.get("action_list", [])
+        for index, action in enumerate(action_list):
+            duration_in_weeks = action.get('duration_weeks')
+            if isinstance(duration_in_weeks, str):
+                try:
                     duration_in_weeks = int(duration_in_weeks)
-
-                if isinstance(duration_in_weeks, int):
-                    total_duration += duration_in_weeks
-
-                plans_list.append({
-                    "plan_name": item['plan_name'],
-                    "actionSteps": item['actionSteps'],
-                })
-                master_plan_name.append(item['plan_name'])
+                except ValueError:
+                    logger.warning(f"Invalid duration_weeks value: {duration_in_weeks}")
+                    duration_in_weeks = 0
+            if isinstance(duration_in_weeks, int):
+                total_duration += duration_in_weeks
+            plan_name = action.get('plan_name')
+            action_steps_arr = []
+            for i, step in enumerate(action.get('actionSteps', [])):
+                step_id = f"{index}_{i}"
+                action_steps_arr.append({"step": step.get('step'), "step_id": step_id})
+                step_id_to_actionstep[step_id] = step
+            plans_list.append({
+                "plan_name": plan_name,
+                "actionSteps": action_steps_arr,
+            })
+            master_plan_name.append(plan_name)
 
 
     master_plan_name = ' and '.join(list(set(master_plan_name)))
 
     combiner_bot = await sync_to_async(CompanyBot.objects.values('tag_context', 'context', 'tool_context', 'llm_model', 'bot_temperature', 'filter_score', 'max_token', 'connect_timeout', 'read_timeout', 'chat_history_limit').get)(route='/action_list_combiner')
-    user_input = render_template_with_context(combiner_bot.get("tag_context"), { "plans": plans_list })
+    logger.info(f"{json.dumps(plans_list, indent=4)}, plans_list")
+    user_input = combiner_bot.get("tag_context")
+
+    user_input = f"{user_input}\n\n{json.dumps(plans_list, indent=2)}"
 
     user_message = [{
         'role': 'user',
@@ -86,12 +113,12 @@ async def generate_action_list_parallel(query, objectives, company_bot, language
         tools=tool_context, top_p=combiner_bot.get("filter_score"), is_json_response=True
     )
 
-    logger.info(f"Response: {response}")
-
     if not response or not isinstance(response, dict):
         logger.info("Invalid validation response from LLM: %s", response)
 
     parsed_response = parse_validator_response(response)
+
+    logger.info(f"parsed_response: {json.dumps(parsed_response)}")
 
     parsed_response = parsed_response.get("actionSteps", [])
 
@@ -102,13 +129,29 @@ async def generate_action_list_parallel(query, objectives, company_bot, language
         logger.error("Invalid response from LLM, `actionSteps` is not a list: %s", parsed_response)
         raise ValueError("Invalid response from LLM, `actionSteps` is not a list")
 
-    for action_step in parsed_response:
+    for index, action_step in enumerate(parsed_response):
+
+        step_ids = []
+        if isinstance(action_step.get("step_id"), str):
+            action_step["step_id"] = json_repair.repair_json(action_step.get("step_id"), return_objects=True)
+
+        if isinstance(action_step.get("step_id"), list):
+            step_ids = action_step.get("step_id")
+
+        sources_master = []
+        for id in step_ids:
+            if id in step_id_to_actionstep:
+                if isinstance(step_id_to_actionstep[id].get("sources"), list):
+                    sources_master.extend(step_id_to_actionstep[id].get("sources"))
+
+                elif isinstance(step_id_to_actionstep[id].get("sources"), str):
+                    sources_master.extend(json_repair.repair_json(step_id_to_actionstep[id].get("sources"), return_objects=True))
+
         action_steps.append({
             "step": action_step.get("step"),
             "reason": action_step.get("reason", ""),
+            "sources": sources_master,
         })
-
-    # TODO: Get the error message from BotVernacular and display it
 
     return {
         "status": "ok",
@@ -119,7 +162,9 @@ async def generate_action_list_parallel(query, objectives, company_bot, language
                 "duration_weeks": total_duration,
                 "actionSteps": action_steps
             }
-        ]
+        ],
+        "chunks_response": chunks_response_master,
+        "filtered_chunks": filtered_chunks_master
     }
 
 
