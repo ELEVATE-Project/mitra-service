@@ -79,6 +79,11 @@ class CommonResponseHandler(BaseResponseHandler):
         if super().is_function_call(response):
             return True
 
+        if isinstance(response, dict) and response.get('should_function_call', False):
+            print("DEBUG: should_function_call is True, treating as function call")
+            logger.info("should_function_call flag is True, treating as function call")
+            return True
+
         try:
             extracted_response, _ = self._extract_response_and_reason(response)
             if extracted_response == '':
