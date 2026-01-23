@@ -139,18 +139,22 @@ async def generate_action_list_parallel(query, objectives, company_bot, language
             step_ids = action_step.get("step_id")
 
         sources_master = []
+        source_ids_master = []
         for id in step_ids:
             if id in step_id_to_actionstep:
                 if isinstance(step_id_to_actionstep[id].get("sources"), list):
                     sources_master.extend(step_id_to_actionstep[id].get("sources"))
 
                 elif isinstance(step_id_to_actionstep[id].get("sources"), str):
-                    sources_master.extend(json_repair.repair_json(step_id_to_actionstep[id].get("sources"), return_objects=True))
+                    sources_master = sources_master.extend(json_repair.repair_json(step_id_to_actionstep[id].get("sources"), return_objects=True))
+
+                source_ids_master.extend(step_id_to_actionstep[id].get("source_ids"))
 
         action_steps.append({
             "step": action_step.get("step"),
             "reason": action_step.get("reason", ""),
             "sources": sources_master,
+            "source_ids": source_ids_master,
         })
 
     return {
