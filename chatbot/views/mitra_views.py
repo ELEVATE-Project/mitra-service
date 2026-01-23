@@ -70,7 +70,6 @@ def create_project_view(request):
         session=session
     )
 
-    print("Result: ", result)
     pdf_url = None
     pdf_filename = "Project_Report.pdf"
     project_id = result.get('project_id') if not project_id else project_id

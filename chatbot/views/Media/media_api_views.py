@@ -1,3 +1,4 @@
+import json_repair
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -827,11 +828,17 @@ class MediaSearchV2View(APIView):
         company_bot = CompanyBot.objects.filter(route='/sg_search_bot').first()
         filter_score = company_bot.filter_score if company_bot else 0
 
+        other_params = company_bot.other_params if company_bot.other_params else {}
+        if other_params and isinstance(other_params, str):
+            other_params = json_repair.repair_json(other_params, return_objects=True)
+        detail_filter_score = other_params.get("detail_filter_score", None)
+
         # Query vector database
         vector_response = query_database_with_metadata(
             query=query if query else None,
             top_k=top_k,
             filter_score=filter_score,
+            detail_filter_score=detail_filter_score,
             categories=tags if tags else None,
             organizations=organizations if organizations else None,
             resource_type=resource_types if resource_types else None,
@@ -992,16 +999,16 @@ class MediaSearchV2View(APIView):
         company_bot = CompanyBot.objects.get(route='/sg_search_bot')
         
         # Filter by relevance score
-        score_filtered_results = []
+        score_filtered_results = results
         
-        for result in results:
-            if not isinstance(result, dict):
-                continue
-            
-            relevance_score = result.get('score', 0)
-            
-            if relevance_score >= company_bot.filter_score:
-                score_filtered_results.append(result)
+        # for result in results:
+        #     if not isinstance(result, dict):
+        #         continue
+        #
+        #     relevance_score = result.get('score', 0)
+        #
+        #     if relevance_score >= company_bot.filter_score:
+        #         score_filtered_results.append(result)
         
         # Get source document media IDs
         source_document_media_ids = set(

@@ -10,7 +10,8 @@ CompanyChat)
 from chatbot.serializer.story_serializer import StoryMediaRetrieveSerializer
 from chatbot.utils.chat_utils import get_guided_chat
 from shikshalokam.utils.action_list.action_processor import post_process_actions_with_source
-from shikshalokam.utils.action_list.action_steps_utils import generate_action_list_utils
+from shikshalokam.utils.action_list.action_steps_utils import generate_action_list_utils, generate_action_list_parallel
+from asgiref.sync import async_to_sync
 from shikshalokam.utils.mitra_base_utils import get_mitra_paraphrase_utils, generate_title_utils
 from chatbot.utils.story_llama_utils import translate_field
 from chatbot.utils.media_utils import upload_to_cloud
@@ -20,7 +21,6 @@ from shikshalokam.utils.objective_list.objective_processor import post_process_o
 from shikshalokam.utils.objective_list.objective_utils import generate_objective_utils
 from shikshalokam.utils.project_utils import update_project_status_utils
 import json_repair
-
 from shikshalokam.utils.validation_utils import validate_objective_utils, validate_actions_utils, validate_title_utils
 
 logger = logging.getLogger('django')
@@ -56,13 +56,6 @@ def paraphrase_view(request):
             print("user_translated_message: ", user_input)
 
         paraphrased_output = get_mitra_paraphrase_utils(messages=formatted_chats, company_bot=company_bot, session_id=session_id)
-
-        # if language != 'en' and isinstance(paraphrased_output, str) and paraphrased_output.lower() != 'no':
-        #     paraphrased_output = translate_field(
-        #         voice_provider=voice_provider, message_body=user_input, target_language=paraphrased_output,
-        #         source_language='en'
-        #     )
-        #     print("llm_translated_message: ", paraphrased_output)
 
         print("\n\nParaphrased Output: ", paraphrased_output)
         return Response({
@@ -393,7 +386,7 @@ def validate_actions_view(request):
 
 @api_view(['POST'])
 def generate_action_list_view(request):
-    error_message = ""
+    error_message = "Please try again!"
     try:
         body = request.data
         user_problem_statement = body.get('user_problem_statement')
@@ -405,11 +398,11 @@ def generate_action_list_view(request):
             f"[generate_action_list_view] Request received - user_problem_statement: {user_problem_statement}, "
             f"user_objective: {user_objective}, language: {language}, profile_id: {profile_id}")
 
-        if isinstance(user_objective, list):
-            user_objective_formatted = ""
+        if isinstance(user_objective, str) and user_objective.strip() != "":
+            user_objective = [user_objective.strip()]
 
-            for obj in range(len(user_objective)):
-                user_objective_formatted += f"{obj + 1}. {user_objective[obj]}\n"
+        elif not isinstance(user_objective, list):
+            raise ValueError("Invalid user_objective format")
 
         profile = Profile.objects.filter(id=profile_id).first()
         if profile:
@@ -421,68 +414,35 @@ def generate_action_list_view(request):
             company_bot=company_bot, type=VoiceType.TextToText, language=language
         ).first()
 
-        if language != 'en':
-            logger.info(f"[generate_action_list_view] Translating inputs from {language} to English")
-            user_problem_statement = translate_field(
-                voice_provider=voice_provider, message_body=user_problem_statement, source_language=language,
-                target_language='en'
-            )
-            user_objective = translate_field(
-                voice_provider=voice_provider, message_body=user_objective_formatted, source_language=language,
-                target_language='en'
-            )
-            logger.info(f"[generate_action_list_view] Translated problem statement: {user_problem_statement}")
-            logger.info(f"[generate_action_list_view] Translated objective: {user_objective_formatted}")
-
-        logger.info(f"[generate_action_list_view] Calling generate_action_list_utils")
-        gen_result = generate_action_list_utils(
+        # Call async fan-out from sync DRF view safely (production-safe under ASGI)
+        gen_result = async_to_sync(generate_action_list_parallel)(
             query=user_problem_statement,
-            objective_text=user_objective_formatted,
-            company_bot=company_bot
+            objectives=user_objective,
+            company_bot=company_bot,
+            language=language,
+            voice_provider=voice_provider
         )
-        logger.info(
-            f"[generate_action_list_view] Generation result status: {gen_result['status']}, action plans count: "
-            f"{len(gen_result.get('action_list', []))}")
 
-        if gen_result['action_list'] == [] or not gen_result['action_list']:
-            bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
-            error_message = bot_vernacular.error_message if bot_vernacular and bot_vernacular.error_message \
-                else "Please try again!"
-            if voice_provider and language != 'en':
-                error_message = translate_field(
-                    voice_provider=voice_provider, message_body=error_message, target_language=language
-                )
+        bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
+        error_message = bot_vernacular.error_message if bot_vernacular and bot_vernacular.error_message \
+            else "Please try again!"
+        if voice_provider and language != 'en':
+            error_message = translate_field(voice_provider=voice_provider, message_body=error_message, target_language=language)
             logger.info(f"[generate_action_list_view] No action plans generated, error message: {error_message}")
-
-        if gen_result['status'] != 'ok':
-            logger.error(
-                f"[generate_action_list_view] Generation failed with status: {gen_result['status']}, message: "
-                f"{gen_result.get('message')}")
-            return Response({
-                'status': gen_result['status'],
-                'message': error_message,
-                'action_list': []
-            }, status=gen_result['status_code'])
 
         action_list = gen_result['action_list']
         chunk_response = gen_result.get('chunks_response', None)
-        filtered_chunks = gen_result['filtered_chunks']
-
-        logger.info(
-            f"[generate_action_list_view] Action plans parsed: {len(action_list)}, filtered chunks: "
-            f"{len(filtered_chunks)}")
+        filtered_chunks = gen_result.get('filtered_chunks', [])
 
         if not action_list:
             logger.info(f"[generate_action_list_view] Empty action list, returning early")
             return Response({
-                'status': 'ok',
+                'status': 'error',
                 'message': error_message,
                 'action_list': []
-            }, status=200)
+            }, status=500)
 
-        logger.info(f"[generate_action_list_view] Calling post_process_actions_with_source")
         post_result = post_process_actions_with_source(action_list, filtered_chunks, chunk_response)
-        logger.info(f"[generate_action_list_view] Post-processing result status: {post_result['status']}")
 
         if post_result['status'] != 'ok':
             logger.error(f"[generate_action_list_view] Post-processing failed: {post_result.get('message')}")
@@ -493,7 +453,6 @@ def generate_action_list_view(request):
             }, status=post_result['status_code'])
 
         action_list = post_result['action_list']
-        logger.info(f"[generate_action_list_view] Post-processed action plans count: {len(action_list)}")
 
         if language != 'en':
             logger.info(f"[generate_action_list_view] Translating action steps to {language}")
@@ -517,7 +476,7 @@ def generate_action_list_view(request):
 
                     action_item['actionSteps'] = translated_steps
 
-        logger.info(f"[generate_action_list_view] Returning {len(action_list)} action plans successfully")
+        # logger.info(f"[generate_action_list_view] Returning {len(action_list)} action plans successfully")
         return Response({
             'status': 'ok',
             'message': error_message,
@@ -525,11 +484,10 @@ def generate_action_list_view(request):
         }, status=200)
 
     except Exception as e:
-        logger.error(f"[generate_action_list_view] Unhandled exception: {str(e)}", exc_info=True)
-        return Response({
+        logger.error(f"[generate_action_list_view_v2] Unhandled exception: {str(e)}", exc_info=True)
+        return JsonResponse({
             'status': 'error',
-            'message': error_message if error_message else "",
-            'action_list': []
+            'message': "Please try again!"
         }, status=500)
 
 
@@ -706,7 +664,6 @@ def validate_title_view(request):
             'result': None,
             'error_message': "Please try again!"
         }, status=500)
-
 
 @api_view(['POST'])
 def update_project_status_view(request):
