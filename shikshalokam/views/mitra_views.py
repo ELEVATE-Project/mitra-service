@@ -362,7 +362,7 @@ def validate_actions_view(request):
 
         response_data = {
             'status': 'ok',
-            'result': True,
+            'result': valid,
         }
 
         if not valid:
