@@ -182,6 +182,10 @@ def parse_llm_action_response(response, filtered_chunks):
                                 raw_source_id = src.get('source_id')
                                 normalized_id = normalize_source_id(raw_source_id)
                                 highlight_text = src.get('highlight_text', '')
+                                confidence_score = src.get('confidence_score', 0)
+
+                                if confidence_score not in [5, "5"]:
+                                    continue
 
                                 if normalized_id and normalized_id in valid_source_ids:
                                     original_id = None
