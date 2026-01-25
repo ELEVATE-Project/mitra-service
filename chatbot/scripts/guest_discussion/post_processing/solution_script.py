@@ -1,6 +1,6 @@
 from chatbot.models import CompanyBot, LLMModel
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from langfuse.openai import openai
+from openai import OpenAI
 from tqdm import tqdm
 from typing import List, Dict, Any
 import json
@@ -217,7 +217,7 @@ def handle_openai_model(
     if client_choice:
         client = client_choice
     else:
-        client = openai
+        client = OpenAI()
 
     if is_actual_key:
         client_api_key = key_name
