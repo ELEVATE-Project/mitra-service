@@ -1,7 +1,11 @@
 from celery import shared_task
 import os
+from chatbot.models import LLMProvider
 from chatbot.utils.database_util import update_single_file, delete_single_file, upsert_single_file
 import logging
+
+from chatbot.utils.knowledge_service.openai_vector_store.vector_store_utils import upload_file_to_openai, \
+    add_file_to_vector_store, delete_file_from_vector_store
 
 logger = logging.getLogger('django')
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
@@ -57,9 +61,33 @@ def save_in_vector_db(media_id, company_slug=None):
         media_id=media_id,
         company_slug=company_slug
     )
-    status_code, response_text = upsert_single_file(file_name, file_content, metadata, media)
-    print(status_code, response_text)
-    return status_code
+    if media and media.company_bot and media.company_bot.provider == LLMProvider.OPENAI:
+        status_code, upload_response = upload_file_to_openai(
+            file_name=file_name, file_content=file_content
+        )
+        if status_code != 200 or not upload_response:
+            return 500
+
+        file_id = upload_response.get("id")
+        if not file_id:
+            logger.error("OpenAI upload succeeded but file_id missing")
+            return 500
+
+        from chatbot.models.media_models import Media
+        Media.objects.filter(id=media.id).update(
+            external_file_id=file_id
+        )
+        media.refresh_from_db()
+
+        status_code, vector_response = add_file_to_vector_store(
+            media=media, metadata=metadata
+        )
+
+        return status_code
+    else:
+        status_code, response_text = upsert_single_file(file_name, file_content, metadata, media)
+        print(status_code, response_text)
+        return status_code
 
 
 @shared_task
@@ -77,11 +105,23 @@ def update_in_vector_db(media_id, company_slug=None):
 def delete_from_vector_db(media_id):
     print('Deleting from vector for media_id: {}'.format(media_id))
     from chatbot.models import Media
-    media = Media.objects.get(id=media_id)
-    company_slug = media.organization.slug if media and media.organization else None
-    status_code, response_text = delete_single_file(media_id, company_slug)
-    print(status_code, response_text)
-    return status_code
+
+    try:
+        media = Media.objects.get(id=media_id)
+    except Media.DoesNotExist:
+        return 404
+
+    if media.company_bot and media.company_bot.provider == LLMProvider.OPENAI:
+        status_code, response = delete_file_from_vector_store(
+            media=media
+        )
+
+        return status_code
+    else:
+        company_slug = media.organization.slug if media and media.organization else None
+        status_code, response_text = delete_single_file(media_id, company_slug)
+        print(status_code, response_text)
+        return status_code
 
 
 @shared_task(bind=True, max_retries=3)

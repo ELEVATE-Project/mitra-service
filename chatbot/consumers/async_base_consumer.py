@@ -36,6 +36,8 @@ class AsyncBaseConsumer(AsyncWebsocketConsumer):
 
         finally:
             # Always close the connection
+            logger.info('Disconnect stack trace: %s', {json.dumps(traceback.format_stack())}, exc_info=True)
+
             await self.close()
 
     async def receive(self, text_data):

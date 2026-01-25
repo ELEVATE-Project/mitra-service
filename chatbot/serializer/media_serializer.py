@@ -26,6 +26,29 @@ class S3UrlMixin:
 
         return obj.get_s3_url()
 
+    def resolve_thumbnail_url(self, obj):
+        linked_file = obj.subdocuments.filter(
+            key_values__key__iregex=r'^document[_\s]type$',
+            key_values__value__icontains="source document"
+        ).first()
+
+        if linked_file:
+            if linked_file.thumbnail:
+                return linked_file.get_thumbnail_s3_url()
+            return None
+
+        if obj.parent:
+            parent_kv = obj.parent.key_values.filter(key__iregex=r'^document[_\s]type$').first()
+            parent_doc_type = parent_kv.value.lower() if parent_kv and parent_kv.value else None
+            if parent_doc_type in ["template", "source document"]:
+                if obj.thumbnail:
+                    return obj.get_thumbnail_s3_url()
+                return None
+
+        if obj.thumbnail:
+            return obj.get_thumbnail_s3_url()
+        return None
+
 
 class KeyValueSerializer(serializers.ModelSerializer):
     value = serializers.SerializerMethodField()
@@ -71,7 +94,7 @@ class MediaImageSerializer(serializers.ModelSerializer):
         return None
 
 
-class MediaSearchResultSerializer(serializers.Serializer):
+class MediaSearchResultSerializer(serializers.Serializer, S3UrlMixin):
 
     def to_representation(self, instance):
         metadata = instance.get('metadata', {})
@@ -110,6 +133,8 @@ class MediaSearchResultSerializer(serializers.Serializer):
         db_media_type = None
         db_media_type_display = None
         thumbnail_url = None
+        view_count = 0
+        download_count = 0
 
         if media_id:
             try:
@@ -138,8 +163,7 @@ class MediaSearchResultSerializer(serializers.Serializer):
                 if media_obj.file:
                     file_size = getattr(media_obj.file, "size", None)
 
-                if media_obj.thumbnail:
-                    thumbnail_url = media_obj.get_thumbnail_s3_url()
+                thumbnail_url = self.resolve_thumbnail_url(media_obj)
 
                 if media_obj.organization:
                     organization_url = media_obj.organization.url
@@ -157,6 +181,9 @@ class MediaSearchResultSerializer(serializers.Serializer):
                 description = media_obj.description
 
                 db_priority = media_obj.priority
+
+                view_count = media_obj.view_count if media_obj.view_count else 0
+                download_count = media_obj.download_count if media_obj.download_count else 0
 
             except Exception as e:
                 file_size = metadata.get('file_size', None)
@@ -206,6 +233,8 @@ class MediaSearchResultSerializer(serializers.Serializer):
             'vector_id': instance.get('id'),
             'score': instance.get('score', 0),
             'field_scores': instance.get('field_scores', {}),
+            'view_count': view_count,
+            'download_count': download_count,
         }
 
     def _get_media_type_display(self, file_type):
@@ -353,9 +382,7 @@ class MediaListSerializer(serializers.ModelSerializer, S3UrlMixin):
         return self.resolve_s3_url(obj)
 
     def get_thumbnail_url(self, obj):
-        if obj.thumbnail:
-            return obj.get_thumbnail_s3_url()
-        return None
+        return self.resolve_thumbnail_url(obj)
 
     def get_file(self, obj):
         return obj.get_s3_url() if hasattr(obj, 'get_s3_url') else None

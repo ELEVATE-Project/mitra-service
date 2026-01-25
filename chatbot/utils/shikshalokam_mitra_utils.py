@@ -134,11 +134,15 @@ def extract_numeric(value):
 
 
 def create_mitra_project_utils(
-        chunks, actual_problem_statement, project_title, project_duration,
-        project_objective, user_action_steps, project_id, program_id, profile,
-        language, session
+        chunks=None, actual_problem_statement=None, project_title=None, project_duration=None,
+        project_objective=None, project_id=None, program_id=None, profile=None,
+        language=None, session=None, user_action_steps = [], description=None
 ):
     try:
+
+        chat_session = ChatSession.objects.filter(session=session).first()
+        if chat_session and chat_session.project_id:
+            project_id = chat_session.project_id
 
         if isinstance(user_action_steps, str):
             user_action_steps = json.loads(user_action_steps)
@@ -150,20 +154,29 @@ def create_mitra_project_utils(
             project_id = generate_random_hex()
             print(f"Generated new project_id: {project_id}")
 
-        project = Project.objects.create(
-            author=profile,
-            expected_duration=project_duration,
-            expected_title=project_title,
-            expected_problem_statement=actual_problem_statement,
-            expected_objective=project_objective,
-            project_id=project_id,
-            program_id=program_id,
-            project_source=chunks,
-            program_source={
+        print("project_id: ", project_id)
+        print("="*50)
+        default_values = {
+            'author': profile,
+            'expected_duration': project_duration,
+            'expected_title': project_title,
+            'expected_problem_statement': actual_problem_statement,
+            'expected_objective': project_objective,
+            'program_id': program_id,
+            'project_source': chunks,
+            'program_source':{
                 "model": "llama3.3",
                 "provider": "Bedrock"
             },
-            project_language=language
+            'project_language': language,
+            'description': description
+        }
+        for k,v  in list(default_values.items()):
+            if v is None:
+                del default_values[k]
+        project, created = Project.objects.update_or_create(
+            project_id=project_id,
+            defaults=default_values
         )
 
         for action in user_action_steps:
@@ -176,7 +189,6 @@ def create_mitra_project_utils(
                 }
             )
 
-        chat_session = ChatSession.objects.filter(session=session).first()
         if chat_session and not chat_session.project_id:
             chat_session.project_id = project_id
             chat_session.save(update_fields=["project_id"])

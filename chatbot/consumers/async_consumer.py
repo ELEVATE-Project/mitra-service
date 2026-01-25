@@ -1,5 +1,7 @@
 import json
 import traceback
+import os
+from django.conf import settings
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.async_base_consumer import AsyncBaseConsumer
 from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType, ChatType, CompanyChat, \
@@ -13,6 +15,7 @@ from chatbot.utils.transliterate_utils import transliterate_text
 import jwt
 
 logger = logging.getLogger('django')
+PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")
 
 
 class AsyncSocketConsumer(AsyncBaseConsumer):
@@ -158,17 +161,24 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
     @database_sync_to_async
     def handle_access_token(self, access_token):
         user_id = None
-        try:
-            if access_token:
-                decoded = jwt.decode(self.access_token, options={"verify_signature": False})
-                print(decoded)
-                if decoded:
-                    user_id = decoded.get('data', {}).get('id')
-        except Exception as e:
-            print("Exception occurred while decoding access token.")
-            logger.error('Access token Decode Error: %s', e, exc_info=True)
-        logger.info("User_id: %s", user_id)
 
+        if access_token:
+            print("Access Token: ", access_token)
+
+            try:
+                decoded = jwt.decode(
+                    access_token,
+                    PUBLIC_KEY,
+                    algorithms=["HS256"]
+                )
+                print("Decoded JWT: ", decoded)
+                if decoded:
+                    user_id = decoded.get("data", {}).get("id")
+            except Exception as e:
+                logger.error('JWT Decode Error: %s', e, exc_info=True)
+                print(f"JWT Decode Error: {e}")
+
+        logger.info("User_id: %s", user_id)
         return user_id
 
     @database_sync_to_async

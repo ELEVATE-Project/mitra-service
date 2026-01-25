@@ -139,6 +139,12 @@ class CompanyBot(models.Model):
             "as conversation history when making an LLM request."
         )
     )
+    stream = models.BooleanField(
+        default=False,
+        help_text=(
+            "Enable streaming mode for LLM responses."
+        )
+    )
 
     history = HistoricalRecords()
 

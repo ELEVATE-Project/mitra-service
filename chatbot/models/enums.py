@@ -22,6 +22,9 @@ class ChatType(models.TextChoices):
     YLC = 'YLC', _('YLC')
     listeningActivity = 'listening-activity', _('Listening Activity')
     ParentPerceptionSurvey = 'parent_perception_survey', _('Parent Perception Survey')
+    LCF = 'lcf', _('LCF')
+    LFA = 'lfa', _('LFA')
+    FreeFlow = 'free_flow', _('Free-Flow')
 
 
 class LLMProvider(models.TextChoices):
@@ -53,6 +56,9 @@ class LLMModel(models.TextChoices):
     GPT4_O = 'gpt-4o', _('GPT4_O')
     GPT4_O_MINI = 'gpt-4o-mini', _('GPT4_O_MINI')
     LLAMA_3_1_8B_OPS = 'meta-llama/Meta-Llama-3.1-8B-Instruct', _('meta-llama/Meta-Llama-3.1-8B-Instruct')
+    GPT5_2 = 'gpt-5.2', _('GPT_5_2')
+    GPT5_2_PRO = 'gpt-5.2-pro', _('GPT_5_2_PRO')
+    GPT5_MINI = 'gpt-5-mini', _('GPT_5_MINI')
 
 
 class EntityStatus(models.TextChoices):
@@ -93,6 +99,8 @@ class MediaTypeChoices(models.TextChoices):
     WEBP = 'image/webp', _('WEBP')
     HEIF = 'image/heif', _('HEIF')
     HEIC = 'image/heic', _('HEIC')
+    XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', _('XLSX')
+
 
 
 class FileTypeChoices(models.TextChoices):
@@ -302,8 +310,6 @@ class PreProcessType(models.TextChoices):
 class PreProcessOutputMode(models.TextChoices):
     NONE = 'NONE', 'None'
     SKIP = 'SKIP', 'Skip This Stage'
-    ENRICH = 'ENRICH', 'Add Output to Prompt'
-    CUSTOM = 'CUSTOM', 'Run Custom Logic'
 
 
 class PostProcessType(models.TextChoices):

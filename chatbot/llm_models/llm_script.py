@@ -3,11 +3,13 @@ from botocore.exceptions import ClientError
 from chatbot.models import LLMModel
 from chatbot.models.enums import LLMProvider
 from chatbot.utils.llm import LLM
+from typing import Optional, List, Dict
 from django.core.validators import URLValidator
 from langfuse.decorators import observe
-from langfuse.openai import openai
+from openai import OpenAI
 from pprint import pprint
 from retrying import retry
+from chatbot.models import LLMModel, Company
 import boto3
 import json
 import json_repair
@@ -87,20 +89,18 @@ def handle_openai_model(
         stream=False, key_name='OPENAI_API_KEY', is_actual_key=False, tools=None, tool_choice=None, client_choice=None,
         top_p=None, system_prompt=None
 ):
-    if client_choice:
-        client = client_choice
-    else:
-        client = openai
-
     if is_actual_key:
         client_api_key = key_name
     else:
         client_api_key = os.getenv(key_name)
 
-    client.api_key = client_api_key
-
-    if not client.api_key:
+    if not client_api_key:
         raise ValueError(f"No API key found for '{key_name}'. Please set the environment variable correctly.")
+
+    if client_choice:
+        client = client_choice
+    else:
+        client = OpenAI(api_key=client_api_key)
 
     if model_name:
         model_to_use = model_name
@@ -149,19 +149,25 @@ def handle_openai_model(
         return response.choices[0].message.content if response.choices else response
 
 def get_pricing_from_company_bot(company_bot, model_id):
-    """Extract pricing from company_bot.other_params"""
     try:
-        if not company_bot.other_params:
+        # Determine if company_bot is dict-like or an object (model instance)
+        if isinstance(company_bot, dict):
+            other_params = company_bot.get('other_params')
+        else:
+            # Model instance, has attribute
+            other_params = getattr(company_bot, 'other_params', None)
+
+        if not other_params:
             return None
 
-        # Parse other_params
-        if isinstance(company_bot.other_params, str):
-            other_params = json.loads(company_bot.other_params)
+        # Parse other_params if it is a string
+        if isinstance(other_params, str):
+            other_params_parsed = json.loads(other_params)
         else:
-            other_params = company_bot.other_params
+            other_params_parsed = other_params
 
         # Check if pricing data exists
-        pricing_data = other_params.get('model_pricing')
+        pricing_data = other_params_parsed.get('model_pricing')
         if not pricing_data:
             logger.info(f"❌ No pricing_data key found in company bot other params.")
             return None
@@ -198,8 +204,15 @@ def handle_bedrock_model(
         model_name=None, region_name='us-west-2', tools=None, is_json_response=False, aws_key=None,
         aws_secret_key=None
 ):
-    connect_timeout = company_bot.connect_timeout
-    read_timeout = company_bot.read_timeout
+    # Support company_bot as either dict or model instance
+    if isinstance(company_bot, dict):
+        connect_timeout = company_bot.get('connect_timeout', 5.0)
+        read_timeout = company_bot.get('read_timeout', 10.0)
+        chat_history_limit = company_bot.get('chat_history_limit', 1000)
+    else:
+        connect_timeout = getattr(company_bot, 'connect_timeout', 5.0)
+        read_timeout = getattr(company_bot, 'read_timeout', 10.0)
+        chat_history_limit = getattr(company_bot, 'chat_history_limit', 1000)
 
     boto_config = BotoConfig(
         connect_timeout=connect_timeout,
@@ -219,8 +232,6 @@ def handle_bedrock_model(
         model_id = model_name
     else:
         model_id = 'meta.llama3-1-8b-instruct-v1:0'
-
-        # 'meta.llama3-1-70b-instruct-v1:0'
 
     inference_config = {}
     additional_model_fields = {}
@@ -246,7 +257,7 @@ def handle_bedrock_model(
         if last_user_idx is None:
             messages = []
         else:
-            start_idx = max(0, last_user_idx - company_bot.chat_history_limit)
+            start_idx = max(0, last_user_idx - chat_history_limit)
 
             # Ensure first message is always a user
             if messages[start_idx]['role'] != 'user':
@@ -270,10 +281,9 @@ def handle_bedrock_model(
             request_payload['toolConfig'] = tools.get('toolConfig')
 
         logger.info('Bedrock request payload: %s', request_payload)
-        print('Conversation Bedrock request payload: ', request_payload)
         response = bedrock_runtime.converse(**request_payload)
-        # logger.info('Bedrock response: %s', response)
-        print('Bedrock response: ', response)
+
+        logger.info('Conversation Bedrock response: %s', json.dumps(response))
 
         usage_metrics = response.get('usage', {})
         if usage_metrics:
@@ -329,10 +339,8 @@ def handle_bedrock_model(
                     json_str = json_str[:-1].strip()
                 try:
                     final_output = json_repair.repair_json(json_str, return_objects=True)
-                    print(f"Loads final_output: {final_output}")
                     logger.info('Loads final_output: %s', final_output)
                 except json.JSONDecodeError as e:
-                    # logger.error('Error decoding JSON: %s', e, exc_info=True)
                     return None
             elif is_json_response:
                 return None
@@ -341,17 +349,430 @@ def handle_bedrock_model(
 
         return final_output
     except ClientError as e:
-            error_response = e.response
-            logger.error("❌ Bedrock ClientError:")
-            logger.error(f"Error Code: {error_response['Error']['Code']}")
-            logger.error(f"Error Message: {error_response['Error']['Message']}")
-            logger.error(f"Request ID: {error_response.get('ResponseMetadata', {}).get('RequestId')}")
-            print("❌ ClientError:")
-            print("Error Code:", error_response["Error"]["Code"])
-            print("Error Message:", error_response["Error"]["Message"])
-            print("Request ID:", error_response.get("ResponseMetadata", {}).get("RequestId"))
-            # return None
+        error_response = e.response
+        logger.error("❌ Bedrock ClientError:")
+        logger.error(f"Error Code: {error_response['Error']['Code']}")
+        logger.error(f"Error Message: {error_response['Error']['Message']}")
+        logger.error(f"Request ID: {error_response.get('ResponseMetadata', {}).get('RequestId')}")
+        print("❌ ClientError:")
+        print("Error Code:", error_response["Error"]["Code"])
+        print("Error Message:", error_response["Error"]["Message"])
+        print("Request ID:", error_response.get("ResponseMetadata", {}).get("RequestId"))
     except Exception as e:
         logger.error('Error processing request: %s', e, exc_info=True)
         print(f'❌ Error processing Bedrock request: {e}')
         return None
+
+
+def get_file_metadata_from_vector_store(client, vector_store_ids, file_id):
+    """
+    Fetch file metadata (attributes) from vector store.
+    Returns attributes dict or None if not found.
+    """
+    if not vector_store_ids:
+        return None
+    
+    try:
+        # Try each vector store until we find the file
+        for vs_id in vector_store_ids:
+            try:
+                # Retrieve the vector store file object
+                vs_file = client.vector_stores.files.retrieve(
+                    vector_store_id=vs_id,
+                    file_id=file_id
+                )
+                
+                # Check if attributes exist
+                if hasattr(vs_file, 'attributes') and vs_file.attributes:
+                    logger.info(f"Found metadata for file {file_id} in vector store {vs_id}")
+                    return vs_file.attributes
+                    
+            except Exception as e:
+                # File not in this vector store, try next
+                logger.error(f"File {file_id} not found in vector store {vs_id}: {e}")
+                continue
+        
+        logger.info(f"No metadata found for file {file_id} in any vector store")
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error fetching file metadata for {file_id}: {e}")
+        return None
+
+
+def add_source_with_organization(source_entry, metadata):
+    """
+    Adds 'url' and conditionally adds 'organization' if company exists in DB.
+    """
+    if not metadata:
+        metadata = {}
+    # Add URL if present in metadata
+    if metadata and 'url' in metadata:
+        source_entry['url'] = metadata['url']
+    
+    # Check for company slug in metadata
+    company_slug = metadata.get('company', 'shikshalokamstaging')
+    if company_slug:
+        try:
+            # Fetch company from database
+            company = Company.objects.filter(slug=company_slug).first()
+            if company:
+                source_entry['organization'] = {
+                    'name': company.name,
+                    'slug': company.slug
+                }
+                logger.info(f"Added organization info for company: {company.name}")
+            else:
+                logger.info(f"Company with slug '{company_slug}' not found in database")
+        except Exception as e:
+            logger.error(f"Error fetching company with slug '{company_slug}': {e}")
+    
+    return source_entry
+
+
+def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
+    """
+    Calculates and logs OpenAI cost using Responses API usage.
+    Works for both streaming and non-streaming responses.
+    """
+
+    if not response or not company_bot:
+        return None
+
+    usage = getattr(response, "usage", None)
+    if not usage:
+        logger.info("⚠️ OpenAI response has no usage data")
+        return None
+
+    input_tokens = usage.input_tokens or 0
+    output_tokens = usage.output_tokens or 0
+    total_tokens = usage.total_tokens or (input_tokens + output_tokens)
+
+    logger.info(
+        f"💰 OpenAI Tokens — Input: {input_tokens}, "
+        f"Output: {output_tokens}, Total: {total_tokens}"
+    )
+
+    pricing = get_pricing_from_company_bot(
+        company_bot=company_bot,
+        model_id=model_id
+    )
+
+    if not pricing:
+        logger.info(f"💵 No pricing configured for OpenAI model: {model_id}")
+        return None
+
+    input_cost = (input_tokens / 1000) * pricing["input"]
+    output_cost = (output_tokens / 1000) * pricing["output"]
+    total_cost = input_cost + output_cost
+
+    logger.info(
+        f"💵 OpenAI Cost — Input: ${input_cost:.6f}, Output: ${output_cost:.6f}, Total: ${total_cost:.6f}"
+    )
+
+    return {
+        "model_id": model_id,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+        "input_cost": input_cost,
+        "output_cost": output_cost,
+        "total_cost": total_cost,
+    }
+
+
+@observe()
+def handle_openai_response_api(
+        messages, system_prompt=None, max_token=None, temperature=None, company_bot=None,
+        model_name=None, key_name='OPENAI_API_KEY', is_actual_key=False,
+        top_p=None, tool_choice="auto", tools: Optional[List[Dict]] = None, stream=False
+):
+    """
+    OpenAI Responses API with file_search support for vector stores.
+
+    This uses the new Responses API (client.responses.create) which supports:
+    - file_search tool with vector stores
+    - Streaming and non-streaming responses
+    - Unified interface for chat + tools
+    """
+    if is_actual_key:
+        client_api_key = key_name
+    else:
+        client_api_key = os.getenv(key_name)
+
+    if not client_api_key:
+        yield {
+            'error': f"No API key found for '{key_name}'. Please set the environment variable correctly.",
+            'finish_reason': 'error'
+        }
+        return
+
+    client = OpenAI(api_key=client_api_key)
+
+    if model_name:
+        model_to_use = model_name
+    elif company_bot:
+        model_to_use = company_bot.llm_model
+    else:
+        model_to_use = LLMModel.GPT4_O_MINI
+
+    # Build input array for Responses API (includes system + conversation messages)
+    input_messages = []
+
+    # Add system prompt as first message
+    if system_prompt:
+        if isinstance(system_prompt, list):
+            # Extract system content from list format
+            for msg in system_prompt:
+                if msg.get('role') == 'system':
+                    input_messages.append({
+                        'role': 'system',
+                        'content': msg.get('content', '')
+                    })
+        elif isinstance(system_prompt, str):
+            input_messages.append({
+                'role': 'system',
+                'content': system_prompt
+            })
+
+    # Enforce chat history rules (similar to bedrock)
+    if messages and company_bot and hasattr(company_bot, 'chat_history_limit') and company_bot.chat_history_limit:
+        # Remove trailing assistant message
+        if messages[-1]['role'] == 'assistant':
+            messages = messages[:-1]
+
+        # Find last user message
+        last_user_idx = None
+        for i in range(len(messages) - 1, -1, -1):
+            if messages[i]['role'] == 'user':
+                last_user_idx = i
+                break
+
+        if last_user_idx is None:
+            messages = []
+        else:
+            start_idx = max(0, last_user_idx - company_bot.chat_history_limit)
+
+            # Ensure first message is always a user
+            if messages[start_idx]['role'] != 'user':
+                for j in range(start_idx + 1, last_user_idx + 1):
+                    if messages[j]['role'] == 'user':
+                        start_idx = j
+                        break
+
+            messages = messages[start_idx:last_user_idx + 1]
+
+    # Add conversation messages
+    input_messages.extend(messages)
+
+    # Build request data for Responses API
+    # Note: client.responses.stream() doesn't take 'stream' parameter - it streams by default
+    request_data = {
+        "model": model_to_use,
+        "input": input_messages
+    }
+
+    if max_token:
+        request_data["max_output_tokens"] = max_token
+    if temperature is not None:
+        request_data['temperature'] = temperature
+    if top_p:
+        request_data['top_p'] = top_p
+
+    # Add tools to request if provided (already parsed by caller)
+    if tools:
+        request_data["tools"] = tools
+        request_data["tool_choice"] = tool_choice
+        logger.info(f"Using tools configuration: {len(tools) if isinstance(tools, list) else 'single tool'}")
+    else:
+        logger.info("⚠️ No tools provided")
+
+    logger.info("Responses API %s request: %s", "streaming" if stream else "non-streaming", request_data)
+    print("Responses API %s request: " % ("streaming" if stream else "non-streaming"), request_data)
+
+    # Extract vector_store_ids from tools for metadata fetching
+    vector_store_ids = []
+    if tools:
+        for tool in (tools if isinstance(tools, list) else [tools]):
+            if tool.get('type') == 'file_search' and tool.get('vector_store_ids'):
+                vector_store_ids.extend(tool.get('vector_store_ids'))
+
+    try:
+        if stream:
+            # Use Responses API with streaming context manager
+            sources = []
+            seen_file_ids = set()
+            with client.responses.stream(**request_data) as response_stream:
+                for event in response_stream:
+
+                    print("Event: ", event)
+
+                    if event.type == 'response.output_text.annotation.added' and event.annotation[
+                        "type"] == 'file_citation':
+                        file_id = event.annotation["file_id"]
+                        if file_id not in seen_file_ids:
+                            source_entry = {
+                                "source_id": file_id,
+                                "title": event.annotation["filename"]
+                            }
+
+                            # Fetch metadata from vector store
+                            metadata = get_file_metadata_from_vector_store(client, vector_store_ids, file_id)
+
+                            # Enrich source with organization info
+                            source_entry = add_source_with_organization(source_entry, metadata)
+
+                            sources.append(source_entry)
+                            seen_file_ids.add(file_id)
+
+                    # Handle ResponseTextDeltaEvent - extract incremental delta
+                    if event.type == 'response.output_text.delta':
+                        content_chunk = event.delta or ""
+                        yield {
+                            'content': content_chunk,
+                            'finish_reason': None
+                        }
+
+                    # Handle ResponseTextDoneEvent - text output completed
+                    elif event.type == 'response.output_text.done':
+                        yield {
+                            'content': '',
+                            'finish_reason': 'stop',
+                            'extra_content': {
+                                "sources": sources
+                            }
+                        }
+
+                    # Handle ResponseCompletedEvent - full response finished
+                    elif event.type == 'response.completed':
+                        logger.info(f"Response completed")
+                        price = calculate_and_log_openai_cost(
+                            response=event.response, model_id=model_to_use, company_bot=company_bot
+                        )
+                        break
+
+                    # Handle error events
+                    elif event.type == 'error':
+                        error_msg = getattr(event, 'error', {}).get('message', 'Unknown error')
+                        logger.error(f"Stream error: {error_msg}")
+                        yield {
+                            'content': '',
+                            'error': error_msg,
+                            'finish_reason': 'error'
+                        }
+                        break
+        else:
+            # Non-streaming mode - get complete response at once
+            response = client.responses.create(**request_data)
+
+            price = calculate_and_log_openai_cost(
+                response=response, model_id=model_to_use, company_bot=company_bot
+            )
+
+            logger.info(f"free-flows response: {response}")
+            logger.info("Non-streaming response received")
+            # Extract full text from response
+            # The response.output is a list that may contain:
+            # - ResponseFileSearchToolCall (tool calls)
+            # - ResponseOutputMessage (actual text messages)
+            # We need to extract text from ResponseOutputMessage items
+            full_text = ""
+            full_text = ""
+            sources = []
+            seen_file_ids = set()
+            if hasattr(response, 'output') and response.output:
+                for output_item in response.output:
+                    # Check if this is a ResponseOutputMessage (has 'content' attribute)
+                    if hasattr(output_item, 'content') and output_item.content:
+                        # The content is a list of ResponseOutputText objects
+                        for content_item in output_item.content:
+                            if hasattr(content_item, 'text'):
+                                full_text += content_item.text
+
+                            # Extract sources from annotations (deduplicate by file_id)
+                            if hasattr(content_item, 'annotations') and content_item.annotations:
+                                for annotation in content_item.annotations:
+                                    if annotation.type == 'file_citation' and annotation.file_id not in seen_file_ids:
+                                        source_entry = {
+                                            "source_id": annotation.file_id,
+                                            "title": annotation.filename
+                                        }
+                                        # Fetch metadata from vector store
+                                        metadata = get_file_metadata_from_vector_store(client, vector_store_ids,
+                                                                                       annotation.file_id)
+
+                                        # Enrich source with organization info
+                                        source_entry = add_source_with_organization(source_entry, metadata)
+                                        sources.append(source_entry)
+                                        seen_file_ids.add(annotation.file_id)
+            logger.info(f"Extracted text length: {len(full_text)} chars, unique sources: {len(sources)}")
+            # Yield single complete response
+            yield {
+                'content': full_text,
+                'finish_reason': 'stop',
+                'extra_content': {
+                    "sources": sources
+                }
+            }
+    except Exception as e:
+        error_msg = f"Error during Responses API {'streaming' if stream else 'call'}: {str(e)}"
+        logger.error('Error: %s', e, exc_info=True)
+        print(error_msg)
+        yield {
+            'content': '',
+            'error': error_msg,
+            'finish_reason': 'error'
+        }
+
+
+@observe()
+def handle_bedrock_invoke_model(
+        messages=None, max_token=None, temperature=None, top_p=None,
+        model_name=None, region_name='us-west-2', tools=None
+):
+
+    if model_name:
+        model_id = model_name
+    else:
+        model_id = 'meta.llama3-1-8b-instruct-v1:0'
+
+    print("USING MODEL ID: ", model_id)
+
+    print("Messages: ", messages)
+    try:
+
+        body = json.dumps({
+            "prompt": json.dumps(messages),
+            "max_gen_len": max_token,
+            "temperature": temperature,
+            "top_p": top_p
+        })
+
+        bedrock_runtime = boto3.client(
+            service_name='bedrock-runtime',
+            region_name=region_name,
+            aws_access_key_id=AWS_KEY,
+            aws_secret_access_key=AWS_SECRET_KEY
+        )
+
+        response = bedrock_runtime.invoke_model(
+            body=body,
+            modelId=model_id,
+            accept="application/json",
+            contentType="application/json"
+        )
+
+        a = response.get('body').read()
+        b = a.decode('utf-8')
+        response_body = json.loads(b)
+        print(response_body)
+        print(type(response_body))
+
+        result = response_body.get('generation', '')
+        print("\nResult:\n\t", result)
+
+
+        return result
+
+    except Exception as e:
+        print(f"Error processing request: {e}")
