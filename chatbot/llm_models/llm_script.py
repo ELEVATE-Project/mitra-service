@@ -112,14 +112,12 @@ def handle_openai_model(
             "model": model_to_use,
             "messages": messages,
         }
-
+        token_limit_models = {
+            LLMModel.GPT5_MINI,
+            LLMModel.GPT5_2_PRO,
+            LLMModel.GPT5_2,
+        }
         if max_token:
-            token_limit_models = {
-                LLMModel.GPT5_MINI,
-                LLMModel.GPT5_2_PRO,
-                LLMModel.GPT5_2,
-            }
-
             if company_bot.llm_model in token_limit_models:
                 request_data["max_completion_tokens"] = max_token
             else:
@@ -134,7 +132,7 @@ def handle_openai_model(
             request_data["tools"]= tools
             if tool_choice:
                 request_data["tool_choice"]= tool_choice
-        if top_p:
+        if top_p is not None and company_bot.llm_model not in token_limit_models:
             request_data['top_p'] = top_p
         print("request_data: ", request_data)
         response = client.chat.completions.create(**request_data)
