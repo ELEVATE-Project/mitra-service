@@ -114,7 +114,16 @@ def handle_openai_model(
         }
 
         if max_token:
-            request_data["max_tokens"]= max_token
+            token_limit_models = {
+                LLMModel.GPT5_MINI,
+                LLMModel.GPT5_2_PRO,
+                LLMModel.GPT5_2,
+            }
+
+            if company_bot.llm_model in token_limit_models:
+                request_data["max_completion_tokens"] = max_token
+            else:
+                request_data["max_tokens"]= max_token
         if temperature:
             request_data['temperature']= temperature
         if is_json_response:
