@@ -51,6 +51,12 @@ class ChatOrchestrator:
 
             state_machine = session_result.get('state_machine', None)
 
+            if state_machine is None:
+                return self._handle_error_response(
+                    error_msg="State machine not found", channel_name=channel_name, language=language,
+                    chat_session=session_data['chat_session'], company_bot=session_data['company_bot']
+                )
+
             # Get filtered chats
             temp_company_chats = self.message_handler.get_filtered_chats(
                 session_id=session_id, state_machine=state_machine,
