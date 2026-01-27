@@ -414,6 +414,13 @@ def generate_action_list_view(request):
             company_bot=company_bot, type=VoiceType.TextToText, language=language
         ).first()
 
+        bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
+        error_message = bot_vernacular.error_message if bot_vernacular and bot_vernacular.error_message \
+            else "Please try again!"
+        if voice_provider and language != 'en':
+            error_message = translate_field(voice_provider=voice_provider, message_body=error_message, target_language=language)
+            logger.info(f"[generate_action_list_view] No action plans generated, error message: {error_message}")
+
         # Call async fan-out from sync DRF view safely (production-safe under ASGI)
         gen_result = async_to_sync(generate_action_list_parallel)(
             query=user_problem_statement,
@@ -423,12 +430,6 @@ def generate_action_list_view(request):
             voice_provider=voice_provider
         )
 
-        bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
-        error_message = bot_vernacular.error_message if bot_vernacular and bot_vernacular.error_message \
-            else "Please try again!"
-        if voice_provider and language != 'en':
-            error_message = translate_field(voice_provider=voice_provider, message_body=error_message, target_language=language)
-            logger.info(f"[generate_action_list_view] No action plans generated, error message: {error_message}")
 
         action_list = gen_result['action_list']
         chunk_response = gen_result.get('chunks_response', None)
@@ -487,7 +488,7 @@ def generate_action_list_view(request):
         logger.error(f"[generate_action_list_view_v2] Unhandled exception: {str(e)}", exc_info=True)
         return JsonResponse({
             'status': 'error',
-            'message': "Please try again!"
+            'message': error_message if error_message else "Please try again!"
         }, status=500)
 
 
