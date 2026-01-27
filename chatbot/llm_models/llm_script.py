@@ -84,64 +84,69 @@ def handle_openai_model(
         stream=False, key_name='OPENAI_API_KEY', is_actual_key=False, tools=None, tool_choice=None, client_choice=None,
         top_p=None, system_prompt=None
 ):
-    if is_actual_key:
-        client_api_key = key_name
-    else:
-        client_api_key = os.getenv(key_name)
+    try:
+        if is_actual_key:
+            client_api_key = key_name
+        else:
+            client_api_key = os.getenv(key_name)
 
-    if not client_api_key:
-        raise ValueError(f"No API key found for '{key_name}'. Please set the environment variable correctly.")
+        if not client_api_key:
+            raise ValueError(f"No API key found for '{key_name}'. Please set the environment variable correctly.")
 
-    if client_choice:
-        client = client_choice
-    else:
-        client = OpenAI(api_key=client_api_key)
+        if client_choice:
+            client = client_choice
+        else:
+            client = OpenAI(api_key=client_api_key)
 
-    if model_name:
-        model_to_use = model_name
-    elif company_bot:
-        model_to_use = company_bot.llm_model
-    else:
-        model_to_use = LLMModel.GPT4_O_MINI
+        if model_name:
+            model_to_use = model_name
+        elif company_bot:
+            model_to_use = company_bot.llm_model
+        else:
+            model_to_use = LLMModel.GPT4_O_MINI
 
-    if system_prompt and isinstance(system_prompt, list):
-        messages = system_prompt+messages
+        if system_prompt and isinstance(system_prompt, list):
+            messages = system_prompt+messages
 
-    request_data = {
-        "model": model_to_use,
-        "messages": messages,
-    }
+        request_data = {
+            "model": model_to_use,
+            "messages": messages,
+        }
 
-    if max_token:
-        request_data["max_tokens"]= max_token
-    if temperature:
-        request_data['temperature']= temperature
-    if is_json_response:
-        request_data["response_format"] = {"type": "json_object"}
-    if stream:
-        request_data["stream"] = stream
-    if tools:
-        request_data["tools"]= tools
-        if tool_choice:
-            request_data["tool_choice"]= tool_choice
-    if top_p:
-        request_data['top_p'] = top_p
-    print("request_data: ", request_data)
-    response = client.chat.completions.create(**request_data)
-    print("raw res: ", response)
-    if is_json_response:
-        response_content = response.choices[0].message.content
-        response_json = None
-        if response_content:
-            response_json = json.loads(response_content)
-        return response_json
-    elif tools:
-        tool_calls = response.choices[0].message.tool_calls
-        if tool_calls and len(tool_calls) > 0:
-            return {}
-        return response.choices[0].message.content if response.choices else response
-    else:
-        return response.choices[0].message.content if response.choices else response
+        if max_token:
+            request_data["max_tokens"]= max_token
+        if temperature:
+            request_data['temperature']= temperature
+        if is_json_response:
+            request_data["response_format"] = {"type": "json_object"}
+        if stream:
+            request_data["stream"] = stream
+        if tools:
+            request_data["tools"]= tools
+            if tool_choice:
+                request_data["tool_choice"]= tool_choice
+        if top_p:
+            request_data['top_p'] = top_p
+        print("request_data: ", request_data)
+        response = client.chat.completions.create(**request_data)
+        print("raw res: ", response)
+        if is_json_response:
+            response_content = response.choices[0].message.content
+            response_json = None
+            if response_content:
+                response_json = json.loads(response_content)
+            return response_json
+        elif tools:
+            tool_calls = response.choices[0].message.tool_calls
+            if tool_calls and len(tool_calls) > 0:
+                return {}
+            return response.choices[0].message.content if response.choices else response
+        else:
+            return response.choices[0].message.content if response.choices else response
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise
 
 def get_pricing_from_company_bot(company_bot, model_id):
     try:
@@ -479,7 +484,8 @@ def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
 def handle_openai_response_api(
         messages, system_prompt=None, max_token=None, temperature=None, company_bot=None,
         model_name=None, key_name='OPENAI_API_KEY', is_actual_key=False,
-        top_p=None, tool_choice="auto", tools: Optional[List[Dict]] = None, stream=False
+        top_p=None, tool_choice="auto", tools: Optional[List[Dict]] = None, stream=False,
+        is_json_response=False
 ):
     """
     OpenAI Responses API with file_search support for vector stores.
@@ -572,6 +578,9 @@ def handle_openai_response_api(
         request_data['temperature'] = temperature
     if top_p:
         request_data['top_p'] = top_p
+    if is_json_response:
+        request_data["response_format"] = {"type": "json_object"}
+
 
     # Add tools to request if provided (already parsed by caller)
     if tools:
@@ -658,6 +667,8 @@ def handle_openai_response_api(
         else:
             # Non-streaming mode - get complete response at once
             response = client.responses.create(**request_data)
+            print("Openai response: ", response)
+            logger.info(f"Openai response: {response}")
 
             price = calculate_and_log_openai_cost(
                 response=response, model_id=model_to_use, company_bot=company_bot
