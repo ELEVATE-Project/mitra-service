@@ -184,9 +184,6 @@ def parse_llm_action_response(response, filtered_chunks):
                                 highlight_text = src.get('highlight_text', '')
                                 confidence_score = src.get('confidence_score', 0)
 
-                                if confidence_score not in [5, "5"]:
-                                    continue
-
                                 if normalized_id and normalized_id in valid_source_ids:
                                     original_id = None
                                     has_valid_sources = True
@@ -198,17 +195,18 @@ def parse_llm_action_response(response, filtered_chunks):
                                     if original_id is not None:
                                         step_source_ids.append(original_id)
                                         all_source_ids.add(original_id)
-                                        step_sources.append({
-                                            'source_id': original_id,
-                                            'highlight_text': highlight_text
-                                        })
+                                        if confidence_score in [5, "5"]:
+                                            step_sources.append({
+                                                'source_id': original_id,
+                                                'highlight_text': highlight_text
+                                            })
                                 else:
                                     print(
                                         f"Warning: source_id '{raw_source_id}' (normalized: '{normalized_id}') not found in valid chunks")
 
                         step_text = step_text.strip()
 
-                        if step_text and (has_valid_sources or not has_sources):
+                        if step_text:
                             processed_steps.append({
                                 'step': step_text,
                                 'sources': step_sources,

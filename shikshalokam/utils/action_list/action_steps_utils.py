@@ -385,6 +385,7 @@ def generate_action_list_utils(query, objective_text, company_bot, language, voi
                 raise ValueError("LLM returned empty action list")
 
         except ValueError as e:
+            logger.error("Invalid response from LLM: %s", e)
             return {
                 'status': 'error',
                 'status_code': 422,
@@ -394,6 +395,7 @@ def generate_action_list_utils(query, objective_text, company_bot, language, voi
             }
 
         except Exception as llm_error:
+            logger.error("Error while fetching chunks: %s", llm_error)
             return {
                 'status': 'error',
                 'status_code': 500,

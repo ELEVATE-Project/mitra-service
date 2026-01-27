@@ -480,7 +480,7 @@ def generate_action_list_view(request):
         # logger.info(f"[generate_action_list_view] Returning {len(action_list)} action plans successfully")
         return Response({
             'status': 'ok',
-            'message': error_message,
+            'message': "Response generated successfully",
             'action_list': action_list
         }, status=200)
 
