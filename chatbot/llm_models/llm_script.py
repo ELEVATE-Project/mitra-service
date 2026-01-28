@@ -482,10 +482,11 @@ def handle_openai_response_api(
         top_p=None, tool_choice="auto", tools: Optional[List[Dict]] = None, stream=False
 ):
     """
-    OpenAI Responses API with file_search support for vector stores.
+    OpenAI Responses API with file_search and function calling support.
 
     This uses the new Responses API (client.responses.create) which supports:
     - file_search tool with vector stores
+    - Function calling (e.g., for file downloads)
     - Streaming and non-streaming responses
     - Unified interface for chat + tools
     """
@@ -582,7 +583,16 @@ def handle_openai_response_api(
         logger.info("⚠️ No tools provided")
 
     logger.info("Responses API %s request: %s", "streaming" if stream else "non-streaming", request_data)
-    print("Responses API %s request: " % ("streaming" if stream else "non-streaming"), request_data)
+    print("\n" + "="*80)
+    print("🔧 OPENAI REQUEST DEBUG")
+    print("="*80)
+    print(f"Streaming: {stream}")
+    print(f"Model: {model_to_use}")
+    print(f"Tools: {tools}")
+    print(f"Tool Choice: {tool_choice}")
+    print(f"Number of messages: {len(input_messages)}")
+    print(f"Last user message: {input_messages[-1] if input_messages else 'None'}")
+    print("="*80 + "\n")
 
     # Extract vector_store_ids from tools for metadata fetching
     vector_store_ids = []
@@ -596,11 +606,56 @@ def handle_openai_response_api(
             # Use Responses API with streaming context manager
             sources = []
             seen_file_ids = set()
+            function_call_name = None
+            function_call_args = ""
+            function_call_id = None
+            function_call_complete = False
+            
             with client.responses.stream(**request_data) as response_stream:
                 for event in response_stream:
+                    print("\n" + "-"*60)
+                    print(f"📨 EVENT TYPE: {event.type}")
+                    print(f"📦 EVENT DATA: {event}")
+                    print("-"*60)
+                    logger.info(f"OpenAI Event: {event.type} | Data: {event}")
 
-                    print("Event: ", event)
-
+                    # Handle function call delta events (streaming function arguments character-by-character)
+                    if event.type == 'response.function_call_arguments.delta':
+                        # Accumulate function arguments using snapshot (complete JSON so far)
+                        function_call_args = event.snapshot
+                        if not function_call_id:
+                            function_call_id = event.item_id
+                        logger.info(f"Function call delta: snapshot length = {len(function_call_args)} chars")
+                        print(f"📝 Function args snapshot: {function_call_args[:100]}...")
+                    
+                    # Handle function call done event
+                    elif event.type == 'response.function_call_arguments.done':
+                        function_call_complete = True
+                        logger.info(f"Function call arguments complete: {len(function_call_args)} chars")
+                        print(f"✅ Function call arguments COMPLETE")
+                        
+                        # Yield function call response with sources
+                        # This will be processed by common_handler to extract content and send to user
+                        yield {
+                            'function_call': {
+                                'name': function_call_name,
+                                'arguments': function_call_args  # JSON string with filename and content
+                            },
+                            'finish_reason': 'function_call',  # Internal marker for common_handler
+                            'extra_content': {
+                                'sources': sources  # Include sources collected from annotations
+                            }
+                        }
+                    
+                    # Handle function call output item to get function name
+                    elif event.type == 'response.output_item.added' and hasattr(event, 'item'):
+                        if hasattr(event.item, 'type') and event.item.type == 'function_call':
+                            function_call_name = event.item.name
+                            function_call_id = event.item.id
+                            logger.info(f"Function call detected: {function_call_name}")
+                            print(f"🎯 Function name: {function_call_name}")
+                    
+                    # Handle file citation annotations
                     if event.type == 'response.output_text.annotation.added' and event.annotation[
                         "type"] == 'file_citation':
                         file_id = event.annotation["file_id"]
@@ -620,7 +675,7 @@ def handle_openai_response_api(
                             seen_file_ids.add(file_id)
 
                     # Handle ResponseTextDeltaEvent - extract incremental delta
-                    if event.type == 'response.output_text.delta':
+                    elif event.type == 'response.output_text.delta':
                         content_chunk = event.delta or ""
                         yield {
                             'content': content_chunk,
@@ -663,17 +718,19 @@ def handle_openai_response_api(
                 response=response, model_id=model_to_use, company_bot=company_bot
             )
 
+            print("\n" + "="*80)
+            print("📥 OPENAI NON-STREAMING RESPONSE")
+            print("="*80)
             logger.info(f"free-flows response: {response}")
             logger.info("Non-streaming response received")
             # Extract full text from response
             # The response.output is a list that may contain:
             # - ResponseFileSearchToolCall (tool calls)
             # - ResponseOutputMessage (actual text messages)
-            # We need to extract text from ResponseOutputMessage items
-            full_text = ""
             full_text = ""
             sources = []
             seen_file_ids = set()
+            
             if hasattr(response, 'output') and response.output:
                 for output_item in response.output:
                     # Check if this is a ResponseOutputMessage (has 'content' attribute)
@@ -699,7 +756,9 @@ def handle_openai_response_api(
                                         source_entry = add_source_with_organization(source_entry, metadata)
                                         sources.append(source_entry)
                                         seen_file_ids.add(annotation.file_id)
+            
             logger.info(f"Extracted text length: {len(full_text)} chars, unique sources: {len(sources)}")
+            
             # Yield single complete response
             yield {
                 'content': full_text,

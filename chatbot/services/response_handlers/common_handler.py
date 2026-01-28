@@ -2,6 +2,8 @@ from chatbot.models import ChatStatus, CompanyChat, CompanyBotTypeChoices, LLMPr
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.services.response_handlers.base_response_handler import BaseResponseHandler
 from chatbot.utils.shiksha_chaupal.date_utils import handle_date_prompt
+from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
+from chatbot.celery_tasks.handle_message import translate_and_send_message
 import logging
 import json
 from json_repair import repair_json
@@ -79,10 +81,17 @@ class CommonResponseHandler(BaseResponseHandler):
         if super().is_function_call(response):
             return True
 
-        if isinstance(response, dict) and response.get('should_function_call', False):
-            print("DEBUG: should_function_call is True, treating as function call")
-            logger.info("should_function_call flag is True, treating as function call")
-            return True
+        # Check for OpenAI Responses API function call format
+        if isinstance(response, dict):
+            if response.get('finish_reason') == 'function_call' and 'function_call' in response:
+                print("DEBUG: Detected OpenAI Responses API function call format")
+                logger.info("Detected OpenAI Responses API function call format")
+                return True
+            
+            if response.get('should_function_call', False):
+                print("DEBUG: should_function_call is True, treating as function call")
+                logger.info("should_function_call flag is True, treating as function call")
+                return True
 
         try:
             extracted_response, _ = self._extract_response_and_reason(response)
@@ -210,13 +219,24 @@ class CommonResponseHandler(BaseResponseHandler):
             expected_output_response = error_message
             response = error_message
 
+        # Handle function calls for STATE_MACHINE bots
         if is_function_call and company_bot and company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
-            print("DEBUG: Processing as function call")
+            print("DEBUG: Processing as STATE_MACHINE function call")
             return self._handle_function_call(
                 response=response, chat_session=chat_session, company_bot=company_bot,
                 session_id=session_id, channel_name=channel_name, language=language, profile_id=profile_id,
                 chunks=chunks, messages=chat_messages, skip_next_stage=skip_next_stage, target_stage=target_stage,
                 skip_next_stage_preprocessing=skip_next_stage_preprocessing
+            )
+        # Handle function calls for FREE_FLOW bots (like download_file)
+        elif is_function_call and isinstance(response, dict) and 'function_call' in response:
+            print("DEBUG: Processing as FREE_FLOW function call")
+            logger.info(f"FREE_FLOW function call detected: {response}")
+            return self._handle_freeflow_function_call(
+                response=response, 
+                chat_session=chat_session, 
+                chunks=chunks, 
+                **kwargs
             )
         else:
             print("DEBUG: Processing as regular response")
@@ -594,3 +614,112 @@ class CommonResponseHandler(BaseResponseHandler):
             response = message
 
         return response, extra_content
+
+    def _handle_freeflow_function_call(self, response, chat_session, chunks, **kwargs):
+        """Handle function calls for FREE_FLOW bots (like download_file)"""
+        import json
+        
+        # Extract required parameters from kwargs
+        company_bot = kwargs['company_bot']
+        session_id = kwargs['session_id']
+        channel_name = kwargs['channel_name']
+        language = kwargs['language']
+        profile_id = kwargs['profile_id']
+        
+        logger.info(f"Processing FREE_FLOW function call for session {session_id}")
+        print(f"DEBUG: _handle_freeflow_function_call called with response: {response}")
+        
+        function_call_data = response.get('function_call', {})
+        function_name = function_call_data.get('name')
+        arguments_str = function_call_data.get('arguments', '{}')
+        
+        # Parse arguments if it's a string
+        if isinstance(arguments_str, str):
+            try:
+                arguments = json.loads(arguments_str)
+            except:
+                import json_repair
+                arguments = json_repair.repair_json(arguments_str, return_objects=True)
+        else:
+            arguments = arguments_str
+        
+        logger.info(f"Function: {function_name}, Arguments: {arguments}")
+        print(f"DEBUG: Function: {function_name}, Arguments: {arguments}")
+        
+        # Handle download_file function
+        if function_name == 'download_file':
+            filename = arguments.get('filename', 'download.pdf')
+            content_type = arguments.get('content_type', 'pdf')
+            
+            # Get the file search content and sources from response
+            file_search_content = response.get('content', '')
+            extra_content_data = response.get('extra_content', {})
+            sources = extra_content_data.get('sources', [])
+            
+            # Get the content parameter from function arguments (contains explanation from file_search)
+            content_from_args = arguments.get('content', '')
+            
+            logger.info(f"Download request - filename: {filename}, type: {content_type}")
+            logger.info(f"Available sources: {len(sources)}")
+            logger.info(f"📄 File search content length: {len(file_search_content)} chars")
+            logger.info(f"📝 Content from function args: {len(content_from_args)} chars")
+            logger.info(f"🎯 Function call detected: {function_name}")
+            logger.info(f"✅ Internal verification - Both content AND function call received")
+            
+            print(f"DEBUG: Download request - filename: {filename}, type: {content_type}")
+            print(f"DEBUG: File search content: {file_search_content[:200]}...")  # First 200 chars
+            print(f"DEBUG: Content from args: {content_from_args[:200]}...")  # First 200 chars
+            print(f"DEBUG: Sources: {sources}")
+            print(f"DEBUG: Available sources: {len(sources)}")
+            
+            # Use content from function arguments as the main message (contains the explanation)
+            # If content is available, show it; otherwise use a default message
+            if content_from_args:
+                bot_message = content_from_args
+            else:
+                bot_message = f"I'll prepare the file '{filename}' for you. Please note that file download functionality is currently being implemented."
+            
+            logger.info(f"Sending download acknowledgment with {len(bot_message)} chars")
+            logger.info(f"Function call detected internally: {function_name} with args: {arguments.keys()}")
+            logger.info(f"File search content available: {len(response.get('content', ''))} chars")
+            
+            # Prepare extra_content with sources (standardized format like non-function call)
+            extra_content_to_send = None
+            if sources:
+                extra_content_to_send = {'sources': sources}
+            
+            # Send the message to user WITHOUT exposing function call to frontend
+            # (function call is detected internally but hidden from WebSocket response)
+            # Keep sources in extra_content for frontend display
+            translated_message = translate_and_send_message(
+                accumulated_message=bot_message,
+                current_channel_name=channel_name,
+                current_step_number=chat_session.current_step,
+                finish_reason="stop",  # Use 'stop' instead of 'function_call' to hide function call from frontend
+                route=language,
+                company_bot=company_bot,
+                extra_content=extra_content_to_send  # Send sources in standard format
+            )
+            
+            # Save to database with function call metadata for internal tracking
+            save_in_company_db(
+                session_id=session_id,
+                profile_id=profile_id,
+                initiated_by='AI',
+                message=bot_message,
+                chunks=None,
+                status=ChatStatus.IN_PROGRESS,
+                translated_message=translated_message,
+                stage=None,
+                other_params={
+                    'function_call': function_name, 
+                    'arguments': arguments,
+                    'file_search_content': response.get('content', ''),  # Store file_search content
+                    'sources': response.get('extra_content', {}).get('sources', [])
+                }
+            )
+            
+            return bot_message
+        else:
+            logger.warning(f"Unknown function call: {function_name}")
+            return self.default_error_message
