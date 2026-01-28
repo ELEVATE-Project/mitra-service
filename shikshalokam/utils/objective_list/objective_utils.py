@@ -1,10 +1,11 @@
-from chatbot.llm_models.llm_script import handle_bedrock_model
-from chatbot.models import CompanyBot
+from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_model
+from chatbot.models import CompanyBot, LLMProvider
 from shikshalokam.utils.action_list.action_validator import validate_and_fix_action_list
 from shikshalokam.utils.chunks_utils import validate_inputs, filter_and_sort_chunks, prepare_chunks_for_template, \
     render_template_with_context
 import logging
 from shikshalokam.utils.objective_list.objective_parser import parse_llm_objective_response
+import json_repair
 
 logger = logging.getLogger('django')
 
@@ -69,21 +70,54 @@ def generate_objective_utils(user_problem_statement, company_bot):
                 company_bot.tag_context, context_data
             )
 
-            messages = [{
-                'role': 'user',
-                'content': [{'text': rendered_content}]
-            }]
+            if company_bot and company_bot.provider == LLMProvider.OPENAI:
+                messages = [
+                    {
+                        'role': 'user',
+                        'content': rendered_content
+                    }
+                ]
 
-            system_prompt = [{'text': company_bot.context}]
-            import json_repair
-            tool_context = company_bot.tool_context
-            tool_context = json_repair.repair_json(tool_context, return_objects=True)
+                context = company_bot.context
+                context += f"\n{company_bot.end_context}" if company_bot.end_context else ""
+                system_prompt = [{"role": "system", "content": context}]
 
-            response = handle_bedrock_model(
-                system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
-                temperature=company_bot.bot_temperature, max_token=company_bot.max_token, company_bot=company_bot,
-                tools=tool_context, top_p=company_bot.filter_score,
-            )
+                tools = None
+                tool_choice = None
+                try:
+                    tool_context = json_repair.repair_json(company_bot.tool_context, return_objects=True)
+                    if tool_context:
+                        tools = tool_context.get("tool")
+                        tool_choice = tool_context.get("tool_choice", "auto")
+
+                    logger.info("Using state machine tool_context")
+                except Exception as e:
+                    logger.error(f"Failed to parse state machine tool_context: {e}")
+
+                logger.info("-----------------OPENAI OBJECTIVES---------------------------------", )
+                logger.info(f"openai system_prompt: {system_prompt}")
+                logger.info(f"openai messages: {messages}")
+                response = handle_openai_model(
+                    messages=messages, system_prompt=system_prompt, max_token=company_bot.max_token,
+                    temperature=company_bot.bot_temperature, company_bot=company_bot,
+                    top_p=company_bot.filter_score if company_bot.filter_score else None,
+                    tool_choice=tool_choice, tools=tools, stream=False, is_json_response=True
+                )
+            else:
+                messages = [{
+                    'role': 'user',
+                    'content': [{'text': rendered_content}]
+                }]
+
+                system_prompt = [{'text': company_bot.context}]
+                tool_context = company_bot.tool_context
+                tool_context = json_repair.repair_json(tool_context, return_objects=True)
+
+                response = handle_bedrock_model(
+                    system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
+                    temperature=company_bot.bot_temperature, max_token=company_bot.max_token, company_bot=company_bot,
+                    tools=tool_context, top_p=company_bot.filter_score,
+                )
 
             try:
                 validate_bot = CompanyBot.objects.filter(route='/validate_objective_list').first()
