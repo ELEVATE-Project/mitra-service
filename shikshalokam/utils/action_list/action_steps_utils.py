@@ -61,7 +61,7 @@ async def generate_action_list_parallel(query, objectives, company_bot, language
 
     step_id_to_actionstep = {}
 
-    for result in results:
+    for index, result in enumerate(results):
         if result.get('status') != 'ok':
             logger.error(
                 "[generate_action_list_view] Generation failed with status: %s, message: %s",
@@ -80,7 +80,7 @@ async def generate_action_list_parallel(query, objectives, company_bot, language
             chunks_response_master.get("results", []).extend(result.get("chunks_response", {}).get("results", []))
 
         action_list = result.get("action_list", [])
-        for index, action in enumerate(action_list):
+        for _i, action in enumerate(action_list):
             duration_in_weeks = action.get('duration_weeks')
             if isinstance(duration_in_weeks, str):
                 try:
