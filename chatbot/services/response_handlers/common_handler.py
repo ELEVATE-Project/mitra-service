@@ -7,6 +7,7 @@ from chatbot.celery_tasks.handle_message import translate_and_send_message
 import logging
 import json
 from json_repair import repair_json
+from chatbot.utils.media_preview.media_creation import create_and_upload_file
 
 logger = logging.getLogger('django')
 
@@ -617,7 +618,6 @@ class CommonResponseHandler(BaseResponseHandler):
 
     def _handle_freeflow_function_call(self, response, chat_session, chunks, **kwargs):
         """Handle function calls for FREE_FLOW bots (like download_file)"""
-        import json
         
         # Extract required parameters from kwargs
         company_bot = kwargs['company_bot']
@@ -672,6 +672,24 @@ class CommonResponseHandler(BaseResponseHandler):
             print(f"DEBUG: Sources: {sources}")
             print(f"DEBUG: Available sources: {len(sources)}")
             
+            # Create and upload file to S3
+            file_result = create_and_upload_file(
+                content=content_from_args,
+                filename=filename,
+                company_bot_id=company_bot.id,
+                session_id=session_id
+            )
+            
+            # Check if file creation was successful
+            file_url = None
+            if file_result.get('success'):
+                file_url = file_result.get('media_url')
+                logger.info(f"✅ File uploaded successfully: {file_url}")
+                print(f"DEBUG: File uploaded successfully: {file_url}")
+            else:
+                logger.error(f"❌ File upload failed: {file_result.get('error')}")
+                print(f"DEBUG: File upload failed: {file_result.get('error')}")
+            
             # Use content from function arguments as the main message (contains the explanation)
             # If content is available, show it; otherwise use a default message
             if content_from_args:
@@ -683,14 +701,17 @@ class CommonResponseHandler(BaseResponseHandler):
             logger.info(f"Function call detected internally: {function_name} with args: {arguments.keys()}")
             logger.info(f"File search content available: {len(response.get('content', ''))} chars")
             
-            # Prepare extra_content with sources (standardized format like non-function call)
-            extra_content_to_send = None
+            # Prepare extra_content with sources and file_url (standardized format)
+            extra_content_to_send = {}
             if sources:
-                extra_content_to_send = {'sources': sources}
+                extra_content_to_send['sources'] = sources
+            if file_url:
+                extra_content_to_send['file_url'] = file_url
+                logger.info(f"📎 Adding file_url to extra_content: {file_url}")
             
             # Send the message to user WITHOUT exposing function call to frontend
             # (function call is detected internally but hidden from WebSocket response)
-            # Keep sources in extra_content for frontend display
+            # Include sources and file_url in extra_content for frontend display
             translated_message = translate_and_send_message(
                 accumulated_message=bot_message,
                 current_channel_name=channel_name,
@@ -698,7 +719,7 @@ class CommonResponseHandler(BaseResponseHandler):
                 finish_reason="stop",  # Use 'stop' instead of 'function_call' to hide function call from frontend
                 route=language,
                 company_bot=company_bot,
-                extra_content=extra_content_to_send  # Send sources in standard format
+                extra_content=extra_content_to_send if extra_content_to_send else None
             )
             
             # Save to database with function call metadata for internal tracking
@@ -715,7 +736,9 @@ class CommonResponseHandler(BaseResponseHandler):
                     'function_call': function_name, 
                     'arguments': arguments,
                     'file_search_content': response.get('content', ''),  # Store file_search content
-                    'sources': response.get('extra_content', {}).get('sources', [])
+                    'sources': response.get('extra_content', {}).get('sources', []),
+                    'file_url': file_url,  # Store the uploaded file URL
+                    'file_result': file_result  # Store full upload result for debugging
                 }
             )
             
