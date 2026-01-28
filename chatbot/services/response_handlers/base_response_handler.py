@@ -294,8 +294,6 @@ class BaseResponseHandler(ABC):
             try:
                 import json_repair
                 tool_context = json_repair.repair_json(company_bot.tool_context, return_objects=True)
-                print(f"Parsed tool_context: {tool_context}")
-                
                 if tool_context:
                     # Handle both formats: flat array or dict with "tool" key
                     if isinstance(tool_context, list):

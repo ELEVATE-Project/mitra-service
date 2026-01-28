@@ -583,16 +583,6 @@ def handle_openai_response_api(
         logger.info("⚠️ No tools provided")
 
     logger.info("Responses API %s request: %s", "streaming" if stream else "non-streaming", request_data)
-    print("\n" + "="*80)
-    print("🔧 OPENAI REQUEST DEBUG")
-    print("="*80)
-    print(f"Streaming: {stream}")
-    print(f"Model: {model_to_use}")
-    print(f"Tools: {tools}")
-    print(f"Tool Choice: {tool_choice}")
-    print(f"Number of messages: {len(input_messages)}")
-    print(f"Last user message: {input_messages[-1] if input_messages else 'None'}")
-    print("="*80 + "\n")
 
     # Extract vector_store_ids from tools for metadata fetching
     vector_store_ids = []
@@ -613,10 +603,6 @@ def handle_openai_response_api(
             
             with client.responses.stream(**request_data) as response_stream:
                 for event in response_stream:
-                    print("\n" + "-"*60)
-                    print(f"📨 EVENT TYPE: {event.type}")
-                    print(f"📦 EVENT DATA: {event}")
-                    print("-"*60)
                     logger.info(f"OpenAI Event: {event.type} | Data: {event}")
 
                     # Handle function call delta events (streaming function arguments character-by-character)
@@ -718,9 +704,6 @@ def handle_openai_response_api(
                 response=response, model_id=model_to_use, company_bot=company_bot
             )
 
-            print("\n" + "="*80)
-            print("📥 OPENAI NON-STREAMING RESPONSE")
-            print("="*80)
             logger.info(f"free-flows response: {response}")
             logger.info("Non-streaming response received")
             # Extract full text from response
