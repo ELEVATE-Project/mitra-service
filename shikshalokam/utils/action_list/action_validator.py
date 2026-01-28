@@ -1,7 +1,9 @@
-from chatbot.llm_models.llm_script import handle_bedrock_model
+from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_model
+from chatbot.models import LLMProvider
 from shikshalokam.utils.action_list.action_parser import unwrap_tool_values
 from shikshalokam.utils.chunks_utils import render_template_with_context
 import logging
+import json_repair
 
 logger = logging.getLogger('django')
 
@@ -24,22 +26,46 @@ def validate_and_fix_action_list(messages, response_json, company_bot):
         {rendered_content}
     """
 
-    print(prompt)
+    if company_bot and company_bot.provider == LLMProvider.OPENAI:
+        system_prompt = [{"role": "system", "content": prompt}]
 
-    system_prompt = [{
-        "text": prompt
-    }]
+        tools = None
+        tool_choice = None
+        try:
+            tool_context = json_repair.repair_json(company_bot.tool_context, return_objects=True)
+            if tool_context:
+                tools = tool_context.get("tool")
+                tool_choice = tool_context.get("tool_choice", "auto")
 
-    import json_repair
-    tool_context = company_bot.tool_context
-    if tool_context:
-        tool_context = json_repair.repair_json(tool_context, return_objects=True)
+            logger.info("Using state machine tool_context")
+        except Exception as e:
+            logger.error(f"Failed to parse state machine tool_context: {e}")
 
-    validation_response = handle_bedrock_model(
-        system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
-        temperature=company_bot.bot_temperature, max_token=company_bot.max_token, company_bot=company_bot,
-        tools=tool_context, top_p=company_bot.filter_score,
-    )
+        logger.info("-----------------OPENAI PARALLEL---------------------------------", )
+        logger.info(f"openai system_prompt: {system_prompt}")
+        logger.info(f"openai messages: {messages}")
+        validation_response = handle_openai_model(
+            messages=messages, system_prompt=system_prompt, max_token=company_bot.max_token,
+            temperature=company_bot.bot_temperature, company_bot=company_bot,
+            top_p=company_bot.filter_score if company_bot.filter_score else None,
+            tool_choice=tool_choice, tools=tools, stream=False, is_json_response=True
+        )
+
+    else:
+
+        system_prompt = [{
+            "text": prompt
+        }]
+
+        tool_context = company_bot.tool_context
+        if tool_context:
+            tool_context = json_repair.repair_json(tool_context, return_objects=True)
+
+        validation_response = handle_bedrock_model(
+            system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
+            temperature=company_bot.bot_temperature, max_token=company_bot.max_token, company_bot=company_bot,
+            tools=tool_context, top_p=company_bot.filter_score,
+        )
 
     logger.info(f"validation_response: {validation_response}")
 

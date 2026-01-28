@@ -1,6 +1,6 @@
 from asgiref.sync import sync_to_async
-from chatbot.llm_models.llm_script import handle_bedrock_model
-from chatbot.models import CompanyBot
+from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_response_api, handle_openai_model
+from chatbot.models import CompanyBot, LLMProvider
 from chatbot.utils.chat_query_handler import query_text_search
 from chatbot.utils.story_llama_utils import translate_field
 from shikshalokam.utils.action_list.action_parser import parse_llm_action_response
@@ -12,6 +12,19 @@ import json_repair
 import logging
 
 logger = logging.getLogger('django')
+
+
+async def load_bot(route: str):
+    from types import SimpleNamespace
+    data = await sync_to_async(
+        CompanyBot.objects.values(
+            "provider", "context", "end_context", "tag_context",
+            "tool_context", "llm_model", "bot_temperature",
+            "filter_score", "max_token"
+        ).get
+    )(route=route)
+    return SimpleNamespace(**data)
+
 
 async def generate_action_list_parallel(query, objectives, company_bot, language, voice_provider, max_concurrency: int = 3):
     """Generate action lists for multiple objectives concurrently.
@@ -48,7 +61,7 @@ async def generate_action_list_parallel(query, objectives, company_bot, language
 
     step_id_to_actionstep = {}
 
-    for result in results:
+    for index, result in enumerate(results):
         if result.get('status') != 'ok':
             logger.error(
                 "[generate_action_list_view] Generation failed with status: %s, message: %s",
@@ -67,7 +80,7 @@ async def generate_action_list_parallel(query, objectives, company_bot, language
             chunks_response_master.get("results", []).extend(result.get("chunks_response", {}).get("results", []))
 
         action_list = result.get("action_list", [])
-        for index, action in enumerate(action_list):
+        for _i, action in enumerate(action_list):
             duration_in_weeks = action.get('duration_weeks')
             if isinstance(duration_in_weeks, str):
                 try:
@@ -92,26 +105,59 @@ async def generate_action_list_parallel(query, objectives, company_bot, language
 
     master_plan_name = ' and '.join(list(set(master_plan_name)))
 
-    combiner_bot = await sync_to_async(CompanyBot.objects.values('tag_context', 'context', 'tool_context', 'llm_model', 'bot_temperature', 'filter_score', 'max_token', 'connect_timeout', 'read_timeout', 'chat_history_limit').get)(route='/action_list_combiner')
+    combiner_bot = await load_bot("/action_list_combiner")
     logger.info(f"{json.dumps(plans_list, indent=4)}, plans_list")
-    user_input = combiner_bot.get("tag_context")
+    user_input = combiner_bot.tag_context
 
     user_input = f"{user_input}\n\n{json.dumps(plans_list, indent=2)}"
+    if combiner_bot and combiner_bot.provider == LLMProvider.OPENAI:
+        messages = [
+            {
+                'role': 'user',
+                'content': user_input
+            }
+        ]
+        context = combiner_bot.context
+        context += f"\n{combiner_bot.end_context}" if combiner_bot.end_context else ""
+        system_prompt = [{"role": "system", "content": context}]
 
-    user_message = [{
-        'role': 'user',
-        'content': [{'text': user_input}]
-    }]
+        tools = None
+        tool_choice = None
+        try:
+            tool_context = json_repair.repair_json(combiner_bot.tool_context, return_objects=True)
+            if tool_context:
+                tools = tool_context.get("tool")
+                tool_choice = tool_context.get("tool_choice", "auto")
 
-    system_prompt = [{'text': combiner_bot.get("context")}]
-    tool_context = combiner_bot.get("tool_context")
-    tool_context = json_repair.repair_json(tool_context, return_objects=True)
+            logger.info("Using state machine tool_context")
+        except Exception as e:
+            logger.error(f"Failed to parse state machine tool_context: {e}")
 
-    response = handle_bedrock_model(
-        system_prompt=system_prompt, messages=user_message, model_name=combiner_bot.get("llm_model"),
-        temperature=combiner_bot.get("bot_temperature"), max_token=combiner_bot.get("max_token"), company_bot=company_bot,
-        tools=tool_context, top_p=combiner_bot.get("filter_score"), is_json_response=True
-    )
+        logger.info("-----------------OPENAI COMBINER---------------------------------",)
+        logger.info(f"openai system_prompt: {system_prompt}")
+        logger.info(f"openai messages: {messages}")
+        response = handle_openai_model(
+            messages=messages, system_prompt=system_prompt, max_token=combiner_bot.max_token,
+            temperature=combiner_bot.bot_temperature, company_bot=combiner_bot,
+            top_p=combiner_bot.filter_score if combiner_bot.filter_score else None,
+            tool_choice=tool_choice, tools=tools, stream=False, is_json_response=True
+        )
+
+    else:
+        user_message = [{
+            'role': 'user',
+            'content': [{'text': user_input}]
+        }]
+
+        system_prompt = [{'text': combiner_bot.context}]
+        tool_context = combiner_bot.tool_context
+        tool_context = json_repair.repair_json(tool_context, return_objects=True)
+
+        response = handle_bedrock_model(
+            system_prompt=system_prompt, messages=user_message, model_name=combiner_bot.llm_model,
+            temperature=combiner_bot.bot_temperature, max_token=combiner_bot.max_token,
+            company_bot=combiner_bot, tools=tool_context, top_p=combiner_bot.filter_score, is_json_response=True
+        )
 
     if not response or not isinstance(response, dict):
         logger.info("Invalid validation response from LLM: %s", response)
@@ -257,22 +303,57 @@ def generate_action_list_utils(query, objective_text, company_bot, language, voi
                 company_bot.tag_context, context_data
             )
 
-            messages = [{
-                'role': 'user',
-                'content': [{'text': rendered_content}]
-            }]
+            if company_bot and company_bot.provider == LLMProvider.OPENAI:
+                messages = [
+                    {
+                        'role': 'user',
+                        'content': rendered_content
+                    }
+                ]
+                context = company_bot.context or "Generate action plans."
+                context += f"\n{company_bot.end_context}" if company_bot.end_context else ""
+                system_prompt = [{"role": "system", "content": context}]
 
-            system_prompt = [{'text': company_bot.context}] if company_bot.context else [
-                {'text': 'Generate action plans.'}]
+                tools = None
+                tool_choice = None
+                try:
+                    tool_context = json_repair.repair_json(company_bot.tool_context, return_objects=True)
+                    if tool_context:
+                        tools = tool_context.get("tool")
+                        tool_choice = tool_context.get("tool_choice", "auto")
 
-            tool_context = company_bot.tool_context
-            tool_context = json_repair.repair_json(tool_context, return_objects=True)
+                    logger.info("Using state machine tool_context")
+                except Exception as e:
+                    logger.error(f"Failed to parse state machine tool_context: {e}")
 
-            response = handle_bedrock_model(
-                system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
-                temperature=company_bot.bot_temperature, max_token=company_bot.max_token, company_bot=company_bot,
-                tools=tool_context, top_p=company_bot.filter_score,
-            )
+                logger.info("-----------------OPENAI PARALLEL---------------------------------", )
+                logger.info(f"openai system_prompt: {system_prompt}")
+                logger.info(f"openai messages: {messages}")
+                response = handle_openai_model(
+                    messages=messages, system_prompt=system_prompt, max_token=company_bot.max_token,
+                    temperature=company_bot.bot_temperature, company_bot=company_bot,
+                    top_p=company_bot.filter_score if company_bot.filter_score else None,
+                    tool_choice=tool_choice, tools=tools, stream=False, is_json_response=True
+                )
+
+            else:
+
+                messages = [{
+                    'role': 'user',
+                    'content': [{'text': rendered_content}]
+                }]
+
+                system_prompt = [{'text': company_bot.context}] if company_bot.context else [
+                    {'text': 'Generate action plans.'}]
+
+                tool_context = company_bot.tool_context
+                tool_context = json_repair.repair_json(tool_context, return_objects=True)
+
+                response = handle_bedrock_model(
+                    system_prompt=system_prompt, messages=messages, model_name=company_bot.llm_model,
+                    temperature=company_bot.bot_temperature, max_token=company_bot.max_token, company_bot=company_bot,
+                    tools=tool_context, top_p=company_bot.filter_score,
+                )
 
             try:
                 validate_bot = CompanyBot.objects.filter(route='/validate_action_list').first()
@@ -289,10 +370,6 @@ def generate_action_list_utils(query, objective_text, company_bot, language, voi
             except Exception as validation_error:
                 logger.error(f"Validation failed: {validation_error}, proceeding with original response")
 
-
-            if company_bot and company_bot.end_context:
-                response = validate_and_fix_action_list(messages=messages, response_json=response, company_bot=company_bot)
-
             if not response:
                 return {
                     'status': 'error',
@@ -308,6 +385,7 @@ def generate_action_list_utils(query, objective_text, company_bot, language, voi
                 raise ValueError("LLM returned empty action list")
 
         except ValueError as e:
+            logger.error("Invalid response from LLM: %s", e)
             return {
                 'status': 'error',
                 'status_code': 422,
@@ -317,6 +395,7 @@ def generate_action_list_utils(query, objective_text, company_bot, language, voi
             }
 
         except Exception as llm_error:
+            logger.error("Error while fetching chunks: %s", llm_error)
             return {
                 'status': 'error',
                 'status_code': 500,
