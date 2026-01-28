@@ -10,12 +10,6 @@ logger = logging.getLogger('django')
 def create_pdf_from_text(text_content: str) -> bytes:
     """
     Create a PDF file from text content using Gotenberg HTML-to-PDF service.
-    
-    Args:
-        text_content: The text content to convert to PDF
-        
-    Returns:
-        bytes: PDF file content
     """
     try:
         # Convert text to formatted HTML
@@ -39,12 +33,6 @@ def create_pdf_from_text(text_content: str) -> bytes:
 def text_to_html(text_content: str) -> str:
     """
     Convert plain text to formatted HTML for PDF generation.
-    
-    Args:
-        text_content: Plain text content
-        
-    Returns:
-        str: Formatted HTML
     """
     # Escape HTML special characters
     import html
@@ -99,12 +87,6 @@ def text_to_html(text_content: str) -> str:
 def sanitize_filename(filename: str) -> str:
     """
     Sanitize filename and ensure it has .pdf extension.
-    
-    Args:
-        filename: Original filename from function call
-        
-    Returns:
-        str: Sanitized filename with .pdf extension
     """
     try:
         # Remove any path separators
@@ -140,15 +122,6 @@ def create_and_upload_file(
 ) -> dict:
     """
     Create a PDF file from content and upload it to S3.
-    
-    Args:
-        content: The text content to convert to PDF
-        filename: Suggested filename (will be sanitized and forced to .pdf)
-        company_bot_id: The company bot ID for folder structure
-        session_id: The session ID for tracking
-        
-    Returns:
-        dict: Contains 'success', 'media_url', 'file_name', and optional 'error'
     """
     try:
         logger.info(f"Creating file for session {session_id}, company_bot {company_bot_id}")

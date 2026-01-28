@@ -664,13 +664,6 @@ class CommonResponseHandler(BaseResponseHandler):
             logger.info(f"📄 File search content length: {len(file_search_content)} chars")
             logger.info(f"📝 Content from function args: {len(content_from_args)} chars")
             logger.info(f"🎯 Function call detected: {function_name}")
-            logger.info(f"✅ Internal verification - Both content AND function call received")
-            
-            print(f"DEBUG: Download request - filename: {filename}, type: {content_type}")
-            print(f"DEBUG: File search content: {file_search_content[:200]}...")  # First 200 chars
-            print(f"DEBUG: Content from args: {content_from_args[:200]}...")  # First 200 chars
-            print(f"DEBUG: Sources: {sources}")
-            print(f"DEBUG: Available sources: {len(sources)}")
             
             # Create and upload file to S3
             file_result = create_and_upload_file(
@@ -709,8 +702,6 @@ class CommonResponseHandler(BaseResponseHandler):
                 extra_content_to_send['file_url'] = file_url
                 logger.info(f"📎 Adding file_url to extra_content: {file_url}")
             
-            # Send the message to user WITHOUT exposing function call to frontend
-            # (function call is detected internally but hidden from WebSocket response)
             # Include sources and file_url in extra_content for frontend display
             translated_message = translate_and_send_message(
                 accumulated_message=bot_message,
