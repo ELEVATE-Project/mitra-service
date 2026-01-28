@@ -33,6 +33,18 @@ async def generate_action_list_parallel(query, objectives, company_bot, language
     can be safely invoked from sync contexts using `async_to_sync` (no cross-event-loop
     semaphore binding).
     """
+    combiner_bot = None
+    try:
+        combiner_bot = await load_bot("/action_list_combiner")
+    except Exception as e:
+        pass
+
+    if combiner_bot is None:
+        objective_str = ""
+        for index, objective in enumerate(objectives):
+            objective_str += f"{index + 1}. {objective}\n"
+        return await sync_to_async(generate_action_list_utils)(query, objective_str, company_bot, language, voice_provider)
+
     sem = asyncio.Semaphore(max_concurrency)
 
     async def _one(objective):
@@ -105,7 +117,6 @@ async def generate_action_list_parallel(query, objectives, company_bot, language
 
     master_plan_name = ' and '.join(list(set(master_plan_name)))
 
-    combiner_bot = await load_bot("/action_list_combiner")
     logger.info(f"{json.dumps(plans_list, indent=4)}, plans_list")
     user_input = combiner_bot.tag_context
 
