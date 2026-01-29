@@ -40,7 +40,8 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
         CustomAdvanceDateFilter,
         'display_mode',
         'name',
-        'media_type'
+        'media_type',
+        'company_bot'
     )
     search_fields = ('name', 'key_values__value')
     actions = ['export_selected', 'change_display_mode_action']
