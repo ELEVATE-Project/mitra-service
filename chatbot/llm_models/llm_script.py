@@ -136,6 +136,9 @@ def handle_openai_model(
             request_data['top_p'] = top_p
         print("request_data: ", request_data)
         response = client.chat.completions.create(**request_data)
+        price = calculate_and_log_openai_cost(
+            response=response, model_id=model_to_use, company_bot=company_bot
+        )
         print("raw res: ", response)
         if is_json_response:
             response_content = response.choices[0].message.content
@@ -458,6 +461,10 @@ def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
         f"💰 OpenAI Tokens — Input: {input_tokens}, "
         f"Output: {output_tokens}, Total: {total_tokens}"
     )
+    print(
+        f"💰 OpenAI Tokens — Input: {input_tokens}, "
+        f"Output: {output_tokens}, Total: {total_tokens}"
+    )
 
     pricing = get_pricing_from_company_bot(
         company_bot=company_bot,
@@ -466,6 +473,7 @@ def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
 
     if not pricing:
         logger.info(f"💵 No pricing configured for OpenAI model: {model_id}")
+        print(f"💵 No pricing configured for OpenAI model: {model_id}")
         return None
 
     input_cost = (input_tokens / 1000) * pricing["input"]
@@ -473,6 +481,10 @@ def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
     total_cost = input_cost + output_cost
 
     logger.info(
+        f"💵 OpenAI Cost — Input: ${input_cost:.6f}, Output: ${output_cost:.6f}, Total: ${total_cost:.6f}"
+    )
+
+    print(
         f"💵 OpenAI Cost — Input: ${input_cost:.6f}, Output: ${output_cost:.6f}, Total: ${total_cost:.6f}"
     )
 
