@@ -3,7 +3,7 @@ import json
 import os
 from typing import Optional, List, Dict
 from django.core.validators import URLValidator
-from langfuse.decorators import observe
+from langfuse import observe
 from openai import OpenAI
 from chatbot.models import LLMModel, Company
 import boto3
@@ -136,6 +136,9 @@ def handle_openai_model(
             request_data['top_p'] = top_p
         print("request_data: ", request_data)
         response = client.chat.completions.create(**request_data)
+        price = calculate_and_log_llm_cost(
+            response=response, model_id=model_to_use, company_bot=company_bot
+        )
         print("raw res: ", response)
         if is_json_response:
             response_content = response.choices[0].message.content
@@ -436,6 +439,87 @@ def add_source_with_organization(source_entry, metadata):
     return source_entry
 
 
+def calculate_and_log_llm_cost(*, response, model_id, company_bot=None, provider="openai"):
+    """
+    Generic cost calculator for OpenAI-style responses.
+    Supports:
+    - Chat Completions API
+    - Responses API
+    - Streaming + non-streaming
+    """
+
+    if not response or not company_bot:
+        return None
+
+    usage = getattr(response, "usage", None)
+    if not usage:
+        logger.info("⚠️ LLM response has no usage data")
+        return None
+
+    # --- Normalize token fields across APIs ---
+    input_tokens = (
+        getattr(usage, "input_tokens", None)       # Responses API
+        or getattr(usage, "prompt_tokens", 0)      # Chat Completions
+    )
+
+    output_tokens = (
+        getattr(usage, "output_tokens", None)      # Responses API
+        or getattr(usage, "completion_tokens", 0)  # Chat Completions
+    )
+
+    total_tokens = (
+        getattr(usage, "total_tokens", None)
+        or (input_tokens + output_tokens)
+    )
+
+    logger.info(
+        f"💰 {provider.upper()} Tokens — "
+        f"Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}"
+    )
+    print(
+        f"💰 {provider.upper()} Tokens — "
+        f"Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}"
+    )
+
+    pricing = get_pricing_from_company_bot(
+        company_bot=company_bot,
+        model_id=model_id
+    )
+
+    if not pricing:
+        logger.info(f"💵 No pricing configured for {provider} model: {model_id}")
+        print(f"💵 No pricing configured for {provider} model: {model_id}")
+        return None
+
+    input_cost = (input_tokens / 1000) * pricing["input"]
+    output_cost = (output_tokens / 1000) * pricing["output"]
+    total_cost = input_cost + output_cost
+
+    logger.info(
+        f"💵 {provider.upper()} Cost — "
+        f"Input: ${input_cost:.6f}, "
+        f"Output: ${output_cost:.6f}, "
+        f"Total: ${total_cost:.6f}"
+    )
+    print(
+        f"💵 {provider.upper()} Cost — "
+        f"Input: ${input_cost:.6f}, "
+        f"Output: ${output_cost:.6f}, "
+        f"Total: ${total_cost:.6f}"
+    )
+
+    return {
+        "provider": provider,
+        "model_id": model_id,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+        "input_cost": input_cost,
+        "output_cost": output_cost,
+        "total_cost": total_cost,
+    }
+
+
 def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
     """
     Calculates and logs OpenAI cost using Responses API usage.
@@ -458,6 +542,10 @@ def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
         f"💰 OpenAI Tokens — Input: {input_tokens}, "
         f"Output: {output_tokens}, Total: {total_tokens}"
     )
+    print(
+        f"💰 OpenAI Tokens — Input: {input_tokens}, "
+        f"Output: {output_tokens}, Total: {total_tokens}"
+    )
 
     pricing = get_pricing_from_company_bot(
         company_bot=company_bot,
@@ -466,6 +554,7 @@ def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
 
     if not pricing:
         logger.info(f"💵 No pricing configured for OpenAI model: {model_id}")
+        print(f"💵 No pricing configured for OpenAI model: {model_id}")
         return None
 
     input_cost = (input_tokens / 1000) * pricing["input"]
@@ -473,6 +562,10 @@ def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
     total_cost = input_cost + output_cost
 
     logger.info(
+        f"💵 OpenAI Cost — Input: ${input_cost:.6f}, Output: ${output_cost:.6f}, Total: ${total_cost:.6f}"
+    )
+
+    print(
         f"💵 OpenAI Cost — Input: ${input_cost:.6f}, Output: ${output_cost:.6f}, Total: ${total_cost:.6f}"
     )
 

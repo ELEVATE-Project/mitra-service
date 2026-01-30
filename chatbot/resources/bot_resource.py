@@ -25,7 +25,7 @@ class CompanyBotResource(resources.ModelResource):
             'bot_temperature', 'top_k', 'llm_model', 'filter_score', 'end_context',
             'introductory_message', 'tag_context', 'route', 'bot_type', 'llm_key',
             'dynamic_context', 'dynamic_context_type', 'pre_context', 'tool_context',
-            'other_params', 'connect_timeout', 'read_timeout'
+            'other_params', 'connect_timeout', 'read_timeout', 'voices', 'state_machines',
         )
         export_order = fields
         skip_unchanged = True
