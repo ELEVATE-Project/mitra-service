@@ -873,7 +873,7 @@ class MediaSearchV2View(APIView):
             all_results = self._apply_media_type_filter(all_results, media_types)
 
         total_results = len(all_results)
-        print("total_results len: ", len(total_results))
+        print("total_results len: ", total_results)
 
         # Apply ordering
         if ordering_field and all_results:
