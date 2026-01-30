@@ -862,17 +862,19 @@ class MediaSearchV2View(APIView):
             }, status=error_status)
         
         all_results = vector_response.get('results', [])
-        
+        print("all_results len: ", len(all_results))
         # Apply content exclusion filter
         all_results = self._apply_content_exclusion_filter_v2(
             all_results
         )
+        print("all_results len: ", len(all_results))
 
         if media_types:
             all_results = self._apply_media_type_filter(all_results, media_types)
 
         total_results = len(all_results)
-        
+        print("total_results len: ", len(total_results))
+
         # Apply ordering
         if ordering_field and all_results:
             all_results = self._apply_ordering(
@@ -928,6 +930,7 @@ class MediaSearchV2View(APIView):
             if media_types:
                 previous_url += f"&media_types={','.join(media_types)}"
         
+        print("len(serializer.data): ", len(serializer.data))
         response_data = {
             "count": total_results,
             "next": next_url,
