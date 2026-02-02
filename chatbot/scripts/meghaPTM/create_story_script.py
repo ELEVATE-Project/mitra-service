@@ -23,6 +23,7 @@ from shikshalokam.serializer import TaskSerializer
 import asyncio
 import functools
 from chatbot.models import LLMProvider, SessionFlowName
+from langfuse.decorators import observe
 import logging
 
 

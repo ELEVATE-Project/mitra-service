@@ -1,0 +1,455 @@
+{% extends "admin/base_site.html" %}
+{% load static i18n admin_urls %}
+
+{% block title %}Post Processing - {{ model_name|title }}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .post-processing-container {
+        max-width: 100%;
+        width: 100%;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .post-processing-container h1 {
+        margin-bottom: 30px;
+        color: #333;
+        border-bottom: 2px solid #417690;
+        padding-bottom: 10px;
+    }
+
+    .dropdown-section {
+        margin-bottom: 30px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+    }
+
+    .dropdown-section label {
+        display: block;
+        margin-bottom: 10px;
+        font-weight: 600;
+        color: #333;
+        font-size: 14px;
+    }
+
+    .processing-dropdown {
+        width: 100%;
+        max-width: 400px;
+        padding: 12px 15px;
+        font-size: 14px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background-color: #fff;
+        cursor: pointer;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .processing-dropdown:focus {
+        outline: none;
+        border-color: #417690;
+        box-shadow: 0 0 0 3px rgba(65, 118, 144, 0.15);
+    }
+
+    .processing-options-section {
+        padding: 25px;
+        background: #fff;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+        margin-bottom: 25px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .processing-options-section.hidden {
+        display: none;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 600;
+        color: #333;
+        font-size: 13px;
+    }
+
+    .form-row {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+    }
+
+    .form-row .form-group {
+        flex: 1;
+        min-width: 250px;
+    }
+
+    .form-input {
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 14px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: #417690;
+        box-shadow: 0 0 0 3px rgba(65, 118, 144, 0.15);
+    }
+
+    .file-input {
+        padding: 8px;
+        background: #f8f9fa;
+    }
+
+    .help-text {
+        display: block;
+        margin-top: 5px;
+        font-size: 12px;
+        color: #666;
+    }
+
+    .date-range-group > label {
+        margin-bottom: 15px;
+    }
+
+    .date-inputs {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+    }
+
+    .date-field {
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .date-field label {
+        margin-bottom: 5px;
+        font-weight: 500;
+        font-size: 12px;
+        color: #555;
+    }
+
+    .form-actions {
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #eee;
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .run-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 150px;
+        padding: 12px 30px;
+        font-size: 15px;
+        font-weight: 600;
+        color: #fff;
+        background-color: #417690;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background-color 0.2s, transform 0.1s;
+    }
+
+    .run-button:hover:not(:disabled) {
+        background-color: #205067;
+    }
+
+    .run-button:active:not(:disabled) {
+        transform: scale(0.98);
+    }
+
+    .run-button:disabled {
+        background-color: #999;
+        cursor: not-allowed;
+    }
+
+    .btn-text.hidden,
+    .btn-loading.hidden {
+        display: none;
+    }
+
+    .success-message {
+        color: #28a745;
+        font-weight: 600;
+        font-size: 14px;
+    }
+
+    .success-message.hidden {
+        display: none;
+    }
+
+    .error-message {
+        color: #dc3545;
+        font-size: 12px;
+        margin-top: 5px;
+    }
+
+    .error-message.hidden {
+        display: none;
+    }
+
+    .required {
+        color: #dc3545;
+        font-weight: bold;
+    }
+
+    .or-divider {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 30px 0 20px 0;
+    }
+
+    .or-divider span {
+        background: #fff;
+        color: #888;
+        font-weight: 600;
+        padding: 0 18px;
+        font-size: 15px;
+        position: relative;
+        z-index: 1;
+    }
+
+    .or-divider:before {
+        content: "";
+        flex: 1;
+        border-bottom: 1.5px dashed #bbb;
+        margin-right: -10px;
+        z-index: 0;
+    }
+
+    .or-divider:after {
+        content: "";
+        flex: 1;
+        border-bottom: 1.5px dashed #bbb;
+        margin-left: -10px;
+        z-index: 0;
+    }
+
+    @media (max-width: 768px) {
+        .post-processing-container {
+            padding: 15px;
+        }
+        .form-row {
+            flex-direction: column;
+        }
+        .date-inputs {
+            flex-direction: column;
+        }
+        .or-divider span {
+            font-size: 13px;
+            padding: 0 10px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label='chatbot' %}">{{ 'chatbot'|capfirst }}</a>
+    &rsaquo; <a href="{% url 'admin:chatbot_story_changelist' %}">Stories</a>
+    &rsaquo; Post Processing
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="post-processing-container">
+    <h1>Post Processing</h1>
+
+    <div class="dropdown-section">
+        <label for="processing-type">Select Processing Type:</label>
+        <select id="processing-type" class="processing-dropdown">
+            <option value="">-- Select an option --</option>
+            <option value="unique_challenges">Unique Challenges</option>
+        </select>
+    </div>
+
+    <div id="processing-options" class="processing-options-section hidden">
+        <form id="processing-form" method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="processing_type" id="form-processing-type" value="">
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="max-workers">Max Workers:</label>
+                    <input type="number" id="max-workers" name="max_workers" value="4" min="1" max="16" class="form-input">
+                    <span class="help-text">Number of parallel workers (1-16)</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="batch-size">Batch Size:</label>
+                    <input type="number" id="batch-size" name="batch_size" value="100" min="1" max="1000" class="form-input">
+                    <span class="help-text">Number of items to process per batch (1-1000)</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="input-file">Upload Input File:</label>
+                <input type="file" id="input-file" name="input_file" accept=".json" class="form-input file-input">
+                <span class="help-text">JSON file containing the data to process</span>
+                <span id="file-error" class="error-message hidden">Either input file or date range is required</span>
+            </div>
+
+            <!-- Visual OR divider -->
+            <div class="or-divider">
+                <span>OR</span>
+            </div>
+
+            <div class="form-group date-range-group">
+                <label>Date Range (DD-MM-YYYY):</label>
+                <div class="date-inputs">
+                    <div class="date-field">
+                        <label for="date-from">From:</label>
+                        <input type="text" id="date-from" name="date_from" placeholder="DD-MM-YYYY" class="form-input date-input" pattern="\d{2}-\d{2}-\d{4}">
+                    </div>
+                    <div class="date-field">
+                        <label for="date-till">Till:</label>
+                        <input type="text" id="date-till" name="date_till" placeholder="DD-MM-YYYY" class="form-input date-input" pattern="\d{2}-\d{2}-\d{4}">
+                    </div>
+                </div>
+                <span class="help-text">Both dates are inclusive. Either provide date range or upload input file.</span>
+                <span id="date-error" class="error-message hidden">Either input file or date range is required</span>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="run-button" id="run-btn">
+                    <span class="btn-text">Run</span>
+                    <span class="btn-loading hidden">Running...</span>
+                </button>
+                <span id="success-message" class="success-message hidden">✅ Script executed successfully!</span>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const processingTypeSelect = document.getElementById('processing-type');
+    const processingOptionsSection = document.getElementById('processing-options');
+    const formProcessingType = document.getElementById('form-processing-type');
+    const processingForm = document.getElementById('processing-form');
+    const runBtn = document.getElementById('run-btn');
+    const btnText = runBtn.querySelector('.btn-text');
+    const btnLoading = runBtn.querySelector('.btn-loading');
+    const successMessage = document.getElementById('success-message');
+    const inputFile = document.getElementById('input-file');
+    const dateFromInput = document.getElementById('date-from');
+    const dateTillInput = document.getElementById('date-till');
+    const fileError = document.getElementById('file-error');
+    const dateError = document.getElementById('date-error');
+
+    // Set default dates (today and 30 days ago)
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+
+    const formatDateDDMMYYYY = (date) => {
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        return `${day}-${month}-${year}`;
+    };
+
+    dateFromInput.value = formatDateDDMMYYYY(thirtyDaysAgo);
+    dateTillInput.value = formatDateDDMMYYYY(today);
+
+    // Auto-format date inputs
+    const formatDateInput = (input) => {
+        input.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length >= 2) value = value.slice(0, 2) + '-' + value.slice(2);
+            if (value.length >= 5) value = value.slice(0, 5) + '-' + value.slice(5);
+            if (value.length > 10) value = value.slice(0, 10);
+            e.target.value = value;
+        });
+    };
+
+    formatDateInput(dateFromInput);
+    formatDateInput(dateTillInput);
+
+    // Show/hide processing options based on selection
+    processingTypeSelect.addEventListener('change', function() {
+        const selectedValue = this.value;
+        formProcessingType.value = selectedValue;
+        processingOptionsSection.classList.toggle('hidden', !selectedValue);
+    });
+
+    // Validate at least one input (file or date range)
+    const validateInputs = () => {
+        const hasFile = inputFile.files.length > 0;
+        const hasDateFrom = dateFromInput.value.trim() !== '';
+        const hasDateTill = dateTillInput.value.trim() !== '';
+        const hasDateRange = hasDateFrom && hasDateTill;
+
+        fileError.classList.add('hidden');
+        dateError.classList.add('hidden');
+
+        if (!hasFile && !hasDateRange) {
+            if (!hasFile) fileError.classList.remove('hidden');
+            if (!hasDateRange) dateError.classList.remove('hidden');
+            return false;
+        }
+        return true;
+    };
+
+    // Handle form submission
+    processingForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        if (!formProcessingType.value) {
+            alert('Please select a processing type');
+            return;
+        }
+
+        if (!validateInputs()) {
+            alert('Please provide either an input file or a date range');
+            return;
+        }
+
+        successMessage.classList.add('hidden');
+        runBtn.disabled = true;
+        btnText.classList.add('hidden');
+        btnLoading.classList.remove('hidden');
+
+        const formData = new FormData(processingForm);
+
+        fetch(window.location.href, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                successMessage.classList.remove('hidden');
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            alert('Request failed: ' + error.message);
+        })
+        .finally(() => {
+            runBtn.disabled = false;
+            btnText.classList.remove('hidden');
+            btnLoading.classList.add('hidden');
+        });
+    });
+});
+</script>
+{% endblock %}

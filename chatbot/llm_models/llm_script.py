@@ -3,7 +3,7 @@ import json
 import os
 from typing import Optional, List, Dict
 from django.core.validators import URLValidator
-from langfuse import observe
+from langfuse.decorators import observe
 from openai import OpenAI
 from chatbot.models import LLMModel, Company
 import boto3

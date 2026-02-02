@@ -12,6 +12,7 @@ from chatbot.resources.story_resource import (
     get_story_fields, get_story_data, generate_zip_response
 )
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf, save_shikshalokam_story
+from chatbot.views.admin.post_processing_views import PostProcessingView
 from django.urls import path
 from django.shortcuts import render
 import tablib
@@ -118,8 +119,14 @@ class StoryAdmin(admin.ModelAdmin):
         urls = super().get_urls()
         custom_urls = [
             path('export_stories/', self.admin_site.admin_view(self.export_stories_view), name='export_stories'),
+            path('post_processing/', self.admin_site.admin_view(PostProcessingView.as_view()), name='chatbot_story_post_processing'),
         ]
         return custom_urls + urls
+
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['show_post_processing_button'] = True
+        return super().changelist_view(request, extra_context=extra_context)
 
     def export_stories_view(self, request):
         ids = request.GET.get('ids', '')
