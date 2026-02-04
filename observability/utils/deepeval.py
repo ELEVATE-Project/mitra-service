@@ -2,7 +2,6 @@ from litellm import acompletion, completion
 from deepeval.models.base_model import DeepEvalBaseLLM
 from pydantic import BaseModel
 import instructor
-from langfuse.decorators import langfuse_context, observe
 
 
 class DeepEvalBaseLLM(DeepEvalBaseLLM):
@@ -17,7 +16,6 @@ class DeepEvalBaseLLM(DeepEvalBaseLLM):
     def load_model(self):
         return self.model
 
-    @observe()
     def generate(self, prompt: str, schema: BaseModel) -> BaseModel:
         messages = [{"content": prompt, "role": "user"}]
         try:
@@ -30,7 +28,6 @@ class DeepEvalBaseLLM(DeepEvalBaseLLM):
 
         return response
 
-    @observe()
     async def a_generate(self, prompt: str, schema: BaseModel) -> BaseModel:
         client = instructor.from_litellm(acompletion)
 

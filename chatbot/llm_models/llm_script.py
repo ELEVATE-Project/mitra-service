@@ -3,7 +3,6 @@ import json
 import os
 from typing import Optional, List, Dict
 from django.core.validators import URLValidator
-from langfuse.decorators import observe
 from openai import OpenAI
 from chatbot.models import LLMModel, Company
 import boto3
@@ -21,7 +20,6 @@ AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 llm_retry_number = int(os.getenv('LLM_RETRY_NUMBER'))
 
 
-@observe()
 def handle_llama_model(
         messages, max_token, model_name=None, is_json_format=True, temperature=None, top_p=None, seed=None, n=None,
         stream=False, url_to_use=None
@@ -78,7 +76,6 @@ def handle_llama_model(
         return response_str
 
 
-@observe()
 def handle_openai_model(
         messages, max_token=None, temperature=None, company_bot=None, model_name=None, is_json_response=True,
         stream=False, key_name='OPENAI_API_KEY', is_actual_key=False, tools=None, tool_choice=None, client_choice=None,
@@ -203,7 +200,6 @@ def get_pricing_from_company_bot(company_bot, model_id):
 def retry_if_result_none(result):
     return result is None
 
-@observe()
 @retry(stop_max_attempt_number=llm_retry_number, retry_on_result=retry_if_result_none, wrap_exception=True)
 def handle_bedrock_model(
         company_bot, system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
@@ -487,7 +483,6 @@ def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
     }
 
 
-@observe()
 def handle_openai_response_api(
         messages, system_prompt=None, max_token=None, temperature=None, company_bot=None,
         model_name=None, key_name='OPENAI_API_KEY', is_actual_key=False,
@@ -737,7 +732,6 @@ def handle_openai_response_api(
         }
 
 
-@observe()
 def handle_bedrock_invoke_model(
         messages=None, max_token=None, temperature=None, top_p=None,
         model_name=None, region_name='us-west-2', tools=None
