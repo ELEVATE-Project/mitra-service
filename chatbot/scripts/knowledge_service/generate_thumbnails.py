@@ -140,6 +140,6 @@ def run(*args):
     sys.argv = ['generate_thumbnails.py'] + list(args)
     main()
 
-
-if __name__ == '__main__':
-    main()
+#
+# if __name__ == '__main__':
+#     main()
