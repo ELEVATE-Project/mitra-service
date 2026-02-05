@@ -115,9 +115,20 @@ def export_bots_json(bots):
         state_machine_data=[]
         state_machines = bot.companystatemachine_set.all().order_by('step')
         for sm in state_machines:
-            state_machine_data.append(model_to_dict(sm, exclude=[
-                'id', 'company_bot', 'preprocess_bot', 'postprocess_bot', 'created_at', 'updated_at', 'history'
-            ]))
+            sm_dict = model_to_dict(
+                sm, exclude=[
+                    'id', 'company_bot', 'preprocess_bot', 'postprocess_bot', 'created_at',
+                    'updated_at', 'history'
+                ]
+            )
+            sm_dict['preprocess_bot_route'] = (
+                sm.preprocess_bot.route if sm.preprocess_bot else None
+            )
+            sm_dict['postprocess_bot_route'] = (
+                sm.postprocess_bot.route if sm.postprocess_bot else None
+            )
+
+            state_machine_data.append(sm_dict)
 
         bot_data['state_machines'] = state_machine_data
 
@@ -199,16 +210,23 @@ def import_bots_json(request, uploaded_file):
             bot_vernacular_data = bot_data.pop('bot_vernaculars', [])
 
             # Create or update bot
-            bot, created = CompanyBot.objects.update_or_create(
-                name=bot_data['name'],
-                company=company,
-                defaults=bot_data
+            bots = CompanyBot.objects.filter(
+                route=bot_data['route'],
+                company=company
             )
 
-            if created:
-                created_count += 1
-            else:
+            if bots.exists():
+                bot = bots.first()
+                for key, value in bot_data.items():
+                    setattr(bot, key, value)
+                bot.save()
                 updated_count += 1
+            else:
+                bot = CompanyBot.objects.create(
+                    company=company,
+                    **bot_data
+                )
+                created_count += 1
 
             # Delete existing inline records
             Voice.objects.filter(company_bot=bot).delete()
@@ -222,20 +240,24 @@ def import_bots_json(request, uploaded_file):
             # Create state machines
             for sm_data in state_machines_data:
                 # Handle bot references
-                preprocess_bot_name = sm_data.pop('preprocess_bot_name', None)
-                postprocess_bot_name = sm_data.pop('postprocess_bot_name', None)
+                preprocess_bot_route = sm_data.pop('preprocess_bot_route', None)
+                postprocess_bot_route = sm_data.pop('postprocess_bot_route', None)
 
                 preprocess_bot = None
-                if preprocess_bot_name:
+                if preprocess_bot_route:
                     try:
-                        preprocess_bot = CompanyBot.objects.get(name=preprocess_bot_name, company=company)
+                        preprocess_bot = CompanyBot.objects.filter(
+                            route=preprocess_bot_route, company=company
+                        ).first()
                     except CompanyBot.DoesNotExist:
                         pass
 
                 postprocess_bot = None
-                if postprocess_bot_name:
+                if postprocess_bot_route:
                     try:
-                        postprocess_bot = CompanyBot.objects.get(name=postprocess_bot_name, company=company)
+                        postprocess_bot = CompanyBot.objects.filter(
+                            route=postprocess_bot_route, company=company
+                        ).first()
                     except CompanyBot.DoesNotExist:
                         pass
 
