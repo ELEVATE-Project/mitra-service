@@ -23,14 +23,14 @@ from shikshalokam.serializer import TaskSerializer
 import asyncio
 import functools
 from chatbot.models import LLMProvider, SessionFlowName
-from langfuse.decorators import observe
+from langfuse import observe
 import logging
 
 
 import json
 import os
 from django.core.validators import URLValidator
-from langfuse.decorators import observe
+from langfuse import observe
 import boto3
 import json_repair
 from retrying import retry

@@ -192,6 +192,41 @@
         display: none;
     }
 
+    .result-section {
+        margin-top: 20px;
+        padding: 20px;
+        background: #f0f9f0;
+        border-radius: 8px;
+        border: 1px solid #28a745;
+    }
+
+    .result-section.hidden {
+        display: none;
+    }
+
+    .result-section h3 {
+        margin: 0 0 15px 0;
+        color: #28a745;
+        font-size: 16px;
+    }
+
+    .result-item {
+        margin-bottom: 10px;
+        font-size: 14px;
+    }
+
+    .result-item label {
+        font-weight: 600;
+        color: #333;
+        display: inline-block;
+        min-width: 150px;
+    }
+
+    .result-item a {
+        color: #417690;
+        text-decoration: underline;
+    }
+
     .error-message {
         color: #dc3545;
         font-size: 12px;
@@ -298,6 +333,20 @@
                 </div>
             </div>
 
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="max-iterations">Max Iterations:</label>
+                    <input type="number" id="max-iterations" name="max_iterations" value="10" min="1" max="50" class="form-input">
+                    <span class="help-text">Maximum number of filtering iterations (1-50)</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="filter-threshold">Filter Threshold (%):</label>
+                    <input type="number" id="filter-threshold" name="filter_threshold" value="10" min="1" max="100" step="0.1" class="form-input">
+                    <span class="help-text">Stop filtering when removal percentage is below this threshold (1-100%)</span>
+                </div>
+            </div>
+
             <div class="form-group">
                 <label for="input-file">Upload Input File:</label>
                 <input type="file" id="input-file" name="input_file" accept=".json" class="form-input file-input">
@@ -333,6 +382,26 @@
                 </button>
                 <span id="success-message" class="success-message hidden">✅ Script executed successfully!</span>
             </div>
+
+            <div id="result-section" class="result-section hidden">
+                <h3>📊 Processing Results</h3>
+                <div class="result-item">
+                    <label>Status:</label>
+                    <span id="result-status"></span>
+                </div>
+                <div class="result-item">
+                    <label>Iterations Completed:</label>
+                    <span id="result-iterations"></span>
+                </div>
+                <div class="result-item">
+                    <label>Final Count:</label>
+                    <span id="result-final-count"></span>
+                </div>
+                <div class="result-item">
+                    <label>Output File:</label>
+                    <span id="result-output-file"></span>
+                </div>
+            </div>
         </form>
     </div>
 </div>
@@ -352,6 +421,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const dateTillInput = document.getElementById('date-till');
     const fileError = document.getElementById('file-error');
     const dateError = document.getElementById('date-error');
+    const resultSection = document.getElementById('result-section');
+    const resultStatus = document.getElementById('result-status');
+    const resultIterations = document.getElementById('result-iterations');
+    const resultFinalCount = document.getElementById('result-final-count');
+    const resultOutputFile = document.getElementById('result-output-file');
 
     // Set default dates (today and 30 days ago)
     const today = new Date();
@@ -387,6 +461,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const selectedValue = this.value;
         formProcessingType.value = selectedValue;
         processingOptionsSection.classList.toggle('hidden', !selectedValue);
+        // Hide results when changing type
+        resultSection.classList.add('hidden');
+        successMessage.classList.add('hidden');
     });
 
     // Validate at least one input (file or date range)
@@ -407,6 +484,16 @@ document.addEventListener('DOMContentLoaded', function() {
         return true;
     };
 
+    // Display results
+    const displayResults = (data) => {
+        resultSection.classList.remove('hidden');
+        
+        resultStatus.textContent = data.message || 'Completed';
+        resultIterations.textContent = data.iterations || 'N/A';
+        resultFinalCount.textContent = data.final_count || 'N/A';
+        resultOutputFile.textContent = data.output_file || 'N/A';
+    };
+
     // Handle form submission
     processingForm.addEventListener('submit', function(e) {
         e.preventDefault();
@@ -422,6 +509,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         successMessage.classList.add('hidden');
+        resultSection.classList.add('hidden');
         runBtn.disabled = true;
         btnText.classList.add('hidden');
         btnLoading.classList.remove('hidden');
@@ -437,6 +525,7 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (data.success) {
                 successMessage.classList.remove('hidden');
+                displayResults(data);
             } else {
                 alert('Error: ' + (data.error || 'Unknown error'));
             }

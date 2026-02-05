@@ -2,7 +2,7 @@ from litellm import acompletion, completion
 from deepeval.models.base_model import DeepEvalBaseLLM
 from pydantic import BaseModel
 import instructor
-from langfuse.decorators import observe
+from langfuse import observe
 
 
 class DeepEvalBaseLLM(DeepEvalBaseLLM):
