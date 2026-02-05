@@ -10,7 +10,7 @@
 
 ---
 
-## 1. Install Python 3.10
+## 1. Install Python 3.10 and uv Dependency Manager
 
 ```bash
 brew install python@3.10
@@ -20,6 +20,11 @@ Verify installation:
 
 ```bash
 python3.10 --version
+```
+
+Install uv:
+```base
+pip install uv
 ```
 
 ---
@@ -32,51 +37,35 @@ Assuming your project is located at:
 /Users/kunal/PycharmProjects/shikshalokam-mohini-service
 ```
 
-### Step 1: Go to the parent directory
+### Step 1: Go to the project directory
 
 ```bash
-cd /Users/kunal/PycharmProjects/
+cd /Users/kunal/PycharmProjects/shikshalokam-mohini-service
 ```
 
 ### Step 2: Create the virtual environment
 
 ```bash
-python3.10 -m venv mitra_env
+uv venv
 ```
 
 ### Step 3: Activate the virtual environment
 
 ```bash
-source mitra_env/bin/activate
+source .venv/bin/activate
 ```
 
 ---
 
-## 3. Navigate to the Project Directory
+## 3. Install Project Dependencies
 
 ```bash
-cd shikshalokam-mohini-service
+uv sync
 ```
 
 ---
 
-## 4. Install `uv`
-
-```bash
-pip install uv
-```
-
----
-
-## 5. Install Project Dependencies
-
-```bash
-uv pip install -r requirements.in --upgrade
-```
-
----
-
-## 6. Load Environment Variables
+## 4. Load Environment Variables
 
 Make sure you have a `.env` file in the project root.
 
@@ -88,9 +77,9 @@ export $(cat .env | xargs)
 
 ---
 
-## 7. Set Up Local PostgreSQL Database
+## 5. Set Up Local PostgreSQL Database
 
-### 7.1 Install PostgreSQL
+### 5.1 Install PostgreSQL
 
 Using Homebrew:
 
@@ -112,7 +101,7 @@ psql --version
 
 ---
 
-### 7.2 Create Database and User
+### 5.2 Create Database and User
 
 Login to Postgres:
 
@@ -146,7 +135,7 @@ Exit psql:
 
 ---
 
-### 7.3 Update `.env` File
+### 5.3 Update `.env` File
 
 Add or update the following variables in your `.env` file:
 
@@ -158,7 +147,7 @@ DATABASE_HOST=localhost
 DATABASE_PORT=5432
 ```
 
-### 7.4 Install PostgreSQL Python Driver
+### 5.4 Install PostgreSQL Python Driver
 
 Make sure this dependency exists (usually already in `requirements.in`):
 
@@ -168,7 +157,7 @@ uv pip install psycopg2-binary
 
 ---
 
-### 7.5 Run Django Migrations
+### 5.5 Run Django Migrations
 
 Ensure your virtual environment is active and env vars are loaded:
 
@@ -215,7 +204,7 @@ lsof -i :5432
 ```
 
 
-## 8. Run the Application Server
+## 6. Run the Application Server
 
 ```bash
 uvicorn shikshalokam_mohini.asgi:application \
@@ -229,7 +218,7 @@ uvicorn shikshalokam_mohini.asgi:application \
 
 ---
 
-## 9. Run Celery Worker
+## 7. Run Celery Worker
 
 Open a new terminal (with the same virtual environment activated):
 
@@ -251,13 +240,13 @@ You can add this as the next section.
 
 ---
 
-## 10. Set Up Redis (Local, IF celery gives error)
+## 8. Set Up Redis (Local, IF celery gives error)
 
 Redis is required for Celery and background task processing.
 
 ---
 
-### 10.1 Install Redis
+### 8.1 Install Redis
 
 Using Homebrew:
 
@@ -267,7 +256,7 @@ brew install redis
 
 ---
 
-### 10.2 Start Redis Server
+### 8.2 Start Redis Server
 
 Start Redis as a background service:
 
@@ -276,7 +265,7 @@ brew services start redis
 ```
 ---
 
-### 10.3 Verify Redis Is Running
+### 8.3 Verify Redis Is Running
 
 ```bash
 redis-cli ping
