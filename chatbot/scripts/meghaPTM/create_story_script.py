@@ -29,7 +29,6 @@ import logging
 import json
 import os
 from django.core.validators import URLValidator
-from langfuse.decorators import observe
 import boto3
 import json_repair
 from retrying import retry
@@ -839,7 +838,6 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
 def retry_if_result_none(result):
     return result is None
 
-@observe()
 @retry(stop_max_attempt_number=llm_retry_number, retry_on_result=retry_if_result_none, wrap_exception=True)
 def handle_bedrock_model(
         company_bot, system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
