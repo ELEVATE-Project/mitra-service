@@ -323,13 +323,13 @@
                 <div class="form-group">
                     <label for="max-workers">Max Workers:</label>
                     <input type="number" id="max-workers" name="max_workers" value="4" min="1" max="16" class="form-input">
-                    <span class="help-text">Number of parallel workers (1-16)</span>
+                    <span class="help-text">How many parallel workers to use for processing.</span>
                 </div>
 
                 <div class="form-group">
                     <label for="batch-size">Batch Size:</label>
                     <input type="number" id="batch-size" name="batch_size" value="100" min="1" max="1000" class="form-input">
-                    <span class="help-text">Number of items to process per batch (1-1000)</span>
+                    <span class="help-text">How many challenges to process together in each batch.</span>
                 </div>
             </div>
 
@@ -337,13 +337,13 @@
                 <div class="form-group">
                     <label for="max-iterations">Max Iterations:</label>
                     <input type="number" id="max-iterations" name="max_iterations" value="10" min="1" max="50" class="form-input">
-                    <span class="help-text">Maximum number of filtering iterations (1-50)</span>
+                    <span class="help-text">The system will keep filtering duplicates until this many rounds.</span>
                 </div>
 
                 <div class="form-group">
                     <label for="filter-threshold">Filter Threshold (%):</label>
                     <input type="number" id="filter-threshold" name="filter_threshold" value="10" min="1" max="100" step="0.1" class="form-input">
-                    <span class="help-text">Stop filtering when removal percentage is below this threshold (1-100%)</span>
+                    <span class="help-text">Stop processing when filtering is lower than this percentage.</span>
                 </div>
             </div>
 
@@ -371,8 +371,8 @@
                         <input type="text" id="date-till" name="date_till" placeholder="DD-MM-YYYY" class="form-input date-input" pattern="\d{2}-\d{2}-\d{4}">
                     </div>
                 </div>
-                <span class="help-text">Both dates are inclusive. Either provide date range or upload input file.</span>
-                <span id="date-error" class="error-message hidden">Either input file or date range is required</span>
+                <span class="help-text">Select a date range to fetch challenges from the database. Both start and end dates are included in the results.</span>
+                <span id="date-error" class="error-message hidden">Please select a date range or upload a file above.</span>
             </div>
 
             <div class="form-actions">

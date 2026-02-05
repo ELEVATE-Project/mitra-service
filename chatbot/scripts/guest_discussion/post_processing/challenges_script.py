@@ -37,29 +37,33 @@ def build_user_message(batch: List[str]) -> List[Dict[str, Any]]:
     ]
 
 def call_llm(batch: List[str], index: int) -> Dict[str, Any]:
-    messages = build_user_message(batch)
-    company_bot = CompanyBot.objects.filter(route='/challenges_script').first()
-    if not company_bot:
-        return {f"batch_{index}_error": "No Bot Found"}
+    try:
+        messages = build_user_message(batch)
+        company_bot = CompanyBot.objects.filter(route='/challenges_script').first()
+        if not company_bot:
+            return {f"batch_{index}_error": "No Bot Found"}
 
-    tool = company_bot.tool_context
-    if tool and isinstance(tool, str):
-        tool = json_repair.repair_json(tool, return_objects=True)
+        tool = company_bot.tool_context
+        if tool and isinstance(tool, str):
+            tool = json_repair.repair_json(tool, return_objects=True)
 
-    formatted_prompt = [{
-        'text': company_bot.context
-    }]
+        formatted_prompt = [{
+            'text': company_bot.context
+        }]
 
-    output = handle_bedrock_model(
-        system_prompt=formatted_prompt, messages=messages, model_name=company_bot.llm_model,
-        temperature=company_bot.bot_temperature, max_token=company_bot.max_token, company_bot=company_bot,
-        tools=tool
-    )
-    if output:
-        output=get_clean_output(response=output)
+        output = handle_bedrock_model(
+            system_prompt=formatted_prompt, messages=messages, model_name=company_bot.llm_model,
+            temperature=company_bot.bot_temperature, max_token=company_bot.max_token, company_bot=company_bot,
+            tools=tool
+        )
+        if output:
+            output = get_clean_output(response=output)
 
-    key = f"challenge"
-    return {key: output}
+        key = f"challenge"
+        return {key: output}
+    except Exception as e:
+        print(f"Error in call_llm for batch {index}: {str(e)}")
+        return {"challenge": None}
 
 
 def process_all_batches(
@@ -281,41 +285,44 @@ def handle_bedrock_model(
 
 
 def get_clean_output(response):
+    try:
+        if isinstance(response, str):
+            try:
+                response = json_repair.repair_json(response, return_objects=True)
+            except Exception:
+                return None
 
-    if isinstance(response, str):
-        try:
-            response = json_repair.repair_json(response, return_objects=True)
-        except Exception:
-            return None
+        if isinstance(response, list):
+            cleaned = []
 
-    if isinstance(response, list):
-        cleaned = []
+            for item in response:
+                if isinstance(item, str):
+                    cleaned.append(item.strip())
 
-        for item in response:
-            if isinstance(item, str):
-                cleaned.append(item.strip())
+                elif isinstance(item, dict) and "challenge" in item:
+                    val = item.get("challenge")
+                    if isinstance(val, str) and val.strip():
+                        cleaned.append(val.strip())
 
-            elif isinstance(item, dict) and "challenge" in item:
-                val = item.get("challenge")
-                if isinstance(val, str) and val.strip():
-                    cleaned.append(val.strip())
+            return cleaned if cleaned else None
 
-        return cleaned if cleaned else None
+        if isinstance(response, dict):
+            if 'type' in response and 'value' in response:
+                return get_clean_output(response.get('value'))
+            
+            # Extract from common parameter keys
+            extracted = (
+                response.get("parameters")
+                or response.get("input")
+                or response.get("unique_challenges")
+            )
 
-    if isinstance(response, dict):
-        if 'type' in response and 'value' in response:
-            return get_clean_output(response.get('value'))
-        
-        # Extract from common parameter keys
-        extracted = (
-            response.get("parameters")
-            or response.get("input")
-            or response.get("unique_challenges")
-        )
+            return get_clean_output(extracted)
 
-        return get_clean_output(extracted)
-
-    return None
+        return None
+    except Exception as e:
+        print(f"Error in get_clean_output: {str(e)}")
+        return None
 
 
 

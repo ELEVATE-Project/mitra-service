@@ -265,15 +265,23 @@ class IterativeChallengeProcessor:
                     challenges_faced = other_params.get('challenges_faced')
                     
                     if challenges_faced:
+                        # Handle both list and string formats
                         if isinstance(challenges_faced, list):
                             for challenge in challenges_faced:
                                 if isinstance(challenge, str) and challenge.strip():
                                     challenges.append(challenge.strip())
                         elif isinstance(challenges_faced, str) and challenges_faced.strip():
+                            # Single string - add it directly
                             challenges.append(challenges_faced.strip())
             
-            print(f"📥 Fetched {len(challenges)} challenges from {stories.count()} stories (flow: {guest_discussion_flow})")
-            print(f"   Date range: {date_from} to {date_till}")
+            # Handle empty results
+            if not challenges:
+                print(f"⚠️ No challenges found in date range {date_from} to {date_till}")
+                print(f"   Stories fetched: {stories.count()}, Flow filter: {guest_discussion_flow}")
+                return []
+            
+            print(f"✓ Fetched {len(challenges)} challenges from {stories.count()} stories")
+            print(f"  Date range: {date_from} to {date_till}")
             return challenges
             
         except Exception as e:

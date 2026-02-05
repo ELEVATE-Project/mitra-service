@@ -39,7 +39,7 @@ class PostProcessingView(TemplateView):
             if not has_file and not has_date_range:
                 return JsonResponse({
                     'success': False,
-                    'error': 'Either input file or date range is required'
+                    'error': 'Please provide either an input file or a date range to begin processing.'
                 })
 
             # Validate numeric inputs
@@ -51,7 +51,7 @@ class PostProcessingView(TemplateView):
             except ValueError:
                 return JsonResponse({
                     'success': False,
-                    'error': 'Invalid numeric values for configuration parameters'
+                    'error': 'Configuration values must be valid numbers. Please check your inputs.'
                 })
 
             # Build configuration
@@ -114,7 +114,7 @@ class PostProcessingView(TemplateView):
             except Exception as e:
                 return {
                     'success': False,
-                    'error': f'Error reading input file: {str(e)}'
+                    'error': f'Unable to read the uploaded file. Please ensure it is a valid JSON format.'
                 }
         
         # Run iterative processing
@@ -141,7 +141,7 @@ class PostProcessingView(TemplateView):
         else:
             return {
                 'success': False,
-                'error': result.get('message', 'Processing failed')
+                'error': result.get('message', 'Processing could not be completed. Please check the logs or try again.')
             }
 
     def _print_processing_output(self, config):
