@@ -303,6 +303,10 @@ def get_clean_output(response):
         return cleaned if cleaned else None
 
     if isinstance(response, dict):
+        if 'type' in response and 'value' in response:
+            return get_clean_output(response.get('value'))
+        
+        # Extract from common parameter keys
         extracted = (
             response.get("parameters")
             or response.get("input")

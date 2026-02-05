@@ -14,6 +14,7 @@ from chatbot.scripts.guest_discussion.post_processing.challenges_script import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_MAX_WORKERS
 )
+from chatbot.utils.S3.s3_service import upload_file_to_s3
 
 
 # -------------- CONFIG ------------------
@@ -231,9 +232,10 @@ class IterativeChallengeProcessor:
     def _fetch_challenges_from_db(self, date_from: str, date_till: str) -> List[str]:
         """
         Fetch challenges from database based on date range.
+        Filters stories with flow='guest-discussion' and extracts from 'challenges_faced'.
         """
         from datetime import datetime
-        from chatbot.models import Story
+        from chatbot.models import Story, SessionFlowName
         
         try:
             # Parse dates (DD-MM-YYYY format)
@@ -243,40 +245,47 @@ class IterativeChallengeProcessor:
             # Make end_date inclusive by setting to end of day
             end_date = end_date.replace(hour=23, minute=59, second=59)
             
-            # Query stories in date range
+            # Query stories in date range with guest-discussion flow
             stories = Story.objects.filter(
                 created_at__gte=start_date,
                 created_at__lte=end_date
             ).values_list('other_params', flat=True)
             
             challenges = []
+            guest_discussion_flow = SessionFlowName.GuestDiscussion.value  # 'guest-discussion'
+            
             for other_params in stories:
                 if other_params and isinstance(other_params, dict):
-                    # Extract challenge from other_params
-                    challenge = other_params.get('challenge') or other_params.get('challenges')
-                    if challenge:
-                        if isinstance(challenge, str):
-                            challenges.append(challenge.strip())
-                        elif isinstance(challenge, list):
-                            for c in challenge:
-                                if isinstance(c, str) and c.strip():
-                                    challenges.append(c.strip())
+                    # Filter by flow
+                    flow = other_params.get('flow')
+                    if flow != guest_discussion_flow:
+                        continue
+                    
+                    # Extract challenges from 'challenges_faced'
+                    challenges_faced = other_params.get('challenges_faced')
+                    
+                    if challenges_faced:
+                        if isinstance(challenges_faced, list):
+                            for challenge in challenges_faced:
+                                if isinstance(challenge, str) and challenge.strip():
+                                    challenges.append(challenge.strip())
+                        elif isinstance(challenges_faced, str) and challenges_faced.strip():
+                            challenges.append(challenges_faced.strip())
             
-            print(f"📥 Fetched {len(challenges)} challenges from database")
+            print(f"📥 Fetched {len(challenges)} challenges from {stories.count()} stories (flow: {guest_discussion_flow})")
+            print(f"   Date range: {date_from} to {date_till}")
             return challenges
             
         except Exception as e:
             print(f"❌ Error fetching from database: {e}")
+            import traceback
+            traceback.print_exc()
             return []
     
     def _save_output(self, challenges: List[str], initial_count: int) -> str:
         """
-        Save the final output to a file.
+        Save the final output to S3 and return the S3 URL.
         """
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'unique_challenges_{timestamp}.json'
-        filepath = os.path.join(self.output_dir, filename)
-        
         output_data = {
             'metadata': {
                 'generated_at': datetime.now().isoformat(),
@@ -289,10 +298,35 @@ class IterativeChallengeProcessor:
             'challenges': challenges
         }
         
-        with open(filepath, 'w') as f:
-            json.dump(output_data, f, indent=2)
+        # Convert to JSON bytes
+        json_content = json.dumps(output_data, indent=2).encode('utf-8')
         
-        return filepath
+        # Upload to S3
+        s3_key = upload_file_to_s3(
+            file_name='unique_challenges.json',
+            file_content=json_content,
+            content_type='application/json',
+            project_id=None,
+            folder_structure='Mitra/post_processing/'
+        )
+        
+        if s3_key:
+            # Construct S3 URL using S3_MEDIA_URL (matches the bucket where files are uploaded)
+            s3_media_url = os.getenv('S3_MEDIA_URL', '')
+            s3_url = f"{s3_media_url}{s3_key}"
+            print(f"✅ File uploaded to S3: {s3_url}")
+            return s3_url
+        else:
+            # Fallback: save locally if S3 upload fails
+            print("⚠️ S3 upload failed, saving locally as fallback")
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f'unique_challenges_{timestamp}.json'
+            filepath = os.path.join(self.output_dir, filename)
+            
+            with open(filepath, 'w') as f:
+                json.dump(output_data, f, indent=2)
+            
+            return filepath
 
 
 def run_iterative_challenge_filtering(
