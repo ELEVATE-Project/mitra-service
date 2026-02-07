@@ -74,16 +74,6 @@ def process_all_batches(
     output_file: str = OUTPUT_FILE
 ) -> Dict[str, Any]:
     """Process all batches and return results dictionary.
-    
-    Args:
-        data: List of challenges to process
-        batch_size: Number of items per batch
-        max_workers: Number of parallel workers
-        save_to_file: Whether to save results to file
-        output_file: Path to save results if save_to_file is True
-        
-    Returns:
-        Dictionary with batch-wise results
     """
     chunks = chunk_data(data, batch_size)
     results = {}
@@ -126,20 +116,6 @@ def run_unique_challenge_processing(
     second_output_file: str = SECOND_OUTPUT_FILE
 ) -> Tuple[Dict[str, Any], List[str]]:
     """Run unique challenge processing.
-    
-    Args:
-        start: Start index for processing
-        end: End index for processing
-        input_file: Path to input JSON file (optional if input_data is provided)
-        input_data: List of challenges to process (optional if input_file is provided)
-        batch_size: Number of items per batch
-        max_workers: Number of parallel workers
-        save_to_file: Whether to save results to files
-        output_file: Path to save batch-wise results
-        second_output_file: Path to save flat list results
-        
-    Returns:
-        Tuple of (batch_results_dict, flat_challenges_list)
     """
     # Get challenges from input_data or input_file
     if input_data is not None:
@@ -334,15 +310,6 @@ def convert_challenges_to_flat_list(
 ) -> List[str]:
     """
     Convert batch-wise LLM output into a single flat list of strings.
-    
-    Args:
-        batch_results: Dictionary with batch-wise results (optional if reading from file)
-        output_file_path: Path to read batch results from (used if batch_results is None)
-        save_to_file: Whether to save the flat list to file
-        save_file_path: Path to save the flat list
-        
-    Returns:
-        Flat list of unique challenges
     """
     flat_challenges = []
     

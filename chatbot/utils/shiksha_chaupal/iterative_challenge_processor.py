@@ -232,7 +232,6 @@ class IterativeChallengeProcessor:
     def _fetch_challenges_from_db(self, date_from: str, date_till: str) -> List[str]:
         """
         Fetch challenges from database based on date range.
-        Filters stories with flow='guest-discussion' and extracts from 'challenges_faced'.
         """
         from datetime import datetime
         from chatbot.models import Story, SessionFlowName
