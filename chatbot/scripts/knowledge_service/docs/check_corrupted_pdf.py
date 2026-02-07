@@ -8,7 +8,7 @@ django.setup()
 from chatbot.models import Media
 
 s3 = boto3.client("s3", region_name="ap-south-1")
-BUCKET = "qa-mohini-static.shikshalokam.org"
+BUCKET = os.getenv('S3_BUCKET_NAME')
 
 
 def is_valid_pdf(bucket, key):
