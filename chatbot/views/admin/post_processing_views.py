@@ -5,6 +5,11 @@ from django.http import JsonResponse
 import json
 import os
 from chatbot.utils.shiksha_chaupal.iterative_challenge_processor import run_iterative_challenge_filtering
+from chatbot.utils.admin_config.config import (
+    get_all_processing_types,
+    get_processing_type_by_value,
+    ProcessingType
+)
 
 
 @method_decorator(staff_member_required, name='dispatch')
@@ -15,23 +20,38 @@ class PostProcessingView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['model_name'] = 'Story'
-        context['processing_types'] = [
-            {'value': 'unique_challenges', 'label': 'Unique Challenges'},
-        ]
+        # Dynamically get all processing types from config
+        context['processing_types'] = get_all_processing_types()
         return context
 
     def post(self, request, *args, **kwargs):
         """Handle POST request for running the processing script"""
         try:
             processing_type = request.POST.get('processing_type', '')
-            max_workers = request.POST.get('max_workers', 4)
-            batch_size = request.POST.get('batch_size', 100)
-            max_iterations = request.POST.get('max_iterations', 10)
-            filter_threshold = request.POST.get('filter_threshold', 10)
+            
+            # Get processing type enum and validate
+            processing_type_enum = get_processing_type_by_value(processing_type)
+            if not processing_type_enum:
+                return JsonResponse({
+                    'success': False,
+                    'error': f'Unknown processing type: {processing_type}'
+                })
+            
+            # Dynamically extract and validate fields based on config
+            config = self._extract_form_data(request, processing_type_enum)
+            
+            # Check for validation errors
+            if 'error' in config:
+                return JsonResponse({
+                    'success': False,
+                    'error': config['error']
+                })
+            
+            # Common fields: file upload and date range
+            input_file = request.FILES.get('input_file', None)
             date_from = request.POST.get('date_from', '').strip()
             date_till = request.POST.get('date_till', '').strip()
-            input_file = request.FILES.get('input_file', None)
-
+            
             # Validate at least one input source
             has_file = input_file is not None
             has_date_range = bool(date_from and date_till)
@@ -41,42 +61,29 @@ class PostProcessingView(TemplateView):
                     'success': False,
                     'error': 'Please provide either an input file or a date range to begin processing.'
                 })
-
-            # Validate numeric inputs
-            try:
-                max_workers = int(max_workers)
-                batch_size = int(batch_size)
-                max_iterations = int(max_iterations)
-                filter_threshold = float(filter_threshold)
-            except ValueError:
-                return JsonResponse({
-                    'success': False,
-                    'error': 'Configuration values must be valid numbers. Please check your inputs.'
-                })
-
-            # Build configuration
-            config = {
+            
+            # Add common fields to config
+            config.update({
                 'processing_type': processing_type,
-                'max_workers': max_workers,
-                'batch_size': batch_size,
-                'max_iterations': max_iterations,
-                'filter_threshold': filter_threshold,
                 'date_from': date_from,
                 'date_till': date_till,
                 'input_file': input_file.name if input_file else None,
                 'has_file': has_file,
                 'has_date_range': has_date_range
-            }
+            })
 
-            # Run the appropriate processing
-            if processing_type == 'unique_challenges':
-                result = self._run_unique_challenges_processing(config, input_file)
+            # Run the appropriate processing using dynamic routing
+            # Get the handler method name from config
+            handler_method_name = processing_type_enum.handler_method
+            handler_method = getattr(self, handler_method_name, None)
+            
+            if handler_method:
+                result = handler_method(config, input_file)
                 return JsonResponse(result)
             else:
-                self._print_processing_output(config)
                 return JsonResponse({
-                    'success': True,
-                    'message': 'Processing initiated!'
+                    'success': False,
+                    'error': f'Handler method {handler_method_name} not found for {processing_type}'
                 })
 
         except Exception as e:
@@ -86,6 +93,66 @@ class PostProcessingView(TemplateView):
                 'success': False,
                 'error': str(e)
             })
+    
+    def _extract_form_data(self, request, processing_type_enum):
+        """
+        Dynamically extract and validate form fields based on processing type config.
+        """
+        from chatbot.utils.admin_config.config import get_processing_type_config
+        
+        config_data = get_processing_type_config(processing_type_enum)
+        field_definitions = config_data.get('fields', [])
+        
+        extracted_data = {}
+        
+        for field_def in field_definitions:
+            field_name = field_def['name']
+            field_type = field_def['type']
+            default_value = field_def.get('default')
+            
+            # Get value from request
+            raw_value = request.POST.get(field_name)
+            
+            # Use default if not provided
+            if raw_value is None or raw_value == '':
+                extracted_data[field_name] = default_value
+                continue
+            
+            # Type conversion and validation
+            try:
+                if field_type == 'number':
+                    # Check if it has step (float) or is integer
+                    if 'step' in field_def and field_def['step'] != 1:
+                        converted_value = float(raw_value)
+                    else:
+                        converted_value = int(raw_value)
+                    
+                    # Validate min/max
+                    if 'min' in field_def and converted_value < field_def['min']:
+                        return {'error': f"{field_def['label']} must be at least {field_def['min']}"}
+                    if 'max' in field_def and converted_value > field_def['max']:
+                        return {'error': f"{field_def['label']} must be at most {field_def['max']}"}
+                    
+                    extracted_data[field_name] = converted_value
+                
+                elif field_type == 'select':
+                    # Validate choice is in allowed choices
+                    valid_choices = [choice['value'] for choice in field_def.get('choices', [])]
+                    if valid_choices and raw_value not in valid_choices:
+                        return {'error': f"Invalid value for {field_def['label']}"}
+                    extracted_data[field_name] = raw_value
+                
+                elif field_type == 'text':
+                    extracted_data[field_name] = raw_value.strip()
+                
+                else:
+                    # Default: store as-is
+                    extracted_data[field_name] = raw_value
+                    
+            except (ValueError, TypeError) as e:
+                return {'error': f"Invalid value for {field_def['label']}: {str(e)}"}
+        
+        return extracted_data
 
     def _run_unique_challenges_processing(self, config, input_file):
         """Run the iterative unique challenges processing."""
