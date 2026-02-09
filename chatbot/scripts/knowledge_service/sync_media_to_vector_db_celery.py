@@ -16,11 +16,11 @@ import time
 
 # Django setup
 import django
-if __name__ == '__main__':
-    project_root = Path(__file__).resolve().parent.parent.parent
-    sys.path.insert(0, str(project_root))
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'shikshalokam_mohini.settings')
-    django.setup()
+# if __name__ == '__main__':
+#     project_root = Path(__file__).resolve().parent.parent.parent
+#     sys.path.insert(0, str(project_root))
+#     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'shikshalokam_mohini.settings')
+#     django.setup()
 
 from django.db.models import Q
 from chatbot.models import Media, Company, CompanyBot
@@ -423,6 +423,14 @@ def main():
         print(f"\n❌ ERROR: {e}")
         sys.exit(1)
 
+#
+# if __name__ == '__main__':
+#     main()
 
-if __name__ == '__main__':
-    main()
+# CALL FOR SOME MEDIA IDS ONLY
+# syncer = MediaVectorDBSyncCelery(
+#     company_slug=None,
+#     media_ids=[364, 396],
+# )
+#
+# syncer.sync_all()

@@ -95,7 +95,15 @@ class CommonResponseHandler(BaseResponseHandler):
                 return True
 
         try:
-            extracted_response, _ = self._extract_response_and_reason(response)
+            extracted_response, _, meta = self._extract_response_and_reason(response)
+            if meta:
+                flag = meta.get("should_function_call")
+                if isinstance(flag, str):
+                    flag = flag.strip().lower() in ("true", "yes", "1")
+                if flag is True:
+                    print("DEBUG: should_function_call detected via meta in is_function_call")
+                    logger.info("should_function_call detected via meta in is_function_call")
+                    return True
             if extracted_response == '':
                 print(
                     "DEBUG: Empty response detected in is_function_call, treating as function call for postprocessing")
@@ -115,7 +123,16 @@ class CommonResponseHandler(BaseResponseHandler):
         if is_actual_function_call:
             return True, None, None
 
-        extracted_response, reason_text = self._extract_response_and_reason(response)
+        extracted_response, reason_text, meta = self._extract_response_and_reason(response)
+
+        if meta:
+            flag = meta.get("should_function_call")
+            if isinstance(flag, str):
+                flag = flag.strip().lower() in ("true", "yes", "1")
+            if flag is True:
+                print("DEBUG: should_function_call detected via meta in _analyze_response")
+                logger.info("should_function_call detected via meta in _analyze_response")
+                return True, None, None
 
         if extracted_response == '':
             print("DEBUG: Empty response detected after extraction, treating as function call for state transition")
@@ -266,7 +283,7 @@ class CommonResponseHandler(BaseResponseHandler):
 
                 if not (response.strip().startswith('{') and response.strip().endswith('}')):
                     logger.info("DEBUG: String doesn't look like JSON, treating as plain text response")
-                    return response, None
+                    return response, None, None
 
                 logger.info("DEBUG: String looks like JSON, attempting parsing")
                 try:
@@ -279,7 +296,7 @@ class CommonResponseHandler(BaseResponseHandler):
                         logger.info("DEBUG: Successfully repaired and parsed JSON")
                     except Exception as repair_error:
                         logger.info(f"DEBUG: JSON repair failed: {repair_error}")
-                        return response, None
+                        return response, None, None
 
                 response = parsed_response
 
@@ -357,19 +374,22 @@ class CommonResponseHandler(BaseResponseHandler):
                     logger.info(
                         f"DEBUG: Extracted data keys: {list(extracted_data.keys()) if isinstance(extracted_data, dict) else 'Not a dict'}")
 
+                meta = extracted_data.copy() if isinstance(extracted_data, dict) else None
                 if extracted_data and isinstance(extracted_data, dict):
                     if len(extracted_data) == 0:
                         print(
                             f"DEBUG: Empty extracted_data detected from LLM (input/parameters) - treating as function call")
                         logger.info(
                             f"Empty extracted_data detected from LLM (input/parameters) - treating as function call: {response}")
-                        return '', 'LLM returned empty input/parameters - treating as function call to proceed to next state'
+                        return '', ('LLM returned empty input/parameters - treating as function call to '
+                                    'proceed to next state'), meta
 
                     response_text = extracted_data.get('response', '')
                     reason_text = extracted_data.get('reason', '')
                     logger.info(
-                        f"DEBUG: Final extraction - response: '{response_text[:100]}...', reason: '{reason_text[:100]}...'")
-                    return response_text, reason_text
+                        f"DEBUG: Final extraction - response: '{response_text[:100]}...', "
+                        f"reason: '{reason_text[:100]}...'")
+                    return response_text, reason_text, meta
 
                 elif extracted_data and isinstance(extracted_data, str):
                     logger.info("DEBUG: Extracted data is string, trying to parse as JSON")
@@ -382,22 +402,26 @@ class CommonResponseHandler(BaseResponseHandler):
                             logger.info("DEBUG: Successfully repaired string data")
                         except Exception as e:
                             logger.info(f"DEBUG: Failed to parse string data: {e}")
-                            return extracted_data, None
+                            return extracted_data, None, meta
 
                     if isinstance(parsed_data, dict):
                         response_text = parsed_data.get('response', '')
                         reason_text = parsed_data.get('reason', '')
                         logger.info(
-                            f"DEBUG: Parsed string data - response: '{response_text[:100]}...', reason: '{reason_text[:100]}...'")
-                        return response_text, reason_text
+                            f"DEBUG: Parsed string data - response: '{response_text[:100]}...', reason: "
+                            f"'{reason_text[:100]}...'")
+                        meta = parsed_data.copy()
+                        return response_text, reason_text, meta
 
                 logger.info("DEBUG: No specific format matched, checking original dict for response/reason")
                 response_text = response_copy.get('response', '')
                 reason_text = response_copy.get('reason', '')
                 if response_text or reason_text:
                     logger.info(
-                        f"DEBUG: Found in original dict - response: '{response_text[:100]}...', reason: '{reason_text[:100]}...'")
-                    return response_text, reason_text
+                        f"DEBUG: Found in original dict - response: '{response_text[:100]}...', reason: "
+                        f"'{reason_text[:100]}...'"
+                    )
+                    return response_text, reason_text, meta
 
         except Exception as e:
             logger.info(f"DEBUG: Error extracting response and reason: {e}")
@@ -405,7 +429,7 @@ class CommonResponseHandler(BaseResponseHandler):
 
         logger.info("DEBUG: Fallback - returning original response as string")
         final_response = str(response) if not isinstance(response, str) else response
-        return final_response, None
+        return final_response, None, None
 
     def _extract_expected_output(self, response):
         """Extract expected_output from function call response if it exists and is not empty"""
