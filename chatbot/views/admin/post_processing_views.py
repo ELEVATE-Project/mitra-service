@@ -10,6 +10,8 @@ from chatbot.utils.admin_config.config import (
     get_processing_type_by_value,
     ProcessingType
 )
+from chatbot.celery_tasks.post_processing_tasks import run_unique_challenges_task
+from celery.result import AsyncResult
 
 
 @method_decorator(staff_member_required, name='dispatch')
@@ -23,6 +25,17 @@ class PostProcessingView(TemplateView):
         # Dynamically get all processing types from config
         context['processing_types'] = get_all_processing_types()
         return context
+    
+    def get(self, request, *args, **kwargs):
+        """Handle GET requests - either render template or check task status"""
+        task_id = request.GET.get('task_id')
+        
+        if task_id:
+            # Check task status
+            return self._check_task_status(task_id)
+        
+        # Normal template rendering
+        return super().get(request, *args, **kwargs)
 
     def post(self, request, *args, **kwargs):
         """Handle POST request for running the processing script"""
@@ -155,62 +168,108 @@ class PostProcessingView(TemplateView):
         return extracted_data
 
     def _run_unique_challenges_processing(self, config, input_file):
-        """Run the iterative unique challenges processing."""
+        """Trigger async task for unique challenges processing."""
         
-        # Prepare input data
-        input_data = None
-        input_file_path = None
+        # Prepare input file content if uploaded
+        input_file_content = None
         
         if config.get('has_file') and input_file:
-            # Read the uploaded file
             try:
+                # Read the uploaded file content
                 content = input_file.read().decode('utf-8')
-                input_data = json.loads(content)
-                
-                # Normalize the data
-                if isinstance(input_data, list):
-                    normalized = []
-                    for item in input_data:
-                        if isinstance(item, str) and item.strip():
-                            normalized.append(item.strip())
-                        elif isinstance(item, dict) and 'challenge' in item:
-                            val = item.get('challenge')
-                            if isinstance(val, str) and val.strip():
-                                normalized.append(val.strip())
-                    input_data = normalized
+                input_file_content = content
             except Exception as e:
                 return {
                     'success': False,
                     'error': f'Unable to read the uploaded file. Please ensure it is a valid JSON format.'
                 }
         
-        # Run iterative processing
-        result = run_iterative_challenge_filtering(
-            input_data=input_data,
-            input_file=input_file_path,
-            date_from=config.get('date_from') if config.get('has_date_range') else None,
-            date_till=config.get('date_till') if config.get('has_date_range') else None,
-            max_iterations=config.get('max_iterations', 10),
-            filter_threshold=config.get('filter_threshold', 10.0),
-            batch_size=config.get('batch_size', 100),
-            max_workers=config.get('max_workers', 4)
-        )
-        
-        if result.get('success'):
+        # Trigger the async Celery task
+        try:
+            import traceback
+            
+            task = run_unique_challenges_task.delay(config, input_file_content)
+            
+            print(f"✅ Task triggered successfully. Task ID: {task.id}")
+            
             return {
                 'success': True,
-                'message': result.get('message', 'Processing completed successfully'),
-                'output_file': result.get('output_file'),
-                'iterations': result.get('iterations_completed'),
-                'final_count': len(result.get('final_challenges', [])),
-                'stats': result.get('stats', [])
+                'task_id': task.id,
+                'message': 'Task has been started.'
             }
-        else:
+        except Exception as e:
+            print(f"❌ Failed to trigger task: {str(e)}")
+            traceback.print_exc()
             return {
                 'success': False,
-                'error': result.get('message', 'Processing could not be completed. Please check the logs or try again.')
+                'error': f'Failed to start task: {str(e)}'
             }
 
+    def _check_task_status(self, task_id):
+        """Check the status of a Celery task."""
+        try:
+            task_result = AsyncResult(task_id)
+            
+            if task_result.state == 'PENDING':
+                return JsonResponse({
+                    'state': 'PENDING',
+                    'status': 'Task is waiting to be processed...'
+                })
+            elif task_result.state == 'PROCESSING':
+                # Custom state we set in the task
+                return JsonResponse({
+                    'state': 'PROCESSING',
+                    'status': task_result.info.get('status', 'Processing...'),
+                    'progress': task_result.info.get('progress', 0)
+                })
+            elif task_result.state == 'SUCCESS':
+                result = task_result.result
+                if result.get('success'):
+                    return JsonResponse({
+                        'state': 'SUCCESS',
+                        'success': True,
+                        'status': 'completed',
+                        'message': result.get('message'),
+                        'output_file': result.get('output_file'),
+                        'iterations': result.get('iterations'),
+                        'final_count': result.get('final_count'),
+                        'stats': result.get('stats', [])
+                    })
+                else:
+                    return JsonResponse({
+                        'state': 'SUCCESS',
+                        'success': False,
+                        'error': result.get('error', 'Processing failed')
+                    })
+            elif task_result.state == 'FAILURE':
+                # Get detailed error information
+                error_info = task_result.info
+                error_message = str(error_info)
+                
+                # If it's an exception, get more details
+                if hasattr(error_info, '__class__'):
+                    error_message = f"{error_info.__class__.__name__}: {str(error_info)}"
+                
+                print(f"❌ Task FAILURE detected. Error: {error_message}")
+                print(f"📊 Task result info: {task_result.info}")
+                
+                return JsonResponse({
+                    'state': 'FAILURE',
+                    'success': False,
+                    'error': error_message
+                })
+            else:
+                return JsonResponse({
+                    'state': task_result.state,
+                    'status': f'Task state: {task_result.state}'
+                })
+                
+        except Exception as e:
+            return JsonResponse({
+                'success': False,
+                'error': f'Error checking task status: {str(e)}'
+            })
+    
     def _print_processing_output(self, config):
         processing_type = config.get('processing_type', '')
         

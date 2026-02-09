@@ -64,7 +64,15 @@
         <span class="btn-text">Run</span>
         <span class="btn-loading hidden">Running...</span>
     </button>
-    <span id="success-message" class="success-message hidden">✅ Script executed successfully!</span>
+    <button type="button" class="run-button hidden" id="view-status-btn" onclick="checkTaskStatus()">
+        <span class="btn-text">View Status</span>
+        <span class="btn-loading hidden">Checking...</span>
+    </button>
+    <span id="success-message" class="success-message hidden">✅ Script iniriated successfully!</span>
+</div>
+
+<div id="task-started-message" class="task-started-message hidden">
+    <span id="task-message-text">Task started!</span>
 </div>
 
 <div id="result-section" class="result-section hidden">

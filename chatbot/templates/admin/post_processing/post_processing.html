@@ -181,6 +181,11 @@
     .btn-loading.hidden {
         display: none;
     }
+    
+    /* General hidden class for any element */
+    .hidden {
+        display: none !important;
+    }
 
     .success-message {
         color: #28a745;
@@ -189,6 +194,21 @@
     }
 
     .success-message.hidden {
+        display: none;
+    }
+    
+    .task-started-message {
+        margin-top: 15px;
+        padding: 12px 20px;
+        background: #e7f3ff;
+        border-left: 4px solid #417690;
+        border-radius: 4px;
+        color: #0d47a1;
+        font-weight: 500;
+        font-size: 14px;
+    }
+    
+    .task-started-message.hidden {
         display: none;
     }
 
@@ -275,6 +295,34 @@
         z-index: 0;
     }
 
+    .info-message {
+        background-color: #e3f2fd;
+        border: 1px solid #90caf9;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 20px;
+    }
+
+    .info-message svg {
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .info-message p {
+        margin: 0;
+        line-height: 1.5;
+    }
+
+    .info-message p:first-of-type {
+        font-weight: 600;
+        color: #1976d2;
+        margin-bottom: 8px;
+    }
+
+    .info-message p:last-of-type {
+        color: #333;
+    }
+
     @media (max-width: 768px) {
         .post-processing-container {
             padding: 15px;
@@ -305,6 +353,22 @@
 {% block content %}
 <div class="post-processing-container">
     <h1>Post Processing</h1>
+
+    <div class="info-message">
+        <div style="display: flex; align-items: flex-start; gap: 12px;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1976d2" stroke-width="2" style="flex-shrink: 0; margin-top: 2px;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <div>
+                <p style="margin: 0 0 8px 0; font-weight: 600; color: #1976d2;">Do Not Reload Page</p>
+                <p style="margin: 0; line-height: 1.5; color: #333;">
+                    Reloading page will remove the current progress.
+                </p>
+            </div>
+        </div>
+    </div>
 
     <div class="dropdown-section">
         <label for="processing-type">Select Processing Type:</label>
@@ -356,6 +420,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const resultIterations = document.getElementById('result-iterations');
     const resultFinalCount = document.getElementById('result-final-count');
     const resultOutputFile = document.getElementById('result-output-file');
+    const viewStatusBtn = document.getElementById('view-status-btn');
+    
+    // Ensure View Status button is hidden on page load
+    if (viewStatusBtn) {
+        viewStatusBtn.classList.add('hidden');
+    }
 
     // Set default dates (today and 30 days ago)
     const today = new Date();
@@ -430,12 +500,104 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Display results
     const displayResults = (data) => {
+        // If we received a task_id, this is an async task
+        if (data.task_id) {
+            showTaskStartedMessage(data.task_id, data.message);
+            return;
+        }
+        
+        // Otherwise, display the results (for completed tasks)
         resultSection.classList.remove('hidden');
         
         resultStatus.textContent = data.message || 'Completed';
         resultIterations.textContent = data.iterations || 'N/A';
         resultFinalCount.textContent = data.final_count || 'N/A';
         resultOutputFile.textContent = data.output_file || 'N/A';
+    };
+    
+    let currentTaskId = null;
+    
+    const showTaskStartedMessage = (taskId, message) => {
+        currentTaskId = taskId;
+        
+        // Hide run button, show view status button
+        runBtn.style.display = 'none';
+        
+        // Show task started message
+        const taskMessageDiv = document.getElementById('task-started-message');
+        if (taskMessageDiv) {
+            taskMessageDiv.classList.remove('hidden');
+            document.getElementById('task-message-text').textContent = message || 'Task started successfully!';
+        }
+        
+        // Show view status button
+        if (viewStatusBtn) {
+            viewStatusBtn.classList.remove('hidden');
+        }
+    };
+    
+    // Make checkTaskStatus globally accessible for onclick handler
+    window.checkTaskStatus = function() {
+        if (!currentTaskId) {
+            alert('No active task to check');
+            return;
+        }
+        
+        const statusBtn = document.getElementById('view-status-btn');
+        const statusBtnText = statusBtn.querySelector('.btn-text');
+        const statusBtnLoading = statusBtn.querySelector('.btn-loading');
+        
+        // Disable button and show loading
+        statusBtn.disabled = true;
+        statusBtnText.classList.add('hidden');
+        statusBtnLoading.classList.remove('hidden');
+        
+        // Fetch task status
+        fetch(`${window.location.href}?task_id=${currentTaskId}`, {
+            method: 'GET',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.state === 'SUCCESS') {
+                if (data.success) {
+                    // Task completed successfully
+                    displayResults(data);
+                    successMessage.classList.remove('hidden');
+                    successMessage.textContent = '✅ Task completed successfully!';
+                    
+                    // Hide task started message and status button
+                    document.getElementById('task-started-message')?.classList.add('hidden');
+                    statusBtn.classList.add('hidden');
+                    document.getElementById('run-btn').style.display = 'inline-flex';
+                    
+                    currentTaskId = null;
+                } else {
+                    alert('Task failed: ' + (data.error || 'Unknown error'));
+                }
+            } else if (data.state === 'FAILURE') {
+                alert('Task failed: ' + (data.error || 'Unknown error'));
+                document.getElementById('task-started-message')?.classList.add('hidden');
+                statusBtn.classList.add('hidden');
+                document.getElementById('run-btn').style.display = 'inline-flex';
+                currentTaskId = null;
+            } else if (data.state === 'PENDING') {
+                alert('⏳ Task is waiting in queue. Please try again in a moment.');
+            } else if (data.state === 'PROCESSING') {
+                alert(`⚙️ ${data.status || 'Task is currently processing...'}`);
+            } else {
+                alert(`Task state: ${data.state}`);
+            }
+        })
+        .catch(error => {
+            alert('Failed to check task status: ' + error.message);
+        })
+        .finally(() => {
+            // Re-enable button
+            statusBtn.disabled = false;
+            statusBtnText.classList.remove('hidden');
+            statusBtnLoading.classList.add('hidden');
+        });
     };
 
     // Handle form submission
