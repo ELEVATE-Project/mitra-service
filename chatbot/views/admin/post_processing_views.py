@@ -215,13 +215,6 @@ class PostProcessingView(TemplateView):
                     'state': 'PENDING',
                     'status': 'Task is waiting to be processed...'
                 })
-            elif task_result.state == 'PROCESSING':
-                # Custom state we set in the task
-                return JsonResponse({
-                    'state': 'PROCESSING',
-                    'status': task_result.info.get('status', 'Processing...'),
-                    'progress': task_result.info.get('progress', 0)
-                })
             elif task_result.state == 'SUCCESS':
                 result = task_result.result
                 if result.get('success'):

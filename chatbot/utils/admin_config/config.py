@@ -1,9 +1,3 @@
-"""
-Admin Configuration for Post Processing
-
-This module defines all processing types and their configurations
-for the admin post-processing interface.
-"""
 
 from enum import Enum
 from typing import Dict, List, Any
@@ -16,7 +10,6 @@ COMMON_FIELDS = ['input_file', 'date_from', 'date_till']
 class ProcessingType(Enum):
     """
     Enum for all available post-processing types.
-    Each type has a value (used in form/URL) and associated configuration.
     """
     UNIQUE_CHALLENGES = 'unique_challenges'
     

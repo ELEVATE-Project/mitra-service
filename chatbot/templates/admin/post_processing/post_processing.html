@@ -577,8 +577,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 currentTaskId = null;
             } else if (data.state === 'PENDING') {
                 alert('⏳ Task is waiting in queue. Please try again in a moment.');
-            } else if (data.state === 'PROCESSING') {
-                alert(`⚙️ ${data.status || 'Task is currently processing...'}`);
             } else {
                 alert(`Task state: ${data.state}`);
             }

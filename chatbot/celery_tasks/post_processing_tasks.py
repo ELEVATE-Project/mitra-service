@@ -13,25 +13,11 @@ from typing import Dict, Any, Optional
 def run_unique_challenges_task(self, config: Dict[str, Any], input_file_content: Optional[str] = None):
     """
     Celery task to run unique challenges processing asynchronously.
-    
-    Args:
-        self: Task instance (automatically passed due to bind=True)
-        config: Configuration dictionary with all processing parameters
-        input_file_content: Optional JSON string content of uploaded file
-    
-    Returns:
-        Dictionary with processing results
     """
     try:
         print(f"\n{'='*60}")
         print(f"🚀 CELERY TASK STARTED: run_unique_challenges_task")
         print(f"📋 Config received: {config}")
-        
-        # Update task state to show it has started
-        self.update_state(
-            state='PROCESSING',
-            meta={'status': 'Starting unique challenges processing...', 'progress': 0}
-        )
         
         from chatbot.utils.shiksha_chaupal.iterative_challenge_processor import run_iterative_challenge_filtering
         
@@ -57,12 +43,6 @@ def run_unique_challenges_task(self, config: Dict[str, Any], input_file_content:
                     'success': False,
                     'error': f'Unable to parse uploaded file content: {str(e)}'
                 }
-        
-        # Update state before starting main processing
-        self.update_state(
-            state='PROCESSING',
-            meta={'status': 'Running iterative challenge filtering...', 'progress': 10}
-        )
         
         # Run iterative processing
         result = run_iterative_challenge_filtering(
