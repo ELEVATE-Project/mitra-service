@@ -427,21 +427,6 @@ document.addEventListener('DOMContentLoaded', function() {
         viewStatusBtn.classList.add('hidden');
     }
 
-    // Set default dates (today and 30 days ago)
-    const today = new Date();
-    const thirtyDaysAgo = new Date(today);
-    thirtyDaysAgo.setDate(today.getDate() - 30);
-
-    const formatDateDDMMYYYY = (date) => {
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        return `${day}-${month}-${year}`;
-    };
-
-    dateFromInput.value = formatDateDDMMYYYY(thirtyDaysAgo);
-    dateTillInput.value = formatDateDDMMYYYY(today);
-
     // Auto-format date inputs
     const formatDateInput = (input) => {
         input.addEventListener('input', function(e) {
@@ -573,11 +558,20 @@ document.addEventListener('DOMContentLoaded', function() {
                     
                     currentTaskId = null;
                 } else {
+                    // Task completed but with error
                     alert('Task failed: ' + (data.error || 'Unknown error'));
+                    // Reset UI to allow retry
+                    document.getElementById('task-started-message')?.classList.add('hidden');
+                    successMessage.classList.add('hidden');
+                    statusBtn.classList.add('hidden');
+                    document.getElementById('run-btn').style.display = 'inline-flex';
+                    currentTaskId = null;
                 }
             } else if (data.state === 'FAILURE') {
                 alert('Task failed: ' + (data.error || 'Unknown error'));
+                // Reset UI to allow retry
                 document.getElementById('task-started-message')?.classList.add('hidden');
+                successMessage.classList.add('hidden');
                 statusBtn.classList.add('hidden');
                 document.getElementById('run-btn').style.display = 'inline-flex';
                 currentTaskId = null;
@@ -614,8 +608,13 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // Clear previous states
         successMessage.classList.add('hidden');
         resultSection.classList.add('hidden');
+        document.getElementById('task-started-message')?.classList.add('hidden');
+        viewStatusBtn?.classList.add('hidden');
+        
+        // Show loading state
         runBtn.disabled = true;
         btnText.classList.add('hidden');
         btnLoading.classList.remove('hidden');
@@ -631,13 +630,22 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(data => {
             if (data.success) {
                 successMessage.classList.remove('hidden');
+                successMessage.textContent = '✅ Script initiated successfully!';
                 displayResults(data);
             } else {
+                // Error case - reset UI to initial state
                 alert('Error: ' + (data.error || 'Unknown error'));
+                runBtn.style.display = 'inline-flex';
+                viewStatusBtn?.classList.add('hidden');
+                document.getElementById('task-started-message')?.classList.add('hidden');
             }
         })
         .catch(error => {
             alert('Request failed: ' + error.message);
+            // Reset UI on network error
+            runBtn.style.display = 'inline-flex';
+            viewStatusBtn?.classList.add('hidden');
+            document.getElementById('task-started-message')?.classList.add('hidden');
         })
         .finally(() => {
             runBtn.disabled = false;
