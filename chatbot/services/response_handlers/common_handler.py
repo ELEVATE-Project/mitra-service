@@ -709,11 +709,11 @@ class CommonResponseHandler(BaseResponseHandler):
             
             # Use content from function arguments as the main message (contains the explanation)
             # If content is available, show it; otherwise use a default message
-            if content_from_args:
-                bot_message = content_from_args
-            else:
-                bot_message = f"I'll prepare the file '{filename}' for you. Please note that file download functionality is currently being implemented."
-            
+            bot_message = arguments.get(
+                "bot_message",
+                f"Your file '{filename}' is ready. You can download it below."
+            )
+
             logger.info(f"Sending download acknowledgment with {len(bot_message)} chars")
             logger.info(f"Function call detected internally: {function_name} with args: {arguments.keys()}")
             logger.info(f"File search content available: {len(response.get('content', ''))} chars")
