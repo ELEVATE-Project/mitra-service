@@ -90,6 +90,10 @@ class BaseResponseHandler(ABC):
 
             if isinstance(result, tuple):
                 response, extra_content, finish_reason = result
+                
+                # Store extra_content if present for later use
+                if extra_content:
+                    kwargs['llm_extra_content'] = extra_content
             else:
                 response = result
                 finish_reason = None
@@ -98,6 +102,7 @@ class BaseResponseHandler(ABC):
 
             streaming_completed = finish_reason == "stop" and use_streaming
 
+            # Only treat None as error
             if response is None:
                 if company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
                     response = {
@@ -276,8 +281,10 @@ class BaseResponseHandler(ABC):
         """
         Handle OpenAI response using handle_openai_response_api.
         Works for both streaming and non-streaming modes.
+        Supports both file_search and function calling tools.
         """
         final_extra_content = None
+        function_call_result = None
 
         try:
             logger.info(f"Processing free-flow for session {session_id}, channel {channel_name}")
@@ -288,12 +295,18 @@ class BaseResponseHandler(ABC):
                 import json_repair
                 tool_context = json_repair.repair_json(company_bot.tool_context, return_objects=True)
                 if tool_context:
-                    tools = tool_context.get("tool")
-                    tool_choice = tool_context.get("tool_choice", "auto")
+                    # Handle both formats: flat array or dict with "tool" key
+                    if isinstance(tool_context, list):
+                        tools = tool_context
+                        tool_choice = "auto"
+                    elif isinstance(tool_context, dict):
+                        tools = tool_context.get("tool")
+                        tool_choice = tool_context.get("tool_choice", "auto")
 
                 logger.info("Using state machine tool_context")
             except Exception as e:
-                logger.error(f"Failed to parse state machine tool_context: {e}")
+                logger.error(f"Failed to parse state machine tool_context: {e}", exc_info=True)
+                print(f"❌ Error parsing tool_context: {e}")
 
             accumulated_response = ""
             finish_reason = None
@@ -313,12 +326,21 @@ class BaseResponseHandler(ABC):
                 finish_reason = chunk_data.get('finish_reason')
                 error = chunk_data.get('error')
                 extra_content = chunk_data.get('extra_content')
+                function_call = chunk_data.get('function_call')
 
                 if error:
                     logger.error(f'OpenAI error: {error}')
                     if stream:
                         self._send_error_chunk(channel_name, "Error processing your request")
                     return None
+
+                # Handle function call response
+                if function_call:
+                    function_call_result = function_call
+                    logger.info(f"Function call received: {function_call['name']}")
+                    logger.info(f"Function arguments: {function_call.get('arguments', {})}")
+                    # Don't send function_call via WebSocket here - it will be handled by common_handler
+                    # This prevents duplicate WebSocket messages
 
                 if content:
                     accumulated_response += content
@@ -340,6 +362,17 @@ class BaseResponseHandler(ABC):
                             "stop",
                             final_extra_content
                         )
+            # If function call was made, return it for processing
+            if function_call_result:
+                logger.info(f"Returning function call result: {function_call_result}")
+                # Return function call as response dict with finish_reason
+                response_dict = {
+                    'function_call': function_call_result,
+                    'finish_reason': 'function_call',
+                    'extra_content': final_extra_content  # Include sources if available
+                }
+                return response_dict, final_extra_content, 'function_call'
+            
             if accumulated_response:
                 save_in_company_db(
                     session_id=session_id,
