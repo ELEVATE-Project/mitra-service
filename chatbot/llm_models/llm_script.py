@@ -5,7 +5,6 @@ from chatbot.models.enums import LLMProvider
 from chatbot.utils.llm import LLM
 from typing import Optional, List, Dict
 from django.core.validators import URLValidator
-from langfuse.decorators import observe
 from openai import OpenAI
 from pprint import pprint
 from retrying import retry
@@ -26,7 +25,6 @@ AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 llm_retry_number = int(os.getenv('LLM_RETRY_NUMBER'))
 
 
-@observe()
 def handle_llama_model(
         messages, max_token, model_name=None, is_json_format=True, temperature=None, top_p=None, seed=None, n=None,
         stream=False, url_to_use=None
@@ -83,70 +81,84 @@ def handle_llama_model(
         return response_str
 
 
-@observe()
 def handle_openai_model(
         messages, max_token=None, temperature=None, company_bot=None, model_name=None, is_json_response=True,
         stream=False, key_name='OPENAI_API_KEY', is_actual_key=False, tools=None, tool_choice=None, client_choice=None,
         top_p=None, system_prompt=None
 ):
-    if is_actual_key:
-        client_api_key = key_name
-    else:
-        client_api_key = os.getenv(key_name)
+    try:
+        if is_actual_key:
+            client_api_key = key_name
+        else:
+            client_api_key = os.getenv(key_name)
 
-    if not client_api_key:
-        raise ValueError(f"No API key found for '{key_name}'. Please set the environment variable correctly.")
+        if not client_api_key:
+            raise ValueError(f"No API key found for '{key_name}'. Please set the environment variable correctly.")
 
-    if client_choice:
-        client = client_choice
-    else:
-        client = OpenAI(api_key=client_api_key)
+        if client_choice:
+            client = client_choice
+        else:
+            client = OpenAI(api_key=client_api_key)
 
-    if model_name:
-        model_to_use = model_name
-    elif company_bot:
-        model_to_use = company_bot.llm_model
-    else:
-        model_to_use = LLMModel.GPT4_O_MINI
+        if model_name:
+            model_to_use = model_name
+        elif company_bot:
+            model_to_use = company_bot.llm_model
+        else:
+            model_to_use = LLMModel.GPT4_O_MINI
 
-    if system_prompt and isinstance(system_prompt, list):
-        messages = system_prompt+messages
+        if system_prompt and isinstance(system_prompt, list):
+            messages = system_prompt+messages
 
-    request_data = {
-        "model": model_to_use,
-        "messages": messages,
-    }
-
-    if max_token:
-        request_data["max_tokens"]= max_token
-    if temperature:
-        request_data['temperature']= temperature
-    if is_json_response:
-        request_data["response_format"] = {"type": "json_object"}
-    if stream:
-        request_data["stream"] = stream
-    if tools:
-        request_data["tools"]= tools
-        if tool_choice:
-            request_data["tool_choice"]= tool_choice
-    if top_p:
-        request_data['top_p'] = top_p
-    print("request_data: ", request_data)
-    response = client.chat.completions.create(**request_data)
-    print("raw res: ", response)
-    if is_json_response:
-        response_content = response.choices[0].message.content
-        response_json = None
-        if response_content:
-            response_json = json.loads(response_content)
-        return response_json
-    elif tools:
-        tool_calls = response.choices[0].message.tool_calls
-        if tool_calls and len(tool_calls) > 0:
-            return {}
-        return response.choices[0].message.content if response.choices else response
-    else:
-        return response.choices[0].message.content if response.choices else response
+        request_data = {
+            "model": model_to_use,
+            "messages": messages,
+        }
+        token_limit_models = {
+            LLMModel.GPT5_MINI,
+            LLMModel.GPT5_2_PRO,
+            LLMModel.GPT5_2,
+        }
+        if max_token:
+            if company_bot.llm_model in token_limit_models:
+                request_data["max_completion_tokens"] = max_token
+            else:
+                request_data["max_tokens"]= max_token
+        if temperature:
+            request_data['temperature']= temperature
+        if is_json_response:
+            request_data["response_format"] = {"type": "json_object"}
+        if stream:
+            request_data["stream"] = stream
+        if tools:
+            request_data["tools"]= tools
+            if tool_choice:
+                request_data["tool_choice"]= tool_choice
+        if top_p is not None and company_bot.llm_model not in token_limit_models:
+            request_data['top_p'] = top_p
+        print("request_data: ", request_data)
+        response = client.chat.completions.create(**request_data)
+        price = calculate_and_log_llm_cost(
+            response=response, model_id=model_to_use, company_bot=company_bot
+        )
+        print("raw res: ", response)
+        if is_json_response:
+            response_content = response.choices[0].message.content
+            response_json = None
+            if response_content:
+                response_json = json.loads(response_content)
+            return response_json
+        elif tools:
+            tool_calls = response.choices[0].message.tool_calls
+            if tool_calls and len(tool_calls) > 0:
+                return {}
+            return response.choices[0].message.content if response.choices else response
+        else:
+            return response.choices[0].message.content if response.choices else response
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise
 
 def get_pricing_from_company_bot(company_bot, model_id):
     try:
@@ -196,8 +208,6 @@ def get_pricing_from_company_bot(company_bot, model_id):
 def retry_if_result_none(result):
     return result is None
 
-
-@observe()
 @retry(stop_max_attempt_number=llm_retry_number, retry_on_result=retry_if_result_none, wrap_exception=True)
 def handle_bedrock_model(
         company_bot, system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
@@ -430,6 +440,87 @@ def add_source_with_organization(source_entry, metadata):
     return source_entry
 
 
+def calculate_and_log_llm_cost(*, response, model_id, company_bot=None, provider="openai"):
+    """
+    Generic cost calculator for OpenAI-style responses.
+    Supports:
+    - Chat Completions API
+    - Responses API
+    - Streaming + non-streaming
+    """
+
+    if not response or not company_bot:
+        return None
+
+    usage = getattr(response, "usage", None)
+    if not usage:
+        logger.info("⚠️ LLM response has no usage data")
+        return None
+
+    # --- Normalize token fields across APIs ---
+    input_tokens = (
+        getattr(usage, "input_tokens", None)       # Responses API
+        or getattr(usage, "prompt_tokens", 0)      # Chat Completions
+    )
+
+    output_tokens = (
+        getattr(usage, "output_tokens", None)      # Responses API
+        or getattr(usage, "completion_tokens", 0)  # Chat Completions
+    )
+
+    total_tokens = (
+        getattr(usage, "total_tokens", None)
+        or (input_tokens + output_tokens)
+    )
+
+    logger.info(
+        f"💰 {provider.upper()} Tokens — "
+        f"Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}"
+    )
+    print(
+        f"💰 {provider.upper()} Tokens — "
+        f"Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}"
+    )
+
+    pricing = get_pricing_from_company_bot(
+        company_bot=company_bot,
+        model_id=model_id
+    )
+
+    if not pricing:
+        logger.info(f"💵 No pricing configured for {provider} model: {model_id}")
+        print(f"💵 No pricing configured for {provider} model: {model_id}")
+        return None
+
+    input_cost = (input_tokens / 1000) * pricing["input"]
+    output_cost = (output_tokens / 1000) * pricing["output"]
+    total_cost = input_cost + output_cost
+
+    logger.info(
+        f"💵 {provider.upper()} Cost — "
+        f"Input: ${input_cost:.6f}, "
+        f"Output: ${output_cost:.6f}, "
+        f"Total: ${total_cost:.6f}"
+    )
+    print(
+        f"💵 {provider.upper()} Cost — "
+        f"Input: ${input_cost:.6f}, "
+        f"Output: ${output_cost:.6f}, "
+        f"Total: ${total_cost:.6f}"
+    )
+
+    return {
+        "provider": provider,
+        "model_id": model_id,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+        "input_cost": input_cost,
+        "output_cost": output_cost,
+        "total_cost": total_cost,
+    }
+
+
 def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
     """
     Calculates and logs OpenAI cost using Responses API usage.
@@ -452,6 +543,10 @@ def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
         f"💰 OpenAI Tokens — Input: {input_tokens}, "
         f"Output: {output_tokens}, Total: {total_tokens}"
     )
+    print(
+        f"💰 OpenAI Tokens — Input: {input_tokens}, "
+        f"Output: {output_tokens}, Total: {total_tokens}"
+    )
 
     pricing = get_pricing_from_company_bot(
         company_bot=company_bot,
@@ -460,6 +555,7 @@ def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
 
     if not pricing:
         logger.info(f"💵 No pricing configured for OpenAI model: {model_id}")
+        print(f"💵 No pricing configured for OpenAI model: {model_id}")
         return None
 
     input_cost = (input_tokens / 1000) * pricing["input"]
@@ -467,6 +563,10 @@ def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
     total_cost = input_cost + output_cost
 
     logger.info(
+        f"💵 OpenAI Cost — Input: ${input_cost:.6f}, Output: ${output_cost:.6f}, Total: ${total_cost:.6f}"
+    )
+
+    print(
         f"💵 OpenAI Cost — Input: ${input_cost:.6f}, Output: ${output_cost:.6f}, Total: ${total_cost:.6f}"
     )
 
@@ -481,17 +581,18 @@ def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
     }
 
 
-@observe()
 def handle_openai_response_api(
         messages, system_prompt=None, max_token=None, temperature=None, company_bot=None,
         model_name=None, key_name='OPENAI_API_KEY', is_actual_key=False,
-        top_p=None, tool_choice="auto", tools: Optional[List[Dict]] = None, stream=False
+        top_p=None, tool_choice="auto", tools: Optional[List[Dict]] = None, stream=False,
+        is_json_response=False
 ):
     """
-    OpenAI Responses API with file_search support for vector stores.
+    OpenAI Responses API with file_search and function calling support.
 
     This uses the new Responses API (client.responses.create) which supports:
     - file_search tool with vector stores
+    - Function calling (e.g., for file downloads)
     - Streaming and non-streaming responses
     - Unified interface for chat + tools
     """
@@ -578,6 +679,9 @@ def handle_openai_response_api(
         request_data['temperature'] = temperature
     if top_p:
         request_data['top_p'] = top_p
+    if is_json_response:
+        request_data["response_format"] = {"type": "json_object"}
+
 
     # Add tools to request if provided (already parsed by caller)
     if tools:
@@ -588,7 +692,6 @@ def handle_openai_response_api(
         logger.info("⚠️ No tools provided")
 
     logger.info("Responses API %s request: %s", "streaming" if stream else "non-streaming", request_data)
-    print("Responses API %s request: " % ("streaming" if stream else "non-streaming"), request_data)
 
     # Extract vector_store_ids from tools for metadata fetching
     vector_store_ids = []
@@ -602,11 +705,52 @@ def handle_openai_response_api(
             # Use Responses API with streaming context manager
             sources = []
             seen_file_ids = set()
+            function_call_name = None
+            function_call_args = ""
+            function_call_id = None
+            function_call_complete = False
+            
             with client.responses.stream(**request_data) as response_stream:
                 for event in response_stream:
+                    logger.info(f"OpenAI Event: {event.type} | Data: {event}")
 
-                    print("Event: ", event)
-
+                    # Handle function call delta events (streaming function arguments character-by-character)
+                    if event.type == 'response.function_call_arguments.delta':
+                        # Accumulate function arguments using snapshot (complete JSON so far)
+                        function_call_args = event.snapshot
+                        if not function_call_id:
+                            function_call_id = event.item_id
+                        logger.info(f"Function call delta: snapshot length = {len(function_call_args)} chars")
+                        print(f"📝 Function args snapshot: {function_call_args[:100]}...")
+                    
+                    # Handle function call done event
+                    elif event.type == 'response.function_call_arguments.done':
+                        function_call_complete = True
+                        logger.info(f"Function call arguments complete: {len(function_call_args)} chars")
+                        print(f"✅ Function call arguments COMPLETE")
+                        
+                        # Yield function call response with sources
+                        # This will be processed by common_handler to extract content and send to user
+                        yield {
+                            'function_call': {
+                                'name': function_call_name,
+                                'arguments': function_call_args  # JSON string with filename and content
+                            },
+                            'finish_reason': 'function_call',  # Internal marker for common_handler
+                            'extra_content': {
+                                'sources': sources  # Include sources collected from annotations
+                            }
+                        }
+                    
+                    # Handle function call output item to get function name
+                    elif event.type == 'response.output_item.added' and hasattr(event, 'item'):
+                        if hasattr(event.item, 'type') and event.item.type == 'function_call':
+                            function_call_name = event.item.name
+                            function_call_id = event.item.id
+                            logger.info(f"Function call detected: {function_call_name}")
+                            print(f"🎯 Function name: {function_call_name}")
+                    
+                    # Handle file citation annotations
                     if event.type == 'response.output_text.annotation.added' and event.annotation[
                         "type"] == 'file_citation':
                         file_id = event.annotation["file_id"]
@@ -626,7 +770,7 @@ def handle_openai_response_api(
                             seen_file_ids.add(file_id)
 
                     # Handle ResponseTextDeltaEvent - extract incremental delta
-                    if event.type == 'response.output_text.delta':
+                    elif event.type == 'response.output_text.delta':
                         content_chunk = event.delta or ""
                         yield {
                             'content': content_chunk,
@@ -664,6 +808,8 @@ def handle_openai_response_api(
         else:
             # Non-streaming mode - get complete response at once
             response = client.responses.create(**request_data)
+            print("Openai response: ", response)
+            logger.info(f"Openai response: {response}")
 
             price = calculate_and_log_openai_cost(
                 response=response, model_id=model_to_use, company_bot=company_bot
@@ -675,11 +821,10 @@ def handle_openai_response_api(
             # The response.output is a list that may contain:
             # - ResponseFileSearchToolCall (tool calls)
             # - ResponseOutputMessage (actual text messages)
-            # We need to extract text from ResponseOutputMessage items
-            full_text = ""
             full_text = ""
             sources = []
             seen_file_ids = set()
+            
             if hasattr(response, 'output') and response.output:
                 for output_item in response.output:
                     # Check if this is a ResponseOutputMessage (has 'content' attribute)
@@ -705,7 +850,9 @@ def handle_openai_response_api(
                                         source_entry = add_source_with_organization(source_entry, metadata)
                                         sources.append(source_entry)
                                         seen_file_ids.add(annotation.file_id)
+            
             logger.info(f"Extracted text length: {len(full_text)} chars, unique sources: {len(sources)}")
+            
             # Yield single complete response
             yield {
                 'content': full_text,
@@ -725,7 +872,6 @@ def handle_openai_response_api(
         }
 
 
-@observe()
 def handle_bedrock_invoke_model(
         messages=None, max_token=None, temperature=None, top_p=None,
         model_name=None, region_name='us-west-2', tools=None

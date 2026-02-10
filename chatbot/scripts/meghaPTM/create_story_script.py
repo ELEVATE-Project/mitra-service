@@ -32,9 +32,7 @@ import logging
 import json
 import os
 from django.core.validators import URLValidator
-from langfuse.decorators import observe
 import json_repair
-from retrying import retry
 
 
 logger = logging.getLogger('django')

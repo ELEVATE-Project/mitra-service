@@ -3,9 +3,6 @@ import os
 import logging
 from datetime import datetime
 import json_repair
-from retrying import retry
-from botocore.client import Config as BotoConfig
-from botocore.exceptions import ClientError
 from chatbot.llm_models.llm_script import handle_bedrock_model
 
 

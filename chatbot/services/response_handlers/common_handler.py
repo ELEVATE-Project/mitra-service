@@ -2,9 +2,12 @@ from chatbot.models import ChatStatus, CompanyChat, CompanyBotTypeChoices, LLMPr
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.services.response_handlers.base_response_handler import BaseResponseHandler
 from chatbot.utils.shiksha_chaupal.date_utils import handle_date_prompt
+from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
+from chatbot.celery_tasks.handle_message import translate_and_send_message
 import logging
 import json
 from json_repair import repair_json
+from chatbot.utils.media_preview.media_creation import create_and_upload_file
 
 logger = logging.getLogger('django')
 
@@ -128,13 +131,28 @@ class CommonResponseHandler(BaseResponseHandler):
         if super().is_function_call(response):
             return True
 
-        if isinstance(response, dict) and response.get('should_function_call', False):
-            print("DEBUG: should_function_call is True, treating as function call")
-            logger.info("should_function_call flag is True, treating as function call")
-            return True
+        # Check for OpenAI Responses API function call format
+        if isinstance(response, dict):
+            if response.get('finish_reason') == 'function_call' and 'function_call' in response:
+                print("DEBUG: Detected OpenAI Responses API function call format")
+                logger.info("Detected OpenAI Responses API function call format")
+                return True
+            
+            if response.get('should_function_call', False):
+                print("DEBUG: should_function_call is True, treating as function call")
+                logger.info("should_function_call flag is True, treating as function call")
+                return True
 
         try:
-            extracted_response, _ = self._extract_response_and_reason(response)
+            extracted_response, _, meta = self._extract_response_and_reason(response)
+            if meta:
+                flag = meta.get("should_function_call")
+                if isinstance(flag, str):
+                    flag = flag.strip().lower() in ("true", "yes", "1")
+                if flag is True:
+                    print("DEBUG: should_function_call detected via meta in is_function_call")
+                    logger.info("should_function_call detected via meta in is_function_call")
+                    return True
             if extracted_response == '':
                 print(
                     "DEBUG: Empty response detected in is_function_call, treating as function call for postprocessing")
@@ -154,7 +172,16 @@ class CommonResponseHandler(BaseResponseHandler):
         if is_actual_function_call:
             return True, None, None
 
-        extracted_response, reason_text = self._extract_response_and_reason(response)
+        extracted_response, reason_text, meta = self._extract_response_and_reason(response)
+
+        if meta:
+            flag = meta.get("should_function_call")
+            if isinstance(flag, str):
+                flag = flag.strip().lower() in ("true", "yes", "1")
+            if flag is True:
+                print("DEBUG: should_function_call detected via meta in _analyze_response")
+                logger.info("should_function_call detected via meta in _analyze_response")
+                return True, None, None
 
         if extracted_response == '':
             print("DEBUG: Empty response detected after extraction, treating as function call for state transition")
@@ -271,13 +298,24 @@ class CommonResponseHandler(BaseResponseHandler):
             expected_output_response = error_message
             response = error_message
 
+        # Handle function calls for STATE_MACHINE bots
         if is_function_call and company_bot and company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
-            print("DEBUG: Processing as function call")
+            print("DEBUG: Processing as STATE_MACHINE function call")
             return self._handle_function_call(
                 response=response, chat_session=chat_session, company_bot=company_bot,
                 session_id=session_id, channel_name=channel_name, language=language, profile_id=profile_id,
                 chunks=chunks, messages=chat_messages, skip_next_stage=skip_next_stage, target_stage=target_stage,
                 skip_next_stage_preprocessing=skip_next_stage_preprocessing
+            )
+        # Handle function calls for FREE_FLOW bots (like download_file)
+        elif is_function_call and isinstance(response, dict) and 'function_call' in response:
+            print("DEBUG: Processing as FREE_FLOW function call")
+            logger.info(f"FREE_FLOW function call detected: {response}")
+            return self._handle_freeflow_function_call(
+                response=response, 
+                chat_session=chat_session, 
+                chunks=chunks, 
+                **kwargs
             )
         else:
             print("DEBUG: Processing as regular response")
@@ -306,7 +344,7 @@ class CommonResponseHandler(BaseResponseHandler):
 
                 if not (response.strip().startswith('{') and response.strip().endswith('}')):
                     logger.info("DEBUG: String doesn't look like JSON, treating as plain text response")
-                    return response, None
+                    return response, None, None
 
                 logger.info("DEBUG: String looks like JSON, attempting parsing")
                 try:
@@ -319,7 +357,7 @@ class CommonResponseHandler(BaseResponseHandler):
                         logger.info("DEBUG: Successfully repaired and parsed JSON")
                     except Exception as repair_error:
                         logger.info(f"DEBUG: JSON repair failed: {repair_error}")
-                        return response, None
+                        return response, None, None
 
                 response = parsed_response
 
@@ -397,19 +435,22 @@ class CommonResponseHandler(BaseResponseHandler):
                     logger.info(
                         f"DEBUG: Extracted data keys: {list(extracted_data.keys()) if isinstance(extracted_data, dict) else 'Not a dict'}")
 
+                meta = extracted_data.copy() if isinstance(extracted_data, dict) else None
                 if extracted_data and isinstance(extracted_data, dict):
                     if len(extracted_data) == 0:
                         print(
                             f"DEBUG: Empty extracted_data detected from LLM (input/parameters) - treating as function call")
                         logger.info(
                             f"Empty extracted_data detected from LLM (input/parameters) - treating as function call: {response}")
-                        return '', 'LLM returned empty input/parameters - treating as function call to proceed to next state'
+                        return '', ('LLM returned empty input/parameters - treating as function call to '
+                                    'proceed to next state'), meta
 
                     response_text = extracted_data.get('response', '')
                     reason_text = extracted_data.get('reason', '')
                     logger.info(
-                        f"DEBUG: Final extraction - response: '{response_text[:100]}...', reason: '{reason_text[:100]}...'")
-                    return response_text, reason_text
+                        f"DEBUG: Final extraction - response: '{response_text[:100]}...', "
+                        f"reason: '{reason_text[:100]}...'")
+                    return response_text, reason_text, meta
 
                 elif extracted_data and isinstance(extracted_data, str):
                     logger.info("DEBUG: Extracted data is string, trying to parse as JSON")
@@ -422,22 +463,26 @@ class CommonResponseHandler(BaseResponseHandler):
                             logger.info("DEBUG: Successfully repaired string data")
                         except Exception as e:
                             logger.info(f"DEBUG: Failed to parse string data: {e}")
-                            return extracted_data, None
+                            return extracted_data, None, meta
 
                     if isinstance(parsed_data, dict):
                         response_text = parsed_data.get('response', '')
                         reason_text = parsed_data.get('reason', '')
                         logger.info(
-                            f"DEBUG: Parsed string data - response: '{response_text[:100]}...', reason: '{reason_text[:100]}...'")
-                        return response_text, reason_text
+                            f"DEBUG: Parsed string data - response: '{response_text[:100]}...', reason: "
+                            f"'{reason_text[:100]}...'")
+                        meta = parsed_data.copy()
+                        return response_text, reason_text, meta
 
                 logger.info("DEBUG: No specific format matched, checking original dict for response/reason")
                 response_text = response_copy.get('response', '')
                 reason_text = response_copy.get('reason', '')
                 if response_text or reason_text:
                     logger.info(
-                        f"DEBUG: Found in original dict - response: '{response_text[:100]}...', reason: '{reason_text[:100]}...'")
-                    return response_text, reason_text
+                        f"DEBUG: Found in original dict - response: '{response_text[:100]}...', reason: "
+                        f"'{reason_text[:100]}...'"
+                    )
+                    return response_text, reason_text, meta
 
         except Exception as e:
             logger.info(f"DEBUG: Error extracting response and reason: {e}")
@@ -445,7 +490,7 @@ class CommonResponseHandler(BaseResponseHandler):
 
         logger.info("DEBUG: Fallback - returning original response as string")
         final_response = str(response) if not isinstance(response, str) else response
-        return final_response, None
+        return final_response, None, None
 
     def _extract_expected_output(self, response):
         """Extract expected_output from function call response if it exists and is not empty"""
@@ -669,3 +714,125 @@ class CommonResponseHandler(BaseResponseHandler):
             response = message
 
         return response, extra_content
+
+    def _handle_freeflow_function_call(self, response, chat_session, chunks, **kwargs):
+        """Handle function calls for FREE_FLOW bots (like download_file)"""
+        
+        # Extract required parameters from kwargs
+        company_bot = kwargs['company_bot']
+        session_id = kwargs['session_id']
+        channel_name = kwargs['channel_name']
+        language = kwargs['language']
+        profile_id = kwargs['profile_id']
+        
+        logger.info(f"Processing FREE_FLOW function call for session {session_id}")
+        print(f"DEBUG: _handle_freeflow_function_call called with response: {response}")
+        
+        function_call_data = response.get('function_call', {})
+        function_name = function_call_data.get('name')
+        arguments_str = function_call_data.get('arguments', '{}')
+        
+        # Parse arguments if it's a string
+        if isinstance(arguments_str, str):
+            try:
+                arguments = json.loads(arguments_str)
+            except:
+                import json_repair
+                arguments = json_repair.repair_json(arguments_str, return_objects=True)
+        else:
+            arguments = arguments_str
+        
+        logger.info(f"Function: {function_name}, Arguments: {arguments}")
+        print(f"DEBUG: Function: {function_name}, Arguments: {arguments}")
+        
+        # Handle download_file function
+        if function_name == 'download_file':
+            filename = arguments.get('filename', 'download.pdf')
+            content_type = arguments.get('content_type', 'pdf')
+            
+            # Get the file search content and sources from response
+            file_search_content = response.get('content', '')
+            extra_content_data = response.get('extra_content', {})
+            sources = extra_content_data.get('sources', [])
+            
+            # Get the content parameter from function arguments (contains explanation from file_search)
+            content_from_args = arguments.get('content', '')
+            
+            logger.info(f"Download request - filename: {filename}, type: {content_type}")
+            logger.info(f"Available sources: {len(sources)}")
+            logger.info(f"📄 File search content length: {len(file_search_content)} chars")
+            logger.info(f"📝 Content from function args: {len(content_from_args)} chars")
+            logger.info(f"🎯 Function call detected: {function_name}")
+            
+            # Create and upload file to S3
+            file_result = create_and_upload_file(
+                content=content_from_args,
+                filename=filename,
+                company_bot_id=company_bot.id,
+                session_id=session_id
+            )
+            
+            # Check if file creation was successful
+            file_url = None
+            if file_result.get('success'):
+                file_url = file_result.get('media_url')
+                logger.info(f"✅ File uploaded successfully: {file_url}")
+                print(f"DEBUG: File uploaded successfully: {file_url}")
+            else:
+                logger.error(f"❌ File upload failed: {file_result.get('error')}")
+                print(f"DEBUG: File upload failed: {file_result.get('error')}")
+            
+            # Use content from function arguments as the main message (contains the explanation)
+            # If content is available, show it; otherwise use a default message
+            if content_from_args:
+                bot_message = content_from_args
+            else:
+                bot_message = f"I'll prepare the file '{filename}' for you. Please note that file download functionality is currently being implemented."
+            
+            logger.info(f"Sending download acknowledgment with {len(bot_message)} chars")
+            logger.info(f"Function call detected internally: {function_name} with args: {arguments.keys()}")
+            logger.info(f"File search content available: {len(response.get('content', ''))} chars")
+            
+            # Prepare extra_content with sources and file_url (standardized format)
+            extra_content_to_send = {}
+            if sources:
+                extra_content_to_send['sources'] = sources
+            if file_url:
+                extra_content_to_send['file_url'] = file_url
+                logger.info(f"📎 Adding file_url to extra_content: {file_url}")
+            
+            # Include sources and file_url in extra_content for frontend display
+            translated_message = translate_and_send_message(
+                accumulated_message=bot_message,
+                current_channel_name=channel_name,
+                current_step_number=chat_session.current_step,
+                finish_reason="stop",  # Use 'stop' instead of 'function_call' to hide function call from frontend
+                route=language,
+                company_bot=company_bot,
+                extra_content=extra_content_to_send if extra_content_to_send else None
+            )
+            
+            # Save to database with function call metadata for internal tracking
+            save_in_company_db(
+                session_id=session_id,
+                profile_id=profile_id,
+                initiated_by='AI',
+                message=bot_message,
+                chunks=None,
+                status=ChatStatus.IN_PROGRESS,
+                translated_message=translated_message,
+                stage=None,
+                other_params={
+                    'function_call': function_name, 
+                    'arguments': arguments,
+                    'file_search_content': response.get('content', ''),  # Store file_search content
+                    'sources': response.get('extra_content', {}).get('sources', []),
+                    'file_url': file_url,  # Store the uploaded file URL
+                    'file_result': file_result  # Store full upload result for debugging
+                }
+            )
+            
+            return bot_message
+        else:
+            logger.warning(f"Unknown function call: {function_name}")
+            return self.default_error_message
