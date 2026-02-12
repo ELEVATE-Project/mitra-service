@@ -1,5 +1,8 @@
 import os
 import logging
+
+from chatbot.models import CompanyBot
+from chatbot.models.story_vernacular_model import StoryVernacular
 from chatbot.utils.S3.s3_service import upload_file_to_s3
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 from chatbot.models.enums import MediaTypeChoices
@@ -7,13 +10,13 @@ from chatbot.models.enums import MediaTypeChoices
 logger = logging.getLogger('django')
 
 
-def create_pdf_from_text(text_content: str) -> bytes:
+def create_pdf_from_text(text_content, company_bot_id) -> bytes:
     """
     Create a PDF file from text content using Gotenberg HTML-to-PDF service.
     """
     try:
         # Convert text to formatted HTML
-        html_content = text_to_html(text_content)
+        html_content = text_to_html(text_content, company_bot_id)
         
         # Use Gotenberg to convert HTML to PDF
         pdf_content = generate_pdf_with_gotenberg(html_content)
@@ -30,27 +33,106 @@ def create_pdf_from_text(text_content: str) -> bytes:
         raise
 
 
-def text_to_html(text_content: str) -> str:
+def text_to_html(text_content, company_bot_id) -> str:
     """
-    Convert plain text to formatted HTML for PDF generation.
+    Convert Markdown text to styled HTML for PDF generation.
     """
-    # Escape HTML special characters
-    import html
-    escaped_text = html.escape(text_content)
-    
-    # Convert line breaks to <br> tags and paragraphs to <p> tags
-    paragraphs = escaped_text.split('\n\n')
-    formatted_paragraphs = []
-    
-    for para in paragraphs:
-        if para.strip():
-            # Replace single newlines with <br>
-            formatted_para = para.replace('\n', '<br>')
-            formatted_paragraphs.append(f'<p>{formatted_para}</p>')
-    
-    html_body = '\n'.join(formatted_paragraphs)
-    
-    # Create full HTML document with styling
+    import markdown
+    import re
+
+    max_char_per_page = 1500
+    try:
+        print(f"company_bot_id: {company_bot_id}")
+        logger.info(f"company_bot_id: {company_bot_id}")
+        company_bot = CompanyBot.objects.filter(id=company_bot_id).first()
+        print(f"company_bot: {company_bot}")
+        logger.info(f"company_bot: {company_bot}")
+        if company_bot:
+            story_vernacular = StoryVernacular.objects.filter(
+                company_bot=company_bot, language='en'
+            ).first()
+            print(f"story_vernacular: {story_vernacular}")
+            logger.info(f"story_vernacular: {story_vernacular}")
+            if story_vernacular and story_vernacular.translation_json:
+                logger.info(f"story_vernacular translation_json: {story_vernacular.translation_json}")
+                max_char_per_page = story_vernacular.translation_json.get(
+                    'page_split_char_len', max_char_per_page
+                )
+        logger.info(f"Using max_char_per_page: {max_char_per_page}")
+    except Exception as e:
+        logger.info(f"Could not get max_char_per_page from StoryVernacular: {e}")
+
+    # Markdown → HTML
+    html = markdown.markdown(
+        text_content,
+        extensions=[
+            "tables",
+            "fenced_code",
+            "sane_lists",
+            "toc",
+            "def_list"
+        ]
+    )
+
+    # Regex to find block-level elements (with attributes allowed)
+    block_pattern = re.compile(
+        r'(<h[1-3][^>]*>.*?</h[1-3]>|'
+        r'<p[^>]*>.*?</p>|'
+        r'<ul[^>]*>.*?</ul>|'
+        r'<ol[^>]*>.*?</ol>|'
+        r'<table[^>]*>.*?</table>)',
+        flags=re.DOTALL
+    )
+
+    pages = []
+    current_page = ""
+    char_count = 0
+    last_index = 0
+
+    def is_heading(block: str) -> bool:
+        return block.lstrip().startswith("<h")
+
+    def is_content_block(block: str) -> bool:
+        return block.lstrip().startswith(("<p", "<ul", "<ol", "<table"))
+
+    for match in block_pattern.finditer(html):
+        start, end = match.span()
+
+        # Preserve any content BEFORE this block
+        prefix = html[last_index:start]
+        if prefix:
+            current_page += prefix
+            char_count += len(prefix)
+
+        block = match.group()
+        current_page += block
+        char_count += len(block)
+
+        # Insert page break ONLY after content blocks
+        if char_count >= max_char_per_page and is_content_block(block):
+            pages.append(current_page)
+            current_page = ""
+            char_count = 0
+
+        last_index = end
+
+    # Append remaining tail content
+    tail = html[last_index:]
+    if tail:
+        current_page += tail
+
+    if current_page.strip():
+        pages.append(current_page)
+
+    # Wrap pages
+    paginated_html = ""
+    for page in pages:
+        paginated_html += f"""
+        <div class="page">
+            {page}
+        </div>
+        """
+
     html_template = f"""
     <!DOCTYPE html>
     <html>
@@ -58,29 +140,83 @@ def text_to_html(text_content: str) -> str:
         <meta charset="UTF-8">
         <style>
             body {{
-                font-family: Arial, sans-serif;
+                font-family: 'Open Sans', Arial, sans-serif;
                 font-size: 11pt;
                 line-height: 1.6;
-                margin: 2cm;
-                color: #333;
+                margin: 2.2cm;
+                color: #111;
             }}
-            p {{
-                margin-bottom: 1em;
-                text-align: justify;
+
+            .page {{
+                page-break-after: always;
             }}
-            h1, h2, h3 {{
-                color: #2c3e50;
-                margin-top: 1.5em;
+
+            .page:last-child {{
+                page-break-after: auto;
+            }}
+
+            h1 {{
+                font-size: 18pt;
+                text-align: center;
+                margin: 0 0 1.5em 0;
+                text-transform: uppercase;
+                letter-spacing: 0.4px;
+            }}
+
+            h2 {{
+                font-size: 14pt;
+                margin-top: 1.8em;
+                margin-bottom: 0.8em;
+                font-weight: 600;
+            }}
+
+            h3 {{
+                font-size: 12pt;
+                margin-top: 1.4em;
                 margin-bottom: 0.5em;
+                font-weight: 600;
+            }}
+
+            p {{
+                margin-bottom: 0.9em;
+                text-align: left;
+            }}
+
+            ul, ol {{
+                margin-left: 1.4em;
+                margin-bottom: 1em;
+            }}
+
+            li {{
+                margin-bottom: 0.3em;
+            }}
+
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+                margin: 1.4em 0;
+                font-size: 9.5pt;
+            }}
+
+            th, td {{
+                border: 1px solid #555;
+                padding: 6px 8px;
+                vertical-align: top;
+            }}
+
+            th {{
+                background-color: #e9ecef;
+                font-weight: bold;
+                text-align: center;
             }}
         </style>
     </head>
     <body>
-        {html_body}
+        {paginated_html}
     </body>
     </html>
     """
-    
+
     return html_template
 
 
@@ -132,7 +268,7 @@ def create_and_upload_file(
         logger.info(f"Sanitized filename: {safe_filename}")
         
         # Create PDF from content using Gotenberg
-        pdf_content = create_pdf_from_text(content)
+        pdf_content = create_pdf_from_text(content, company_bot_id)
         
         logger.info(f"PDF created successfully, size: {len(pdf_content)} bytes")
         
