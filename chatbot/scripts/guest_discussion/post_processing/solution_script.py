@@ -28,61 +28,56 @@ AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 def chunk_data(data: List[str], batch_size: int) -> List[List[str]]:
     return [data[i:i + batch_size] for i in range(0, len(data), batch_size)]
 
-def build_user_message(batch: List[str], company_bot) -> List[Dict[str, Any]]:
+def build_user_message(batch: List[str]) -> List[Dict[str, Any]]:
     solutions_text = "\n".join([f"- {solution}" for solution in batch])
-    messages = [
-        {'role': 'system', 'content': company_bot.context},
+    return [
         {
             'role': 'user',
-            'content': f"""Given the list of solutions below, identify and return a JSON list of **unique and consolidated** solutions:\n\n{solutions_text}\n\nRespond ONLY in this format:\n[\n  "unique solution 1",\n  "unique solution 2"\n]"""
+            'content': [{
+                'text': f"""Given the list of solutions below, identify and return a JSON list of **unique and consolidated** solutions:\n\n{solutions_text}\n\nRespond ONLY in this format:\n[\n  "unique solution 1",\n  "unique solution 2"\n]"""
+            }]
         }
     ]
-    # return [
-    #     {
-    #         'role': 'user',
-    #         'content': [{
-    #             'text': f"""Given the list of solutions below, identify and return a JSON list of **unique and consolidated** solutions:\n\n{solutions_text}\n\nRespond ONLY in this format:\n[\n  "unique solution 1",\n  "unique solution 2"\n]"""
-    #         }]
-    #     }
-    # ]
-
-    return messages
 
 def call_llm(batch: List[str], index: int) -> Dict[str, Any]:
-    company_bot = CompanyBot.objects.filter(route='/solutions_script').first()
-    messages = build_user_message(batch, company_bot)
-    if not company_bot:
-        return {f"batch_{index}_error": "No Bot Found"}
+    try:
+        messages = build_user_message(batch)
+        company_bot = CompanyBot.objects.filter(route='/solutions_script').first()
+        if not company_bot:
+            return {f"batch_{index}_error": "No Bot Found"}
 
-    # tool = company_bot.tool_context
-    # if tool and isinstance(tool, str):
-    #     tool = json_repair.repair_json(tool, return_objects=True)
+        tool = company_bot.tool_context
+        if tool and isinstance(tool, str):
+            tool = json_repair.repair_json(tool, return_objects=True)
 
-    # formatted_prompt = [{
-    #     'text': company_bot.context
-    # }]
+        formatted_prompt = [{
+            'text': company_bot.context
+        }]
 
-    # output = handle_bedrock_model(
-    #     system_prompt=formatted_prompt, messages=messages, model_name=company_bot.llm_model,
-    #     temperature=company_bot.bot_temperature, max_token=company_bot.max_token, company_bot=company_bot,
-    #     tools=tool
-    # )
+        output = handle_bedrock_model(
+            system_prompt=formatted_prompt, messages=messages, model_name=company_bot.llm_model,
+            temperature=company_bot.bot_temperature, max_token=company_bot.max_token, company_bot=company_bot,
+            tools=tool
+        )
 
-    output = handle_openai_model(
-        messages=messages,
-        temperature=0.0,
-        max_token=32768,
-        top_p=1.0,
-        model_name=LLMModel.GPT4_1_MINI,
-        key_name='OPENAI_API_KEY',
-        is_actual_key=False
-    )
+        # output = handle_openai_model(
+        #     messages=messages,
+        #     temperature=0.0,
+        #     max_token=32768,
+        #     top_p=1.0,
+        #     model_name=LLMModel.GPT4_1_MINI,
+        #     key_name='OPENAI_API_KEY',
+        #     is_actual_key=False
+        # )
 
-    if output:
-        output=get_clean_output(response=output)
+        if output:
+            output=get_clean_output(response=output)
 
-    key = f"solution"
-    return {key: output}
+        key = f"solution"
+        return {key: output}
+    except Exception as e:
+        print(f"Error in call_llm for batch {index}: {str(e)}")
+        return {"solution": None}
 
 
 def process_all_batches(data: List[str], batch_size: int = BATCH_SIZE, max_workers: int = MAX_WORKERS, save_to_file: bool = True) -> Dict[str, Any]:
@@ -327,35 +322,46 @@ def handle_bedrock_model(
 
 
 def get_clean_output(response):
-    print("Cleaning: ", response)
-    if response and isinstance(response, dict):
-        extracted_data = response.pop("parameters", response.pop("input", None))
-        if extracted_data and isinstance(extracted_data, dict):
-            response.clear()
-            response.update(extracted_data)
+    try:
+        print("Cleaning: ", response)
+        
+        if isinstance(response, str):
+            try:
+                response = json_repair.repair_json(response, return_objects=True)
+            except Exception:
+                return None
 
-    response_json_content = response.get('unique_solutions')
-    reason_content = response.get('reason_for_uniqueness')
-    if response_json_content and isinstance(response_json_content, str):
-        response_json_content = json_repair.repair_json(response_json_content, return_objects=True)
+        if isinstance(response, list):
+            cleaned = []
 
-    if isinstance(response_json_content, dict) and response_json_content.get("type"):
-        if "value" in response_json_content:
-            value = response_json_content.get("value")
-        elif "parameters" in response_json_content:
-            value = response_json_content.get("parameters")
-        else:
-            value = None
-        if value and isinstance(value, str) and value.strip():
-            value = json_repair.repair_json(value, return_objects=True)
-            response_json_content = value
-        else:
-            response_json_content = {}
+            for item in response:
+                if isinstance(item, str):
+                    cleaned.append(item.strip())
 
-    print("response_json_content: ", response_json_content)
-    print("reason_content: ", reason_content)
+                elif isinstance(item, dict) and "solution" in item:
+                    val = item.get("solution")
+                    if isinstance(val, str) and val.strip():
+                        cleaned.append(val.strip())
 
-    return response_json_content
+            return cleaned if cleaned else None
+
+        if isinstance(response, dict):
+            if 'type' in response and 'value' in response:
+                return get_clean_output(response.get('value'))
+            
+            # Extract from common parameter keys
+            extracted = (
+                response.get("parameters")
+                or response.get("input")
+                or response.get("unique_solutions")
+            )
+
+            return get_clean_output(extracted)
+
+        return None
+    except Exception as e:
+        print(f"Error in get_clean_output: {str(e)}")
+        return None
 
 
 def convert_solutions_to_flat_list(batch_results: Dict[str, Any] = None, output_file_path=OUTPUT_FILE, save_to_file: bool = True, save_file_path=SECOND_OUTPUT_FILE) -> List[str]:
