@@ -4,13 +4,14 @@ from django.utils.decorators import method_decorator
 from django.http import JsonResponse
 import json
 import os
+import traceback
 from chatbot.utils.shiksha_chaupal.iterative_challenge_processor import run_iterative_challenge_filtering
 from chatbot.utils.admin_config.config import (
     get_all_processing_types,
     get_processing_type_by_value,
     ProcessingType
 )
-from chatbot.celery_tasks.post_processing_tasks import run_unique_challenges_task
+from chatbot.celery_tasks.post_processing_tasks import run_unique_challenges_task, run_unique_solutions_task
 from celery.result import AsyncResult
 
 
@@ -205,6 +206,40 @@ class PostProcessingView(TemplateView):
                 'error': f'Failed to start task: {str(e)}'
             }
 
+    def _run_unique_solutions_processing(self, config, input_file):
+        """Trigger async task for unique solutions processing."""
+        
+        # Prepare input file content if uploaded
+        input_file_content = None
+        
+        if config.get('has_file') and input_file:
+            try:
+                input_file_content = input_file.read().decode('utf-8')
+                print(f"✅ Read input file: {input_file.name}")
+            except Exception as e:
+                return {'success': False, 'error': f'Failed to read file: {str(e)}'}
+        
+        # Trigger the async Celery task
+        try:
+            print(f"✅ Triggering unique solutions task with config: {config}")
+            
+            task = run_unique_solutions_task.delay(config, input_file_content)
+            
+            print(f"✅ Task triggered successfully. Task ID: {task.id}")
+            
+            return {
+                'success': True,
+                'task_id': task.id,
+                'message': 'Task has been started.'
+            }
+        except Exception as e:
+            print(f"❌ Failed to trigger task: {str(e)}")
+            traceback.print_exc()
+            return {
+                'success': False,
+                'error': f'Failed to start task: {str(e)}'
+            }
+
     def _check_task_status(self, task_id):
         """Check the status of a Celery task."""
         try:
@@ -270,9 +305,10 @@ class PostProcessingView(TemplateView):
         print("🚀 POST PROCESSING")
         print("=" * 60)
         
-        if processing_type == 'unique_challenges':
+        if processing_type in ['unique_challenges', 'unique_solutions']:
+            type_label = 'Challenges' if processing_type == 'unique_challenges' else 'Solutions'
             print(f"\n📋 Configuration:")
-            print(f"   Type: {processing_type}")
+            print(f"   Type: Unique {type_label}")
             print(f"   MAX_WORKERS: {config.get('max_workers')}")
             print(f"   BATCH_SIZE: {config.get('batch_size')}")
             print(f"   MAX_ITERATIONS: {config.get('max_iterations')}")

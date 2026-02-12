@@ -8,7 +8,7 @@
     <div class="form-group">
         <label for="batch-size">Batch Size:</label>
         <input type="number" id="batch-size" name="batch_size" value="100" min="1" max="1000" class="form-input">
-        <span class="help-text">How many challenges to process together in each batch.</span>
+        <span class="help-text">How many solutions to process together in each batch.</span>
     </div>
 </div>
 
@@ -27,10 +27,10 @@
 </div>
 
 <div class="form-group">
-    <label for="challenges-input-file">Upload Input File:</label>
-    <input type="file" id="challenges-input-file" name="input_file" accept=".json" class="form-input file-input">
+    <label for="solutions-input-file">Upload Input File:</label>
+    <input type="file" id="solutions-input-file" name="input_file" accept=".json" class="form-input file-input">
     <span class="help-text">JSON file containing the data to process</span>
-    <span id="challenges-file-error" class="error-message hidden">Either input file or date range is required</span>
+    <span id="solutions-file-error" class="error-message hidden">Either input file or date range is required</span>
 </div>
 
 <!-- Visual OR divider -->
@@ -42,50 +42,50 @@
     <label>Date Range (DD-MM-YYYY):</label>
     <div class="date-inputs">
         <div class="date-field">
-            <label for="challenges-date-from">From:</label>
-            <input type="text" id="challenges-date-from" name="date_from" placeholder="DD-MM-YYYY" class="form-input date-input" pattern="\d{2}-\d{2}-\d{4}">
+            <label for="solutions-date-from">From:</label>
+            <input type="text" id="solutions-date-from" name="date_from" placeholder="DD-MM-YYYY" class="form-input date-input" pattern="\d{2}-\d{2}-\d{4}">
         </div>
         <div class="date-field">
-            <label for="challenges-date-till">Till:</label>
-            <input type="text" id="challenges-date-till" name="date_till" placeholder="DD-MM-YYYY" class="form-input date-input" pattern="\d{2}-\d{2}-\d{4}">
+            <label for="solutions-date-till">Till:</label>
+            <input type="text" id="solutions-date-till" name="date_till" placeholder="DD-MM-YYYY" class="form-input date-input" pattern="\d{2}-\d{2}-\d{4}">
         </div>
     </div>
-    <span class="help-text">Select a date range to fetch challenges from the database. Both start and end dates are included in the results.</span>
-    <span id="challenges-date-error" class="error-message hidden">Please select a date range or upload a file above.</span>
+    <span class="help-text">Select a date range to fetch solutions from the database. Both start and end dates are included in the results.</span>
+    <span id="solutions-date-error" class="error-message hidden">Please select a date range or upload a file above.</span>
 </div>
 
 <div class="form-actions">
-    <button type="submit" class="run-button" id="challenges-run-btn">
+    <button type="submit" class="run-button" id="solutions-run-btn">
         <span class="btn-text">Run</span>
         <span class="btn-loading hidden">Running...</span>
     </button>
-    <button type="button" class="run-button hidden" id="challenges-view-status-btn" onclick="checkTaskStatus()">
+    <button type="button" class="run-button hidden" id="solutions-view-status-btn" onclick="checkTaskStatus()">
         <span class="btn-text">View Status</span>
         <span class="btn-loading hidden">Checking...</span>
     </button>
-    <span id="challenges-success-message" class="success-message hidden">✅ Script initiated successfully!</span>
+    <span id="solutions-success-message" class="success-message hidden">✅ Script initiated successfully!</span>
 </div>
 
-<div id="challenges-task-started-message" class="task-started-message hidden">
-    <span id="challenges-task-message-text">Task started!</span>
+<div id="solutions-task-started-message" class="task-started-message hidden">
+    <span id="solutions-task-message-text">Task started!</span>
 </div>
 
-<div id="challenges-result-section" class="result-section hidden">
+<div id="solutions-result-section" class="result-section hidden">
     <h3>📊 Processing Results</h3>
     <div class="result-item">
         <label>Status:</label>
-        <span id="challenges-result-status"></span>
+        <span id="solutions-result-status"></span>
     </div>
     <div class="result-item">
         <label>Iterations Completed:</label>
-        <span id="challenges-result-iterations"></span>
+        <span id="solutions-result-iterations"></span>
     </div>
     <div class="result-item">
         <label>Final Count:</label>
-        <span id="challenges-result-final-count"></span>
+        <span id="solutions-result-final-count"></span>
     </div>
     <div class="result-item">
         <label>Output File:</label>
-        <span id="challenges-result-output-file"></span>
+        <span id="solutions-result-output-file"></span>
     </div>
 </div>
