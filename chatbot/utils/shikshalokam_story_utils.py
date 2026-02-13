@@ -1,4 +1,5 @@
-from chatbot.models import StoryMedia, MediaTypeChoices, CompanyChat, Profile, Story, ChatSession, SessionFlowName, CompanyBot, Flow, Voice
+from chatbot.models import StoryMedia, MediaTypeChoices, CompanyChat, Profile, Story, ChatSession, SessionFlowName, \
+    CompanyBot, Flow, Voice, StoryLanguageChoices
 from chatbot.models.company_models import PDFTemplates
 from chatbot.models.enums import UserTypeChoices, VoiceType
 from chatbot.models.story_models import StoryTranslation
@@ -404,7 +405,19 @@ def get_html_from_template(story, profile, flow, auth=False, language=None):
 def update_story_pdf(access_token, session, flow, is_edit_story=False):
 
     try:
+        chatsession = ChatSession.objects.values("language").get(session=session)
+
         story = Story.objects.get(session=session)
+        translated_story = None
+        if chatsession.get("language", StoryLanguageChoices.ENGLISH)  != StoryLanguageChoices.ENGLISH:
+            translated_story = StoryTranslation.objects.select_related("story").get(story__session=session, language=chatsession.get("language", StoryLanguageChoices.ENGLISH))
+
+        if translated_story is not None:
+            story.title = translated_story.title
+            story.content = translated_story.content
+            story.location = translated_story.location
+            story.other_params = translated_story.other_params
+
         if story and story.content and story.formatted_content:
             update_story_content(story)
         profile = story.author

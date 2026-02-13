@@ -196,6 +196,7 @@ def save_generic_story(
 
     previous_english_snapshot = {k: v for k, v in other_params.items()}
 
+    user_name = None
     if isinstance(profile, Profile):
         user_name = profile.first_name if profile and profile.first_name else ''
 
@@ -336,7 +337,7 @@ def save_generic_story(
             story_fields_to_update['location'] = ""
 
     story_fields_to_update.update({
-        'author': profile if isinstance(profile, Profile) else profile.get("id"),
+        'author': profile if isinstance(profile, Profile) else Profile.objects.filter(id=profile.get("id")).first(),
         'session': session,
         'language': 'en',
         'stage': StoryStatusChoices.COMPLETED,

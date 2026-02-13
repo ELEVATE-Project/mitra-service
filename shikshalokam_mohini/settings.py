@@ -87,7 +87,7 @@ CORS_ALLOWED_METHODS = [
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 
-ALLOWED_HOSTS.append(gethostbyname(gethostname()))
+# ALLOWED_HOSTS.append(gethostbyname(gethostname()))
 
 
 # Application definition
