@@ -1,34 +1,24 @@
-"""
-Iterative Challenge Processor Utility
-
-This utility runs the unique challenges filtering script iteratively until
-the filtering threshold is met or maximum iterations are reached.
-"""
 import json
 import os
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 
-from chatbot.scripts.guest_discussion.post_processing.challenges_script import (
-    run_unique_challenge_processing,
-    DEFAULT_BATCH_SIZE,
-    DEFAULT_MAX_WORKERS
+from chatbot.scripts.guest_discussion.post_processing.solution_script import (
+    run_unique_solution_processing,
+    convert_solutions_to_flat_list
 )
 from chatbot.utils.S3.s3_service import upload_file_to_s3
 
 
 # -------------- CONFIG ------------------
+DEFAULT_BATCH_SIZE = 5
+DEFAULT_MAX_WORKERS = 2
 DEFAULT_MAX_ITERATIONS = 10
-DEFAULT_FILTER_THRESHOLD = 10.0  # Stop if less than 10% items were removed
-OUTPUT_DIR = 'chatbot/scripts/challenges/iterative_output'
+DEFAULT_FILTER_THRESHOLD = 10.0
+OUTPUT_DIR = 'chatbot/scripts/solutions/iterative_output'
 
 
-class IterativeChallengeProcessor:
-    """
-    Processor that runs unique challenge filtering iteratively until
-    the output stabilizes.
-    """
-    
+class IterativeSolutionProcessor:
     def __init__(
         self,
         max_iterations: int = DEFAULT_MAX_ITERATIONS,
@@ -47,9 +37,6 @@ class IterativeChallengeProcessor:
         os.makedirs(self.output_dir, exist_ok=True)
         
     def calculate_removal_percentage(self, input_count: int, output_count: int) -> float:
-        """
-        Calculate the percentage of items removed.
-        """
         if input_count == 0:
             return 0.0
         
@@ -58,13 +45,8 @@ class IterativeChallengeProcessor:
         return round(percentage, 2)
     
     def should_continue_filtering(self, input_count: int, output_count: int) -> bool:
-        """
-        Determine if filtering should continue based on removal percentage.
-        """
         removal_percentage = self.calculate_removal_percentage(input_count, output_count)
-        
-        # If removal percentage is greater than or equal to threshold, continue filtering
-        # If it's less than threshold, we've reached satisfactory uniqueness
+
         return removal_percentage >= self.filter_threshold
     
     def run_iterative_processing(
@@ -74,12 +56,9 @@ class IterativeChallengeProcessor:
         date_from: Optional[str] = None,
         date_till: Optional[str] = None
     ) -> Dict[str, Any]:
-        """
-        Run iterative challenge processing until threshold is met or max iterations reached.
-        """
         result = {
             'success': False,
-            'final_challenges': [],
+            'final_solutions': [],
             'iterations_completed': 0,
             'stats': [],
             'output_file': None,
@@ -96,9 +75,9 @@ class IterativeChallengeProcessor:
             
             initial_count = len(current_data)
             print(f"\n{'='*60}")
-            print(f"🚀 ITERATIVE CHALLENGE PROCESSOR")
+            print(f"🚀 ITERATIVE SOLUTION PROCESSOR")
             print(f"{'='*60}")
-            print(f"📊 Initial challenges count: {initial_count}")
+            print(f"📊 Initial solutions count: {initial_count}")
             print(f"⚙️  Max iterations: {self.max_iterations}")
             print(f"⚙️  Filter threshold: {self.filter_threshold}%")
             print(f"⚙️  Batch size: {self.batch_size}")
@@ -121,15 +100,22 @@ class IterativeChallengeProcessor:
                     print(f"   ⚠️ Too few items to process, stopping.")
                     break
                 
-                # Run the challenge processing
-                _, flat_challenges = run_unique_challenge_processing(
-                    input_data=current_data,
+                # Run the solution processing without saving intermediate files
+                from chatbot.scripts.guest_discussion.post_processing.solution_script import process_all_batches
+                batch_results = process_all_batches(
+                    data=current_data,
                     batch_size=self.batch_size,
                     max_workers=self.max_workers,
-                    save_to_file=False
+                    save_to_file=False  # Don't save intermediate files
                 )
                 
-                output_count = len(flat_challenges)
+                # Convert results to flat list in-memory (no file writing)
+                flat_solutions = convert_solutions_to_flat_list(
+                    batch_results=batch_results,
+                    save_to_file=False  # Don't save intermediate files
+                )
+                
+                output_count = len(flat_solutions)
                 removal_percentage = self.calculate_removal_percentage(input_count, output_count)
                 
                 # Record stats
@@ -148,15 +134,15 @@ class IterativeChallengeProcessor:
                 # Check if we should stop
                 if not self.should_continue_filtering(input_count, output_count):
                     print(f"\n   ✅ Threshold reached! Removal ({removal_percentage}%) < threshold ({self.filter_threshold}%)")
-                    current_data = flat_challenges
+                    current_data = flat_solutions
                     break
                 
                 # Prepare for next iteration
-                current_data = flat_challenges
+                current_data = flat_solutions
                 print(f"   ➡️ Continuing to next iteration...")
             
             # Save final output
-            result['final_challenges'] = current_data
+            result['final_solutions'] = current_data
             result['iterations_completed'] = iteration
             
             # Generate output file
@@ -201,43 +187,40 @@ class IterativeChallengeProcessor:
         date_from: Optional[str],
         date_till: Optional[str]
     ) -> List[str]:
-        """
-        Load initial data from provided source.
-        """
         if input_data:
-            return self._normalize_challenges(input_data)
+            return self._normalize_solutions(input_data)
         
         if input_file:
             with open(input_file, 'r') as f:
                 data = json.load(f)
-            return self._normalize_challenges(data)
+            return self._normalize_solutions(data)
         
         if date_from and date_till:
-            return self._fetch_challenges_from_db(date_from, date_till)
+            return self._fetch_solutions_from_db(date_from, date_till)
         
         return []
     
-    def _normalize_challenges(self, data: Any) -> List[str]:
+    def _normalize_solutions(self, data: Any) -> List[str]:
         """
-        Normalize challenge data to a flat list of strings.
+        Normalize solution data to a flat list of strings.
         """
         if not isinstance(data, list):
             return []
         
-        challenges = []
+        solutions = []
         for item in data:
             if isinstance(item, str) and item.strip():
-                challenges.append(item.strip())
-            elif isinstance(item, dict) and 'challenge' in item:
-                val = item.get('challenge')
+                solutions.append(item.strip())
+            elif isinstance(item, dict) and 'solution' in item:
+                val = item.get('solution')
                 if isinstance(val, str) and val.strip():
-                    challenges.append(val.strip())
+                    solutions.append(val.strip())
         
-        return challenges
+        return solutions
     
-    def _fetch_challenges_from_db(self, date_from: str, date_till: str) -> List[str]:
+    def _fetch_solutions_from_db(self, date_from: str, date_till: str) -> List[str]:
         """
-        Fetch challenges from database based on date range.
+        Fetch solutions from database based on date range.
         """
         from datetime import datetime
         from chatbot.models import Story, SessionFlowName
@@ -256,7 +239,7 @@ class IterativeChallengeProcessor:
                 created_at__lte=end_date
             ).values_list('other_params', flat=True)
             
-            challenges = []
+            solutions = []
             guest_discussion_flow = SessionFlowName.GuestDiscussion.value  # 'guest-discussion'
             
             for other_params in stories:
@@ -266,28 +249,28 @@ class IterativeChallengeProcessor:
                     if flow != guest_discussion_flow:
                         continue
                     
-                    # Extract challenges from 'challenges_faced'
-                    challenges_faced = other_params.get('challenges_faced')
+                    # Extract solutions from 'solutions_discussed'
+                    solutions_discussed = other_params.get('solutions_discussed')
                     
-                    if challenges_faced:
+                    if solutions_discussed:
                         # Handle both list and string formats
-                        if isinstance(challenges_faced, list):
-                            for challenge in challenges_faced:
-                                if isinstance(challenge, str) and challenge.strip():
-                                    challenges.append(challenge.strip())
-                        elif isinstance(challenges_faced, str) and challenges_faced.strip():
+                        if isinstance(solutions_discussed, list):
+                            for solution in solutions_discussed:
+                                if isinstance(solution, str) and solution.strip():
+                                    solutions.append(solution.strip())
+                        elif isinstance(solutions_discussed, str) and solutions_discussed.strip():
                             # Single string - add it directly
-                            challenges.append(challenges_faced.strip())
+                            solutions.append(solutions_discussed.strip())
             
             # Handle empty results
-            if not challenges:
-                print(f"⚠️ No challenges found in date range {date_from} to {date_till}")
+            if not solutions:
+                print(f"⚠️ No solutions found in date range {date_from} to {date_till}")
                 print(f"   Stories fetched: {stories.count()}, Flow filter: {guest_discussion_flow}")
                 return []
             
-            print(f"✓ Fetched {len(challenges)} challenges from {stories.count()} stories")
+            print(f"✓ Fetched {len(solutions)} solutions from {stories.count()} stories")
             print(f"  Date range: {date_from} to {date_till}")
-            return challenges
+            return solutions
             
         except Exception as e:
             print(f"❌ Error fetching from database: {e}")
@@ -295,28 +278,28 @@ class IterativeChallengeProcessor:
             traceback.print_exc()
             return []
     
-    def _save_output(self, challenges: List[str], initial_count: int) -> str:
+    def _save_output(self, solutions: List[str], initial_count: int) -> str:
         """
         Save the final output to S3 and return the S3 URL.
         """
-        # Normalize challenges to plain strings
-        normalized_challenges = []
-        for item in challenges:
+        # Normalize solutions to plain strings (in case they're dicts with 'solution' key)
+        normalized_solutions = []
+        for item in solutions:
             if isinstance(item, str):
-                normalized_challenges.append(item)
-            elif isinstance(item, dict) and 'challenge' in item:
-                normalized_challenges.append(item['challenge'])
+                normalized_solutions.append(item)
+            elif isinstance(item, dict) and 'solution' in item:
+                normalized_solutions.append(item['solution'])
         
         output_data = {
             'metadata': {
                 'generated_at': datetime.now().isoformat(),
                 'initial_count': initial_count,
-                'final_count': len(normalized_challenges),
-                'removed_count': initial_count - len(normalized_challenges),
+                'final_count': len(normalized_solutions),
+                'removed_count': initial_count - len(normalized_solutions),
                 'filter_threshold': self.filter_threshold,
                 'max_iterations': self.max_iterations
             },
-            'challenges': normalized_challenges
+            'solutions': normalized_solutions
         }
         
         # Convert to JSON bytes
@@ -324,7 +307,7 @@ class IterativeChallengeProcessor:
         
         # Upload to S3
         s3_key = upload_file_to_s3(
-            file_name='unique_challenges.json',
+            file_name='unique_solutions.json',
             file_content=json_content,
             content_type='application/json',
             project_id=None,
@@ -343,7 +326,7 @@ class IterativeChallengeProcessor:
             return None
 
 
-def run_iterative_challenge_filtering(
+def run_iterative_solution_filtering(
     input_data: Optional[List[str]] = None,
     input_file: Optional[str] = None,
     date_from: Optional[str] = None,
@@ -354,8 +337,10 @@ def run_iterative_challenge_filtering(
     max_workers: int = DEFAULT_MAX_WORKERS,
     output_dir: str = OUTPUT_DIR
 ) -> Dict[str, Any]:
-    
-    processor = IterativeChallengeProcessor(
+    """
+    Main function to run iterative solution filtering.
+    """
+    processor = IterativeSolutionProcessor(
         max_iterations=max_iterations,
         filter_threshold=filter_threshold,
         batch_size=batch_size,
