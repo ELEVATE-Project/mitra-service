@@ -45,9 +45,6 @@ def load_secrets():
     raise FileNotFoundError(f"secrets.json not found in any of: {paths_to_try}")
 
 
-
-
-
 SECRETS, SECRETS_JSON_PATH = load_secrets()
 
 # Quick-start development settings - unsuitable for production

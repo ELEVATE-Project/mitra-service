@@ -41,7 +41,6 @@ def get_presigned_url(request):
         file_type=file_type,
         folder_structure=folder_structure or '',
         entity_id=story_id if story_id else None,
-        acl='public-read',
         expires_in=3600
     )
 
@@ -58,7 +57,7 @@ def get_presigned_url(request):
         return Response({
             "uploadUrl": result.upload_url,
             "s3ObjectKey": result.object_key,
-            "s3Url": result.public_url,
+            "s3Url": result.object_url,
         })
     
     except ValueError as e:

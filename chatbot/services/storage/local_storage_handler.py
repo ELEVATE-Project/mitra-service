@@ -61,6 +61,7 @@ class LocalStorageHandler(BaseStorageHandler):
                 upload_url=upload_url,
                 object_key=object_key,
                 public_url=public_url,
+                object_url=public_url,
                 success=True
             )
             
@@ -71,6 +72,7 @@ class LocalStorageHandler(BaseStorageHandler):
                 upload_url='',
                 object_key='',
                 public_url='',
+                object_url='',
                 success=False,
                 error=error_msg
             )
@@ -106,6 +108,7 @@ class LocalStorageHandler(BaseStorageHandler):
                 upload_url=file_path,
                 object_key=object_key,
                 public_url=public_url,
+                object_url=public_url,
                 success=True
             )
             
@@ -116,6 +119,7 @@ class LocalStorageHandler(BaseStorageHandler):
                 upload_url='',
                 object_key='',
                 public_url='',
+                object_url='',
                 success=False,
                 error=error_msg
             )

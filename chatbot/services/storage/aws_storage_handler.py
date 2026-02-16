@@ -6,7 +6,7 @@ import logging
 import boto3
 from botocore.exceptions import ClientError
 from typing import BinaryIO
-
+from urllib.parse import urlparse
 from .base_storage_handler import BaseStorageHandler, UploadConfig, UploadResult
 
 logger = logging.getLogger('django')
@@ -83,6 +83,7 @@ class AWSS3StorageHandler(BaseStorageHandler):
             )
             
             public_url = self.get_public_url(object_key)
+            s3_url = self.get_s3_url(object_key)
             
             logger.info(f"Generated presigned URL for S3: {object_key}")
             
@@ -90,6 +91,7 @@ class AWSS3StorageHandler(BaseStorageHandler):
                 upload_url=upload_url,
                 object_key=object_key,
                 public_url=public_url,
+                object_url=s3_url,
                 success=True
             )
             
@@ -100,6 +102,7 @@ class AWSS3StorageHandler(BaseStorageHandler):
                 upload_url='',
                 object_key='',
                 public_url='',
+                object_url='',
                 success=False,
                 error=error_msg
             )
@@ -136,13 +139,15 @@ class AWSS3StorageHandler(BaseStorageHandler):
             )
             
             public_url = self.get_public_url(object_key)
-            
+            s3_url = self.get_s3_url(object_key)
+
             logger.info(f"Successfully uploaded file to S3: {object_key}")
             
             return UploadResult(
                 upload_url='',
                 object_key=object_key,
                 public_url=public_url,
+                object_url=s3_url,
                 success=True
             )
             
@@ -153,6 +158,7 @@ class AWSS3StorageHandler(BaseStorageHandler):
                 upload_url='',
                 object_key='',
                 public_url='',
+                object_url='',
                 success=False,
                 error=error_msg
             )
@@ -191,6 +197,18 @@ class AWSS3StorageHandler(BaseStorageHandler):
         """
         return f"https://{self.bucket_name}/{object_key}"
 
+    def get_s3_url(self, object_key: str) -> str:
+        """
+        Get the s3 URL for an S3 object
+        
+        Args:
+            object_key: S3 object key
+            
+        Returns:
+            s3 URL string
+        """
+        return f"s3://{self.bucket_name}/{object_key}"
+
     def file_exists(self, object_key: str) -> bool:
         """
         Check if a file exists in S3
@@ -210,3 +228,17 @@ class AWSS3StorageHandler(BaseStorageHandler):
         except ClientError:
             return False
 
+    def get_file_from_store(self, object_url: str) -> any:
+        """
+        Get a file from S3
+        
+        Args:
+            object_url: S3 object URL
+            
+        Returns:
+            File object
+        """
+        bucket_name = os.environ.get('S3_BUCKET_NAME')
+        parsed = urlparse(object_url)
+        object_key = parsed.path.lstrip("/")
+        return self.client.get_object(Bucket=bucket_name, Key=object_key).get('Body').read()

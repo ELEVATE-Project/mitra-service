@@ -4,6 +4,7 @@ Base storage handler interface for cloud storage operations
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, BinaryIO
 from dataclasses import dataclass
+import requests
 
 
 @dataclass
@@ -13,7 +14,7 @@ class UploadConfig:
     file_type: str
     folder_structure: Optional[str] = None
     entity_id: Optional[str] = None
-    acl: str = 'public-read'
+    acl: str | None = None
     expires_in: int = 3600
     metadata: Optional[Dict[str, str]] = None
 
@@ -24,6 +25,7 @@ class UploadResult:
     upload_url: str
     object_key: str
     public_url: str
+    object_url: str
     success: bool = True
     error: Optional[str] = None
 
@@ -123,3 +125,16 @@ class BaseStorageHandler(ABC):
         entity_part = f"{upload_config.entity_id}/" if upload_config.entity_id else ''
         return f"{folder}{entity_part}{upload_config.file_name}"
 
+    def get_file_from_store(self, object_url: str) -> any:
+        """
+        Get a file from storage
+        
+        Args:
+            object_url: URL of the object to get
+            
+        Returns:
+            File object
+        """
+        response = requests.get(object_url)
+        response.raise_for_status()
+        return response.content
