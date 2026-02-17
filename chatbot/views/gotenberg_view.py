@@ -1,6 +1,6 @@
 from rest_framework.decorators import api_view
 from django.http import HttpResponse
-from chatbot.models import Story
+from chatbot.models import Story, ChatSession
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 from chatbot.utils.shikshalokam_story_utils import get_story_html, get_html_from_template
 from django.core.files.base import ContentFile
@@ -41,9 +41,10 @@ def generate_pdf_view_v2(request):
     flow = body.get('flow')
     print("session: ", session)
     story = Story.objects.get(session=session)
+    chatsession = ChatSession.objects.get(session=session)
     profile = story.author
 
-    html_content = get_html_from_template(story=story, profile=profile, flow=flow)
+    html_content = get_html_from_template(story=story, profile=profile, flow=flow, language=chatsession.language)
     print("--------------------")
     print(html_content)
     print("--------------------")
