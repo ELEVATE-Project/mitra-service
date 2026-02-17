@@ -341,8 +341,6 @@ class UserTypeChoices(models.TextChoices):
 
 
 class CreateStoryChoices(models.TextChoices):
-    GUEST = 'guest', _('Guest')
-    AUTH = 'auth', _('Authenticated')
     ALL = 'all', _('All')
     NONE = 'none', _('None')
 
