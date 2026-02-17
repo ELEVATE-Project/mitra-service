@@ -1,6 +1,7 @@
 
 from enum import Enum
 from typing import Dict, List, Any
+from chatbot.constants.post_processing_constants import PROCESSING_TYPE_CONFIG
 
 
 # Common fields that all processing types share
@@ -12,75 +13,27 @@ class ProcessingType(Enum):
     Enum for all available post-processing types.
     """
     UNIQUE_CHALLENGES = 'unique_challenges'
+    UNIQUE_SOLUTIONS = 'unique_solutions'
     
     @property
     def label(self) -> str:
         """Human-readable label for the processing type"""
-        return PROCESSING_TYPE_CONFIG[self]['label']
+        return PROCESSING_TYPE_CONFIG[self.value]['label']
     
     @property
     def template_name(self) -> str:
         """Template file name for the processing type's form fields"""
-        return PROCESSING_TYPE_CONFIG[self]['template_name']
+        return PROCESSING_TYPE_CONFIG[self.value]['template_name']
     
     @property
     def fields(self) -> List[Dict[str, Any]]:
         """Configuration for form fields specific to this processing type"""
-        return PROCESSING_TYPE_CONFIG[self]['fields']
+        return PROCESSING_TYPE_CONFIG[self.value]['fields']
     
     @property
     def handler_method(self) -> str:
         """Name of the method in PostProcessingView that handles this type"""
-        return PROCESSING_TYPE_CONFIG[self]['handler_method']
-
-
-# Configuration for each processing type
-PROCESSING_TYPE_CONFIG: Dict[ProcessingType, Dict[str, Any]] = {
-    ProcessingType.UNIQUE_CHALLENGES: {
-        'label': 'Unique Challenges',
-        'template_name': 'admin/post_processing/forms/unique_challenges_form.html',
-        'handler_method': '_run_unique_challenges_processing',
-        'fields': [
-            {
-                'name': 'max_workers',
-                'type': 'number',
-                'label': 'Max Workers',
-                'default': 4,
-                'min': 1,
-                'max': 8,
-                'help_text': 'How many parallel workers to use for processing.'
-            },
-            {
-                'name': 'batch_size',
-                'type': 'number',
-                'label': 'Batch Size',
-                'default': 100,
-                'min': 1,
-                'max': 1000,
-                'help_text': 'How many challenges to process together in each batch.'
-            },
-            {
-                'name': 'max_iterations',
-                'type': 'number',
-                'label': 'Max Iterations',
-                'default': 10,
-                'min': 1,
-                'max': 50,
-                'help_text': 'The system will keep filtering duplicates until this many rounds.'
-            },
-            {
-                'name': 'filter_threshold',
-                'type': 'number',
-                'label': 'Filter Threshold (%)',
-                'default': 10,
-                'min': 1,
-                'max': 100,
-                'step': 0.1,
-                'help_text': 'Stop processing when filtering is lower than this percentage. Lower percentage means aggressive filtering.'
-            },
-        ]
-    },
-}
+        return PROCESSING_TYPE_CONFIG[self.value]['handler_method']
 
 
 def get_all_processing_types() -> List[Dict[str, str]]:
@@ -101,4 +54,5 @@ def get_processing_type_by_value(value: str) -> ProcessingType:
 
 
 def get_processing_type_config(processing_type: ProcessingType) -> Dict[str, Any]:
-    return PROCESSING_TYPE_CONFIG.get(processing_type, {})
+    """Get configuration dictionary for a specific processing type"""
+    return PROCESSING_TYPE_CONFIG.get(processing_type.value, {})

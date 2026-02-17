@@ -221,6 +221,12 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
         session_value = request.data.get('session')
         access_token = request.data.get('access_token')
         flow = request.data.get('flow')
+        file_url = request.data.get('file_url')
+
+        if file_url is not None and file_url.startswith("s3://"):
+            file_url = "https://" + file_url[len("s3://"):]
+            request.data["file_url"] = file_url
+
         print("session_value: ", session_value)
         print("flow: ", flow)
         print("access_token: ", access_token)

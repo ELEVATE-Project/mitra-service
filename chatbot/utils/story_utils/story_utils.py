@@ -242,7 +242,7 @@ def generate_story(profile_id, session, access_token, flow, language='en'):
                         if profile_data and profile_data.get("first_name") and intro_to_pass:
                             words = intro_to_pass.split(" ", 1)
                             if len(words) > 1:
-                                intro_to_pass = f"{words[0]} {profile_data.get("first_name")} {words[1]}"
+                                intro_to_pass = f"{words[0]} {profile_data.get('first_name')} {words[1]}"
                             else:
                                 intro_to_pass = f"{words[0]} {profile_data.get("first_name")}"
                     else:

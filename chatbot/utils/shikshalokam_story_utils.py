@@ -424,7 +424,10 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         print("profile: ", profile)
         print("story: ", story.title)
         print("story format: ", story.formatted_content)
-        html_content = get_html_from_template(story=story, profile=profile, flow=flow)
+        if isinstance(flow, str):
+            html_content = get_story_html(story=story, profile=profile, flow=flow)
+        else:
+            html_content = get_html_from_template(story=story, profile=profile, flow=flow)
 
         pdf_generated = generate_pdf_with_gotenberg(html_content)
         # print("pdf_generated: ", pdf_generated)
