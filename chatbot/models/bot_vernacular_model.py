@@ -4,6 +4,11 @@ from chatbot.models import CompanyBot
 
 
 class BotVernacular(models.Model):
+    """
+    Stores language-specific (vernacular) configurations for a company bot.
+    Allows customized introductory and error messages per language.
+    """
+
     company_bot = models.ForeignKey(CompanyBot, on_delete=models.SET_NULL, related_name='bot_vernacular', null=True)
 
     language = models.CharField(max_length=250, help_text="Language code, Example for English use en.")

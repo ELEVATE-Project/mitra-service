@@ -15,6 +15,10 @@ S3_BASE_URL = os.getenv('S3_BASE_URL')
 
 
 class Company(models.Model):
+    """
+    Represents a company that owns and manages chatbot configurations.
+    Stores company details like name, slug, status, and logo.
+    """
 
     def get_file_upload_path(self, filename):
         folder_name = 'chatbot/company/{}'.format(self.slug)
@@ -43,6 +47,10 @@ class Company(models.Model):
 
 
 class CompanyBot(models.Model):
+    """
+    Defines a chatbot configuration for a specific company.
+    Stores LLM settings, prompts, provider details, and behavior controls.
+    """
 
     def get_file_upload_path(self, filename):
         folder_name = self.company.slug+'/'+'static-media'
@@ -150,6 +158,11 @@ class CompanyBot(models.Model):
 
 
 class CompanyChat(models.Model):
+    """
+    Represents a chat message exchanged between a user and a company bot.
+    Stores message content, session data, metadata, and optional attachments.
+    """
+
     def get_file_upload_path(self, filename):
         folder_name = f'chatbot'
         upload_path = os.path.join(folder_name, filename)
@@ -194,6 +207,11 @@ class CompanyChat(models.Model):
 
 
 class Voice(models.Model):
+    """
+    Defines a text-to-speech voice configuration for a company bot.
+    Stores provider details, language, gender, and playback settings.
+    """
+
     company_bot = models.ForeignKey(CompanyBot, on_delete=models.SET_NULL, null=True, blank=True)
     type = models.CharField(max_length=300, choices=VoiceType.choices, null=True, blank=True)
     provider = models.CharField(max_length=300, null=True, blank=True,
@@ -226,6 +244,11 @@ class Voice(models.Model):
 
 
 class CompanyStateMachine(models.Model):
+    """
+    Represents a step in a structured conversational workflow for a company bot.
+    Defines stage logic, prompts, and optional pre/post processing rules.
+    """
+
     company_bot = models.ForeignKey(CompanyBot, on_delete=models.CASCADE)
     name = models.CharField(max_length=100, help_text="Enter the name of the state.")
     step = models.IntegerField(
