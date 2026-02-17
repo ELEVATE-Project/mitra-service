@@ -68,6 +68,22 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                     self.session_id, profile, self.company_bot, self.ip_address, user_id
                 )
             else:
+                # Validate that user is authenticated before processing messages
+                if not self.session_id or not self.bot_route:
+                    error_msg = "Authentication required. Please send authentication message first with type='authenticate', sessionid, profileid, route, and bot_route."
+                    logger.error(f"Unauthenticated message attempt: {error_msg}")
+                    await self.channel_layer.send(
+                        self.channel_name,
+                        {
+                            "type": "chat_message",
+                            "text": {
+                                "msg": error_msg,
+                                "source": "system",
+                                "error": True
+                            },
+                        },
+                    )
+                    return
                 company_chat_status = await self.determine_company_chat_status_async(
                     session_id=self.session_id, profile_id=self.profile_id, route=self.bot_route
                 )
@@ -89,15 +105,21 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 )()
 
                 current_stage = None
-                if (chat_session and self.company_bot and
-                        self.company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE):
-                    state_machine = await database_sync_to_async(
-                        lambda: CompanyStateMachine.objects.get(
-                            company_bot=self.company_bot, step=chat_session.current_step
+                if chat_session and self.company_bot:
+                    try:
+                        state_machine = await database_sync_to_async(
+                            lambda: CompanyStateMachine.objects.get(
+                                company_bot=self.company_bot, step=chat_session.current_step
+                            )
+                        )()
+                        if state_machine:
+                            current_stage = state_machine.name
+                    except CompanyStateMachine.DoesNotExist:
+                        logger.error(
+                            f"CompanyStateMachine not found for bot_id={self.company_bot.id}, "
+                            f"step={chat_session.current_step}. "
+                            f"Please create state machines in admin panel."
                         )
-                    )()
-                    if state_machine:
-                        current_stage = state_machine.name
                 # Use a task for database operations
                 await database_sync_to_async(save_in_company_db)(
                     session_id=self.session_id, profile_id=self.profile_id, initiated_by='User',

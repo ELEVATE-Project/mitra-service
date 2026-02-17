@@ -6,7 +6,9 @@ from chatbot.translate.ai4Bharat.text_lang_detect import call_ai4bharat_text_lan
 from chatbot.utils.audio_converter_utils import convert_s3_audio_to_wav_base64
 from chatbot.utils.audio_provider_utils import text_speech_provider, speech_text_provider, text_translate_provider
 from chatbot.utils.transliterate_utils import transliterate_text
-import requests
+import logging
+
+logger = logging.getLogger('django')
 
 
 ai4bharat_api_key = os.getenv("BHASHANI_API_KEY")
@@ -62,8 +64,6 @@ def speech_text(request):
         source_language = body.get('source_language', 'en')
         route = body.get('route')
 
-        response = requests.get(s3_url)
-        response.raise_for_status()
         company_bot = CompanyBot.objects.filter(route=route).first()
         if not company_bot:
             company_bot = CompanyBot.objects.filter(route='/common_bot').first()
@@ -96,6 +96,7 @@ def speech_text(request):
             }, status=response.get('status'))
 
     except Exception as e:
+        logger.error("Error in speech_text: %s", e, exc_info=True)
         return Response({
             'status': 'error',
             'message': str(e)

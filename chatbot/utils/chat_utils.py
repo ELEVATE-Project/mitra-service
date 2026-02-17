@@ -1,8 +1,8 @@
-from chatbot.models import Profile, LLMProvider
+from chatbot.models import Profile, LLMProvider, CompanyChat
 import json
 
 def format_message_as_per_openai_format(chats, intro=None):
-    ai_user = Profile.objects.get(id=1)
+    ai_user = Profile.objects.values("id").get(id=1)
     if intro:
         messages = [
             {
@@ -16,10 +16,25 @@ def format_message_as_per_openai_format(chats, intro=None):
     else:
         messages = []
     for chat in chats:
-        if chat.receiver == ai_user:
-            user_message = chat.message
-            if chat.translated_message is not None and chat.translated_message != '':
-                user_message = chat.translated_message
+        chat_receiver = None
+        chat_message = None
+        chat_translated_message = None
+        
+        # variable instialisation
+        if isinstance(chat, CompanyChat):
+            chat_receiver = getattr(chat.receiver, 'id', None)
+            chat_message = getattr(chat, 'message', None)
+            chat_translated_message = getattr(chat, 'translated_message', None)
+
+        elif isinstance(chat, dict):
+            chat_receiver = chat.get("receiver")
+            chat_message = chat.get("message")
+            chat_translated_message = chat.get("translated_message")
+
+        if chat_receiver == ai_user.get("id"):
+            user_message = chat_message
+            if chat_translated_message is not None and chat_translated_message != '':
+                user_message = chat_translated_message
             messages.append({
                 'role': 'user',
                 'content': user_message
@@ -27,13 +42,13 @@ def format_message_as_per_openai_format(chats, intro=None):
         else:
             messages.append({
                 'role': 'assistant',
-                "content": chat.message
+                "content": chat_message
             })
     return messages
 
 
 def format_message_as_per_bedrock_format(chats, intro=None, other_info=None):
-    ai_user = Profile.objects.get(id=1)
+    ai_user = Profile.objects.values("id").get(id=1)
     if intro:
         if other_info:
             user_name = other_info.get('first_name', None)
@@ -58,10 +73,25 @@ def format_message_as_per_bedrock_format(chats, intro=None, other_info=None):
     else:
         messages = []
     for chat in chats:
-        if chat.receiver == ai_user:
-            user_message = chat.message
-            if chat.translated_message is not None and chat.translated_message != '':
-                user_message = chat.translated_message
+        chat_receiver = None
+        chat_message = None
+        chat_translated_message = None
+        
+        # variable instialisation
+        if isinstance(chat, CompanyChat):
+            chat_receiver = getattr(chat.receiver, 'id', None)
+            chat_message = getattr(chat, 'message', None)
+            chat_translated_message = getattr(chat, 'translated_message', None)
+
+        elif isinstance(chat, dict):
+            chat_receiver = chat.get("receiver")
+            chat_message = chat.get("message")
+            chat_translated_message = chat.get("translated_message")
+
+        if chat_receiver == ai_user.get("id"):
+            user_message = chat_message
+            if chat_translated_message is not None and chat_translated_message != '':
+                user_message = chat_translated_message
             messages.append({
                 'role': 'user',
                 'content': [{'text': user_message}]
@@ -69,7 +99,7 @@ def format_message_as_per_bedrock_format(chats, intro=None, other_info=None):
         else:
             messages.append({
                 'role': 'assistant',
-                "content": [{'text': chat.message}]
+                "content": [{'text': chat_message}]
             })
 
     if not messages or messages[0].get('role') != 'user':

@@ -77,6 +77,55 @@ class CommonResponseHandler(BaseResponseHandler):
         messages = kwargs.get('messages')
         return temp_messages if temp_messages else messages
 
+    def _send_db_question(self, bot_question, chat_session, chunks, **kwargs):
+        """Send bot question from database for NON_LLM operations"""
+        company_bot = kwargs['company_bot']
+        session_id = kwargs['session_id']
+        channel_name = kwargs['channel_name']
+        language = kwargs['language']
+        profile_id = kwargs['profile_id']
+        
+        try:
+            state_machine = CompanyStateMachine.objects.get(
+                company_bot=company_bot, step=chat_session.current_step
+            )
+        except CompanyStateMachine.DoesNotExist:
+            logger.error(f"State machine not found for step {chat_session.current_step}")
+            return self.default_error_message
+        
+        chat_status = self.get_chat_status(
+            state_machine=state_machine, company_bot=company_bot
+        )
+        
+        # Translate and send to WebSocket
+        translated_message = self.translate_message(
+            message=bot_question,
+            channel_name=channel_name,
+            step_number=chat_session.current_step,
+            language=language,
+            company_bot=company_bot
+        )
+        
+        # Save to database with metadata indicating this is a NON_LLM question from DB
+        self.save_message(
+            session_id=session_id,
+            profile_id=profile_id,
+            message=bot_question,
+            chunks=chunks,
+            status=chat_status,
+            translated_message=translated_message,
+            stage=state_machine.name,
+            other_params={
+                'message_type': 'question',
+                'operation_type': 'non_llm',
+                'source': 'database'
+            }
+        )
+        
+        logger.info(f"Sent NON_LLM bot question from DB for state: {state_machine.name}")
+        return bot_question
+
+
     def is_function_call(self, response):
         """Override to handle empty responses as function calls"""
         if super().is_function_call(response):
@@ -157,7 +206,19 @@ class CommonResponseHandler(BaseResponseHandler):
         print(f"DEBUG: Current retry attempt: {retry_attempt}")
 
         skip_llm_call = kwargs.get('skip_llm', False)
+        send_bot_question = kwargs.get('send_bot_question', False)
         print(f"DEBUG: skip_llm_call: {skip_llm_call}")
+
+        # Handle NON_LLM operation type - send bot_question directly from database
+        if send_bot_question and skip_llm_call:
+            bot_question = kwargs.get('bot_question_from_db')
+            if bot_question:
+                return self._send_db_question(
+                    bot_question=bot_question,
+                    chat_session=chat_session,
+                    chunks=chunks,
+                    **kwargs
+                )
 
         current_step = chat_session.current_step
 
@@ -538,6 +599,14 @@ class CommonResponseHandler(BaseResponseHandler):
             return None
         bot_question = state_machine.bot_question
 
+        # Check if this is a NON_LLM state - if so, just use bot_question from DB
+        is_non_llm = False
+        if hasattr(state_machine, 'operation_type'):
+            from chatbot.models.enums import OperationTypeChoices
+            if state_machine.operation_type == OperationTypeChoices.NON_LLM:
+                is_non_llm = True
+                logger.info(f"State {state_machine.name} is NON_LLM, using bot_question from DB")
+
         chat_status = self.get_chat_status(state_machine=state_machine, company_bot=company_bot)
 
         translated_message = self.translate_message(
@@ -546,7 +615,13 @@ class CommonResponseHandler(BaseResponseHandler):
         )
 
         other_params = {'function_call_response': response}
-        print(f"DEBUG: Saving whole function call response in other_params: {response}")
+        if is_non_llm:
+            other_params.update({
+                'message_type': 'question',
+                'operation_type': 'non_llm',
+                'source': 'database'
+            })
+        print(f"DEBUG: Saving function call response in other_params: {response}")
         stage = state_machine.name if state_machine else None
         self.save_message(
             session_id=session_id, profile_id=profile_id, message=bot_question, chunks=chunks,

@@ -33,7 +33,7 @@ class ChatSession(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def save_title(self, language='en'):
-        company_chats = CompanyChat.objects.filter(session=self.session).order_by('created_at')
+        company_chats = CompanyChat.objects.select_related('sender', 'receiver').filter(session=self.session).order_by('created_at').values("receiver", "receiver__id", "translated_message", "message", "status", "created_at")
         if self.profile:
             company_bot = CompanyBot.objects.filter(company=self.profile.company, route='/mohini_title').first()
         else:

@@ -9,6 +9,7 @@ from chatbot.utils.story_utils.get_story_prompts import get_creation_promt, get_
     get_validation_prompt
 
 
+from chatbot.llm_models.llm_script import handle_bedrock_model
 import traceback
 from chatbot.models import StoryStatusChoices, Story, CompanyBot, Voice, \
     VoiceType
@@ -16,6 +17,8 @@ from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.story_llama_utils import translate_field, create_project
 from chatbot.utils.story_utils.challenges_utils import handle_challenges_solutions
 from chatbot.utils.story_utils.format_utils import clean_escaped_text
+from chatbot.utils.story_utils.story_llm import generate_story_llm
+from chatbot.utils.story_utils.story_utils import get_story_company_bot
 from chatbot.utils.transliterate_utils import transliterate_text
 from shikshalokam.models import Project, Task
 from shikshalokam.serializer import TaskSerializer
@@ -29,11 +32,7 @@ import logging
 import json
 import os
 from django.core.validators import URLValidator
-import boto3
 import json_repair
-from retrying import retry
-from botocore.client import Config as BotoConfig
-from botocore.exceptions import ClientError
 
 
 logger = logging.getLogger('django')
@@ -241,7 +240,7 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
         traceback.print_exc()
         if not company_bot:
             profile = Profile.objects.filter(id=profile_id).first()
-            company_bot, validate_bot = get_story_company_bot(profile=profile, flow=flow)
+            company_bot, validate_bot = get_story_company_bot(flow=flow)
 
         bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
         error_message = bot_vernacular.error_message if bot_vernacular and bot_vernacular.error_message \
@@ -251,43 +250,6 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
                 voice_provider=voice_provider, message_body=error_message, target_language=language
             )
         return "", "", error_message
-
-
-def get_story_company_bot(profile, flow):
-    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.Reflection, SessionFlowName.SsoFlow]:
-        company_bot = CompanyBot.objects.get(route='/story')
-        validate_bot = CompanyBot.objects.get(route='/story_validation')
-    elif flow in [SessionFlowName.GuestMiStory]:
-        company_bot = CompanyBot.objects.get(route='/guest-story')
-        validate_bot = CompanyBot.objects.get(route='/guest-story_validation')
-    elif flow in [SessionFlowName.megaPTM]:
-        company_bot = CompanyBot.objects.get(route='/ptm-story')
-        validate_bot = CompanyBot.objects.get(route='/ptm-story_validation')
-    else:
-        company_bot = CompanyBot.objects.get(route='/chaupal-story')
-        validate_bot = CompanyBot.objects.get(route='/chaupal-_validation')
-    # if profile:
-    #     if flow in [SessionFlowName.LoginMiStory, SessionFlowName.Reflection]:
-    #         company_bot = CompanyBot.objects.get(company=profile.company, route='/story')
-    #         validate_bot = CompanyBot.objects.get(company=profile.company, route='/story_validation')
-    #     elif flow in [SessionFlowName.GuestMiStory]:
-    #         company_bot = CompanyBot.objects.get(company=profile.company, route='/guest-story')
-    #         validate_bot = CompanyBot.objects.get(company=profile.company, route='/guest-story_validation')
-    #     else:
-    #         company_bot = CompanyBot.objects.get(company=profile.company, route='/chaupal-story')
-    #         validate_bot = CompanyBot.objects.get(company=profile.company, route='/chaupal-_validation')
-    # else:
-    #     if flow in [SessionFlowName.LoginMiStory, SessionFlowName.Reflection]:
-    #         company_bot = CompanyBot.objects.get(route='/story')
-    #         validate_bot = CompanyBot.objects.get(route='/story_validation')
-    #     elif flow in [SessionFlowName.GuestMiStory]:
-    #         company_bot = CompanyBot.objects.get(company=profile.company, route='/guest-story')
-    #         validate_bot = CompanyBot.objects.get(company=profile.company, route='/guest-story_validation')
-    #     else:
-    #         company_bot = CompanyBot.objects.get(route='/chaupal-story')
-    #         validate_bot = CompanyBot.objects.get(route='/chaupal-_validation')
-
-    return company_bot, validate_bot
 
 
 def save_story(
@@ -675,70 +637,6 @@ def save_ptm_story(
 
 
 
-async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, messages, tool_content, tool_story,
-                             company_bot, flow):
-    async def func1():
-        if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
-            return await asyncio.to_thread(
-                functools.partial(
-                    handle_bedrock_model,
-                    system_prompt=formatted_content_prompt,
-                    messages=messages,
-                    tools=tool_content,
-                    temperature=company_bot.bot_temperature,
-                    max_token=company_bot.max_token,
-                    top_p=company_bot.filter_score,
-                    model_name=company_bot.llm_model,
-                    company_bot=company_bot
-                )
-            )
-
-
-    async def func2():
-        if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
-            return await asyncio.to_thread(
-                functools.partial(
-                    handle_bedrock_model,
-                    system_prompt=formatted_story_prompt,
-                    messages=messages,
-                    tools=tool_story,
-                    temperature=company_bot.bot_temperature,
-                    max_token=company_bot.max_token,
-                    top_p=company_bot.filter_score,
-                    model_name=company_bot.llm_model,
-                    company_bot=company_bot
-                )
-            )
-
-
-    if flow in [SessionFlowName.LoginMiStory, SessionFlowName.GuestMiStory, SessionFlowName.Reflection,
-        SessionFlowName.megaPTM, SessionFlowName.SsoFlow
-    ]:
-        response_json_content, response_json_story = await asyncio.gather(func1(), func2())
-    else:
-        response_json_content = await func1()
-        response_json_story = None
-    logger.info(f"response_json_content: %s", response_json_content)
-    logger.info(f"response_json_story: %s", response_json_story)
-
-    if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
-        for response in [response_json_content, response_json_story]:
-            if response and isinstance(response, dict):
-                extracted_data = response.pop("parameters", response.pop("input", None))
-                if extracted_data and isinstance(extracted_data, dict):
-                    response.clear()
-                    response.update(extracted_data)
-
-    elif company_bot.provider == LLMProvider.OPENAI:
-        pass
-
-    logger.info(f"Final response_json_content: %s", response_json_content)
-    logger.info(f"Final response_json_story: %s", response_json_story)
-
-
-    return response_json_content, response_json_story
-
-
 async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, messages, tool_content, tool_story,
                              company_bot, flow):
     async def func1():
@@ -837,98 +735,3 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
 
 def retry_if_result_none(result):
     return result is None
-
-@retry(stop_max_attempt_number=llm_retry_number, retry_on_result=retry_if_result_none, wrap_exception=True)
-def handle_bedrock_model(
-        company_bot, system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
-        model_name=None, region_name='us-west-2', tools=None, is_json_response=False
-):
-    connect_timeout = company_bot.connect_timeout
-    read_timeout = company_bot.read_timeout
-
-    boto_config = BotoConfig(
-        connect_timeout=connect_timeout,
-        read_timeout=read_timeout,
-        retries={"mode": "adaptive"}
-    )
-
-    bedrock_runtime = boto3.client(
-        service_name='bedrock-runtime',
-        region_name=region_name,
-        aws_access_key_id=AWS_KEY,
-        aws_secret_access_key=AWS_SECRET_KEY,
-        config=boto_config
-    )
-
-    if model_name:
-        model_id = model_name
-    else:
-        model_id = 'meta.llama3-1-8b-instruct-v1:0'
-
-        # 'meta.llama3-1-70b-instruct-v1:0'
-
-    inference_config = {}
-    additional_model_fields = {}
-
-    if max_token:
-        inference_config['maxTokens'] = max_token
-    if temperature is not None:
-        inference_config['temperature'] = temperature
-    if top_p:
-        inference_config['topP'] = top_p
-    if messages and messages[-1]['role'] == 'assistant':
-        messages.pop()
-
-    try:
-        request_payload = {
-            'modelId': model_id,
-            'messages': messages,
-            'system': system_prompt,
-        }
-        if inference_config:
-            request_payload['inferenceConfig'] = inference_config
-        if tools:
-            request_payload['toolConfig'] = tools.get('toolConfig')
-
-        logger.info('Bedrock request payload: %s', request_payload)
-        response = bedrock_runtime.converse(**request_payload)
-        logger.info('Bedrock response: %s', response)
-
-        content_arr = response['output']['message']['content']
-        content = content_arr[0]
-        content_tool = content.get('toolUse')
-        if content_tool:
-            if isinstance(content_tool, str):
-                final_output = json_repair.repair_json(content_tool, return_objects=True)
-            else:
-                final_output = content_tool
-        else:
-            content_text = content.get('text')
-            json_start = content_text.find('{')
-            if json_start != -1:
-                json_str = content_text[json_start:]
-                json_str = json_str.replace('\n', '').replace('\r', '').strip()
-                while json_str and (json_str.endswith("'") or json_str.endswith('"') or json_str.endswith(',')):
-                    json_str = json_str[:-1].strip()
-                try:
-                    final_output = json_repair.repair_json(json_str, return_objects=True)
-                    logger.info('Loads final_output: %s', final_output)
-                except json.JSONDecodeError as e:
-                    logger.error('Error decoding JSON: %s', e, exc_info=True)
-                    return None
-            elif is_json_response:
-                return None
-            else:
-                return content_text
-
-        return final_output
-    except ClientError as e:
-            error_response = e.response
-            print("❌ ClientError:")
-            print("Error Code:", error_response["Error"]["Code"])
-            print("Error Message:", error_response["Error"]["Message"])
-            print("Request ID:", error_response.get("ResponseMetadata", {}).get("RequestId"))
-            return None
-    except Exception as e:
-        logger.error('Error processing request: %s', e, exc_info=True)
-        return None

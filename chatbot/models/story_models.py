@@ -10,6 +10,7 @@ from django.core.files.base import ContentFile
 from PIL import Image, UnidentifiedImageError
 import requests
 
+from chatbot.services.storage import StorageFactory
 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 register_heif_opener()
@@ -116,10 +117,16 @@ class StoryMedia(models.Model):
     def save(self, *args, **kwargs):
         try:
             if self.file_url:
-                response = requests.get(self.file_url)
-                response.raise_for_status()
-                self.base64_str = base64.b64encode(response.content).decode('utf-8')
-                print("Encoded base64 from file_url")
+                if self.file_url.startswith("s3://"):
+                    storage_handler = StorageFactory.get_storage_handler()
+                    response_content = storage_handler.get_file_from_store(self.file_url)
+                    self.base64_str = base64.b64encode(response_content).decode('utf-8')
+                    print("Encoded base64 from file_url")
+                else:
+                    response = requests.get(self.file_url)
+                    response.raise_for_status()
+                    self.base64_str = base64.b64encode(response.content).decode('utf-8')
+                    print("Encoded base64 from file_url")
 
             if not self.file:
                 super().save(*args, **kwargs)
