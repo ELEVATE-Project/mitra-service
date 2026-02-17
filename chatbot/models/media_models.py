@@ -17,6 +17,10 @@ S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 
 
 class ProfileMedia(models.Model):
+    """
+    Stores media files uploaded by a user profile.
+    Encodes files to base64 and provides public S3 access.
+    """
 
     def get_file_upload_path(self, filename):
         folder_name = 'chatbot/profilemedia/{}'.format(self.profile.id)
@@ -40,6 +44,10 @@ class ProfileMedia(models.Model):
 
 
 class Media(models.Model):
+    """
+    Represents knowledge/media files linked to a company bot.
+    Handles storage, preview generation, vector indexing, and similarity search.
+    """
 
     def _get_org_slug(self):
         return self.organization.slug if self.organization else self.company_bot.company.slug
@@ -193,7 +201,10 @@ class Media(models.Model):
 
 
 class MediaImage(models.Model):
-    """Store images associated with Media documents"""
+    """
+    Stores images extracted or associated with a Media document.
+    Maintains ordering and metadata like page number and dimensions.
+    """
 
     def get_file_upload_path(self, filename):
         folder_name = f'shikshalokam/media/{self.media.company_bot.id}/images'
@@ -221,6 +232,11 @@ class MediaImage(models.Model):
 
 
 class MediaVector(models.Model):
+    """
+    Stores vector database reference IDs for a Media document.
+    Used for semantic search and embedding-based retrieval.
+    """
+
     media = models.ForeignKey(Media, on_delete=models.CASCADE, related_name='media_vector')
     vector_id = models.CharField(max_length=1000, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -228,6 +244,11 @@ class MediaVector(models.Model):
 
 
 class KeyValue(models.Model):
+    """
+    Stores structured key-value metadata associated with a Media document.
+    Used for tagging or storing extracted attributes.
+    """
+
     media = models.ForeignKey(Media, on_delete=models.CASCADE, related_name='key_values')
     key = models.CharField(max_length=1000)
     value = models.TextField(null=True, blank=True)
@@ -237,6 +258,11 @@ class KeyValue(models.Model):
 
 
 class MediaTemplate(models.Model):
+    """
+    Defines reusable templates for processing or rendering Media content.
+    Supports different template types and PDF handling strategies.
+    """
+
     name = models.CharField(max_length=100, null=True, unique=True)
     template_content = models.TextField(null=True)
     template_type = models.CharField(choices=MediaTemplateChoices.choices, max_length=100, null=True)
