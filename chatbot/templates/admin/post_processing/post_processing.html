@@ -464,24 +464,33 @@ document.addEventListener('DOMContentLoaded', function() {
     // Show/hide processing options based on selection
     processingTypeSelect.addEventListener('change', function() {
         const selectedValue = this.value;
-        
+
         formProcessingType.value = selectedValue;
         processingOptionsSection.classList.toggle('hidden', !selectedValue);
-        
-        // Hide ALL processing-specific form fields first
+
+        // Hide and DISABLE all forms first
         document.querySelectorAll('.processing-specific-fields').forEach(field => {
             field.classList.add('hidden');
+
+            // Disable all inputs inside hidden forms
+            field.querySelectorAll('input, select, textarea, button').forEach(input => {
+                input.disabled = true;
+            });
         });
-        
-        // Show only the form fields for selected processing type
+
+        // Show and ENABLE selected form
         if (selectedValue) {
             const selectedFormFields = document.getElementById(`form-${selectedValue}`);
             if (selectedFormFields) {
                 selectedFormFields.classList.remove('hidden');
+
+                selectedFormFields.querySelectorAll('input, select, textarea, button').forEach(input => {
+                    input.disabled = false;
+                });
             }
         }
-        
-        // Hide all result sections and messages in all forms when changing type
+
+        // Reset result sections
         document.querySelectorAll('[id$="-result-section"]').forEach(el => el.classList.add('hidden'));
         document.querySelectorAll('[id$="-success-message"]').forEach(el => el.classList.add('hidden'));
         document.querySelectorAll('[id$="-view-status-btn"]').forEach(el => el.classList.add('hidden'));
@@ -527,7 +536,32 @@ document.addEventListener('DOMContentLoaded', function() {
             if (elements.resultStatus) elements.resultStatus.textContent = data.message || 'Completed';
             if (elements.resultIterations) elements.resultIterations.textContent = data.iterations || 'N/A';
             if (elements.resultFinalCount) elements.resultFinalCount.textContent = data.final_count || 'N/A';
-            if (elements.resultOutputFile) elements.resultOutputFile.textContent = data.output_file || 'N/A';
+            if (elements.resultOutputFile) {
+                if (data.output_file) {
+                    const fileUrl = data.output_file;
+                    const filename = fileUrl.split('/').pop();
+
+                    elements.resultOutputFile.innerHTML = `
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <input type="text"
+                                       value="${fileUrl}"
+                                       readonly
+                                       style="flex:1; padding:6px; font-size:12px;"
+                                       onclick="this.select()">
+
+                                <button type="button"
+                                        onclick="navigator.clipboard.writeText('${fileUrl}'); this.innerText='Copied!'; setTimeout(() => this.innerText='Copy URL', 1500);"
+                                        style="padding:6px 10px; font-size:12px; cursor:pointer;">
+                                    Copy URL
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    elements.resultOutputFile.textContent = 'N/A';
+                }
+            }
         }
     };
     
