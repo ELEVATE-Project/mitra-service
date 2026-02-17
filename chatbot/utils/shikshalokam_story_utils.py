@@ -1,11 +1,8 @@
-import json
-import os
-import re
-import traceback
-import requests
-from django.core.files.base import ContentFile
-from chatbot.models import StoryMedia, MediaTypeChoices, CompanyChat, Profile, Story, ChatSession, CompanyBot, Voice, \
-    VoiceType, SessionFlowName, StoryTranslation
+from chatbot.models import StoryMedia, MediaTypeChoices, CompanyChat, Profile, Story, ChatSession, SessionFlowName, \
+    CompanyBot, Flow, Voice, StoryLanguageChoices
+from chatbot.models.company_models import PDFTemplates
+from chatbot.models.enums import UserTypeChoices, VoiceType
+from chatbot.models.story_models import StoryTranslation
 from chatbot.models.story_vernacular_model import StoryVernacular
 from chatbot.pdf.listening_activity.la_report import get_common_report_html
 from chatbot.pdf.shiksha_chaupal.mom_report import get_mom_report_html
@@ -13,14 +10,21 @@ from chatbot.pdf.story_first_page import get_first_page_html
 from chatbot.pdf.story_images_page import get_story_images_page_html
 from chatbot.pdf.story_secondpage import get_story_secondpage_html
 from chatbot.pdf.story_thirdpage import get_thirdpage_html
+from chatbot.serializer.story_serializer import StoryCreateSerializer
 from chatbot.utils.elevate.project_detail import fetch_existing_project_attachments
 from chatbot.utils.gotenberg_utils import generate_pdf_with_gotenberg
 from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
-from shikshalokam.models import Project, ProjectVernacular
-import json_repair
-
+from django.core.files.base import ContentFile
+from jinja2 import Template
+from shikshalokam.models import Project
+from shikshalokam.models.project_vernacular_model import ProjectVernacular
 from shikshalokam.serializer import ProjectSerializer
+import json
+import os
+import re
+import requests
+import traceback
 
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
@@ -112,6 +116,86 @@ def save_shikshalokam_story(
     except Exception as e:
         traceback.print_exc()
         print(f"Failed to save story to Shikshalokam: {str(e)}")
+
+
+def save_project_story( story, problem_statement, chat_history, access_token, project_id, session, profile, conversation, flow):
+    try:
+        html_content = get_html_from_template(story=story, profile=profile, flow=flow, auth=access_token is not None)
+
+        pdf_generated = generate_pdf_with_gotenberg(html_content)
+        pdf_file_name = story.title
+        if not pdf_file_name or pdf_file_name == '':
+            pdf_file_name = 'Improvement_story'
+        pdf_file_name = f"{pdf_file_name}.pdf"
+        pdf_content = ContentFile(pdf_generated, name=pdf_file_name)
+        print("pdf_content: ", pdf_content)
+        print("pdf_content type: ", type(pdf_content))
+
+        story_media, created = StoryMedia.objects.update_or_create(
+            story=story,
+            media_type=MediaTypeChoices.PDF,
+            defaults={
+                "name": pdf_file_name,
+                "file": pdf_content,
+                "include_in_story": False
+            }
+        )
+
+        if created:
+            print("New PDF created")
+        else:
+            print("Existing PDF updated")
+
+        if access_token in [None, "", "null"] or not session or not project_id or flow != SessionFlowName.Reflection:
+            print("Not calling shikshalokam api as access_tokne or session or project_id is missing")
+            return
+        upload_response_json = upload_to_cloud(session_value=session, access_token=access_token, story=story)
+        attachments = upload_response_json.get('attachments')
+        print("attachments: ", attachments)
+
+        pdf_information = upload_response_json.get('pdfInformation')
+        print("pdf_information: ", pdf_information)
+
+
+        request_body = {
+            "story": {
+                "title": story.title,
+                "problemStatement": problem_statement,
+                "objective": story.objective,
+                "timeline": "",
+                "actionSteps": story.action_steps or [],
+                "resources": [],
+                "impact": story.impact,
+                "summary": story.content,
+                "authorName": story.author.first_name if story.author else "",
+                "location": story.location or "",
+                "conversation": conversation,
+                "chatHistory": chat_history,
+                "attachments": attachments,
+                "pdfInformation": pdf_information,
+            }
+        }
+        print("request_body: ", request_body)
+        print("type: ", type(request_body))
+        print("type: ", type(request_body.get("story")))
+
+        url = f"https://{base_url}/userProjects/addStory/{project_id}"
+        print("Using url: ", url)
+
+        headers = {
+            "X-auth-token": access_token,
+        }
+
+        response = requests.put(url, headers=headers, json=request_body)
+        print("Res:", response)
+        print("response: ", response.json())
+        response.raise_for_status()
+
+        print(f"Story successfully saved to Shikshalokam: {response.status_code}")
+    except Exception as e:
+        traceback.print_exc()
+        print(f"Failed to save story to Shikshalokam: {str(e)}")
+        raise e
 
 
 def get_story_html(story, profile, flow):
@@ -244,24 +328,24 @@ def get_story_html(story, profile, flow):
             story=object_to_pass, profile=profile, story_vernacular=story_vernacular
         )
 
-    html_content += f"""
+    html_content += """
         <script>
-        document.addEventListener("DOMContentLoaded", function () {{
-            function checkOverflowAndInsertBreaks() {{
+        document.addEventListener("DOMContentLoaded", function () {
+            function checkOverflowAndInsertBreaks() {
                 const containers = document.querySelectorAll(".story-second-page-container");
                 console.log("containers: ", containers)
-                containers.forEach(container => {{
-                    if (container.scrollHeight > container.clientHeight) {{
+                containers.forEach(container => {
+                    if (container.scrollHeight > container.clientHeight) {
                         // Create a page break div if the content overflows
                         const pageBreak = document.createElement("div");
                         pageBreak.style.pageBreakBefore = "always";
                         container.parentNode.insertBefore(pageBreak, container.nextSibling);
-                    }}
-                }});
-            }}
+                    }
+                });
+            }
 
             checkOverflowAndInsertBreaks(); // Run on page load
-        }});
+        });
         </script>
         </body>
     </html>
@@ -269,17 +353,81 @@ def get_story_html(story, profile, flow):
     return html_content
 
 
+def get_html_from_template(story, profile, flow, auth=False, language=None):
+    project = Project.objects.filter(story=story).first()
+    flow_obj = Flow.objects.get(flow_route=flow)
+
+    language_used = language
+
+    if language_used is None:
+        chat_session = ChatSession.objects.filter(session=story.session).first()
+        translation_languages = list(story.translations.values_list('language', flat=True))
+        language_used = (
+            chat_session.language or
+            translation_languages[0] if translation_languages else
+            (project.project_language if project else None) or
+            story.language or
+            'en'
+        )
+
+    story_serialized = StoryCreateSerializer(story)
+    project_serialized = ProjectSerializer(project)
+    profile_serialized = profile
+
+    pdf_template: PDFTemplates | None = None
+    if auth:
+        pdf_template = PDFTemplates.objects.filter(
+            flow=flow_obj, 
+            user_type__in=[UserTypeChoices.AUTH, UserTypeChoices.ALL]
+        ).first()
+    else:
+        pdf_template = PDFTemplates.objects.filter(flow=flow_obj,
+            user_type__in=[UserTypeChoices.GUEST, UserTypeChoices.ALL]
+        ).first()
+
+    if pdf_template is None:
+        return ""
+
+    jinja_template = pdf_template.template
+    constants = pdf_template.constants_json
+
+    render_params = {
+        "constants": constants.get(language_used, {}),
+        "story": story_serialized.data,
+        "project": project_serialized.data,
+        "profile": profile_serialized
+    }
+
+    template = Template(jinja_template)
+    html_content = template.render(**render_params)
+    return html_content
+
 def update_story_pdf(access_token, session, flow, is_edit_story=False):
 
     try:
+        chatsession = ChatSession.objects.values("language").get(session=session)
+
         story = Story.objects.get(session=session)
+        translated_story = None
+        if chatsession.get("language", StoryLanguageChoices.ENGLISH)  != StoryLanguageChoices.ENGLISH:
+            translated_story = StoryTranslation.objects.select_related("story").get(story__session=session, language=chatsession.get("language", StoryLanguageChoices.ENGLISH))
+
+        if translated_story is not None:
+            story.title = translated_story.title
+            story.content = translated_story.content
+            story.location = translated_story.location
+            story.other_params = translated_story.other_params
+
         if story and story.content and story.formatted_content:
             update_story_content(story)
         profile = story.author
         print("profile: ", profile)
         print("story: ", story.title)
         print("story format: ", story.formatted_content)
-        html_content = get_story_html(story=story, profile=profile, flow=flow)
+        if isinstance(flow, str):
+            html_content = get_story_html(story=story, profile=profile, flow=flow)
+        else:
+            html_content = get_html_from_template(story=story, profile=profile, flow=flow)
 
         pdf_generated = generate_pdf_with_gotenberg(html_content)
         # print("pdf_generated: ", pdf_generated)

@@ -37,7 +37,7 @@ def load_secrets():
         try:
             with open(path, 'r') as f:
                 print(f"[DEBUG] Loaded secrets from: {path}")
-                return json.load(f)
+                return json.load(f), path
         except FileNotFoundError:
             print(f"[DEBUG] File not found at: {path}")
             continue
@@ -45,10 +45,7 @@ def load_secrets():
     raise FileNotFoundError(f"secrets.json not found in any of: {paths_to_try}")
 
 
-
-
-
-SECRETS = load_secrets()
+SECRETS, SECRETS_JSON_PATH = load_secrets()
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
@@ -87,7 +84,7 @@ CORS_ALLOWED_METHODS = [
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 
-ALLOWED_HOSTS.append(gethostbyname(gethostname()))
+# ALLOWED_HOSTS.append(gethostbyname(gethostname()))
 
 
 # Application definition
@@ -126,7 +123,16 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    ## extra middlwares
+    'chatbot.middlewares.VerifyAuthToken'
 ]
+
+if DEBUG:
+    MIDDLEWARE.extend([
+        'querycount.middleware.QueryCountMiddleware'
+    ])
+
 
 ROOT_URLCONF = 'shikshalokam_mohini.urls'
 
@@ -145,6 +151,10 @@ TEMPLATES = [
         },
     },
 ]
+
+QUERYCOUNT = {
+    'DISPLAY_DUPLICATES': 5,
+}
 
 WSGI_APPLICATION = 'shikshalokam_mohini.wsgi.application'
 
@@ -203,7 +213,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
-STATIC_ROOT = "/var/www/shikshalokam/static/"
+STATIC_ROOT = os.getenv('STATIC_ROOT', '/var/www/shikshalokam/static/')
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static')
 ]
@@ -217,12 +227,17 @@ ASGI_APPLICATION = 'shikshalokam_mohini.asgi.application'
 
 REDIS_HOST = os.environ.get('REDIS_HOST', "127.0.0.1")
 REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
+REDIS_USE_SSL = os.environ.get('REDIS_USE_SSL', 'false').lower() == 'true'
+
+# Build Redis connection URL with SSL support
+REDIS_PROTOCOL = 'rediss' if REDIS_USE_SSL else 'redis'
+REDIS_URL = f'{REDIS_PROTOCOL}://{REDIS_HOST}:{REDIS_PORT}'
 
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
+            "hosts": [REDIS_URL],
             "capacity": 100000,
             "channel_capacity": {
                 "http.request": 50000,
@@ -236,7 +251,7 @@ CHANNEL_LAYERS = {
 CACHES = {
     'default': {
         'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': 'redis://127.0.0.1:6379/1',  # Use database 1 (different from channels)
+        'LOCATION': f'{REDIS_URL}/1',  # Use database 1 (different from channels)
         'OPTIONS': {
             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
             'CONNECTION_POOL_KWARGS': {
@@ -263,22 +278,80 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
 CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "https://*.shikshalokam.org,https://*.127.0.0.1,https://*.gritworks.ai,http://localhost:3000").split(',')
 
-STORAGES = {
-    "default": {
-        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
-        "OPTIONS": {
-            "bucket_name": os.getenv('S3_BUCKET_NAME'),
-            "region_name": os.getenv('AWS_REGION'),
+STORAGE_CLOUD_PROVIDER = os.environ.get('STORAGE_CLOUD_PROVIDER', 'AWS').upper()
+
+# Storage backend configurations
+STORAGE_BACKENDS = {
+    'AWS': {
+        'backend': 'storages.backends.s3boto3.S3Boto3Storage',
+        'options': {
+            'bucket_name': os.getenv('S3_BUCKET_NAME'),
+            'region_name': os.getenv('AWS_REGION'),
         },
     },
-    "staticfiles": {
-        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
-        "OPTIONS": {
-            "bucket_name": os.getenv('S3_BUCKET_NAME'),
-            "region_name": os.getenv('AWS_REGION'),
+    'GCP': {
+        'backend': 'storages.backends.gcloud.GoogleCloudStorage',
+        'options': {
+            'bucket_name': os.getenv('GCS_BUCKET_NAME'),
+            'project_id': os.getenv('GCP_PROJECT_ID'),
+            'credentials': os.getenv('GCP_CREDENTIALS_PATH'),
+        },
+    },
+    'AZURE': {
+        'backend': 'storages.backends.azure_storage.AzureStorage',
+        'options': {
+            'account_name': os.getenv('AZURE_ACCOUNT_NAME'),
+            'account_key': os.getenv('AZURE_ACCOUNT_KEY'),
+            'azure_container': os.getenv('AZURE_CONTAINER_NAME'),
+        },
+    },
+    'LOCAL': {
+        'backend': 'django.core.files.storage.FileSystemStorage',
+        'options': {
+            'location': os.path.join(BASE_DIR, 'media'),
+            'base_url': '/media/',
         },
     },
 }
+
+# Configure storage based on provider
+if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
+    config = STORAGE_BACKENDS[STORAGE_CLOUD_PROVIDER]
+    
+    if STORAGE_CLOUD_PROVIDER == 'LOCAL':
+        MEDIA_ROOT = config['options']['location']
+        MEDIA_URL = config['options']['base_url']
+        
+        STORAGES = {
+            "default": {
+                "BACKEND": config['backend'],
+                "OPTIONS": config['options'],
+            },
+            "staticfiles": {
+                "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+            },
+        }
+    else:
+        # For cloud storage (AWS/GCP/Azure), still set MEDIA_ROOT and MEDIA_URL
+        # These are needed for our storage handler to work correctly
+        MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+        MEDIA_URL = '/media/'
+        
+        STORAGES = {
+            "default": {
+                "BACKEND": config['backend'],
+                "OPTIONS": config['options'],
+            },
+            "staticfiles": {
+                "BACKEND": config['backend'],
+                "OPTIONS": config['options'],
+            },
+        }
+else:
+    raise ValueError(
+        f"Unsupported STORAGE_CLOUD_PROVIDER: {STORAGE_CLOUD_PROVIDER}. "
+        f"Supported values: {', '.join(STORAGE_BACKENDS.keys())}"
+    )
 
 
 # AWS Configurations

@@ -10,7 +10,7 @@ from chatbot.views.Media.document_upload_view import DocumentUploadView
 from chatbot.views.admin.generic_upload_views import GenericBatchUploadView, GenericBatchTemplateView, \
     GenericBatchImportView
 from chatbot.views.aws_views import get_presigned_url
-from chatbot.views.gotenberg_view import generate_pdf_view
+from chatbot.views.gotenberg_view import generate_pdf_view, generate_pdf_view_v2
 from chatbot.views.kafka_views import sync_user_project_view
 from chatbot.views.location_views import get_location_view, get_ip_location_view
 from chatbot.views.Media.media_views import MediaSearchView
@@ -23,11 +23,12 @@ from chatbot.views.chat_view import save_chats_view, create_chatsession, save_pt
 from chatbot.views.drf_views import CompanyChatListCreateView, CompanyChatRetrieveUpdateDestroyView, \
     CompanyBotListCreateView, CompanyBotRetrieveUpdateDestroyView, ProfileListCreateView, \
     ProfileRetrieveUpdateDestroyView, ChatSessionListCreateView, ChatSessionRetrieveUpdateDestroyView, \
-    ChatSessionRetrieveUpdateDestroyViewSession, BotVernacularListCreateView, BotVernacularRetrieveUpdateDestroyView
+    ChatSessionRetrieveUpdateDestroyViewSession, BotVernacularListCreateView, BotVernacularRetrieveUpdateDestroyView, \
+    FlowImageConfigView, FlowLanguagesView, FlowConnectionInfoView
 from chatbot.views.mitra_views import \
     create_project_view
 from chatbot.views.recommendation import generate_recommendation
-from chatbot.views.story_views import end_story, StoryListCreateView, StoryBySessionView, \
+from chatbot.views.story_views import end_story, end_story_v2, StoryListCreateView, StoryBySessionView, \
     StoryRetrieveUpdateDestroyView, StoryMediaListCreateView, StoryMediaRetrieveUpdateDestroyView
 from rest_framework.routers import DefaultRouter
 from chatbot.views.Media.media_api_views import MediaViewSet
@@ -47,6 +48,7 @@ urlpatterns = [
     path('api/logout/', api_views.logout, name='logout'),
 
     path('api/end-story/', end_story, name='end-story'),
+    path('api/end-story/v2/', end_story_v2, name='end-story-v2'),
 
     path('api/text_to_speech/', text_speech_view, name='text_speech_view'),
     path('api/asr/', speech_text, name='speech_text'),
@@ -85,11 +87,17 @@ urlpatterns = [
     path('api/chatsession/<str:session>/', ChatSessionRetrieveUpdateDestroyViewSession.as_view(),
          name='chatsession-retrieve-update-destroy'),
 
+    # Flow APIs
+    path('api/flow-image-config/', FlowImageConfigView.as_view(), name='flow-image-config'),
+    path('api/flow-languages/', FlowLanguagesView.as_view(), name='flow-languages'),
+    path('api/flow-connection-info/', FlowConnectionInfoView.as_view(), name='flow-connection-info'),
+
     path('api/save-company-chat/', save_chats_view, name="save-company-chat"),
     path('api/create-chatsession/', create_chatsession, name="create-chatsession"),
     path('api/create-profile/', create_profile_views, name="create-profile"),
     path('api/create-project/', create_project_view, name="create-project"),
     path('api/generate-pdf/', generate_pdf_view, name='generate_pdf'),
+    path('api/generate-pdf/v2/', generate_pdf_view_v2, name='generate_pdf_v2'),
     path('api/generate-recommendation/', generate_recommendation, name='generate-recommendation'),
     path('api/sync-user-project/', sync_user_project_view, name='sync-user-project'),
     path('api/get-location/', get_location_view, name='get-location'),

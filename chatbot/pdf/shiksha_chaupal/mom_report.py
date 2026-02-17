@@ -1,10 +1,20 @@
 import re
+import logging
 import json_repair
+from jinja2 import Template
+from chatbot.models import PDFTemplates
 from chatbot.pdf.shiksha_chaupal.story_images_page import get_report_images_page_html
 from datetime import datetime
 
+logger = logging.getLogger('django')
+
 
 def get_mom_report_html(story, story_vernacular, voice_provider, profile):
+    """
+    Generate MOM report HTML. Tries to use Jinja2 template from database first,
+    falls back to hardcoded HTML if template not found.
+    """
+    # Extract raw data
     if story.other_params:
         challenges_faced = story.other_params.get('challenges_faced')
         solutions_discussed = story.other_params.get('solutions_discussed')
@@ -23,13 +33,88 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
     solutions_char_limit = translation_json.get('solutions_char_limit', None)
     remarks_char_limit = translation_json.get('remarks_char_limit', None)
 
+    # Process chunks for Jinja2 template
+    challenges_chunks = process_steps_to_chunks(
+        raw_data=challenges_faced,
+        fallback_text=translation_json.get('no_challenges_faced_text', ""),
+        char_limit=challenges_char_limit,
+        first_char_limit=first_challenges_char_limit,
+        is_challenges=True
+    )
+
+    solutions_chunks = process_steps_to_chunks(
+        raw_data=solutions_discussed,
+        fallback_text=translation_json.get('no_solutions_text', ""),
+        char_limit=solutions_char_limit
+    )
+
+    remarks_chunks = process_steps_to_chunks(
+        raw_data=remarks,
+        fallback_text=translation_json.get('no_remarks_text', ""),
+        char_limit=remarks_char_limit
+    )
+
+    # Get processed user details
+    author, address_string, company_logo, date_of_discussion, participants_info, organization = get_user_details(
+        story=story, profile=profile, voice_provider=voice_provider, translation_json=translation_json
+    )
+
+    if hasattr(story, 'story'):
+        story_obj = story.story
+    else:
+        story_obj = story
+
+    # Get images HTML
+    images_html = get_report_images_page_html(story=story_obj)
+
+    # Try to use Jinja2 template from database
+    try:
+        pdf_template = PDFTemplates.objects.get(template_name='chaupal_mom_report')
+        logger.info("[MOM PDF] Using Jinja2 template from database")
+        
+        # Build context for Jinja2 template with objects
+        context = {
+            # Core objects for direct access
+            'story': story,
+            'profile': profile,
+            'translation_json': translation_json,
+            
+            # Processed chunks
+            'challenges_chunks': challenges_chunks,
+            'solutions_chunks': solutions_chunks,
+            'remarks_chunks': remarks_chunks,
+            
+            # Processed values
+            'date_of_discussion': date_of_discussion,
+            'participants_info': participants_info,
+            'company_logo': company_logo,
+            'images_html': images_html,
+        }
+        
+        # Merge constants from template if available
+        if pdf_template.constants_json:
+            context = {**pdf_template.constants_json, **context}
+        
+        template = Template(pdf_template.template)
+        return template.render(**context)
+        
+    except PDFTemplates.DoesNotExist:
+        logger.warning("[MOM PDF] Template not found, using legacy HTML generation")
+        # Fallback to legacy hardcoded HTML
+        pass
+    except Exception as e:
+        logger.error(f"[MOM PDF] Error rendering template: {e}", exc_info=True)
+        # Fallback to legacy hardcoded HTML
+        pass
+
+    # Legacy fallback: Generate HTML directly
     challenges_html = process_steps(
         raw_data=challenges_faced,
         fallback_text=translation_json.get('no_challenges_faced_text', ""),
         heading=translation_json.get('heading2', "Challenges"),
         char_limit=challenges_char_limit,
         first_char_limit=first_challenges_char_limit,
-        is_challenges=True  # New flag
+        is_challenges=True
     )
 
     solutions_html = process_steps(
@@ -46,23 +131,9 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
         char_limit=remarks_char_limit
     )
 
-    author, address_string, company_logo, date_of_discussion, participants_info, organization = get_user_details(
-        story=story, profile=profile, voice_provider=voice_provider, translation_json=translation_json
-    )
-
-    # Build organization line
     organization_html = f"<p>{organization}</p>" if organization else ""
-
-    # Build date line
     date_html = f"<p><span>{translation_json.get('dateHeader', 'Date of discussion')}:</span> {date_of_discussion}</p>" if date_of_discussion else ""
-
-    # Build participants line
     participants_html = f"<p>{participants_info}</p>" if participants_info else ""
-
-    if hasattr(story, 'story'):
-        story_obj = story.story
-    else:
-        story_obj = story
 
     page_html = f"""
     <div class="story-second-page-container">
@@ -83,10 +154,68 @@ def get_mom_report_html(story, story_vernacular, voice_provider, profile):
         {challenges_html if challenges_faced not in [None, [], [""]] else ""}
         {solutions_html if solutions_discussed not in [None, [], [""]] else ""}
         {remarks_html if remarks not in [None, [], [""], ""] else ""}
-        {get_report_images_page_html(story=story_obj)}
+        {images_html}
     </div>
     """
     return page_html
+
+
+def process_steps_to_chunks(raw_data, fallback_text, char_limit, first_char_limit=None, is_challenges=False):
+    """
+    Process steps and return chunks (arrays) for Jinja2 template.
+    Similar to process_steps but returns data instead of HTML.
+    """
+    if isinstance(raw_data, str):
+        try:
+            if raw_data.strip().startswith("["):
+                raw_data = json_repair.repair_json(raw_data, return_objects=True)
+            else:
+                raw_data = [raw_data]
+        except Exception as e:
+            raw_data = [fallback_text]
+
+    steps = (
+        [clean_escaped_text(step) for step in raw_data] if isinstance(raw_data, list)
+        else [clean_escaped_text(raw_data)] if isinstance(raw_data, str)
+        else [fallback_text]
+    )
+
+    if steps and isinstance(steps, list) and len(steps) == 1 and isinstance(steps[0], str):
+        steps_text = steps[0]
+        split_steps = re.findall(r'\d+\.\s*[^0-9]+', steps_text)
+        split_steps = [step.strip() for step in split_steps if step.strip()]
+        if not split_steps:
+            split_steps = steps
+    elif steps and isinstance(steps, str):
+        steps_text = " ".join(steps)
+        split_steps = re.findall(r'\d+\.\s*[^.]+', steps_text)
+        split_steps = [step.strip() for step in split_steps if step.strip()]
+    else:
+        split_steps = [step.strip() for step in steps if step.strip()]
+
+    # Chunking logic
+    chunks = []
+    current_chunk = []
+    current_length = 0
+    chunk_index = 0
+
+    for step in split_steps:
+        current_limit = first_char_limit if is_challenges and chunk_index == 0 else char_limit or 1200
+        step_len = len(step)
+
+        if current_length + step_len > current_limit and current_chunk:
+            chunks.append(current_chunk)
+            current_chunk = [step]
+            current_length = step_len
+            chunk_index += 1
+        else:
+            current_chunk.append(step)
+            current_length += step_len
+
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    return chunks if chunks else [[fallback_text]]
 
 
 def clean_escaped_text(text):

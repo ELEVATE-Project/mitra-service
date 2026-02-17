@@ -1,16 +1,21 @@
-import requests
-import json
-import os
+from botocore.client import Config as BotoConfig
+from botocore.exceptions import ClientError
+from chatbot.models import LLMModel
+from chatbot.models.enums import LLMProvider
+from chatbot.utils.llm import LLM
 from typing import Optional, List, Dict
 from django.core.validators import URLValidator
 from openai import OpenAI
+from pprint import pprint
+from retrying import retry
 from chatbot.models import LLMModel, Company
 import boto3
+import json
 import json_repair
-from retrying import retry, RetryError
 import logging
-from botocore.client import Config as BotoConfig
-from botocore.exceptions import ClientError
+import os
+import requests
+import traceback
 
 
 logger = logging.getLogger('django')
@@ -876,7 +881,6 @@ def handle_bedrock_invoke_model(
         model_id = model_name
     else:
         model_id = 'meta.llama3-1-8b-instruct-v1:0'
-        # model_id = 'meta.llama3-2-3b-instruct-v1:0'
 
     print("USING MODEL ID: ", model_id)
 

@@ -7,7 +7,7 @@ from chatbot.filter.admin_filter import (CompanyChatCompanyFilter, ChatSessionFi
                                          ProfileStateFilter, ProfileCompanyChatFilter, ProfileEmailFilter)
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import Company, Profile, ProfileType, CompanyBot, CompanyChat, ChatSession, \
-    CompanyBotTypeChoices, Voice, VoiceProvider
+    CompanyBotTypeChoices, Voice, VoiceProvider, ImageConfiguration, Flow
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.resources.resource import CompanyChatResource
 from chatbot.resources.company_resource import ChatSessionResource
@@ -26,6 +26,7 @@ class CompanyStateMachineAdmin(admin.TabularInline):
     fields = (
         'name', 'step', 'use_stage_chats', 'text_conversion_type',
         'bot_question', 'completion_criteria', 'context', 'tool_context',
+        'operation_type', 'skip_if_authenticated',
         'preprocess_type', 'preprocess_prompt', 'preprocess_bot', 'preprocess_output_mode',
         'postprocess_type', 'postprocess_prompt', 'postprocess_bot', 'postprocess_output_mode',
         'skip_to_step',
@@ -363,3 +364,82 @@ class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
 
 
 admin.site.register(Company, CompanyAdmin)
+
+
+@admin.register(ImageConfiguration)
+class ImageConfigurationAdmin(admin.ModelAdmin):
+    """Admin interface for Image Configuration model."""
+    list_display = ('name', 'max_images', 'get_image_size_mb', 'created_at')
+    list_filter = ('created_at', 'max_images')
+    search_fields = ('name',)
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name',)
+        }),
+        ('Image Constraints', {
+            'fields': ('max_images', 'image_size'),
+            'description': 'Configure image upload limits for this configuration.'
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ('created_at', 'updated_at')
+
+    def get_image_size_mb(self, obj):
+        """Display image size in MB."""
+        return f"{obj.image_size / 1048576:.2f} MB"
+    get_image_size_mb.short_description = 'Max Image Size'
+
+
+@admin.register(Flow)
+class FlowAdmin(SimpleHistoryAdmin):
+    """Admin interface for Flow model."""
+    list_display = (
+        'flow_name', 'flow_route', 'bot', 'active', 'hidden', 
+        'user_type', 'created_at'
+    )
+    list_filter = (
+        'active', 'hidden', 'user_type',
+        'bot__company', CustomAdvanceDateFilter, 'create_story'
+    )
+    search_fields = ('flow_name', 'flow_route', 'bot__name')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
+    raw_id_fields = ('bot', 'story_bot', 'parent_flow', 'image_config', 'story_validation_bot')
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('flow_name', 'flow_route', 'languages')
+        }),
+        ('Bot Configuration', {
+            'fields': ('bot', 'story_bot', 'story_validation_bot'),
+            'description': 'Configure the bots associated with this flow.'
+        }),
+        ('Flow Settings', {
+            'fields': ('active', 'hidden', 'user_type', 'parent_flow', 'image_config', 'create_story'),
+        }),
+        ('Advanced Settings', {
+            'fields': ('websocket_url',),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ('created_at', 'updated_at')
+    
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        """Customize form field for languages JSONField."""
+        if db_field.name == 'languages':
+            kwargs['help_text'] = 'Enter languages as JSON array, e.g., ["en", "hi", "kn"]'
+        elif db_field.name == 'websocket_url':
+            kwargs['help_text'] = 'Enter WebSocket route only (e.g., "ws/common/"). Do not include the full URL.'
+        return super().formfield_for_dbfield(db_field, request, **kwargs)

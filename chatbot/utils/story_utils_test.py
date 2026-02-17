@@ -11,6 +11,7 @@ from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_
 from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story
 from chatbot.utils.story_llama_utils import create_project, translate_field
 from chatbot.llm_models.llm_script import handle_bedrock_model
+from chatbot.utils.story_utils.story_llm import generate_story_llm
 from shikshalokam.models import Project, Task
 from shikshalokam.serializer import TaskSerializer
 from shikshalokam.utils.project_utils import get_project_formatted_data
@@ -364,53 +365,6 @@ def generate_random_string(length):
     characters = string.ascii_letters + string.digits
     rs = ''.join(random.choice(characters) for _ in range(length))
     return rs
-
-
-async def generate_story_llm(formatted_content_prompt, formatted_story_prompt, messages, tool_content, tool_story,
-                             company_bot):
-    async def func1():
-        print("Running func1")
-        return await asyncio.to_thread(
-            functools.partial(
-                handle_bedrock_model,
-                system_prompt=formatted_content_prompt,
-                messages=messages,
-                tools=tool_content,
-                temperature=company_bot.bot_temperature,
-                max_token=company_bot.max_token,
-                top_p=company_bot.filter_score,
-                model_name=company_bot.llm_model,
-                company_bot=company_bot
-            )
-        )
-
-    async def func2():
-        print("Running func2")
-        return await asyncio.to_thread(
-            functools.partial(
-                handle_bedrock_model,
-                system_prompt=formatted_story_prompt,
-                messages=messages,
-                tools=tool_story,
-                temperature=company_bot.bot_temperature,
-                max_token=company_bot.max_token,
-                top_p=company_bot.filter_score,
-                model_name=company_bot.llm_model,
-                company_bot=company_bot
-            )
-        )
-
-    response_json_content, response_json_story = await asyncio.gather(func1(), func2())
-    print("response_json_content: ", response_json_content)
-    print("response_json_story: ", response_json_story)
-    for response in [response_json_content, response_json_story]:
-        if response and isinstance(response, dict):
-            extracted_data = response.pop("parameters", response.pop("input", None))
-            if extracted_data and isinstance(extracted_data, dict):
-                response.clear()
-                response.update(extracted_data)
-
-    return response_json_content, response_json_story
 
 
 async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, messages, tool_content, tool_story,

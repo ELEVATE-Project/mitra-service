@@ -5,10 +5,11 @@ from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.celery_tasks.handle_message import translate_and_send_message
 from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_response_api
 from chatbot.models import ChatSession, ChatStatus, LLMProvider, CompanyBotTypeChoices
-import logging
-from chatbot.models.company_models import CompanyStateMachine, CompanyChat
+from chatbot.models.company_models import CompanyStateMachine
+from chatbot.models.enums import OperationTypeChoices
 from chatbot.services.postprocessing.postprocessing_service import PostprocessingService
 from chatbot.services.preprocessing.preprocessing_service import PreprocessingService
+import logging
 
 logger = logging.getLogger('django')
 channel_layer = get_channel_layer()
@@ -82,6 +83,49 @@ class BaseResponseHandler(ABC):
         except Exception as e:
             logger.error(f"Error getting state machine: {e}")
             state_machine = None
+
+        # Check operation_type - if non_llm, automatically skip LLM and move to next step
+        if state_machine and hasattr(state_machine, 'operation_type'):
+            if state_machine.operation_type == OperationTypeChoices.NON_LLM:
+                kwargs['skip_llm'] = True
+                kwargs['skip_reason'] = 'non_llm_operation_type'
+                
+                # Only send bot_question if we haven't received user input for this state yet
+                # Check if there are any user messages for the current state
+                from chatbot.models import CompanyChat
+                user_messages_for_state = CompanyChat.objects.filter(
+                    session=session_id,
+                    stage=state_machine.name
+                ).exclude(message=state_machine.bot_question).exists()
+                
+                if not user_messages_for_state:
+                    # First time in this state - send the bot question
+                    kwargs['send_bot_question'] = True
+                    kwargs['bot_question_from_db'] = state_machine.bot_question if state_machine.bot_question else None
+                    logger.info(f"NON_LLM state {state_machine.name}: Sending initial bot question")
+                else:
+                    # User has already answered - proceed to next state
+                    kwargs['send_bot_question'] = False
+                    logger.info(f"NON_LLM state {state_machine.name}: User answered, will advance to next step")
+
+        # Prepare original prompt
+        original_prompt = kwargs.get('system_prompt', [])
+
+        # Execute preprocessing if state machine exists
+        preprocessing_result = {'action': 'continue', 'prompt': original_prompt}
+        if state_machine:
+            preprocessing_result = self.preprocessing_service.execute_preprocessing(
+                state_machine, original_prompt, **kwargs
+            )
+
+        # Handle preprocessing results
+        if preprocessing_result['action'] == 'skip':
+            # Skip the current stage - move to next stage
+            kwargs['skip_llm'] = True
+            kwargs['skip_reason'] = 'preprocessing'
+        elif preprocessing_result['action'] == 'continue':
+            # Update prompt if it was enriched
+            kwargs['system_prompt'] = preprocessing_result.get('prompt', original_prompt)
 
         response = None
         streaming_completed = False

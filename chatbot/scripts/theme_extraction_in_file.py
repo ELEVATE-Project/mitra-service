@@ -3,10 +3,7 @@ import os
 import logging
 from datetime import datetime
 import json_repair
-import boto3
-from retrying import retry
-from botocore.client import Config as BotoConfig
-from botocore.exceptions import ClientError
+from chatbot.llm_models.llm_script import handle_bedrock_model
 
 
 logger = logging.getLogger('django')
@@ -17,98 +14,6 @@ AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 
 def retry_if_result_none(result):
     return result is None
-
-
-@retry(stop_max_attempt_number=llm_retry_number, retry_on_result=retry_if_result_none, wrap_exception=True)
-def handle_bedrock_model(
-        company_bot, system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
-        model_name=None, region_name='us-west-2', tools=None, is_json_response=False
-):
-    """Handle Bedrock model calls with retry logic"""
-    connect_timeout = company_bot.connect_timeout
-    read_timeout = company_bot.read_timeout
-
-    boto_config = BotoConfig(
-        connect_timeout=connect_timeout,
-        read_timeout=read_timeout,
-        retries={"mode": "adaptive"}
-    )
-
-    bedrock_runtime = boto3.client(
-        service_name='bedrock-runtime',
-        region_name=region_name,
-        aws_access_key_id=AWS_KEY,
-        aws_secret_access_key=AWS_SECRET_KEY,
-        config=boto_config
-    )
-
-    if model_name:
-        model_id = model_name
-    else:
-        model_id = 'meta.llama3-1-8b-instruct-v1:0'
-
-    inference_config = {}
-
-    if max_token:
-        inference_config['maxTokens'] = max_token
-    if temperature is not None:
-        inference_config['temperature'] = temperature
-    if top_p:
-        inference_config['topP'] = top_p
-    if messages and messages[-1]['role'] == 'assistant':
-        messages.pop()
-
-    try:
-        request_payload = {
-            'modelId': model_id,
-            'messages': messages,
-            'system': system_prompt,
-        }
-        if inference_config:
-            request_payload['inferenceConfig'] = inference_config
-        if tools:
-            request_payload['toolConfig'] = tools.get('toolConfig', tools)
-
-        response = bedrock_runtime.converse(**request_payload)
-        content_arr = response['output']['message']['content']
-        content = content_arr[0]
-        content_tool = content.get('toolUse')
-        if content_tool:
-            if isinstance(content_tool, str):
-                final_output = json_repair.repair_json(content_tool, return_objects=True)
-            else:
-                final_output = content_tool
-        else:
-            content_text = content.get('text')
-            json_start = content_text.find('{')
-            if json_start != -1:
-                json_str = content_text[json_start:]
-                json_str = json_str.replace('\n', '').replace('\r', '').strip()
-                while json_str and (json_str.endswith("'") or json_str.endswith('"') or json_str.endswith(',')):
-                    json_str = json_str[:-1].strip()
-                try:
-                    final_output = json_repair.repair_json(json_str, return_objects=True)
-                except json.JSONDecodeError as e:
-                    print('Error decoding JSON: ', e)
-                    return None
-            elif is_json_response:
-                return None
-            else:
-                return content_text
-
-        return final_output
-
-    except ClientError as e:
-        error_response = e.response
-        print("❌ ClientError:")
-        print("Error Code:", error_response["Error"]["Code"])
-        print("Error Message:", error_response["Error"]["Message"])
-        print("Request ID:", error_response.get("ResponseMetadata", {}).get("RequestId"))
-        return None
-
-    except Exception as e:
-        print(f"Error processing request: {e}")
-        return None
 
 
 def get_clean_output(response):

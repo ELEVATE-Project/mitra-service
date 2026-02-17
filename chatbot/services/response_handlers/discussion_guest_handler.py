@@ -77,9 +77,70 @@ class GuestDiscussionResponseHandler(BaseResponseHandler):
         messages=kwargs.get('messages')
         return temp_messages if temp_messages else messages
 
+    def _send_db_question(self, bot_question, chat_session, chunks, **kwargs):
+        """Send bot question from database for NON_LLM operations"""
+        company_bot = kwargs['company_bot']
+        session_id = kwargs['session_id']
+        channel_name = kwargs['channel_name']
+        language = kwargs['language']
+        profile_id = kwargs['profile_id']
+        
+        try:
+            state_machine = CompanyStateMachine.objects.get(
+                company_bot=company_bot, step=chat_session.current_step
+            )
+        except CompanyStateMachine.DoesNotExist:
+            logger.error(f"State machine not found for step {chat_session.current_step}")
+            return self.default_error_message
+        
+        chat_status = self.get_chat_status(
+            state_machine=state_machine, company_bot=company_bot
+        )
+        
+        # Translate and send to WebSocket
+        translated_message = self.translate_message(
+            message=bot_question,
+            channel_name=channel_name,
+            step_number=chat_session.current_step,
+            language=language,
+            company_bot=company_bot
+        )
+        
+        # Save to database with metadata indicating this is a NON_LLM question from DB
+        self.save_message(
+            session_id=session_id,
+            profile_id=profile_id,
+            message=bot_question,
+            chunks=chunks,
+            status=chat_status,
+            translated_message=translated_message,
+            stage=state_machine.name,
+            other_params={
+                'message_type': 'question',
+                'operation_type': 'non_llm',
+                'source': 'database'
+            }
+        )
+        
+        logger.info(f"Sent NON_LLM bot question from DB for state: {state_machine.name}")
+        return bot_question
+
+
     def process_response(self, response, chat_session, chunks, **kwargs):
         """Process guest discussion response"""
         skip_llm_call = kwargs.get('skip_llm', False)
+        send_bot_question = kwargs.get('send_bot_question', False)
+
+        # Handle NON_LLM operation type - send bot_question directly from database
+        if send_bot_question and skip_llm_call:
+            bot_question = kwargs.get('bot_question_from_db')
+            if bot_question:
+                return self._send_db_question(
+                    bot_question=bot_question,
+                    chat_session=chat_session,
+                    chunks=chunks,
+                    **kwargs
+                )
 
         current_step = chat_session.current_step
         if skip_llm_call:
@@ -128,28 +189,38 @@ class GuestDiscussionResponseHandler(BaseResponseHandler):
         )
         bot_question = state_machine.bot_question
 
-        if state_machine.name == 'CHALLENGES':
-            challenge_res = get_chaupal_challenge_response(messages=messages)
-            if challenge_res and isinstance(challenge_res, str):
-                bot_question = challenge_res
-            else:
-                bot_question = self.default_error_message
+        # Check if this is a NON_LLM state - if so, just use bot_question from DB
+        is_non_llm = False
+        if hasattr(state_machine, 'operation_type'):
+            from chatbot.models.enums import OperationTypeChoices
+            if state_machine.operation_type == OperationTypeChoices.NON_LLM:
+                is_non_llm = True
+                logger.info(f"State {state_machine.name} is NON_LLM, using bot_question from DB")
 
-        elif state_machine.name == 'SOLUTIONS':
-            solution_res = get_chaupal_solution_response(messages=messages)
+        # Only process CHALLENGES and SOLUTIONS for LLM states
+        if not is_non_llm:
+            if state_machine.name == 'CHALLENGES':
+                challenge_res = get_chaupal_challenge_response(messages=messages)
+                if challenge_res and isinstance(challenge_res, str):
+                    bot_question = challenge_res
+                else:
+                    bot_question = self.default_error_message
 
-            if solution_res in ["", '', '""', None]:
-                # Skip to next state
-                chat_session.current_step += 1
-                chat_session.save()
-                state_machine = CompanyStateMachine.objects.get(
-                    company_bot=company_bot, step=chat_session.current_step
-                )
-                bot_question = state_machine.bot_question
-            elif solution_res and isinstance(solution_res, str):
-                bot_question = solution_res
-            else:
-                bot_question = self.default_error_message
+            elif state_machine.name == 'SOLUTIONS':
+                solution_res = get_chaupal_solution_response(messages=messages)
+
+                if solution_res in ["", '', '""', None]:
+                    # Skip to next state
+                    chat_session.current_step += 1
+                    chat_session.save()
+                    state_machine = CompanyStateMachine.objects.get(
+                        company_bot=company_bot, step=chat_session.current_step
+                    )
+                    bot_question = state_machine.bot_question
+                elif solution_res and isinstance(solution_res, str):
+                    bot_question = solution_res
+                else:
+                    bot_question = self.default_error_message
 
         chat_status = self.get_chat_status(state_machine=state_machine, company_bot=company_bot)
 
@@ -158,9 +229,19 @@ class GuestDiscussionResponseHandler(BaseResponseHandler):
             language=language, company_bot=company_bot
         )
 
+        # Prepare other_params with metadata
+        other_params = {}
+        if is_non_llm:
+            other_params = {
+                'message_type': 'question',
+                'operation_type': 'non_llm',
+                'source': 'database'
+            }
+
         self.save_message(
             session_id=session_id, profile_id=profile_id, message=bot_question, chunks=chunks,
-            status=chat_status, translated_message=translated_message, stage=state_machine.name
+            status=chat_status, translated_message=translated_message, stage=state_machine.name,
+            other_params=other_params if other_params else None
         )
 
         return response
