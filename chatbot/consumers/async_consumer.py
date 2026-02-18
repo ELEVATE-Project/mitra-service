@@ -105,7 +105,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 )()
 
                 current_stage = None
-                if chat_session and self.company_bot:
+                if chat_session and self.company_bot and self.company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
                     try:
                         state_machine = await database_sync_to_async(
                             lambda: CompanyStateMachine.objects.get(
