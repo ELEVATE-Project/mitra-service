@@ -176,7 +176,6 @@ async def validate_story_llm(formatted_content_prompt, formatted_story_prompt, m
         response_json_story = json_repair.repair_json(response_json_story, return_objects=True)
 
     logger.info(f"Final Validation: response_json_content: %s", response_json_content)
-    logger.info(f"Final Validation: response_json_story: %s", response_json_story)
 
     if (isinstance(response_json_story, dict) and response_json_story.get("type") and
             "value" in response_json_story):

@@ -120,7 +120,8 @@ def save_shikshalokam_story(
 
 def save_project_story( story, problem_statement, chat_history, access_token, project_id, session, profile, conversation, flow):
     try:
-        html_content = get_html_from_template(story=story, profile=profile, flow=flow, auth=access_token is not None)
+        session_data = ChatSession.objects.get(session=session)
+        html_content = get_html_from_template(story=story, profile=profile, flow=flow, auth=access_token is not None, language=session_data.language)
 
         pdf_generated = generate_pdf_with_gotenberg(html_content)
         pdf_file_name = story.title
@@ -398,6 +399,13 @@ def get_html_from_template(story, profile, flow, auth=False, language=None):
         "profile": profile_serialized
     }
 
+    if language_used != StoryLanguageChoices.ENGLISH:
+        translated_story = StoryTranslation.objects.select_related("story").get(story__session=story.session, language=language)
+        render_params.get("story", {})["title"] = translated_story.title
+        render_params.get("story", {})["content"] = translated_story.content
+        render_params.get("story", {})["location"] = translated_story.location
+        render_params.get("story", {})["other_params"] = translated_story.other_params
+
     template = Template(jinja_template)
     html_content = template.render(**render_params)
     return html_content
@@ -427,7 +435,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         if isinstance(flow, str):
             html_content = get_story_html(story=story, profile=profile, flow=flow)
         else:
-            html_content = get_html_from_template(story=story, profile=profile, flow=flow)
+            html_content = get_html_from_template(story=story, profile=profile, flow=flow, language=chatsession.get("language", StoryLanguageChoices.ENGLISH))
 
         pdf_generated = generate_pdf_with_gotenberg(html_content)
         # print("pdf_generated: ", pdf_generated)

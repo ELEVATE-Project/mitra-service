@@ -244,7 +244,7 @@ def generate_story(profile_id, session, access_token, flow, language='en'):
                             if len(words) > 1:
                                 intro_to_pass = f"{words[0]} {profile_data.get('first_name')} {words[1]}"
                             else:
-                                intro_to_pass = f"{words[0]} {profile_data.get("first_name")}"
+                                intro_to_pass = f"{words[0]} {profile_data.get('first_name')}"
                     else:
                         intro_to_pass = bot_vernacular.alt_introductory_message
             else:

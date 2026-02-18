@@ -1,5 +1,4 @@
 import traceback
-
 from celery import shared_task
 from chatbot.utils.llm import LLM
 from observability.utils.preparechats import get_chat_dict
