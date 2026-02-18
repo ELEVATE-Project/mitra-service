@@ -1,3 +1,4 @@
+from chatbot.llm_models.llm_script import handle_bedrock_model
 from chatbot.models import CompanyBot, LLMModel
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from openai import OpenAI

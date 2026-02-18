@@ -9,6 +9,11 @@ from chatbot.utils.chat_utils import get_guided_chat
 
 
 class ChatSession(models.Model):
+    """
+    Represents an active chat session between a user profile and a company bot.
+    Stores session metadata, conversation state, and handles title generation using LLMs.
+    """
+
     session = models.CharField(max_length=255, unique=True)
     profile = models.ForeignKey(Profile, on_delete=models.DO_NOTHING, null=True, blank=True)
     company_bot = models.ForeignKey(CompanyBot, on_delete=models.SET_NULL, null=True, blank=True)

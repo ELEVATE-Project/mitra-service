@@ -4,6 +4,11 @@ from chatbot.models import CompanyBot, ThemeType
 
 
 class Theme(models.Model):
+    """
+    Stores theme configurations associated with a company bot.
+    Supports custom story themes or inheritance from a master theme.
+    """
+
     bot = models.ForeignKey(
         CompanyBot, on_delete=models.CASCADE, related_name='themes',
         help_text="Select the bot this theme belongs to."

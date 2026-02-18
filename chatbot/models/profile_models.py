@@ -9,6 +9,10 @@ from chatbot.models.company_models import Company, Flow
 
 
 class Profile(models.Model):
+    """
+    Represents a user profile associated with a company.
+    Stores personal details, authentication data, and metadata for chatbot interactions.
+    """
 
     def get_file_upload_path(self, filename):
         folder_name = self.company.slug+'/'+'profile'+'/'+self.email
