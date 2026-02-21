@@ -112,38 +112,45 @@ def speech_text_provider(company_bot, base64, audio_format, source_language):
     return response
 
 
-def text_translate_provider(company_bot, message_body, target_language, source_language):
-    voice_provider = get_voice_provider(
-        company_bot=company_bot, voice_type=VoiceType.TextToText, source_language=source_language,
-        target_language=target_language
-    )
-    if voice_provider.provider == VoiceProvider.AI4Bharat:
-        response = call_ai4bharat_translation_api(
-            source_language=source_language, target_language=target_language, message_body=message_body,
-            voice_provider=voice_provider
-        )
-    elif voice_provider.provider == VoiceProvider.GOOGLE:
-        secret = settings.SECRETS
-        response = translate_text(
-            project_id=secret.get('project_id'), text=message_body,
-            source_language_code=LanguageMapping.get_mapped_language(source_language),
-            target_language_code=LanguageMapping.get_mapped_language(target_language)
-        )
-    elif voice_provider.provider == VoiceProvider.SARVAM:
-        service = SarvamLanguageService()
-        response = service.translate(
-            input_text=message_body, source_lang=LanguageMapping.get_mapped_language(source_language),
-            target_lang=LanguageMapping.get_mapped_language(target_language), voice_provider=voice_provider
-        )
-    elif voice_provider.provider == VoiceProvider.CUSTOM_LLM:
-        company_bot = CompanyBot.objects.filter(route="/transliterate_text").first()
-        response = handle_custom_translation(
-            message_body=message_body, source_language=LanguageMapping.get_mapped_language(source_language),
-            target_language=LanguageMapping.get_mapped_language(target_language), company_bot=company_bot
-        )
-    else:
+def text_translate_provider(message_body, target_language, source_language, voice_provider=None, company_bot=None):
+    try:
+        if not voice_provider and company_bot:
+            voice_provider = get_voice_provider(
+                company_bot=company_bot, voice_type=VoiceType.TextToText, source_language=source_language,
+                target_language=target_language
+            )
+        if voice_provider.provider == VoiceProvider.AI4Bharat:
+            response = call_ai4bharat_translation_api(
+                source_language=source_language, target_language=target_language, message_body=message_body,
+                voice_provider=voice_provider
+            )
+        elif voice_provider.provider == VoiceProvider.GOOGLE:
+            secret = settings.SECRETS
+            response = translate_text(
+                project_id=secret.get('project_id'), text=message_body,
+                source_language_code=LanguageMapping.get_mapped_language(source_language),
+                target_language_code=LanguageMapping.get_mapped_language(target_language)
+            )
+        elif voice_provider.provider == VoiceProvider.SARVAM:
+            service = SarvamLanguageService()
+            response = service.translate(
+                input_text=message_body, source_lang=LanguageMapping.get_mapped_language(source_language),
+                target_lang=LanguageMapping.get_mapped_language(target_language), voice_provider=voice_provider
+            )
+        elif voice_provider.provider == VoiceProvider.CUSTOM_LLM:
+            company_bot = CompanyBot.objects.filter(route="/transliterate_text").first()
+            response = handle_custom_translation(
+                message_body=message_body, source_language=LanguageMapping.get_mapped_language(source_language),
+                target_language=LanguageMapping.get_mapped_language(target_language), company_bot=company_bot
+            )
+        else:
+            return {
+                'status': 500,
+                'content': "No provider found!"
+            }
+        return response
+    except Exception as e:
         return {
             'status': 500,
-            'content': "No provider found!"
+            'content': str(e)
         }
-    return response
