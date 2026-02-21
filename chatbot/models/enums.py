@@ -366,6 +366,7 @@ class VoiceProvider(models.TextChoices):
     AI4Bharat = 'AI4Bharat', _('AI4Bharat')
     OPENAI_WHISPER = 'OPENAI_WHISPER', _('OpenAI Whisper')
     SARVAM = 'Sarvam', _('Sarvam')
+    CUSTOM_LLM = 'CUSTOM_LLM', _('Custom LLM')
 
 
 class VoiceType(models.TextChoices):
