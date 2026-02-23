@@ -8,7 +8,6 @@ from .consumers.mitra_bedrock_consumer import MitraBedrockConsumer
 from .consumers.one_shot_bedrock_consumer import OneShotBedrockConsumer
 from .consumers.oneshot_guest_consumer import OneShotGuestConsumer
 from .consumers.shikshalokam_bedrock_consumer import ShikshalokamBedrockConsumer
-from chatbot.consumers.async_bot_response_consumer import AsyncBotResponseConsumer
 
 
 websocket_urlpatterns = [
