@@ -112,6 +112,11 @@ def save_chaupal_report(
                 company_bot=company_bot, type=VoiceType.Transliterate, language=language
             ).first()
 
+        is_within_domain = response_json_story.get('is_within_domain', True)
+
+        if not is_within_domain:
+            raise ValueError("Story content is outside allowed domain")
+
         # Extract and translate fields to English
         raw_title = response_json_story.get('title', '')
         english_title = clean_escaped_text(
