@@ -395,11 +395,11 @@
         border-radius: 20px;
         background-color: #fff;
         page-break-inside: avoid;
+        break-inside: avoid;  
     }
     .story-action-steps {
-        page-break-before: auto; /* Ensure steps start on a new page if needed */
-        page-break-inside: auto;  /* Avoid breaking inside a step */
-        page-break-after: auto; /* Continue on the next page if needed */
+        page-break-inside: avoid;
+        break-inside: avoid;
     }
     .story-second-page-section h2 {
         display: flex;
@@ -522,6 +522,9 @@
     margin: 40px 0 0 0;
     padding: 0;
     text-align: justify;
+
+    page-break-inside: avoid;
+    break-inside: avoid;
 
   }
 
@@ -963,6 +966,8 @@
         justify-items: center;
         grid-row-gap: 20px;
         grid-column-gap: 0px;
+
+        break-inside: avoid;
     }
 
     .image-nohead {
@@ -977,6 +982,9 @@
       border-radius: 20px;
       box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
       padding: 3px;
+
+      page-break-inside: avoid;
+      break-inside: avoid;
 
     }
 
