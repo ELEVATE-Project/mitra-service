@@ -3,14 +3,14 @@ import secrets
 import traceback
 from datetime import datetime
 from chatbot.utils.audio_provider_utils import text_translate_provider
-from shikshalokam.models import Project, ProjectStatus, ProjectVernacular
+from shikshalokam.models import Project, ProjectStatus, ProjectVernacular, Task
 import logging
 
 logger = logging.getLogger('django')
 
 
 def create_project(response_json, title, objective, story, profile, problem_statement, project_id, language,
-                   voice_provider):
+                   voice_provider, action_steps=None):
     try:
         resource_name = response_json.get('resource_name', '')
         resource_link = response_json.get('resource_link', '')
@@ -54,6 +54,46 @@ def create_project(response_json, title, objective, story, profile, problem_stat
 
         project.save()
 
+        if action_steps:
+            if isinstance(action_steps, str):
+                action_steps = [action_steps]
+            if created:
+                for idx, step in enumerate(action_steps):
+                    cleaned_step = step.strip()
+                    if not cleaned_step:
+                        continue
+                    llm_source = "UNKNOWN"
+                    if voice_provider and voice_provider.company_bot:
+                        company_bot = voice_provider.company_bot
+
+                        provider = company_bot.provider or "unknown_provider"
+                        model = company_bot.llm_model or "unknown_model"
+
+                        llm_source = f"{provider}:{model}"
+                    task = Task.objects.create(
+                        project=project,
+                        task_id=generate_random_hex(8),
+                        parent_task_id=None,
+                        task_name=cleaned_step,
+                        mandatory_task=None,
+                        task_status="COMPLETED",
+                        description=cleaned_step,
+                        source=llm_source,
+                        other_params={
+                            "order": idx + 1,
+                            "generated_from": "action_steps"
+                        },
+                        created_by=profile.user if hasattr(profile, "user") else None
+                    )
+
+                    if language != 'en':
+                        task_data = {'task_name': cleaned_step}
+                        create_task_vernacular(
+                            task=task, language=language, voice_provider=voice_provider, task_data=task_data
+                        )
+
+                print(f"{len(action_steps)} tasks created for project {project.project_id}")
+
         if language != 'en':
             create_project_vernacular(
                 project=project,
@@ -67,7 +107,7 @@ def create_project(response_json, title, objective, story, profile, problem_stat
                     'keywords': keywords,
                     'resource_name': resource_name,
                     'resource_link': resource_link
-                }
+                },
             )
 
         return story.id, story.content
@@ -135,6 +175,24 @@ def create_project_vernacular(project, language, voice_provider, project_data):
         print(f"Error creating ProjectVernacular: {e}")
         traceback.print_exc()
         return None
+
+
+def create_task_vernacular(task, language, voice_provider, task_data):
+    if language != 'en' and voice_provider:
+        translated_task_name = translate_field(
+            voice_provider=voice_provider,
+            message_body=task_data.get('task_name'),
+            target_language=language
+        )
+
+        ProjectVernacular.objects.update_or_create(
+            task=task,
+            language=language,
+            details=json.dumps({
+                "task_name": translated_task_name,
+                "description": translated_task_name
+            }),
+        )
 
 
 def generate_random_hex(length=16):

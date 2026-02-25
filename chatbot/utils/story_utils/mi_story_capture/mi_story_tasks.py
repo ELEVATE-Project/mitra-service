@@ -282,8 +282,7 @@ def save_story(
         create_project(
             response_json=response_json_story, title=english_title, objective=english_objective, story=story,
             profile=profile, problem_statement=english_problem_statement, language=language,
-            voice_provider=voice_provider,
-            project_id=project_id
+            voice_provider=voice_provider, project_id=project_id, action_steps=english_action_steps
         )
 
         return story, english_problem_statement
