@@ -228,6 +228,13 @@ def save_chaupal_report(
         else:
             location = user_location
 
+        if isinstance(english_challenges_faced, str):
+            english_challenges_faced = [english_challenges_faced]
+
+        if not isinstance(english_challenges_faced, list) or not english_challenges_faced:
+            raise ValueError("Story Challenges cannot be empty.")
+
+
         other_params = {
             'challenges_faced': list(english_challenges_faced) if isinstance(
                 english_challenges_faced, list) else english_challenges_faced,
