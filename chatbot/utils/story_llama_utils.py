@@ -163,7 +163,7 @@ def create_project_vernacular(project, language, voice_provider, project_data):
             project=project,
             language=language,
             defaults={
-                'details': json.dumps({"project": translated_data})
+                'details': json.dumps({"project": translated_data}, ensure_ascii=False)
             }
         )
 
@@ -194,7 +194,7 @@ def create_task_vernacular(task, language, voice_provider, task_data):
             details=json.dumps({
                 "task_name": translated_task_name,
                 "description": translated_task_name
-            }),
+            }, ensure_ascii=False),
         )
 
 
