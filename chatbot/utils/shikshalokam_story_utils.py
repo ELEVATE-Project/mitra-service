@@ -17,7 +17,7 @@ from chatbot.utils.media_utils import upload_to_cloud
 from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_stored_chathistory
 from django.core.files.base import ContentFile
 from jinja2 import Template
-from shikshalokam.models import Project
+from shikshalokam.models import Project, Task
 from shikshalokam.models.project_vernacular_model import ProjectVernacular
 from shikshalokam.serializer import ProjectSerializer
 import json
@@ -505,6 +505,40 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         conversation = get_stored_conversation(company_chats=company_chats)
         chat_history = get_stored_chathistory(company_chats=company_chats)
 
+
+        tasks_payload = []
+
+        task_id_from_session = None
+        if chat_session.other_params:
+            task_id_from_session = chat_session.other_params.get('task_id')
+
+        if task_id_from_session:
+            task_obj = Task.objects.filter(task_id=task_id_from_session).first()
+
+            if task_obj:
+                tasks_payload.append({
+                    "_id": task_obj.task_id,
+                    "status": task_obj.task_status,
+                    "taskName": task_obj.task_name
+                })
+            else:
+                tasks_payload.append({
+                    "_id": task_id_from_session,
+                    "status": "completed"
+                })
+
+        else:
+            project = Project.objects.filter(project_id=project_id).first()
+            if project:
+                project_tasks = Task.objects.filter(project=project)
+
+                for task in project_tasks:
+                    tasks_payload.append({
+                        "_id": task.task_id,
+                        "status": task.task_status.lower() if task.task_status else None,
+                        "taskName": task.task_name
+                    })
+
         request_body = {
             "story": {
                 "title": story.title,
@@ -521,12 +555,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
                 "attachments": attachments,
                 "pdfInformation": pdf_information,
             },
-            "tasks": [
-                {
-                    "_id": chat_session.other_params.get('task_id'),
-                    "status": "completed"
-                }
-            ]
+            "tasks": tasks_payload
         }
 
         headers = {

@@ -188,6 +188,11 @@ def save_generic_story(
 
     story = Story.objects.filter(session=session).first()
 
+    is_within_domain = response_json_story.get('is_within_domain', True)
+
+    if not is_within_domain:
+        raise ValueError("Story content is outside allowed domain")
+
     if story and story.other_params:
         other_params = copy.deepcopy(story.other_params)
         other_params.pop('_english_snapshot', None)
