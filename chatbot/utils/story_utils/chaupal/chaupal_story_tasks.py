@@ -98,6 +98,20 @@ def transliterate_to_english_if_needed(text, voice_provider, source_language):
         return text
 
 
+def normalize_list_field(value):
+    if isinstance(value, str):
+        value = value.strip()
+        if value in ("[]", ""):
+            return []
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return parsed
+        except Exception:
+            return [value]
+    return value
+
+
 def save_chaupal_report(
         response_json_story, language, company_bot, voice_provider, profile, session, combined_reason, flow=None,
         messages=[]
@@ -126,6 +140,9 @@ def save_chaupal_report(
         # Handle challenges and solutions (can be arrays)
         raw_challenges_faced = response_json_story.get('challenges_faced', [])
         raw_solutions_discussed = response_json_story.get('solutions_discussed', [])
+
+        raw_challenges_faced = normalize_list_field(raw_challenges_faced)
+        raw_solutions_discussed = normalize_list_field(raw_solutions_discussed)
 
         # Translate challenges and solutions
         if isinstance(raw_challenges_faced, list):
