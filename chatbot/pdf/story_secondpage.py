@@ -116,18 +116,24 @@ def get_story_secondpage_html(story, project, story_vernacular):
     print("Fallback text:", repr(translation_json.get('no_problem_statement_text', "")))
     print("Final result:", repr(problem_statement or translation_json.get('no_problem_statement_text', "")))
 
-    # ── Build the Impact section HTML ──────────────────────────────────
-    # Impact is ALWAYS rendered in its own standalone wrapper
-    impact_html = f"""
-    <div class="story-impact-wrapper">
+   
+    impact_section = f"""
         <div class="story-second-page-section">
             <h2>{translation_json.get('heading5', "")}</h2>
             <p>{story.impact or translation_json.get('no_impact_text', "")}</p>
-        </div>
+        </div>"""
+
+    impact_standalone = f"""
+    <div class="story-impact-wrapper">
+        {impact_section}
     </div>
     """
 
-    # ── Main second page ─────────────────────────────────────────────────
+  
+    overflow_batches = step_batches[1:] if step_batches else []
+    has_overflow = len(overflow_batches) > 0
+
+
     page_html = f"""
     <div class="story-second-page-container">
         <h1>{translation_json.get('heading1', "")}</h1>
@@ -143,12 +149,12 @@ def get_story_secondpage_html(story, project, story_vernacular):
             <h2>{translation_json.get('heading4', "")}</h2>
             {first_batch_html or translation_json.get('no_action_step_text', "")}
         </div>
+        {impact_section if not has_overflow else ''}
     </div>
     """
 
-    # ── Overflow pages for remaining action-step batches ──────────────────
+   
     running_index = len(step_batches[0]) + 1 if step_batches else 1
-    overflow_batches = step_batches[1:] if step_batches else []
     for batch in overflow_batches:
         overflow_ol = _build_steps_ol(batch, start_index=running_index)
         page_html += f"""
@@ -160,8 +166,9 @@ def get_story_secondpage_html(story, project, story_vernacular):
         """
         running_index += len(batch)
 
-    # ── Impact always last, in its own wrapper ────────────────────────────
-    page_html += impact_html
+   
+    if has_overflow:
+        page_html += impact_standalone
 
     return page_html
 
