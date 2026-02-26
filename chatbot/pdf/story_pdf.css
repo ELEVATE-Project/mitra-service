@@ -362,7 +362,7 @@ html, body {
 .story-second-page-container {
   width: 100%;
   background-color: #f1f1f1;
-  padding: 20px 40px 40px 40px;
+  padding: 20px 40px 20px 40px;
   box-sizing: border-box;
   page-break-before: always;
 }
@@ -386,13 +386,13 @@ html, body {
   text-decoration-color: #4192A6;
   text-decoration-thickness: 2px;
   text-underline-offset: 16px;
-  margin: 40px 0 70px 0;
+  margin: 20px 0 40px 0;
   text-align: center;
 }
 
 .story-second-page-section {
-  margin-top: 20px;
-  margin-bottom: 20px;
+  margin-top: 15px;
+  margin-bottom: 15px;
   padding: 20px;
   border: 2px solid #ddd;
   border-radius: 20px;
