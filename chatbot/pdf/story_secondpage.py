@@ -4,6 +4,7 @@ import json_repair
 from chatbot.constants.pdf_constants import (
     SECOND_PAGE_ACTION_STEPS_CHAR_LIMIT,
     FULL_PAGE_ACTION_STEPS_CHAR_LIMIT,
+    SECOND_PAGE_TOTAL_CHAR_LIMIT,
 )
 
 
@@ -133,27 +134,37 @@ def get_story_secondpage_html(story, project, story_vernacular):
     overflow_batches = step_batches[1:] if step_batches else []
     has_overflow = len(overflow_batches) > 0
 
+    ps_text = problem_statement or translation_json.get('no_problem_statement_text', '')
+    obj_text = story.objective or translation_json.get('no_objective_text', '')
+    impact_text = story.impact or translation_json.get('no_impact_text', '')
+    first_batch_chars = sum(len(s) for s in step_batches[0]) if step_batches else 0
+    impact_chars = len(impact_text)
+    second_page_chars = len(ps_text) + len(obj_text) + first_batch_chars + impact_chars
+    print(f"second_page_chars (incl. impact): {second_page_chars}, limit: {SECOND_PAGE_TOTAL_CHAR_LIMIT}")
+
+    # Impact goes inline only when there's no overflow AND all 4 sections fit
+    impact_fits_on_page = not has_overflow and second_page_chars <= SECOND_PAGE_TOTAL_CHAR_LIMIT
 
     page_html = f"""
     <div class="story-second-page-container">
         <h1>{translation_json.get('heading1', "")}</h1>
         <div class="story-second-page-section">
             <h2>{translation_json.get('heading2', "")}</h2>
-            <p>{problem_statement or translation_json.get('no_problem_statement_text', "")}</p>
+            <p>{ps_text}</p>
         </div>
         <div class="story-second-page-section">
             <h2>{translation_json.get('heading3', "")}</h2>
-            <p>{story.objective or translation_json.get('no_objective_text', "")}</p>
+            <p>{obj_text}</p>
         </div>
         <div class="story-second-page-section story-action-steps">
             <h2>{translation_json.get('heading4', "")}</h2>
             {first_batch_html or translation_json.get('no_action_step_text', "")}
         </div>
-        {impact_section if not has_overflow else ''}
+        {impact_section if impact_fits_on_page else ''}
     </div>
     """
 
-   
+
     running_index = len(step_batches[0]) + 1 if step_batches else 1
     for batch in overflow_batches:
         overflow_ol = _build_steps_ol(batch, start_index=running_index)
@@ -166,8 +177,8 @@ def get_story_secondpage_html(story, project, story_vernacular):
         """
         running_index += len(batch)
 
-   
-    if has_overflow:
+
+    if not impact_fits_on_page:
         page_html += impact_standalone
 
     return page_html
