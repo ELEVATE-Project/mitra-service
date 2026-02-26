@@ -535,7 +535,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
                 for task in project_tasks:
                     tasks_payload.append({
                         "_id": task.task_id,
-                        "status": task.task_status,
+                        "status": task.task_status.lower() if task.task_status else None,
                         "taskName": task.task_name
                     })
 
