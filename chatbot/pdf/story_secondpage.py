@@ -116,9 +116,7 @@ def get_story_secondpage_html(story, project, story_vernacular):
     print("Fallback text:", repr(translation_json.get('no_problem_statement_text', "")))
     print("Final result:", repr(problem_statement or translation_json.get('no_problem_statement_text', "")))
 
-    # ── Build Impact section HTML fragments ─────────────────────────────
-    # "inline" = inside main container (no extra padding, natural spacing)
-    # "standalone" = own wrapper with top padding (for when it starts a new page)
+   
     impact_section = f"""
         <div class="story-second-page-section">
             <h2>{translation_json.get('heading5', "")}</h2>
@@ -131,11 +129,11 @@ def get_story_secondpage_html(story, project, story_vernacular):
     </div>
     """
 
-    # ── Determine if there are overflow batches ──────────────────────────
+  
     overflow_batches = step_batches[1:] if step_batches else []
     has_overflow = len(overflow_batches) > 0
 
-    # ── Main second page ─────────────────────────────────────────────────
+
     page_html = f"""
     <div class="story-second-page-container">
         <h1>{translation_json.get('heading1', "")}</h1>
@@ -155,7 +153,7 @@ def get_story_secondpage_html(story, project, story_vernacular):
     </div>
     """
 
-    # ── Overflow pages for remaining action-step batches ──────────────────
+   
     running_index = len(step_batches[0]) + 1 if step_batches else 1
     for batch in overflow_batches:
         overflow_ol = _build_steps_ol(batch, start_index=running_index)
@@ -168,7 +166,7 @@ def get_story_secondpage_html(story, project, story_vernacular):
         """
         running_index += len(batch)
 
-    # ── Impact after overflow pages (standalone wrapper with top padding) ─
+   
     if has_overflow:
         page_html += impact_standalone
 
