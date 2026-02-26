@@ -28,6 +28,15 @@ def create_project(response_json, title, objective, story, profile, problem_stat
                 project_id = generate_random_hex()
                 print(f"Generated new project_id: {project_id}")
 
+        llm_source = "UNKNOWN"
+        if voice_provider and voice_provider.company_bot:
+            company_bot = voice_provider.company_bot
+
+            provider = company_bot.provider or "unknown_provider"
+            model = company_bot.llm_model or "unknown_model"
+
+            llm_source = f"{provider}:{model}"
+
         project, created = Project.objects.update_or_create(
             project_id=project_id,
             defaults={
@@ -39,6 +48,8 @@ def create_project(response_json, title, objective, story, profile, problem_stat
                 "project_status": ProjectStatus.SUBMITTED,
                 "actual_problem_statement": problem_statement,
                 "keywords": keywords,
+                'project_source': llm_source,
+                'program_source': llm_source,
                 "resource_name": resource_name,
                 "resource_link": resource_link,
                 "project_start_date": project_start_date,
@@ -62,14 +73,6 @@ def create_project(response_json, title, objective, story, profile, problem_stat
                     cleaned_step = step.strip()
                     if not cleaned_step:
                         continue
-                    llm_source = "UNKNOWN"
-                    if voice_provider and voice_provider.company_bot:
-                        company_bot = voice_provider.company_bot
-
-                        provider = company_bot.provider or "unknown_provider"
-                        model = company_bot.llm_model or "unknown_model"
-
-                        llm_source = f"{provider}:{model}"
                     task = Task.objects.create(
                         project=project,
                         task_id=generate_random_hex(8),
