@@ -120,6 +120,11 @@ def save_story(
         raw_problem_statement = response_json_story.get('problem_statement', '')
         raw_blurb = response_json_story.get('blurb', '')
 
+        is_within_domain = response_json_story.get('is_within_domain', True)
+
+        if not is_within_domain:
+            raise ValueError("Story content is outside allowed domain")
+
         # Translate main content fields to English
         english_title = clean_escaped_text(
             text=translate_to_english_if_needed(raw_title, translation_voice_provider, language)
@@ -277,8 +282,7 @@ def save_story(
         create_project(
             response_json=response_json_story, title=english_title, objective=english_objective, story=story,
             profile=profile, problem_statement=english_problem_statement, language=language,
-            voice_provider=voice_provider,
-            project_id=project_id
+            voice_provider=voice_provider, project_id=project_id, action_steps=english_action_steps
         )
 
         return story, english_problem_statement

@@ -39,6 +39,13 @@ def end_story(request):
                 access_token=access_token, flow=flow, language=language
             )
 
+            if error_msg:
+                return Response({
+                    'status': 'error',
+                    'message': error_msg,
+                    'error_message': error_msg
+                }, status=400)
+
             return Response({
                 'status': 'ok',
                 'message': 'Story created',
