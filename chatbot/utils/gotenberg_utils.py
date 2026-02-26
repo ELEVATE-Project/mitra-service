@@ -18,6 +18,7 @@ def generate_pdf_with_gotenberg(html_content):
         "marginRight": "0cm",
         "paperWidth": "210mm",
         "paperHeight": "297mm",
+        "printBackground": "true",
     }
 
     try:
