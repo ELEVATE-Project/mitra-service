@@ -12,7 +12,7 @@ sarvam_api_key = os.getenv("SARVAM_API_KEY")
 logger = logging.getLogger('django')
 
 
-def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language):
+def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language, model):
     try:
         client = SarvamAI(api_subscription_key=sarvam_api_key)
 
@@ -23,7 +23,7 @@ def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language):
             with open(tmp_file.name, "rb") as f:
                 response = client.speech_to_text.transcribe(
                     file=f,
-                    model="saarika:v2",
+                    model=model,
                     language_code=source_language
                 )
         print("response: ", response)
@@ -38,18 +38,21 @@ def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language):
         return (chunk_number, '')
 
 
-def transcribe_sarvam_multiple_chunks(voice_provider, base64_audio_file, source_language, audio_format="wav"):
+def transcribe_sarvam_multiple_chunks(
+        voice_provider, base64_audio_file, source_language, audio_format="wav",
+):
     try:
         audio_bytes = base64.b64decode(base64_audio_file)
         duration = 10
+        model=None
         if voice_provider.other_params:
             duration = int(voice_provider.other_params.get('chunk_duration', 10))
+            model = voice_provider.other_params.get('model')
         chunks = split_audio(audio_bytes, chunk_duration=duration)
-
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(
-                    transcribe_single_chunk, chunk_number, chunk, audio_format, source_language
+                    transcribe_single_chunk, chunk_number, chunk, audio_format, source_language, model
                 )
                 for chunk_number, chunk in chunks
             ]
