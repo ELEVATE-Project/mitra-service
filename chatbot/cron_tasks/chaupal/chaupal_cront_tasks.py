@@ -8,6 +8,8 @@ from chatbot.models import CompanyBot
 from chatbot.scripts.guest_discussion.clean_story_script import get_story_count, clean_specific_stories
 from chatbot.scripts.guest_discussion.post_processing.village_data_cleaning import run_for_specific_stories
 # from chatbot.scripts.guest_discussion.translate_script import get_translate_story_count, translate_specific_story_ids
+from chatbot.models import Story
+import json
 
 logger = logging.getLogger('django')
 
@@ -39,14 +41,14 @@ def handle_village_ingestion_cron():
         logger.info('🧹 Starting village ingestion cron at: %s', timezone.now())
 
         bot = CompanyBot.objects.filter(route='/script_village_mapping').first()
-        sql_data = bot.end_context
+        master_villages = json.loads(bot.end_context)
 
-        # Step 1: Execute SQL
-        with connection.cursor() as cursor:
-            cursor.execute(sql_data)
-            rows = cursor.fetchall()
-            columns = [col[0] for col in cursor.description]
-            result = [dict(zip(columns, row)) for row in rows]
+        result = list(Story.objects.filter(
+            other_params__flow='guest-discussion'
+        ).exclude(
+            other_params__village__isnull= False  
+        ).values('id'))
+
 
         logger.info(f"📄 Raw story data: {result}")
 
@@ -72,7 +74,7 @@ def handle_village_ingestion_cron():
             logger.warning("⚠️ No story IDs found from SQL. Skipping village mapping.")
             return
 
-        summary = run_for_specific_stories(story_ids=story_ids)
+        summary = run_for_specific_stories(story_ids=story_ids, master_villages = master_villages)
         logger.info(f'✅ Village summary: {summary}')
         logger.info('🎉 Completed village ingestion at: %s', timezone.now())
 

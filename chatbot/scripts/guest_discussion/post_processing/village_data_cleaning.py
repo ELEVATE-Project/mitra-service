@@ -482,10 +482,16 @@ def get_village_mapping_stats() -> Dict[str, Any]:
 
 # -------------- USAGE EXAMPLES ------------------
 
-def run_for_specific_stories(story_ids: List[int]) -> Dict[str, List[int]]:
+def run_for_specific_stories(story_ids: List[int], master_villages=None) -> Dict[str, List[int]]:
     """Run village mapping for specific story IDs"""
+    if master_villages is None:
+        master_villages = load_master_villages()
+    
+    if not master_villages:
+        return {"skipped_no_location": [], "failed_village_mapping": []}
+
     stories = Story.objects.filter(id__in=story_ids)
-    summary = run_village_mapper(story_queryset=stories)
+    summary = run_village_mapper(story_queryset=stories, master_villages = master_villages)
 
     # Analyze results
     analyze_skipped_stories(summary['skipped_no_location'])
