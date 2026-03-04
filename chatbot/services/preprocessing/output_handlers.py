@@ -14,6 +14,10 @@ class PreprocessOutputHandler:
         """Handle preprocessing output based on mode"""
         if output_mode == PreProcessOutputMode.SKIP:
             return SkipOutputHandler.handle(preprocess_response, **kwargs)
+        elif output_mode == PreProcessOutputMode.MODIFY_QUESTION:
+            return ModifyQuestionOutputHandler.handle(
+                preprocess_response, original_prompt, **kwargs
+            )
         else:
             return {'action': 'continue', 'prompt': original_prompt}
 
@@ -86,36 +90,45 @@ class SkipOutputHandler:
             return {'action': 'continue'}
 
 
-class EnrichOutputHandler:
-    """Handles ENRICH output mode"""
+class ModifyQuestionOutputHandler:
+    """Handles MODIFY_QUESTION output mode"""
 
     @staticmethod
     def handle(preprocess_response, original_prompt, **kwargs):
-        """Enrich the original prompt with preprocessing output"""
+        """
+        Extract modified_question from preprocessing response.
+        Falls back to original bot_question if parsing fails.
+        """
+        logger.info(f"[ModifyQuestionOutputHandler] Processing response")
+
         if not preprocess_response:
+            logger.info("No preprocessing response, cannot modify question")
             return {'action': 'continue', 'prompt': original_prompt}
 
-        company_bot = kwargs.get('company_bot')
+        modified_question = None
 
-        # Enrich prompt based on provider type
-        if company_bot and hasattr(company_bot, 'provider'):
-            if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
-                enriched_prompt = original_prompt.copy()
-                enriched_prompt.append({
-                    'text': f"\nAdditional Context from Preprocessing:\n{preprocess_response}"
-                })
-            else:  # OpenAI
-                if original_prompt and len(original_prompt) > 0:
-                    original_content = original_prompt[0].get('content', '')
-                    enriched_content = f"{original_content}\n\nAdditional Context from Preprocessing:\n{preprocess_response}"
-                    enriched_prompt = [{'role': 'system', 'content': enriched_content}]
-                else:
-                    enriched_prompt = original_prompt
+        if isinstance(preprocess_response, dict):
+            parsed = preprocess_response
         else:
-            enriched_prompt = original_prompt
+            try:
+                parsed = json_repair.repair_json(preprocess_response, return_objects=True)
+            except Exception as e:
+                logger.error(f"Failed to parse preprocessing response: {e}")
+                return {'action': 'continue', 'prompt': original_prompt}
 
-        logger.info(f"Prompt enriched with preprocessing output: {preprocess_response}")
-        return {'action': 'continue', 'prompt': enriched_prompt}
+        if isinstance(parsed, dict):
+            modified_question = parsed.get('modified_question', '').strip()
+
+        if modified_question:
+            logger.info(f"Successfully extracted modified question: {modified_question[:100]}")
+            return {
+                'action': 'modify_question',
+                'modified_bot_question': modified_question,
+                'prompt': original_prompt
+            }
+        else:
+            logger.info("No valid modified_question found, will use original")
+            return {'action': 'continue', 'prompt': original_prompt}
 
 
 class CustomOutputHandler:

@@ -457,6 +457,7 @@ class PreProcessOutputMode(models.TextChoices):
     """
     NONE = 'NONE', 'None'
     SKIP = 'SKIP', 'Skip This Stage'
+    MODIFY_QUESTION = 'MODIFY_QUESTION', 'Modify Bot Question'
 
 
 class PostProcessType(models.TextChoices):

@@ -294,6 +294,7 @@ def handle_bedrock_model(
         response = bedrock_runtime.converse(**request_payload)
 
         logger.info('Conversation Bedrock response: %s', json.dumps(response))
+        print('Conversation Bedrock response: ', response)
 
         usage_metrics = response.get('usage', {})
         if usage_metrics:
