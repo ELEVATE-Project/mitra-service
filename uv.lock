@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.10"
 resolution-markers = [
     "python_full_version >= '3.14' and sys_platform == 'win32'",
@@ -918,6 +918,19 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/c3/29/ca800141c33d2df90eb3306c86f5a8c89c11d2d0493e5c503217f57fb0a1/django_admin_rangefilter-0.13.5.tar.gz", hash = "sha256:3134e9e877f59ccad5949cd25cd2db9bf20d170fd8070be584875fdca96d3a14", size = 23712, upload-time = "2025-12-13T07:58:31.327Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/bd/ad/577f872dcc0107d608085b626103990028655b797eedab884242b61f6ac0/django_admin_rangefilter-0.13.5-py2.py3-none-any.whl", hash = "sha256:7fdcd1ee9007e2b76a5bd35bc017e785bdc7b17a24b8a36aef4ce80741356c47", size = 48383, upload-time = "2025-12-13T07:58:30.028Z" },
+]
+
+[[package]]
+name = "django-celery-results"
+version = "2.6.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "celery" },
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a6/b5/9966c28e31014c228305e09d48b19b35522a8f941fe5af5f81f40dc8fa80/django_celery_results-2.6.0.tar.gz", hash = "sha256:9abcd836ae6b61063779244d8887a88fe80bbfaba143df36d3cb07034671277c", size = 83985, upload-time = "2025-04-10T08:23:52.677Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2c/da/70f0f3c5364735344c4bc89e53413bcaae95b4fc1de4e98a7a3b9fb70c88/django_celery_results-2.6.0-py3-none-any.whl", hash = "sha256:b9ccdca2695b98c7cbbb8dea742311ba9a92773d71d7b4944a676e69a7df1c73", size = 38351, upload-time = "2025-04-10T08:23:49.965Z" },
 ]
 
 [[package]]
@@ -4390,6 +4403,7 @@ dependencies = [
     { name = "deepeval" },
     { name = "django" },
     { name = "django-admin-rangefilter" },
+    { name = "django-celery-results" },
     { name = "django-cors-headers" },
     { name = "django-countries" },
     { name = "django-crontab" },
@@ -4475,6 +4489,7 @@ requires-dist = [
     { name = "deepeval", specifier = ">=3.8.2" },
     { name = "django", specifier = "==5.2.0" },
     { name = "django-admin-rangefilter", specifier = ">=0.13.5" },
+    { name = "django-celery-results", specifier = ">=2.6.0" },
     { name = "django-cors-headers", specifier = ">=4.9.0" },
     { name = "django-countries", specifier = ">=8.2.0" },
     { name = "django-crontab", specifier = ">=0.7.1" },
