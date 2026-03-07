@@ -35,7 +35,13 @@ def save_in_company_db(
         last_chat.translated_message = translated_message
         last_chat.chunks = chunks
         last_chat.status = status
-        last_chat.file_url = audio_base64
+        # last_chat.file_url = audio_base64
+        if audio_base64:
+            if last_chat.file_url:
+                last_chat.file_url = f"{last_chat.file_url},{audio_base64}"
+            else:
+                last_chat.file_url = audio_base64
+        
         last_chat.stage = stage
         last_chat.other_params = other_params
         last_chat.save()
