@@ -55,7 +55,14 @@ class CommonResponseHandler(BaseResponseHandler):
             bot_question = self.default_error_message
 
         if bot_question == '':
-            return {'skip_llm': True}
+            return {
+                "toolUseId": "tooluse_auto_advance",
+                "name": "get_state_information",
+                "input": {
+                    "next_state_name": 'AUTO',
+                    "reason": "Date parsed successfully"
+                }
+            }
         else:
             translated_message = self.translate_message(
                 message=bot_question, channel_name=channel_name, step_number=chat_session.current_step,
@@ -84,7 +91,12 @@ class CommonResponseHandler(BaseResponseHandler):
         channel_name = kwargs['channel_name']
         language = kwargs['language']
         profile_id = kwargs['profile_id']
-        
+
+        modified_bot_question = kwargs.get('modified_bot_question')
+        if modified_bot_question:
+            bot_question = modified_bot_question
+            logger.info(f"Using modified bot_question from preprocessing: {bot_question[:100]}")
+
         try:
             state_machine = CompanyStateMachine.objects.get(
                 company_bot=company_bot, step=chat_session.current_step
@@ -280,14 +292,14 @@ class CommonResponseHandler(BaseResponseHandler):
                     kwargs['use_error_message'] = True
 
         company_bot = kwargs['company_bot']
-        session_id = kwargs['session_id']
         language = kwargs['language']
-        profile_id = kwargs['profile_id']
-        channel_name = kwargs['channel_name']
-        skip_next_stage = kwargs.get('skip_next_stage', False)
-        skip_next_stage_preprocessing = kwargs.get('skip_next_stage_preprocessing', False)
-        target_stage = kwargs.get('target_stage', False)
-        chat_messages = self.get_messages_for_llm(**kwargs)
+
+        forward_kwargs = kwargs.copy()
+
+        forward_kwargs['messages'] = self.get_messages_for_llm(**kwargs)
+        forward_kwargs['skip_next_stage'] = kwargs.get('skip_next_stage', False)
+        forward_kwargs['target_stage'] = kwargs.get('target_stage', False)
+        forward_kwargs['skip_next_stage_preprocessing'] = kwargs.get('skip_next_stage_preprocessing', False)
 
         if kwargs.get('use_error_message', False) and not is_function_call:
             bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
@@ -302,10 +314,7 @@ class CommonResponseHandler(BaseResponseHandler):
         if is_function_call and company_bot and company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
             print("DEBUG: Processing as STATE_MACHINE function call")
             return self._handle_function_call(
-                response=response, chat_session=chat_session, company_bot=company_bot,
-                session_id=session_id, channel_name=channel_name, language=language, profile_id=profile_id,
-                chunks=chunks, messages=chat_messages, skip_next_stage=skip_next_stage, target_stage=target_stage,
-                skip_next_stage_preprocessing=skip_next_stage_preprocessing
+                response=response, chat_session=chat_session, chunks=chunks, **forward_kwargs
             )
         # Handle function calls for FREE_FLOW bots (like download_file)
         elif is_function_call and isinstance(response, dict) and 'function_call' in response:
@@ -569,10 +578,18 @@ class CommonResponseHandler(BaseResponseHandler):
         print("DEBUG: No expected_output found, returning None")
         return None
 
-    def _handle_function_call(self, response, chat_session, company_bot,
-                              session_id, channel_name, language, profile_id, chunks, messages, skip_next_stage,
-                              skip_next_stage_preprocessing, target_stage):
+    def _handle_function_call(self, response, chat_session, chunks, **kwargs):
         """Handle function call for guided guest"""
+
+        company_bot = kwargs['company_bot']
+        session_id = kwargs['session_id']
+        channel_name = kwargs['channel_name']
+        language = kwargs['language']
+        profile_id = kwargs['profile_id']
+        skip_next_stage = kwargs.get('skip_next_stage', False)
+        skip_next_stage_preprocessing = kwargs.get('skip_next_stage_preprocessing', False)
+        target_stage = kwargs.get('target_stage')
+        modified_bot_question = kwargs.get('modified_bot_question')
         if skip_next_stage:
             if target_stage and isinstance(target_stage, int):
                 if skip_next_stage_preprocessing:
@@ -597,7 +614,12 @@ class CommonResponseHandler(BaseResponseHandler):
         ).first()
         if not state_machine:
             return None
-        bot_question = state_machine.bot_question
+
+        if modified_bot_question:
+            bot_question = modified_bot_question
+            logger.info(f"Using modified bot_question from preprocessing: {bot_question[:100]}")
+        else:
+            bot_question = state_machine.bot_question
 
         # Check if this is a NON_LLM state - if so, just use bot_question from DB
         is_non_llm = False
@@ -609,6 +631,7 @@ class CommonResponseHandler(BaseResponseHandler):
 
         chat_status = self.get_chat_status(state_machine=state_machine, company_bot=company_bot)
 
+        print("sending bot_question: ", bot_question)
         translated_message = self.translate_message(
             message=bot_question, channel_name=channel_name, step_number=chat_session.current_step,
             language=language, company_bot=company_bot

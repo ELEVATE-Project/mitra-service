@@ -24,7 +24,7 @@ class PreprocessingService:
         # Get appropriate preprocessor
         preprocessor = self.preprocessors.get(state_machine.preprocess_type)
         if not preprocessor:
-            logger.warning(f"No preprocessor found for type: {state_machine.preprocess_type}")
+            logger.info(f"No preprocessor found for type: {state_machine.preprocess_type}")
             return {'action': 'continue', 'prompt': original_prompt}
 
         # Execute preprocessing

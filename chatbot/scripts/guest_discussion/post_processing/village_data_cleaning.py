@@ -180,10 +180,17 @@ def call_llm_for_village_mapping(story: Story, master_villages: Dict[str, List[s
         if cleaned_response and isinstance(cleaned_response, dict):
             village_name = cleaned_response.get('village', 'others')
             district_name = cleaned_response.get('district', 'others')
+
+            mapped_key = ''
+            for key, villages in master_villages.items():
+                if village_name in villages:
+                    mapped_key = key
+                    break
+
             return {
                 'story_id': story.id,
-                'village': village_name,
-                'district': district_name,
+                'village': mapped_key,
+                'district': mapped_key,
                 'original_location': location
             }
 
@@ -327,17 +334,18 @@ def update_stories_in_db(updates: List[Dict[str, Any]]) -> None:
 
 # -------------- MAIN ------------------
 
-def run_village_mapper(story_queryset=None) -> Dict[str, List[int]]:
+def run_village_mapper(story_queryset=None, master_villages=None) -> Dict[str, List[int]]:
     """Main function to run village mapping"""
 
-    # Load master villages data
-    master_villages = load_master_villages()
+    # Use passed master_villages, fallback to loading from file
+    if master_villages is None:
+        master_villages = load_master_villages()
+
     if not master_villages:
         return {"skipped_no_location": [], "failed_village_mapping": []}
 
     # Get stories to process
     if story_queryset is None:
-        # Get all stories that have other_params but no village mapping yet
         stories = Story.objects.filter(
             other_params__isnull=False
         ).exclude(
@@ -482,10 +490,16 @@ def get_village_mapping_stats() -> Dict[str, Any]:
 
 # -------------- USAGE EXAMPLES ------------------
 
-def run_for_specific_stories(story_ids: List[int]) -> Dict[str, List[int]]:
+def run_for_specific_stories(story_ids: List[int], master_villages=None) -> Dict[str, List[int]]:
     """Run village mapping for specific story IDs"""
+    if master_villages is None:
+        master_villages = load_master_villages()
+    
+    if not master_villages:
+        return {"skipped_no_location": [], "failed_village_mapping": []}
+
     stories = Story.objects.filter(id__in=story_ids)
-    summary = run_village_mapper(story_queryset=stories)
+    summary = run_village_mapper(story_queryset=stories, master_villages = master_villages)
 
     # Analyze results
     analyze_skipped_stories(summary['skipped_no_location'])

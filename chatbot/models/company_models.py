@@ -195,7 +195,7 @@ class CompanyChat(models.Model):
     stage = models.CharField(max_length=500, null=True, blank=True)
     other_params = models.JSONField(null=True, blank=True)
     audio_file = models.FileField(upload_to=get_file_upload_path, max_length=1000, null=True, blank=True)
-    file_url = models.CharField(max_length=2000, null=True, blank=True)
+    file_url = models.TextField(null=True, blank=True)
 
     def __str__(self):
         return self.message
@@ -291,7 +291,7 @@ class CompanyStateMachine(models.Model):
     )
     tool_context = models.TextField(null=True, blank=True)
     preprocess_type = models.CharField(
-        max_length=10, choices=PreProcessType.choices, default=PreProcessType.NONE,
+        max_length=100, choices=PreProcessType.choices, default=PreProcessType.NONE,
         help_text="Choose how this stage should be preprocessed: "
         "'Simple Prompt' lets you define a direct prompt, "
         "'Use Preprocess Bot' lets you select a separate bot to handle complex logic."
@@ -309,14 +309,14 @@ class CompanyStateMachine(models.Model):
     )
 
     preprocess_output_mode = models.CharField(
-        max_length=10, choices=PreProcessOutputMode.choices, default=PreProcessOutputMode.NONE,
+        max_length=100, choices=PreProcessOutputMode.choices, default=PreProcessOutputMode.NONE,
         help_text="Define how to use the preprocess output: "
         "'Skip' means use output to decide if stage should be skipped; "
         "'Enrich' means use output in this stage's prompt; "
         "'Custom' means run custom logic on the output."
     )
     postprocess_type = models.CharField(
-        max_length=10, choices=PostProcessType.choices, default=PostProcessType.NONE,
+        max_length=100, choices=PostProcessType.choices, default=PostProcessType.NONE,
         help_text="Choose how this stage should be postprocessed: "
                   "'Simple Prompt' lets you define a direct prompt, "
                   "'Use Postprocess Bot' lets you select a separate bot to handle complex logic."
@@ -334,7 +334,7 @@ class CompanyStateMachine(models.Model):
     )
 
     postprocess_output_mode = models.CharField(
-        max_length=10, choices=PostProcessOutputMode.choices, default=PostProcessOutputMode.NONE,
+        max_length=100, choices=PostProcessOutputMode.choices, default=PostProcessOutputMode.NONE,
         help_text="Define how to use the postprocess output."
     )
 

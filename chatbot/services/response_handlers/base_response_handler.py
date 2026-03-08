@@ -6,7 +6,7 @@ from chatbot.celery_tasks.handle_message import translate_and_send_message
 from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_response_api
 from chatbot.models import ChatSession, ChatStatus, LLMProvider, CompanyBotTypeChoices
 from chatbot.models.company_models import CompanyStateMachine
-from chatbot.models.enums import OperationTypeChoices
+from chatbot.models.enums import OperationTypeChoices, PreProcessOutputMode
 from chatbot.services.postprocessing.postprocessing_service import PostprocessingService
 from chatbot.services.preprocessing.preprocessing_service import PreprocessingService
 import logging
@@ -64,7 +64,7 @@ class BaseResponseHandler(ABC):
         session_id = kwargs['session_id']
         chat_session = ChatSession.objects.get(session=session_id)
         chunks = []
-
+        is_function_call = False
         early_return = self.check_early_return(chat_session, **kwargs)
         if early_return is not None:
             if isinstance(early_return, str):
@@ -72,6 +72,8 @@ class BaseResponseHandler(ABC):
             elif isinstance(early_return, dict):
                 if early_return.get('skip_llm', False):
                     kwargs['skip_llm'] = True
+                else:
+                    is_function_call = self.is_function_call(response=early_return)
             else:
                 return early_return
 
@@ -113,23 +115,25 @@ class BaseResponseHandler(ABC):
 
         # Execute preprocessing if state machine exists
         preprocessing_result = {'action': 'continue', 'prompt': original_prompt}
-        if state_machine:
+        if state_machine and state_machine.preprocess_output_mode not in [
+            PreProcessOutputMode.NONE, PreProcessOutputMode.SKIP, PreProcessOutputMode.MODIFY_QUESTION
+        ]:
             preprocessing_result = self.preprocessing_service.execute_preprocessing(
                 state_machine, original_prompt, **kwargs
             )
-
-        # Handle preprocessing results
-        if preprocessing_result['action'] == 'skip':
-            # Skip the current stage - move to next stage
-            kwargs['skip_llm'] = True
-            kwargs['skip_reason'] = 'preprocessing'
-        elif preprocessing_result['action'] == 'continue':
-            # Update prompt if it was enriched
-            kwargs['system_prompt'] = preprocessing_result.get('prompt', original_prompt)
+            if preprocessing_result['action'] == 'skip':
+                kwargs['skip_llm'] = True
+                kwargs['skip_reason'] = 'preprocessing'
+            elif preprocessing_result['action'] == 'modify_question':
+                kwargs['modified_bot_question'] = preprocessing_result.get('modified_bot_question')
+                kwargs['system_prompt'] = preprocessing_result.get('prompt', original_prompt)
+                logger.info(f"Preprocessing modified bot_question: {kwargs['modified_bot_question']}")
+            elif preprocessing_result['action'] == 'continue':
+                kwargs['system_prompt'] = preprocessing_result.get('prompt', original_prompt)
 
         response = None
         streaming_completed = False
-        if not kwargs.get('skip_llm', False):
+        if not is_function_call and not kwargs.get('skip_llm', False):
             result = self.get_llm_response(**kwargs)
 
             if isinstance(result, tuple):
@@ -159,7 +163,10 @@ class BaseResponseHandler(ABC):
                 else:
                     response = self.default_error_message
 
-        is_function_call = self.is_function_call(response=response) if state_machine else False
+        if is_function_call and response is None:
+            response = early_return
+        if not is_function_call:
+            is_function_call = self.is_function_call(response=response) if state_machine else False
         if is_function_call and state_machine and response:
             postprocessing_result = self.postprocessing_service.execute_postprocessing(
                 state_machine, response, **kwargs
@@ -182,6 +189,10 @@ class BaseResponseHandler(ABC):
 
                     if next_stage_preprocessing_result['action'] == 'skip':
                         kwargs['skip_next_stage_preprocessing'] = True
+                    elif next_stage_preprocessing_result['action'] == 'modify_question':
+                        kwargs['modified_bot_question'] = next_stage_preprocessing_result.get('modified_bot_question')
+                        kwargs['system_prompt'] = next_stage_preprocessing_result.get('prompt', original_prompt)
+                        logger.info(f"Preprocessing modified bot_question: {kwargs['modified_bot_question']}")
 
                 except CompanyStateMachine.DoesNotExist:
                     logger.error(f"Next state machine {next_stage_number} not found for preprocessing")
@@ -198,6 +209,10 @@ class BaseResponseHandler(ABC):
 
                     if next_stage_preprocessing_result['action'] == 'skip':
                         kwargs['skip_next_stage_preprocessing'] = True
+                    elif next_stage_preprocessing_result['action'] == 'modify_question':
+                        kwargs['modified_bot_question'] = next_stage_preprocessing_result.get('modified_bot_question')
+                        kwargs['system_prompt'] = next_stage_preprocessing_result.get('prompt', original_prompt)
+                        logger.info(f"Preprocessing modified bot_question: {kwargs['modified_bot_question']}")
 
                 except CompanyStateMachine.DoesNotExist:
                     logger.info(f"Next state machine {next_stage_number} not found, likely at end of flow")
