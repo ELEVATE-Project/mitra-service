@@ -108,6 +108,12 @@ def save_question_answer_utils(
             )
             logger.info("Saved question with ID %s for session %s", question_id, session)
 
+            existing_answer = CompanyChat.objects.filter(
+                session=session, source_msg_id=answer_id
+            ).first()
+            if existing_answer and existing_answer.file_url and audio_file:
+                audio_file = f"{existing_answer.file_url},{audio_file}" 
+
             CompanyChat.objects.update_or_create(
                 session=session,
                 source_msg_id=answer_id,

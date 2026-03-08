@@ -195,7 +195,7 @@ class CompanyChat(models.Model):
     stage = models.CharField(max_length=500, null=True, blank=True)
     other_params = models.JSONField(null=True, blank=True)
     audio_file = models.FileField(upload_to=get_file_upload_path, max_length=1000, null=True, blank=True)
-    file_url = models.CharField(max_length=2000, null=True, blank=True)
+    file_url = models.TextField(null=True, blank=True)
 
     def __str__(self):
         return self.message
