@@ -30,36 +30,38 @@ def translate_and_send_message(
         else:
             translated_messages = accumulated_message
 
-        async_to_sync(channel_layer.send)(
-            current_channel_name,
-            {
-                "type": "chat.message",
-                "text": {
-                    "msg": translated_messages,
-                    "source": "bot",
-                    "finish_reason": finish_reason,
-                    "step": current_step_number,
-                    "extra_content": extra_content
+        if current_channel_name:
+            async_to_sync(channel_layer.send)(
+                current_channel_name,
+                {
+                    "type": "chat.message",
+                    "text": {
+                        "msg": translated_messages,
+                        "source": "bot",
+                        "finish_reason": finish_reason,
+                        "step": current_step_number,
+                        "extra_content": extra_content
+                    },
                 },
-            },
-        )
+            )
         logger.info(f"Translated message: %s", translated_messages)
         return translated_messages
     else:
         logger.info(f"Sending  accumulated_message: %s", accumulated_message)
-        async_to_sync(channel_layer.send)(
-            current_channel_name,
-            {
-                "type": "chat.message",
-                "text": {
-                    "msg": accumulated_message,
-                    "source": "bot",
-                    "finish_reason": finish_reason,
-                    "step": current_step_number,
-                    "extra_content": extra_content
+        if current_channel_name:
+            async_to_sync(channel_layer.send)(
+                current_channel_name,
+                {
+                    "type": "chat.message",
+                    "text": {
+                        "msg": accumulated_message,
+                        "source": "bot",
+                        "finish_reason": finish_reason,
+                        "step": current_step_number,
+                        "extra_content": extra_content
+                    },
                 },
-            },
-        )
+            )
         return None
 
 def get_language_code_from_route(route):
