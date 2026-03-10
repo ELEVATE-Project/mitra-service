@@ -80,7 +80,7 @@ def handle_custom_translation(company_bot, message_body, source_language, target
         traceback.print_exc()
         return {
             "status": 500,
-            "content": str(e)
+            "content": message_body
         }
 
 def parse_llm_response(response):

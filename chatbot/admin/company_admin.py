@@ -46,6 +46,12 @@ class VoiceProviderAdmin(admin.TabularInline):
         qs = super().get_queryset(request)
         return qs.order_by('type', 'language')
 
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name == "other_params":
+            kwargs["help_text"] = "Leave empty to auto-load provider defaults."
+
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
+
 
 class CompanyAdmin(admin.ModelAdmin):
     list_display = ('name', 'created_at', 'status')

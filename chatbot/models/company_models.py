@@ -1,9 +1,13 @@
 import os
+from copy import deepcopy
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator
 from simple_history.models import HistoricalRecords
+
+from chatbot.constants.voice_provider_defaults import get_provider_defaults, VOICE_PROVIDER_DEFAULTS
 from chatbot.models.enums import (
     CreateStoryChoices, EntityStatus, LLMModel, GenderChoices, ChatStatus,
     FeedbackChoices, CompanyBotTypeChoices, CompanyBotDynamicContextType, CompanyChatSourceChoices,
@@ -242,6 +246,26 @@ class Voice(models.Model):
 
     def __str__(self):
         return f"{self.provider}-{self.type}"
+
+    def save(self, *args, **kwargs):
+
+        if self.other_params == "null":
+            self.other_params = None
+
+        defaults = VOICE_PROVIDER_DEFAULTS.get(self.provider, {}).get(self.type, {})
+
+        if self.pk:
+            old = Voice.objects.filter(pk=self.pk).first()
+
+            # If provider or type changed → reset config
+            if old and (old.provider != self.provider or old.type != self.type):
+                self.other_params = deepcopy(defaults)
+
+        # If new object and params empty → load defaults
+        if self.other_params in (None, {}, "null") and defaults:
+            self.other_params = deepcopy(defaults)
+
+        super().save(*args, **kwargs)
 
     class Meta:
         indexes = [
