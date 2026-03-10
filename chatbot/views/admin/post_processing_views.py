@@ -261,6 +261,7 @@ class PostProcessingView(TemplateView):
                         'output_file': result.get('output_file'),
                         'iterations': result.get('iterations'),
                         'final_count': result.get('final_count'),
+                        'category_counts': result.get('category_counts', {}),
                         'stats': result.get('stats', [])
                     })
                 else:

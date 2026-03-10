@@ -1,4 +1,5 @@
 from typing import List, Dict, Any, Optional, Tuple
+from collections import defaultdict
 from tqdm import tqdm
 from chatbot.models import CompanyBot
 import json
@@ -20,28 +21,83 @@ DEFAULT_MAX_WORKERS = 2
 llm_retry_number = int(os.getenv('LLM_RETRY_NUMBER', '3'))
 AWS_KEY = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+
+# -------------- CATEGORIES ------------------
+CHALLENGE_CATEGORIES = [
+    "Challenges",
+    "Positive Observations",
+    "Advocacy/Activity Logs",
+    "Vague/Incomplete/Nonsense",
+    "Redundant/Repetitive",
+    "Solutions"
+]
 # -------------- CORE FUNCTIONS ------------------
 
-def chunk_data(data: List[str], batch_size: int) -> List[List[str]]:
+def chunk_data(data: List[Dict[str, Any]], batch_size: int) -> List[List[Dict[str, Any]]]:
+    """Split list of challenge dicts into batches."""
     return [data[i:i + batch_size] for i in range(0, len(data), batch_size)]
 
-def build_user_message(batch: List[str]) -> List[Dict[str, Any]]:
-    challenges_text = "\n".join([f"- {challenge}" for challenge in batch])
+
+def build_user_message(batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Build the user message for the LLM with category classification and counts.
+    
+    Each item in batch is a dict with keys: challenge_text, challenge_count, category.
+    """
+    challenges_text = "\n".join(
+        [f"- [count: {item['challenge_count']}] {item['challenge_text']}" for item in batch]
+    )
+    
+    categories_list = ", ".join(CHALLENGE_CATEGORIES)
+    
+    prompt_text = (
+        f"Given the list of challenges below (each with a count representing how many times it appeared), "
+        f"identify and return unique and consolidated challenges.\n\n"
+        f"Rules:\n"
+        f"1. Deduplicate: merge challenges that are semantically identical or very similar.\n"
+        f"2. When merging duplicates, SUM their counts. For example, if challenge A (count: 3) and challenge B (count: 4) are duplicates, the merged result should have count: 7.\n"
+        f"3. Classify each unique challenge into exactly ONE of these categories: {categories_list}\n"
+        f"4. Keep the original text unchanged for the challenge you keep.\n"
+        f"5. Also provide a summary of how many items in the ORIGINAL input batch fell into each category.\n\n"
+        f"Challenges:\n{challenges_text}\n\n"
+        f"Respond ONLY with valid JSON in this exact format:\n"
+        "{\n"
+        '  "unique_challenges": [\n'
+        '    {\n'
+        '      "challenge_text": "original text of unique challenge",\n'
+        '      "challenge_count": <summed count>,\n'
+        '      "category": "<one of the 6 categories>"\n'
+        '    }\n'
+        '  ],\n'
+        '  "categories": [\n'
+        '    { "category_name": "<category>", "category_count": <count of items in this batch belonging to this category> }\n'
+        '  ],\n'
+        '  "reason_for_uniqueness": "Brief explanation of your deduplication process and criteria applied."\n'
+        "}"
+    )
+    
     return [
         {
             'role': 'user',
             'content': [{
-                'text': f"""Given the list of challenges below, identify and return a JSON list of **unique and consolidated** challenges:\n\n{challenges_text}\n\nRespond ONLY in this format:\n[\n  "unique challenge 1",\n  "unique challenge 2"\n]"""
+                'text': prompt_text
             }]
         }
     ]
 
-def call_llm(batch: List[str], index: int) -> Dict[str, Any]:
+def call_llm(batch: List[Dict[str, Any]], index: int) -> Dict[str, Any]:
+    """Call LLM for a batch of challenge dicts and return parsed result.
+    
+    Returns:
+        {
+            "challenges": List[dict] or None,
+            "categories": List[dict] or None
+        }
+    """
     try:
         messages = build_user_message(batch)
         company_bot = CompanyBot.objects.filter(route='/challenges_script').first()
         if not company_bot:
-            return {f"batch_{index}_error": "No Bot Found"}
+            return {"challenges": None, "categories": None}
 
         tool = company_bot.tool_context
         if tool and isinstance(tool, str):
@@ -57,24 +113,23 @@ def call_llm(batch: List[str], index: int) -> Dict[str, Any]:
             tools=tool
         )
         if output:
-            output = get_clean_output(response=output)
+            parsed = get_clean_output(response=output)
+            return parsed if parsed else {"challenges": None, "categories": None}
 
-        key = f"challenge"
-        return {key: output}
+        return {"challenges": None, "categories": None}
     except Exception as e:
         print(f"Error in call_llm for batch {index}: {str(e)}")
-        return {"challenge": None}
+        return {"challenges": None, "categories": None}
 
 
 def process_all_batches(
-    data: List[str],
+    data: List[Dict[str, Any]],
     batch_size: int = DEFAULT_BATCH_SIZE,
     max_workers: int = DEFAULT_MAX_WORKERS,
     save_to_file: bool = False,
     output_file: str = OUTPUT_FILE
 ) -> Dict[str, Any]:
-    """Process all batches and return results dictionary.
-    """
+    """Process all batches and return results dictionary.    """
     chunks = chunk_data(data, batch_size)
     results = {}
 
@@ -93,7 +148,10 @@ def process_all_batches(
         for future in tqdm(as_completed(futures), total=len(futures), desc="Batches Completed"):
             idx, result = future.result()
             batch_key = f"challenge_{idx}"
-            results[batch_key] = result.get("challenge")
+            results[batch_key] = {
+                "challenges": result.get("challenges"),
+                "categories": result.get("categories")
+            }
 
     if save_to_file:
         with open(output_file, "w") as f:
@@ -108,13 +166,13 @@ def run_unique_challenge_processing(
     start: int = 0,
     end: int = None,
     input_file: str = None,
-    input_data: List[str] = None,
+    input_data: List[Dict[str, Any]] = None,
     batch_size: int = DEFAULT_BATCH_SIZE,
     max_workers: int = DEFAULT_MAX_WORKERS,
     save_to_file: bool = False,
     output_file: str = OUTPUT_FILE,
     second_output_file: str = SECOND_OUTPUT_FILE
-) -> Tuple[Dict[str, Any], List[str]]:
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """Run unique challenge processing.
     """
     # Get challenges from input_data or input_file
@@ -122,15 +180,13 @@ def run_unique_challenge_processing(
         challenges = input_data
     elif input_file:
         with open(input_file, "r") as f:
-            challenges = json.load(f)
+            raw = json.load(f)
+        challenges = _ensure_challenge_dicts(raw)
     else:
         input_file = INPUT_FILE
         with open(input_file, "r") as f:
-            challenges = json.load(f)
-
-    # Extract challenge strings if input is list of dicts
-    if isinstance(challenges, list) and all(isinstance(c, dict) and 'challenge' in c for c in challenges):
-        challenges = [c['challenge'] for c in challenges]
+            raw = json.load(f)
+        challenges = _ensure_challenge_dicts(raw)
 
     total = len(challenges)
     end = end if end is not None else total
@@ -147,21 +203,48 @@ def run_unique_challenge_processing(
         output_file=output_file
     )
 
-    # Convert to flat list
-    flat_challenges = convert_challenges_to_flat_list(
+    # Combine batch results
+    combined = combine_batch_results(
         batch_results=batch_results,
         save_to_file=save_to_file,
         save_file_path=second_output_file
     )
     
-    return batch_results, flat_challenges
+    return batch_results, combined
+
+
+def _ensure_challenge_dicts(data: list) -> List[Dict[str, Any]]:
+    """Convert raw data (strings or dicts) into the standard challenge dict format."""
+    result = []
+    if not isinstance(data, list):
+        return result
+    for item in data:
+        if isinstance(item, str) and item.strip():
+            result.append({
+                'challenge_text': item.strip(),
+                'challenge_count': 1,
+                'category': ''
+            })
+        elif isinstance(item, dict):
+            # Support both old {'challenge': '...'} and new {'challenge_text': '...'} formats
+            text = item.get('challenge_text') or item.get('challenge') or ''
+            if isinstance(text, str) and text.strip():
+                result.append({
+                    'challenge_text': text.strip(),
+                    'challenge_count': item.get('challenge_count', 1),
+                    'category': item.get('category', '')
+                })
+    return result
 
 
 
 def retry_if_result_none(result):
     return result is None
 
-def get_clean_output(response):
+
+def get_clean_output(response) -> Optional[Dict[str, Any]]:
+    """Parse LLM response and extract challenges + categories.
+    """
     try:
         if isinstance(response, str):
             try:
@@ -169,32 +252,32 @@ def get_clean_output(response):
             except Exception:
                 return None
 
-        if isinstance(response, list):
-            cleaned = []
-
-            for item in response:
-                if isinstance(item, str):
-                    cleaned.append(item.strip())
-
-                elif isinstance(item, dict) and "challenge" in item:
-                    val = item.get("challenge")
-                    if isinstance(val, str) and val.strip():
-                        cleaned.append(val.strip())
-
-            return cleaned if cleaned else None
-
+        # Unwrap tool-call wrappers
         if isinstance(response, dict):
             if 'type' in response and 'value' in response:
                 return get_clean_output(response.get('value'))
             
-            # Extract from common parameter keys
-            extracted = (
-                response.get("parameters")
-                or response.get("input")
-                or response.get("unique_challenges")
-            )
-
-            return get_clean_output(extracted)
+            # Unwrap common wrapper keys
+            if 'parameters' in response:
+                return get_clean_output(response.get('parameters'))
+            if 'input' in response and 'unique_challenges' not in response:
+                return get_clean_output(response.get('input'))
+            
+            # --- Main parsing: expect {unique_challenges: [...], categories: [...]} ---
+            raw_challenges = response.get('unique_challenges')
+            raw_categories = response.get('categories')
+            
+            if raw_challenges is not None:
+                challenges = _parse_challenge_items(raw_challenges)
+                categories = _parse_category_items(raw_categories)
+                if challenges:
+                    return {"challenges": challenges, "categories": categories}
+        
+        # Handle case where LLM returns a plain list (backward compat)
+        if isinstance(response, list):
+            challenges = _parse_challenge_items(response)
+            if challenges:
+                return {"challenges": challenges, "categories": []}
 
         return None
     except Exception as e:
@@ -202,53 +285,119 @@ def get_clean_output(response):
         return None
 
 
+def _parse_challenge_items(data) -> List[Dict[str, Any]]:
+    """Parse a list of challenge items from LLM output.
+    """
+    if not isinstance(data, list):
+        return []
+    
+    cleaned = []
+    for item in data:
+        if isinstance(item, dict):
+            text = item.get('challenge_text', '')
+            if isinstance(text, str) and text.strip():
+                cleaned.append({
+                    'challenge_text': text.strip(),
+                    'challenge_count': item.get('challenge_count', 1),
+                    'category': item.get('category', '')
+                })
+        elif isinstance(item, str) and item.strip():
+            # Backward compat: plain string → wrap as dict with count 1
+            cleaned.append({
+                'challenge_text': item.strip(),
+                'challenge_count': 1,
+                'category': ''
+            })
+    return cleaned
 
-def convert_challenges_to_flat_list(
+
+def _parse_category_items(data) -> List[Dict[str, Any]]:
+    """Parse category count items from LLM output."""
+    if not isinstance(data, list):
+        return []
+    
+    cleaned = []
+    for item in data:
+        if isinstance(item, dict):
+            name = item.get('category_name', '')
+            count = item.get('category_count', 0)
+            if name:
+                cleaned.append({
+                    'category_name': str(name),
+                    'category_count': int(count) if count else 0
+                })
+    return cleaned
+
+
+
+def combine_batch_results(
     batch_results: Dict[str, Any] = None,
     output_file_path: str = OUTPUT_FILE,
     save_to_file: bool = False,
     save_file_path: str = SECOND_OUTPUT_FILE
-) -> List[str]:
+) -> Dict[str, Any]:
     """
-    Convert batch-wise LLM output into a single flat list of strings.
+    Combine batch-wise LLM output into a single result.
     """
-    flat_challenges = []
+    all_challenges = []
+    category_counts = defaultdict(int)
     
     # Use provided batch_results or load from file
     if batch_results is not None:
         challenges_dict = batch_results
     else:
-        # Check if output file exists
         if not os.path.exists(output_file_path):
             print(f"⚠️ Warning: Output file {output_file_path} not found.")
-            return flat_challenges
+            return {"challenges": [], "category_counts": {}}
 
-        # Load batch output
         try:
             with open(output_file_path, "r") as f:
                 challenges_dict = json.load(f)
         except Exception as e:
             print(f"❌ Error reading {output_file_path}: {e}")
-            return flat_challenges
+            return {"challenges": [], "category_counts": {}}
 
-    # Flatten
-    for _, challenges_list in challenges_dict.items():
+    # Combine challenges and aggregate category counts from all batches
+    for _, batch_data in challenges_dict.items():
+        if not isinstance(batch_data, dict):
+            continue
+        
+        # Collect challenges
+        challenges_list = batch_data.get("challenges")
         if isinstance(challenges_list, list):
             for challenge in challenges_list:
-                if isinstance(challenge, str) and challenge.strip():
-                    flat_challenges.append(challenge.strip())
+                if isinstance(challenge, dict) and challenge.get('challenge_text', '').strip():
+                    all_challenges.append({
+                        'challenge_text': challenge['challenge_text'].strip(),
+                        'challenge_count': challenge.get('challenge_count', 1),
+                        'category': challenge.get('category', '')
+                    })
+        
+        # Aggregate category counts
+        categories_list = batch_data.get("categories")
+        if isinstance(categories_list, list):
+            for cat in categories_list:
+                if isinstance(cat, dict) and cat.get('category_name'):
+                    category_counts[cat['category_name']] += cat.get('category_count', 0)
 
-    # Save flat list if requested
+    # Save if requested
     if save_to_file:
         try:
+            save_data = {
+                "challenges": all_challenges,
+                "category_counts": dict(category_counts)
+            }
             with open(save_file_path, "w") as f:
-                json.dump(flat_challenges, f, indent=2)
-            print(f"✅ Converted challenges saved to {save_file_path}")
+                json.dump(save_data, f, indent=2)
+            print(f"✅ Combined results saved to {save_file_path}")
         except Exception as e:
             print(f"❌ Error saving file: {e}")
 
-    print("Len flat_challenges:", len(flat_challenges))
-    return flat_challenges
+    print(f"Combined challenges count: {len(all_challenges)}")
+    return {
+        "challenges": all_challenges,
+        "category_counts": dict(category_counts)
+    }
 
 
 if __name__ == "__main__":
