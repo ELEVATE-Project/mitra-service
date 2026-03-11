@@ -80,5 +80,5 @@ def call_ai4bharat_transliterate_api(source_language, target_language, message_b
         traceback.print_exc()
         return {
             'status': 500,
-            'content': f"Error during transliteration API call: {str(e)}"
+            'content': message_body
         }

@@ -10,7 +10,9 @@ from django.shortcuts import render, redirect
 from django.http import HttpResponse
 from django.db import transaction
 from chatbot.models import CompanyBot, Voice, CompanyStateMachine, Company, Profile, ProfileType, BotVernacular
+import logging
 
+logger = logging.getLogger('django')
 
 def generate_template(format_type):
     """Generate empty template files for import"""
@@ -184,91 +186,122 @@ def import_bots(request):
 
 def import_bots_json(request, uploaded_file):
     """Import from JSON file"""
-    data = json.load(uploaded_file)
-    user_email = request.user.email
-    profile = Profile.objects.filter(email=user_email).first()
+    try:
+        data = json.load(uploaded_file)
+        user_email = request.user.email
+        profile = Profile.objects.filter(email=user_email).first()
 
-    created_count = 0
-    updated_count = 0
+        created_count = 0
+        updated_count = 0
+        bot_import_payloads = []
 
-    with transaction.atomic():
-        for bot_data in data:
-            company_slug = bot_data.pop('company_slug')
-            try:
-                company = Company.objects.get(slug=company_slug)
-            except Company.DoesNotExist:
-                raise ValueError(f"Company with slug '{company_slug}' not found")
+        with transaction.atomic():
+            # Pass 1: Create/update all bots and clear inline records.
+            for bot_data in data:
+                company_slug = bot_data.pop('company_slug')
+                try:
+                    company = Company.objects.get(slug=company_slug)
+                except Company.DoesNotExist:
+                    raise ValueError(f"Company with slug '{company_slug}' not found")
 
-            # Check permissions
-            if not request.user.is_superuser:
-                if not profile or profile.profile_type != ProfileType.MODERATOR or profile.company != company:
-                    raise PermissionError(f"You don't have permission to import bots for company {company_slug}")
+                # Check permissions
+                if not request.user.is_superuser:
+                    if not profile or profile.profile_type != ProfileType.MODERATOR or profile.company != company:
+                        raise PermissionError(f"You don't have permission to import bots for company {company_slug}")
 
-            # Extract inline data
-            voices_data = bot_data.pop('voices', [])
-            state_machines_data = bot_data.pop('state_machines', [])
-            bot_vernacular_data = bot_data.pop('bot_vernaculars', [])
+                # Extract inline data
+                voices_data = bot_data.pop('voices', [])
+                state_machines_data = bot_data.pop('state_machines', [])
+                bot_vernacular_data = bot_data.pop('bot_vernaculars', [])
 
-            # Create or update bot
-            bots = CompanyBot.objects.filter(
-                route=bot_data['route'],
-                company=company
-            )
-
-            if bots.exists():
-                bot = bots.first()
-                for key, value in bot_data.items():
-                    setattr(bot, key, value)
-                bot.save()
-                updated_count += 1
-            else:
-                bot = CompanyBot.objects.create(
-                    company=company,
-                    **bot_data
+                # Create or update bot
+                bots = CompanyBot.objects.filter(
+                    route=bot_data['route'],
+                    company=company
                 )
-                created_count += 1
 
-            # Delete existing inline records
-            Voice.objects.filter(company_bot=bot).delete()
-            CompanyStateMachine.objects.filter(company_bot=bot).delete()
-            BotVernacular.objects.filter(company_bot=bot).delete()
+                if bots.exists():
+                    bot = bots.first()
+                    for key, value in bot_data.items():
+                        setattr(bot, key, value)
+                    bot.save()
+                    updated_count += 1
+                else:
+                    bot = CompanyBot.objects.create(
+                        company=company,
+                        **bot_data
+                    )
+                    created_count += 1
 
-            # Create voices
-            for voice_data in voices_data:
-                Voice.objects.create(company_bot=bot, **voice_data)
+                # Delete existing inline records
+                Voice.objects.filter(company_bot=bot).delete()
+                CompanyStateMachine.objects.filter(company_bot=bot).delete()
+                BotVernacular.objects.filter(company_bot=bot).delete()
 
-            # Create state machines
-            for sm_data in state_machines_data:
-                # Handle bot references
-                preprocess_bot_route = sm_data.pop('preprocess_bot_route', None)
-                postprocess_bot_route = sm_data.pop('postprocess_bot_route', None)
+                bot_import_payloads.append(
+                    {
+                        'bot': bot,
+                        'company': company,
+                        'voices_data': voices_data,
+                        'state_machines_data': state_machines_data,
+                        'bot_vernacular_data': bot_vernacular_data,
+                    }
+                )
 
-                preprocess_bot = None
-                if preprocess_bot_route:
-                    try:
+            # Pass 2: Create inline records once all bots are available.
+            for payload in bot_import_payloads:
+                bot = payload['bot']
+                company = payload['company']
+                voices_data = payload['voices_data']
+                state_machines_data = payload['state_machines_data']
+                bot_vernacular_data = payload['bot_vernacular_data']
+
+                # Create voices
+                for voice_data in voices_data:
+                    Voice.objects.create(company_bot=bot, **voice_data)
+
+                # Create state machines
+                for sm_data in state_machines_data:
+                    sm_payload = sm_data.copy()
+
+                    # Handle bot references
+                    preprocess_bot_route = sm_payload.pop('preprocess_bot_route', None)
+                    postprocess_bot_route = sm_payload.pop('postprocess_bot_route', None)
+
+                    preprocess_bot = None
+                    if preprocess_bot_route:
                         preprocess_bot = CompanyBot.objects.filter(
                             route=preprocess_bot_route, company=company
                         ).first()
-                    except CompanyBot.DoesNotExist:
-                        pass
+                        if not preprocess_bot:
+                            raise ValueError(
+                                f"Preprocess bot route '{preprocess_bot_route}' not found for "
+                                f"company '{company.slug}' while importing bot '{bot.route}'."
+                            )
 
-                postprocess_bot = None
-                if postprocess_bot_route:
-                    try:
+                    postprocess_bot = None
+                    if postprocess_bot_route:
                         postprocess_bot = CompanyBot.objects.filter(
                             route=postprocess_bot_route, company=company
                         ).first()
-                    except CompanyBot.DoesNotExist:
-                        pass
+                        if not postprocess_bot:
+                            raise ValueError(
+                                f"Postprocess bot route '{postprocess_bot_route}' not found for "
+                                f"company '{company.slug}' while importing bot '{bot.route}'."
+                            )
 
-                CompanyStateMachine.objects.create(
-                    company_bot=bot,
-                    preprocess_bot=preprocess_bot,
-                    postprocess_bot=postprocess_bot,
-                    **sm_data
-                )
-            # Create bot_vernacular
-            for bv_data in bot_vernacular_data:
-                BotVernacular.objects.create(company_bot=bot, **bv_data)
+                    CompanyStateMachine.objects.create(
+                        company_bot=bot,
+                        preprocess_bot=preprocess_bot,
+                        postprocess_bot=postprocess_bot,
+                        **sm_payload
+                    )
+                # Create bot_vernacular
+                for bv_data in bot_vernacular_data:
+                    BotVernacular.objects.create(company_bot=bot, **bv_data)
 
-    return {'created': created_count, 'updated': updated_count}
+        return {'created': created_count, 'updated': updated_count}
+
+    except Exception as e:
+        logger.error(f"Error importing bots: {e}", exc_info=True)
+        return {'created': 0, 'updated': 0}

@@ -4325,7 +4325,7 @@ wheels = [
 
 [[package]]
 name = "sarvamai"
-version = "0.1.22"
+version = "0.1.26"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
@@ -4334,9 +4334,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "websockets" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ca/39/9d84caa25df3ebd309b39f34c04936bc5d4db774cd43e84866b2a1bf2266/sarvamai-0.1.22.tar.gz", hash = "sha256:1e30d9ab63d801d0bfd0768bdc05e5a9445cee4a511da8b6af28104f4e5301f9", size = 89326, upload-time = "2025-11-27T20:07:01.733Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d7/31/13f65e8533b667514e1cfe838d12a14494cbc5943fd8f0c101305127459b/sarvamai-0.1.26.tar.gz", hash = "sha256:d51a213c27feb33d65f5b71e4882dcdb873dc5e0d720390b7ba18d1bdeec2471", size = 113050, upload-time = "2026-03-06T16:40:36.647Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e5/e8/beeea8c43e29f2f60bb12487fee62636830fdbb326f9a0892c2a61b6a422/sarvamai-0.1.22-py3-none-any.whl", hash = "sha256:bbb304e97f17c5a162d038575aadc096346a7c81aa94e2edcd0d1b179c9e581d", size = 177637, upload-time = "2025-11-27T20:07:00.708Z" },
+    { url = "https://files.pythonhosted.org/packages/76/c9/c03a807ace9cafbfe26418be995e4959142a55313c9f26564586e111f31d/sarvamai-0.1.26-py3-none-any.whl", hash = "sha256:39e79ba0932f4501a2aa28f84fd2de64d34fc9a7af2b0d4ead1efa617517b3bd", size = 229057, upload-time = "2026-03-06T16:40:35.584Z" },
 ]
 
 [[package]]
@@ -4544,7 +4544,7 @@ requires-dist = [
     { name = "redis", specifier = ">=7.1.0" },
     { name = "requests", specifier = ">=2.32.5" },
     { name = "retrying", specifier = ">=1.4.2" },
-    { name = "sarvamai", specifier = ">=0.1.22" },
+    { name = "sarvamai", specifier = "==0.1.26" },
     { name = "sentry-sdk", specifier = ">=2.51.0" },
     { name = "tablib", specifier = ">=3.9.0" },
     { name = "tabulate", specifier = ">=0.9.0" },

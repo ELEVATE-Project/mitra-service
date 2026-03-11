@@ -119,12 +119,6 @@ class SarvamLanguageService:
 
         other = getattr(voice_provider, "other_params", {}) or {}
 
-        numerals_format = other.get("numerals_format")
-        spoken_form = other.get("spoken_form")
-        spoken_form_numerals_language = other.get(
-            "spoken_form_numerals_language"
-        )
-
         def base_kwargs_builder(chunk):
             return {
                 "input": chunk,
@@ -140,9 +134,9 @@ class SarvamLanguageService:
                 chunks=chunks,
                 base_kwargs_builder=base_kwargs_builder,
                 extra_kwargs={
-                    "numerals_format": numerals_format,
-                    "spoken_form": spoken_form,
-                    "spoken_form_numerals_language": spoken_form_numerals_language,
+                    "numerals_format": other.get("numerals_format"),
+                    "spoken_form": other.get("spoken_form"),
+                    "spoken_form_numerals_language": other.get("spoken_form_numerals_language"),
                 },
             ),
         }
@@ -169,8 +163,10 @@ class SarvamLanguageService:
                 chunks=chunks,
                 base_kwargs_builder=base_kwargs_builder,
                 extra_kwargs={
+                    "model": other.get("model"),
                     "mode": other.get("mode"),
                     "output_script": other.get("output_script"),
+                    "numerals_format": other.get("numerals_format"),
                 },
             ),
         }

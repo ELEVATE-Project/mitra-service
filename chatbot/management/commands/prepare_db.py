@@ -17,6 +17,7 @@ Environment Variables:
 import os
 import re
 from django.core.management.base import BaseCommand, CommandError
+from django.core.management import call_command
 from django.db import connection
 from chatbot.models.company_models import Company
 from chatbot.models.profile_models import Profile
@@ -51,6 +52,10 @@ class Command(BaseCommand):
         schema_errors = self._create_schemas(options)
         total_errors += schema_errors
 
+        migration_errors = self._migrate_database()
+        total_errors += migration_errors
+
+
         # Step 2: Create/update Company
         company_errors = self._setup_company()
         total_errors += company_errors
@@ -80,11 +85,11 @@ class Command(BaseCommand):
         Returns:
             int: Number of errors encountered
         """
-        self.stdout.write(self.style.HTTP_INFO('\n[1/3] Creating PostgreSQL Schemas'))
+        self.stdout.write(self.style.HTTP_INFO('\n[1/4] Creating PostgreSQL Schemas'))
         self.stdout.write('-' * 60)
 
         # Get schemas from command argument or environment variable
-        schemas_str = options.get('schemas') or os.environ.get('POSTGRES_SCHEMAS', '')
+        schemas_str = options.get('schemas') or os.environ.get('POSTGRES_SCHEMAS', '') or ['shikshalokam']
         
         if not schemas_str:
             self.stdout.write(
@@ -159,6 +164,36 @@ class Command(BaseCommand):
         self.stdout.write(f'\n  Summary: Created: {created_count}, Skipped: {skipped_count}, Errors: {error_count}')
         return error_count
 
+    def _migrate_database(self):
+        """
+        Migrate the database by running Django's migrate command programmatically.
+
+        Returns:
+            int: Number of errors encountered (0 or 1)
+        """
+        self.stdout.write(self.style.HTTP_INFO('\n[2/4] Migrating the database'))
+        self.stdout.write('-' * 60)
+
+        try:
+            self.stdout.write('  Running migrations...\n')
+
+            call_command('migrate', interactive=False, verbosity=1)
+
+            self.stdout.write(
+                self.style.SUCCESS(
+                    '  ✓ Database migrations applied successfully'
+                )
+            )
+            return 0
+
+        except Exception as e:
+            self.stdout.write(
+                self.style.ERROR(
+                    f'  ✗ Error migrating database: {str(e)}'
+                )
+            )
+            return 1
+
     def _setup_company(self):
         """
         Create or update Company record with id=1
@@ -166,7 +201,7 @@ class Command(BaseCommand):
         Returns:
             int: Number of errors encountered (0 or 1)
         """
-        self.stdout.write(self.style.HTTP_INFO('\n[2/3] Setting up Company Record'))
+        self.stdout.write(self.style.HTTP_INFO('\n[3/4] Setting up Company Record'))
         self.stdout.write('-' * 60)
 
         try:
@@ -222,7 +257,7 @@ class Command(BaseCommand):
         Returns:
             int: Number of errors encountered (0 or 1)
         """
-        self.stdout.write(self.style.HTTP_INFO('\n[3/3] Setting up Admin Profile'))
+        self.stdout.write(self.style.HTTP_INFO('\n[4/4] Setting up Admin Profile'))
         self.stdout.write('-' * 60)
 
         try:
@@ -308,17 +343,17 @@ class Command(BaseCommand):
         Returns:
             int: Number of errors encountered (0 or 1)
         """
-        self.stdout.write(self.style.HTTP_INFO('\n[3/3] Setting up Admin Profile'))
+        self.stdout.write(self.style.HTTP_INFO('\n[4/4] Setting up Null User Profile'))
         self.stdout.write('-' * 60)
 
         try:
             # Get environment variable
-            admin_email = "null@shikshalokam.org"
-            admin_first_name = 'Null User'
+            null_user_email = "null@shikshalokam.org"
+            null_user_first_name = 'Null User'
             company_name = os.environ.get('COMPANY_SLUG', 'shikshalokamstaging')
 
-            self.stdout.write(f'  Admin Email: {admin_email}')
-            self.stdout.write(f'  Admin First Name: {admin_first_name}\n')
+            self.stdout.write(f'  Null User Email: {null_user_email}')
+            self.stdout.write(f'  Null User First Name: {null_user_first_name}\n')
 
             # Ensure Company with id=1 exists
             try:
@@ -333,22 +368,22 @@ class Command(BaseCommand):
 
             # Check if Profile with id=1 exists
             try:
-                profile = Profile.objects.get(email=admin_email)
+                profile = Profile.objects.get(email=null_user_email)
                 # Update existing profile
-                profile.first_name = admin_first_name
-                profile.email = admin_email
+                profile.first_name = null_user_first_name
+                profile.email = null_user_email
                 profile.company = company
                 profile.password = "grit@123"
                 profile.save()
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f'  ✓ Updated Profile ({admin_email}): {admin_email}'
+                        f'  ✓ Updated Profile ({null_user_email}): {null_user_email}'
                     )
                 )
             except Profile.DoesNotExist:
                 profile = Profile.objects.create(
-                    first_name=admin_first_name,
-                    email=admin_email,
+                    first_name=null_user_first_name,
+                    email=null_user_email,
                     company=company,
                     status=EntityStatus.ACTIVE,
                     profile_type=ProfileType.USER,
@@ -373,7 +408,7 @@ class Command(BaseCommand):
                 )
                 self.stdout.write(
                     self.style.SUCCESS(
-                        f'  ✓ Created Profile (id=1): {admin_email}'
+                        f'  ✓ Created Profile : {null_user_email}'
                     )
                 )
 
