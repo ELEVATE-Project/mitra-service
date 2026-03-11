@@ -1,3 +1,5 @@
+from pygments.lexer import combined
+
 from chatbot.models import (Profile, CompanyChat, ChatSession, ChatStatus, Voice, VoiceType, SessionFlowName, BotVernacular, StoryTranslation, CompanyBot)
 from chatbot.models.company_models import Flow
 from chatbot.serializer.profile_serializer import ProfileSerializer
@@ -289,24 +291,26 @@ def generate_story(profile_id, session, access_token, flow, language='en'):
         logger.info(f"STORY response_json_content: %s", response_json_content)
         logger.info(f"STORY response_json_story: %s", response_json_story)
 
-        validate_content_prompt, validate_story_prompt = get_validation_prompt(
-            response_json_story=response_json_story, validate_bot=validate_bot,
-            response_json_content=response_json_content, tag_context=tag_context, project_data=project_data,
-            profile=profile_data
-        )
-
-        tool_content, tool_story = get_tool_values(company_bot=validate_bot)
-
-        if company_bot.provider != validate_bot.provider:
-            messages = get_guided_chat(company_bot=validate_bot, company_chats=company_chats, intro=intro_to_pass)
-
-        response_json_story, combined_reason = asyncio.run(
-            validate_story_llm(
-                formatted_content_prompt=validate_content_prompt, formatted_story_prompt=validate_story_prompt,
-                messages=messages, tool_content=tool_content, tool_story=tool_story, company_bot=validate_bot,
-                flow=flow
+        combined_reason = None
+        if validate_bot:
+            validate_content_prompt, validate_story_prompt = get_validation_prompt(
+                response_json_story=response_json_story, validate_bot=validate_bot,
+                response_json_content=response_json_content, tag_context=tag_context, project_data=project_data,
+                profile=profile_data
             )
-        )
+
+            tool_content, tool_story = get_tool_values(company_bot=validate_bot)
+
+            if company_bot.provider != validate_bot.provider:
+                messages = get_guided_chat(company_bot=validate_bot, company_chats=company_chats, intro=intro_to_pass)
+
+            response_json_story, combined_reason = asyncio.run(
+                validate_story_llm(
+                    formatted_content_prompt=validate_content_prompt, formatted_story_prompt=validate_story_prompt,
+                    messages=messages, tool_content=tool_content, tool_story=tool_story, company_bot=validate_bot,
+                    flow=flow
+                )
+            )
 
         logger.info("VALIDATION STORY response_json_story: {story}".format(story=response_json_story))
 
@@ -376,7 +380,7 @@ def get_story_company_bot_simple(flow):
         company_story_bot = company_flow.story_bot
         company_story_validation_bot = company_flow.story_validation_bot
 
-        if not company_story_bot or not company_story_validation_bot:
+        if not company_story_bot:
             raise NotFound(detail=f"Story bot not configured for the flow: {flow}")
 
         return company_story_bot, company_story_validation_bot

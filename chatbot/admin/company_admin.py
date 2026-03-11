@@ -17,6 +17,7 @@ from django.contrib import messages
 from django.urls import path
 from django.http import HttpResponseRedirect
 from django.urls import reverse
+from django.forms import ModelForm, MultipleChoiceField, CheckboxSelectMultiple
 
 class CompanyStateMachineAdmin(admin.TabularInline):
     model = CompanyStateMachine
@@ -402,10 +403,54 @@ class ImageConfigurationAdmin(admin.ModelAdmin):
         return f"{obj.image_size / 1048576:.2f} MB"
     get_image_size_mb.short_description = 'Max Image Size'
 
+LANGUAGE_CHOICES = [
+    ("en", "English"),
+    ("hi", "Hindi"),
+    ("kn", "Kannada"),
+    ("te", "Telugu"),
+]
+
+
+class FlowAdminForm(ModelForm):
+    languages = MultipleChoiceField(
+        choices=LANGUAGE_CHOICES,
+        required=False,
+        widget=CheckboxSelectMultiple,
+        help_text="Select one or more supported languages."
+    )
+
+    class Meta:
+        model = Flow
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        value = self.instance.languages if self.instance and self.instance.pk else None
+        self.fields["languages"].initial = value or ["en", "hi", "kn", "te"]
+
+    def clean_languages(self):
+        value = self.cleaned_data.get("languages", [])
+
+        if not isinstance(value, list):
+            raise ValidationError("Languages must be a list of language codes.")
+
+        if len(value) != len(set(value)):
+            raise ValidationError("Language codes must be unique.")
+
+        allowed = {code for code, _ in LANGUAGE_CHOICES}
+        invalid = [code for code in value if code not in allowed]
+        if invalid:
+            raise ValidationError(f"Invalid language codes: {', '.join(invalid)}")
+
+        return value
+
 
 @admin.register(Flow)
 class FlowAdmin(SimpleHistoryAdmin):
     """Admin interface for Flow model."""
+    form = FlowAdminForm
+
     list_display = (
         'flow_name', 'flow_route', 'bot', 'active', 'hidden', 
         'user_type', 'created_at'
