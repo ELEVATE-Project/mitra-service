@@ -362,7 +362,6 @@ class VoiceProvider(models.TextChoices):
     Used for transcription and voice synthesis services.
     """
     GOOGLE = 'GOOGLE', _('GOOGLE')
-    GOOGLE_V1 = 'GOOGLE_V1', _('GOOGLE v1 STT')
     AI4Bharat = 'AI4Bharat', _('AI4Bharat')
     OPENAI_WHISPER = 'OPENAI_WHISPER', _('OpenAI Whisper')
     SARVAM = 'Sarvam', _('Sarvam')

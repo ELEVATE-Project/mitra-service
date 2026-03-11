@@ -2,6 +2,7 @@ import json
 import traceback
 import logging
 import re
+from chatbot.exceptions.story_exceptions import StoryDomainError, StoryValidationError, StoryError, StorySaveError
 from chatbot.models import StoryStatusChoices, Story, Voice, VoiceType, StoryTranslation
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.story_llama_utils import translate_field
@@ -129,7 +130,7 @@ def save_chaupal_report(
         is_within_domain = response_json_story.get('is_within_domain', True)
 
         if not is_within_domain:
-            raise ValueError("Story content is outside allowed domain")
+            raise StoryDomainError()
 
         # Extract and translate fields to English
         raw_title = response_json_story.get('title', '')
@@ -249,7 +250,7 @@ def save_chaupal_report(
             english_challenges_faced = [english_challenges_faced]
 
         if not isinstance(english_challenges_faced, list) or not english_challenges_faced:
-            raise ValueError("Story Challenges cannot be empty.")
+            raise StoryValidationError()
 
 
         other_params = {
@@ -313,10 +314,14 @@ def save_chaupal_report(
             )
 
         return story, None
+
+    except StoryError:
+        raise
+
     except Exception as e:
         logger.error('Error Occurred: %s', e, exc_info=True)
         traceback.print_exc()
-        raise Exception("Failed to save chaupal report")
+        raise StorySaveError()
 
 
 def create_chaupal_translation(story, language, english_title, english_challenges_faced, english_solutions_discussed,

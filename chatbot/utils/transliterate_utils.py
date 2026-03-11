@@ -1,5 +1,6 @@
-from chatbot.models import VoiceProvider, VoiceType, LanguageMapping
+from chatbot.models import VoiceProvider, VoiceType, LanguageMapping, CompanyBot
 from chatbot.translate.ai4Bharat.transliterate import call_ai4bharat_transliterate_api
+from chatbot.translate.custom.custom_llm import handle_custom_translation
 from chatbot.translate.sarvam.sarvam import SarvamLanguageService
 from chatbot.utils.audio_provider_utils import get_voice_provider
 
@@ -25,6 +26,14 @@ def transliterate_text(
                 target_lang=LanguageMapping.get_mapped_language(target_language),
                 voice_provider=voice_provider
             )
+        elif voice_provider.provider == VoiceProvider.CUSTOM_LLM:
+            other = getattr(voice_provider, "other_params", {}) or {}
+            route = other.get('route', "/transliterate_text")
+            company_bot = CompanyBot.objects.filter(route=route).first()
+            response = handle_custom_translation(
+                message_body=message_body, source_language=LanguageMapping.get_mapped_language(source_language),
+                target_language=LanguageMapping.get_mapped_language(target_language), company_bot=company_bot
+            )
         else:
             return {
                 'status': 500,
@@ -34,7 +43,7 @@ def transliterate_text(
     except Exception as e:
         return {
             'status': 500,
-            'content': str(e)
+            'content': message_body
         }
 
 

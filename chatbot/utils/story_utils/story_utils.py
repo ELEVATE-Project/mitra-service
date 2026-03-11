@@ -1,3 +1,5 @@
+from pygments.lexer import combined
+
 from chatbot.models import (Profile, CompanyChat, ChatSession, ChatStatus, Voice, VoiceType, SessionFlowName, BotVernacular, StoryTranslation, CompanyBot)
 from chatbot.models.company_models import Flow
 from chatbot.serializer.profile_serializer import ProfileSerializer
@@ -6,7 +8,6 @@ from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_
 from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story, save_project_story
 from chatbot.utils.story_llama_utils import translate_field
 from chatbot.utils.story_utils.common.generic_story_tasks import save_generic_story
-from chatbot.utils.story_utils.format_utils import get_formatted_story
 from chatbot.utils.story_utils.get_story_prompts import get_creation_promt, get_tool_values, get_validation_prompt
 from chatbot.utils.story_utils.story_llm import generate_story_llm, validate_story_llm
 from rest_framework.exceptions import NotFound
@@ -198,18 +199,39 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
 
     except Exception as e:
         traceback.print_exc()
+
+        error_type = getattr(e, "code", "generic_error")
+
         if not company_bot:
             profile = Profile.objects.filter(id=profile_id).first()
             company_bot, validate_bot = get_story_company_bot(profile=profile, flow=flow)
 
         bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
-        error_message = bot_vernacular.error_message if bot_vernacular and bot_vernacular.error_message \
-            else "Please try again!"
+        error_message = get_bot_error_message(bot_vernacular, error_type)
         if voice_provider and language != 'en':
             error_message = translate_field(
                 voice_provider=voice_provider, message_body=error_message, target_language=language
             )
         return "", "", error_message
+
+
+def get_bot_error_message(bot_vernacular, error_type):
+
+    if not bot_vernacular or not bot_vernacular.error_message:
+        return "Please try again!"
+
+    raw = bot_vernacular.error_message
+
+    if isinstance(raw, dict):
+        data = raw
+    else:
+        try:
+            import json
+            data = json.loads(raw)
+        except Exception:
+            return raw
+
+    return data.get(error_type) or data.get("generic_error") or "Please try again!"
 
 
 def generate_story(profile_id, session, access_token, flow, language='en'):
@@ -269,24 +291,26 @@ def generate_story(profile_id, session, access_token, flow, language='en'):
         logger.info(f"STORY response_json_content: %s", response_json_content)
         logger.info(f"STORY response_json_story: %s", response_json_story)
 
-        validate_content_prompt, validate_story_prompt = get_validation_prompt(
-            response_json_story=response_json_story, validate_bot=validate_bot,
-            response_json_content=response_json_content, tag_context=tag_context, project_data=project_data,
-            profile=profile_data
-        )
-
-        tool_content, tool_story = get_tool_values(company_bot=validate_bot)
-
-        if company_bot.provider != validate_bot.provider:
-            messages = get_guided_chat(company_bot=validate_bot, company_chats=company_chats, intro=intro_to_pass)
-
-        response_json_story, combined_reason = asyncio.run(
-            validate_story_llm(
-                formatted_content_prompt=validate_content_prompt, formatted_story_prompt=validate_story_prompt,
-                messages=messages, tool_content=tool_content, tool_story=tool_story, company_bot=validate_bot,
-                flow=flow
+        combined_reason = None
+        if validate_bot:
+            validate_content_prompt, validate_story_prompt = get_validation_prompt(
+                response_json_story=response_json_story, validate_bot=validate_bot,
+                response_json_content=response_json_content, tag_context=tag_context, project_data=project_data,
+                profile=profile_data
             )
-        )
+
+            tool_content, tool_story = get_tool_values(company_bot=validate_bot)
+
+            if company_bot.provider != validate_bot.provider:
+                messages = get_guided_chat(company_bot=validate_bot, company_chats=company_chats, intro=intro_to_pass)
+
+            response_json_story, combined_reason = asyncio.run(
+                validate_story_llm(
+                    formatted_content_prompt=validate_content_prompt, formatted_story_prompt=validate_story_prompt,
+                    messages=messages, tool_content=tool_content, tool_story=tool_story, company_bot=validate_bot,
+                    flow=flow
+                )
+            )
 
         logger.info("VALIDATION STORY response_json_story: {story}".format(story=response_json_story))
 
@@ -356,7 +380,7 @@ def get_story_company_bot_simple(flow):
         company_story_bot = company_flow.story_bot
         company_story_validation_bot = company_flow.story_validation_bot
 
-        if not company_story_bot or not company_story_validation_bot:
+        if not company_story_bot:
             raise NotFound(detail=f"Story bot not configured for the flow: {flow}")
 
         return company_story_bot, company_story_validation_bot

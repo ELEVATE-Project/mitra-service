@@ -22,7 +22,9 @@ def transcribe_chunk(client, project_id, config, chunk_number, chunk):
         response = client.recognize(request=request)
         transcript = ""
         if response and not isinstance(response, str):
+            print("response: ", response)
             for res_result in response.results:
+                print("res_result: ", res_result)
                 if res_result and res_result.alternatives:
                     transcript += res_result.alternatives[0].transcript + " "
         return (chunk_number, transcript.strip())
@@ -41,20 +43,65 @@ def transcribe_multiple_languages_v2(
     client = SpeechClient()
 
     try:
+        other_params = voice_provider.other_params or {}
+
         logger.info("language_codes %s", language_codes)
-        config = cloud_speech.RecognitionConfig(
-            auto_decoding_config=cloud_speech.AutoDetectDecodingConfig(),
-            language_codes=language_codes,
-            model="latest_long",
-        )
+
+        config_kwargs = {
+            "auto_decoding_config": cloud_speech.AutoDetectDecodingConfig(),
+            "language_codes": language_codes,
+            "model": other_params.get("model", "latest_long"),
+        }
+
+        # -------- FEATURES --------
+        features_kwargs = {}
+
+        feature_params = [
+            "enable_automatic_punctuation",
+            "enable_spoken_punctuation",
+            "enable_spoken_emojis",
+            "enable_word_time_offsets",
+            "profanity_filter",
+            "max_alternatives"
+        ]
+
+        for param in feature_params:
+            if param in other_params:
+                features_kwargs[param] = other_params[param]
+
+        if features_kwargs:
+            config_kwargs["features"] = cloud_speech.RecognitionFeatures(**features_kwargs)
+
+        # -------- BOOST WORDS --------
+        if other_params.get("boost_words"):
+
+            phrases = []
+
+            for item in other_params["boost_words"]:
+                if isinstance(item, dict):
+                    word = item.get("word")
+                else:
+                    word = item
+
+                if word:
+                    phrases.append({"value": word})
+
+            config_kwargs["adaptation"] = {
+                "phrase_sets": [
+                    {
+                        "inline_phrase_set": {
+                            "phrases": phrases
+                        }
+                    }
+                ]
+            }
+
+        config = cloud_speech.RecognitionConfig(**config_kwargs)
 
         audio_bytes = base64.b64decode(audio_file)
-        duration = 10
-        if voice_provider.other_params:
-            duration = int(voice_provider.other_params.get('chunk_duration', 10))
+        duration = int(other_params.get('chunk_duration', 10))
         chunks = split_audio(audio_bytes, chunk_duration=duration)
 
-        transcripts = []
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_to_chunk = {
                 executor.submit(transcribe_chunk, client, project_id, config, chunk_number, chunk): chunk_number

@@ -83,19 +83,10 @@ def speech_text_provider(company_bot, base64, audio_format, source_language):
             language_codes=[LanguageMapping.get_mapped_language(source_language, region)],
             voice_provider=voice_provider
         )
-    elif voice_provider.provider == VoiceProvider.GOOGLE_V1:
-        if source_language == 'en':
-            region = "US"
-        else:
-            region = "IN"
-
-        response = transcribe_multiple_languages_v1(
-            audio_file=base64,
-            language_codes=[LanguageMapping.get_mapped_language(source_language, region)]
-        )
     elif voice_provider.provider == VoiceProvider.OPENAI_WHISPER:
         response = transcribe_audio(
-            base64_audio=base64, audio_format=audio_format, source_language=source_language
+            base64_audio=base64, audio_format=audio_format, source_language=source_language,
+            voice_provider=voice_provider
         )
     elif voice_provider.provider == VoiceProvider.SARVAM:
         response = transcribe_sarvam_multiple_chunks(
@@ -129,7 +120,8 @@ def text_translate_provider(message_body, target_language, source_language, voic
             response = translate_text(
                 project_id=secret.get('project_id'), text=message_body,
                 source_language_code=LanguageMapping.get_mapped_language(source_language),
-                target_language_code=LanguageMapping.get_mapped_language(target_language)
+                target_language_code=LanguageMapping.get_mapped_language(target_language),
+                voice_provider=voice_provider
             )
         elif voice_provider.provider == VoiceProvider.SARVAM:
             service = SarvamLanguageService()
@@ -138,7 +130,9 @@ def text_translate_provider(message_body, target_language, source_language, voic
                 target_lang=LanguageMapping.get_mapped_language(target_language), voice_provider=voice_provider
             )
         elif voice_provider.provider == VoiceProvider.CUSTOM_LLM:
-            company_bot = CompanyBot.objects.filter(route="/transliterate_text").first()
+            other = getattr(voice_provider, "other_params", {}) or {}
+            route = other.get('route', "/transliterate_text")
+            company_bot = CompanyBot.objects.filter(route=route).first()
             response = handle_custom_translation(
                 message_body=message_body, source_language=LanguageMapping.get_mapped_language(source_language),
                 target_language=LanguageMapping.get_mapped_language(target_language), company_bot=company_bot
