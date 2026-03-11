@@ -3,6 +3,24 @@ from typing import Dict, List, Any
 
 # -------------- REUSABLE FIELD DEFINITIONS ------------------
 
+# -------------- CATEGORY CONSTANTS ------------------
+CHALLENGE_CATEGORIES = [
+    "Challenges",
+    "Positive Observations",
+    "Advocacy/Activity Logs",
+    "Vague/Incomplete/Nonsense",
+    "Redundant/Repetitive",
+    "Solutions"
+]
+
+SOLUTION_CATEGORIES = [
+    "Solution Proposals",
+    "Implemented Success",
+    "Challenge Restatement",
+    "Vague Generalization",
+    "Redundant/Repetitive",
+]
+
 # Fields for iterative processing (used by unique challenges, unique solutions, etc.)
 ITERATIVE_PROCESSING_FIELDS: List[Dict[str, Any]] = [
     {

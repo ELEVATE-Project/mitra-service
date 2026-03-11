@@ -12,7 +12,8 @@ from typing import List, Dict, Any, Optional, Tuple
 from chatbot.scripts.guest_discussion.post_processing.challenges_script import (
     run_unique_challenge_processing,
     DEFAULT_BATCH_SIZE,
-    DEFAULT_MAX_WORKERS
+    DEFAULT_MAX_WORKERS,
+    CHALLENGE_CATEGORIES
 )
 from chatbot.utils.S3.s3_service import upload_file_to_s3
 
@@ -42,6 +43,7 @@ class IterativeChallengeProcessor:
         self.batch_size = batch_size
         self.max_workers = max_workers
         self.output_dir = output_dir
+        self.category_counts = {}  # Will store iteration 1 category breakdown
         
         # Ensure output directory exists
         os.makedirs(self.output_dir, exist_ok=True)
@@ -69,17 +71,17 @@ class IterativeChallengeProcessor:
     
     def run_iterative_processing(
         self,
-        input_data: Optional[List[str]] = None,
+        input_data: Optional[List] = None,
         input_file: Optional[str] = None,
         date_from: Optional[str] = None,
         date_till: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Run iterative challenge processing until threshold is met or max iterations reached.
-        """
+        Run iterative challenge processing until threshold is met or max iterations reached.        """
         result = {
             'success': False,
             'final_challenges': [],
+            'category_counts': {},
             'iterations_completed': 0,
             'stats': [],
             'output_file': None,
@@ -122,14 +124,25 @@ class IterativeChallengeProcessor:
                     break
                 
                 # Run the challenge processing
-                _, flat_challenges = run_unique_challenge_processing(
+                _, combined_result = run_unique_challenge_processing(
                     input_data=current_data,
                     batch_size=self.batch_size,
                     max_workers=self.max_workers,
                     save_to_file=False
                 )
                 
-                output_count = len(flat_challenges)
+                # Extract challenges and category counts from combined result
+                output_challenges = combined_result.get('challenges', [])
+                batch_category_counts = combined_result.get('category_counts', {})
+                
+                # Capture category counts from iteration 1 only (original input distribution)
+                if iteration == 1:
+                    self.category_counts = batch_category_counts
+                    print(f"   📊 Category counts (from original input):")
+                    for cat_name, cat_count in self.category_counts.items():
+                        print(f"      {cat_name}: {cat_count}")
+                
+                output_count = len(output_challenges)
                 removal_percentage = self.calculate_removal_percentage(input_count, output_count)
                 
                 # Record stats
@@ -148,19 +161,20 @@ class IterativeChallengeProcessor:
                 # Check if we should stop
                 if not self.should_continue_filtering(input_count, output_count):
                     print(f"\n   ✅ Threshold reached! Removal ({removal_percentage}%) < threshold ({self.filter_threshold}%)")
-                    current_data = flat_challenges
+                    current_data = output_challenges
                     break
                 
                 # Prepare for next iteration
-                current_data = flat_challenges
+                current_data = output_challenges
                 print(f"   ➡️ Continuing to next iteration...")
             
             # Save final output
             result['final_challenges'] = current_data
+            result['category_counts'] = self.category_counts
             result['iterations_completed'] = iteration
             
             # Generate output file
-            output_file = self._save_output(current_data, initial_count)
+            output_file = self._save_output(current_data, initial_count, self.category_counts)
             
             if output_file:
                 result['success'] = True
@@ -196,13 +210,14 @@ class IterativeChallengeProcessor:
     
     def _load_initial_data(
         self,
-        input_data: Optional[List[str]],
+        input_data: Optional[List],
         input_file: Optional[str],
         date_from: Optional[str],
         date_till: Optional[str]
-    ) -> List[str]:
+    ) -> List[Dict[str, Any]]:
         """
         Load initial data from provided source.
+        Returns List[dict] with keys: challenge_text, challenge_count, category.
         """
         if input_data:
             return self._normalize_challenges(input_data)
@@ -217,9 +232,10 @@ class IterativeChallengeProcessor:
         
         return []
     
-    def _normalize_challenges(self, data: Any) -> List[str]:
+    def _normalize_challenges(self, data: Any) -> List[Dict[str, Any]]:
         """
-        Normalize challenge data to a flat list of strings.
+        Normalize challenge data to a list of dicts with keys:
+        challenge_text, challenge_count, category.
         """
         if not isinstance(data, list):
             return []
@@ -227,17 +243,27 @@ class IterativeChallengeProcessor:
         challenges = []
         for item in data:
             if isinstance(item, str) and item.strip():
-                challenges.append(item.strip())
-            elif isinstance(item, dict) and 'challenge' in item:
-                val = item.get('challenge')
-                if isinstance(val, str) and val.strip():
-                    challenges.append(val.strip())
+                challenges.append({
+                    'challenge_text': item.strip(),
+                    'challenge_count': 1,
+                    'category': ''
+                })
+            elif isinstance(item, dict):
+                # Support both old {'challenge': '...'} and new {'challenge_text': '...'} formats
+                text = item.get('challenge_text') or item.get('challenge') or ''
+                if isinstance(text, str) and text.strip():
+                    challenges.append({
+                        'challenge_text': text.strip(),
+                        'challenge_count': item.get('challenge_count', 1),
+                        'category': item.get('category', '')
+                    })
         
         return challenges
     
-    def _fetch_challenges_from_db(self, date_from: str, date_till: str) -> List[str]:
+    def _fetch_challenges_from_db(self, date_from: str, date_till: str) -> List[Dict[str, Any]]:
         """
         Fetch challenges from database based on date range.
+        Returns List[dict] with keys: challenge_text, challenge_count, category.
         """
         from datetime import datetime
         from chatbot.models import Story, SessionFlowName
@@ -274,10 +300,17 @@ class IterativeChallengeProcessor:
                         if isinstance(challenges_faced, list):
                             for challenge in challenges_faced:
                                 if isinstance(challenge, str) and challenge.strip():
-                                    challenges.append(challenge.strip())
+                                    challenges.append({
+                                        'challenge_text': challenge.strip(),
+                                        'challenge_count': 1,
+                                        'category': ''
+                                    })
                         elif isinstance(challenges_faced, str) and challenges_faced.strip():
-                            # Single string - add it directly
-                            challenges.append(challenges_faced.strip())
+                            challenges.append({
+                                'challenge_text': challenges_faced.strip(),
+                                'challenge_count': 1,
+                                'category': ''
+                            })
             
             # Handle empty results
             if not challenges:
@@ -295,17 +328,25 @@ class IterativeChallengeProcessor:
             traceback.print_exc()
             return []
     
-    def _save_output(self, challenges: List[str], initial_count: int) -> str:
+    def _save_output(self, challenges: List[Dict[str, Any]], initial_count: int, category_counts: Dict[str, int] = None) -> str:
         """
         Save the final output to S3 and return the S3 URL.
         """
-        # Normalize challenges to plain strings
+        # Normalize challenges to the enriched format
         normalized_challenges = []
         for item in challenges:
-            if isinstance(item, str):
-                normalized_challenges.append(item)
-            elif isinstance(item, dict) and 'challenge' in item:
-                normalized_challenges.append(item['challenge'])
+            if isinstance(item, dict) and item.get('challenge_text'):
+                normalized_challenges.append({
+                    'challenge_text': item['challenge_text'],
+                    'challenge_count': item.get('challenge_count', 1),
+                    'category': item.get('category', '')
+                })
+            elif isinstance(item, str):
+                normalized_challenges.append({
+                    'challenge_text': item,
+                    'challenge_count': 1,
+                    'category': ''
+                })
         
         output_data = {
             'metadata': {
@@ -314,7 +355,8 @@ class IterativeChallengeProcessor:
                 'final_count': len(normalized_challenges),
                 'removed_count': initial_count - len(normalized_challenges),
                 'filter_threshold': self.filter_threshold,
-                'max_iterations': self.max_iterations
+                'max_iterations': self.max_iterations,
+                'category_counts': category_counts or {}
             },
             'challenges': normalized_challenges
         }
@@ -344,7 +386,7 @@ class IterativeChallengeProcessor:
 
 
 def run_iterative_challenge_filtering(
-    input_data: Optional[List[str]] = None,
+    input_data: Optional[List] = None,
     input_file: Optional[str] = None,
     date_from: Optional[str] = None,
     date_till: Optional[str] = None,
