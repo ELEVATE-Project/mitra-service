@@ -8,7 +8,6 @@ from chatbot.utils.shikshalokam_mitra_utils import get_stored_conversation, get_
 from chatbot.utils.shikshalokam_story_utils import save_shikshalokam_story, save_project_story
 from chatbot.utils.story_llama_utils import translate_field
 from chatbot.utils.story_utils.common.generic_story_tasks import save_generic_story
-from chatbot.utils.story_utils.format_utils import get_formatted_story
 from chatbot.utils.story_utils.get_story_prompts import get_creation_promt, get_tool_values, get_validation_prompt
 from chatbot.utils.story_utils.story_llm import generate_story_llm, validate_story_llm
 from rest_framework.exceptions import NotFound
@@ -200,18 +199,39 @@ def create_story_object(profile_id, session, access_token, flow, language='en'):
 
     except Exception as e:
         traceback.print_exc()
+
+        error_type = getattr(e, "code", "generic_error")
+
         if not company_bot:
             profile = Profile.objects.filter(id=profile_id).first()
             company_bot, validate_bot = get_story_company_bot(profile=profile, flow=flow)
 
         bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language=language).first()
-        error_message = bot_vernacular.error_message if bot_vernacular and bot_vernacular.error_message \
-            else "Please try again!"
+        error_message = get_bot_error_message(bot_vernacular, error_type)
         if voice_provider and language != 'en':
             error_message = translate_field(
                 voice_provider=voice_provider, message_body=error_message, target_language=language
             )
         return "", "", error_message
+
+
+def get_bot_error_message(bot_vernacular, error_type):
+
+    if not bot_vernacular or not bot_vernacular.error_message:
+        return "Please try again!"
+
+    raw = bot_vernacular.error_message
+
+    if isinstance(raw, dict):
+        data = raw
+    else:
+        try:
+            import json
+            data = json.loads(raw)
+        except Exception:
+            return raw
+
+    return data.get(error_type) or data.get("generic_error") or "Please try again!"
 
 
 def generate_story(profile_id, session, access_token, flow, language='en'):

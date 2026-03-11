@@ -28,16 +28,10 @@ def transcribe_audio(
         temperature = other_params.get("temperature", 0)
         chunk_duration = int(other_params.get("chunk_duration", 300))
         dictionary = other_params.get("dictionary", [])
-        prompt = other_params.get("prompt", "")
 
-        # -------- DICTIONARY BIASING --------
-        if dictionary:
+        dictionary_prompt = None
+        if dictionary and len(dictionary)> 0:
             dictionary_prompt = "Vocabulary: " + ", ".join(dictionary)
-
-            if prompt:
-                prompt = f"{prompt}. {dictionary_prompt}"
-            else:
-                prompt = dictionary_prompt
 
         audio_bytes = base64.b64decode(base64_audio)
         print("Audio size:", len(audio_bytes))
@@ -62,8 +56,8 @@ def transcribe_audio(
             if source_language:
                 params["language"] = source_language
 
-            if prompt:
-                params["prompt"] = prompt
+            if dictionary_prompt:
+                params["prompt"] = dictionary_prompt
 
             transcription = client.audio.transcriptions.create(**params)
             print("transcription: ", transcription)
