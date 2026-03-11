@@ -1,6 +1,8 @@
 import traceback
 import logging
 import re
+
+from chatbot.exceptions.story_exceptions import StoryDomainError, StoryValidationError, StorySaveError, StoryError
 from chatbot.models import StoryStatusChoices, Story, SessionFlowName, Voice, VoiceType, StoryTranslation
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.story_llama_utils import translate_field, create_project
@@ -123,7 +125,7 @@ def save_story(
         is_within_domain = response_json_story.get('is_within_domain', True)
 
         if not is_within_domain:
-            raise ValueError("Story content is outside allowed domain")
+            raise StoryDomainError()
 
         # Translate main content fields to English
         english_title = clean_escaped_text(
@@ -194,8 +196,10 @@ def save_story(
                 else:
                     location = ""
 
-        if not english_title or not english_objective or not english_action_steps or not english_problem_statement:
-            raise Exception("Empty fields found")
+        if (not english_title or not english_objective or not english_action_steps or not
+            english_problem_statement or not english_content or not english_blurb
+        ):
+            raise StoryValidationError()
 
         if flow in [SessionFlowName.Reflection] and project_id:
             logger.info(f"project_id: %s", project_id)
@@ -286,10 +290,14 @@ def save_story(
         )
 
         return story, english_problem_statement
+
+    except StoryError:
+        raise
+
     except Exception as e:
         logger.error('Error Occurred: %s', e, exc_info=True)
         traceback.print_exc()
-        raise Exception("Failed to save mi story")
+        raise StorySaveError()
 
 
 def create_story_translation(story, language, english_data, voice_provider, flow, company_bot, other_data):
