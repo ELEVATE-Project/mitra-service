@@ -1,6 +1,8 @@
+import logging
 from typing import List, Dict, Any, Optional, Tuple
 from collections import defaultdict
 from tqdm import tqdm
+from jinja2 import Template
 from chatbot.models import CompanyBot
 import json
 import os
@@ -11,6 +13,8 @@ from chatbot.utils.llm import LLM
 from chatbot.models.enums import LLMProvider
 from chatbot.llm_models.llm_script import handle_bedrock_model
 from chatbot.constants.post_processing_constants import CHALLENGE_CATEGORIES
+
+logger = logging.getLogger('django')
 
 
 # -------------- CONFIG ------------------
@@ -30,8 +34,8 @@ def chunk_data(data: List[Dict[str, Any]], batch_size: int) -> List[List[Dict[st
     return [data[i:i + batch_size] for i in range(0, len(data), batch_size)]
 
 
-def build_user_message(batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Build the user message for the LLM with category classification and counts.
+def build_user_message(batch: List[Dict[str, Any]], company_bot) -> List[Dict[str, Any]]:
+    """Build the user message for the LLM using tag_context from CompanyBot.
     
     Each item in batch is a dict with keys: challenge_text, challenge_count, category.
     """
@@ -41,31 +45,16 @@ def build_user_message(batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     
     categories_list = ", ".join(CHALLENGE_CATEGORIES)
     
-    prompt_text = (
-        f"Given the list of challenges below (each with a count representing how many times it appeared), "
-        f"identify and return unique and consolidated challenges.\n\n"
-        f"Rules:\n"
-        f"1. Deduplicate: merge challenges that are semantically identical or very similar.\n"
-        f"2. When merging duplicates, SUM their counts. For example, if challenge A (count: 3) and challenge B (count: 4) are duplicates, the merged result should have count: 7.\n"
-        f"3. Classify each unique challenge into exactly ONE of these categories: {categories_list}\n"
-        f"4. Keep the original text unchanged for the challenge you keep.\n"
-        f"5. Also provide a summary of how many items in the ORIGINAL input batch fell into each category.\n\n"
-        f"Challenges:\n{challenges_text}\n\n"
-        f"Respond ONLY with valid JSON in this exact format:\n"
-        "{\n"
-        '  "unique_challenges": [\n'
-        '    {\n'
-        '      "challenge_text": "original text of unique challenge",\n'
-        '      "challenge_count": <summed count>,\n'
-        '      "category": "<one of the 6 categories>"\n'
-        '    }\n'
-        '  ],\n'
-        '  "categories": [\n'
-        '    { "category_name": "<category>", "category_count": <count of items in this batch belonging to this category> }\n'
-        '  ],\n'
-        '  "reason_for_uniqueness": "Brief explanation of your deduplication process and criteria applied."\n'
-        "}"
-    )
+    # Render the tag_context Jinja2 template with variables
+    context_data = {
+        "challenges_text": challenges_text,
+        "categories_list": categories_list,
+    }
+    
+    template = Template(company_bot.tag_context)
+    prompt_text = template.render(context_data)
+    
+    logger.info(f"[challenges_script] Rendered prompt for batch (first 500 chars): {prompt_text[:500]}")
     
     return [
         {
@@ -86,10 +75,16 @@ def call_llm(batch: List[Dict[str, Any]], index: int) -> Dict[str, Any]:
         }
     """
     try:
-        messages = build_user_message(batch)
         company_bot = CompanyBot.objects.filter(route='/challenges_script').first()
         if not company_bot:
+            logger.error("[challenges_script] CompanyBot with route '/challenges_script' not found.")
             return {"challenges": None, "categories": None}
+
+        if not company_bot.tag_context:
+            logger.error("[challenges_script] tag_context is empty for CompanyBot route='/challenges_script'. Please set the prompt template in admin.")
+            return {"challenges": None, "categories": None}
+
+        messages = build_user_message(batch, company_bot)
 
         tool = company_bot.tool_context
         if tool and isinstance(tool, str):

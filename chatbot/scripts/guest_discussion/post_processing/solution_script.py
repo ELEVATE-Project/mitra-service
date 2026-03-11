@@ -1,6 +1,8 @@
+import logging
 from typing import List, Dict, Any, Optional, Tuple
 from collections import defaultdict
 from tqdm import tqdm
+from jinja2 import Template
 from chatbot.models import CompanyBot
 import json
 import os
@@ -9,6 +11,8 @@ from retrying import retry
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from chatbot.llm_models.llm_script import handle_bedrock_model
 from chatbot.constants.post_processing_constants import SOLUTION_CATEGORIES
+
+logger = logging.getLogger('django')
 
 
 # -------------- CONFIG ------------------
@@ -28,38 +32,24 @@ def chunk_data(data: List[Dict[str, Any]], batch_size: int) -> List[List[Dict[st
     return [data[i:i + batch_size] for i in range(0, len(data), batch_size)]
 
 
-def build_user_message(batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def build_user_message(batch: List[Dict[str, Any]], company_bot) -> List[Dict[str, Any]]:
+
     solutions_text = "\n".join(
         [f"- [count: {item['solution_count']}] {item['solution_text']}" for item in batch]
     )
     
     categories_list = ", ".join(SOLUTION_CATEGORIES)
     
-    prompt_text = (
-        f"Given the list of solutions below (each with a count representing how many times it appeared), "
-        f"identify and return unique and consolidated solutions.\n\n"
-        f"Rules:\n"
-        f"1. Deduplicate: merge solutions that are semantically identical or very similar.\n"
-        f"2. When merging duplicates, SUM their counts. For example, if solution A (count: 3) and solution B (count: 4) are duplicates, the merged result should have count: 7.\n"
-        f"3. Classify each unique solution into exactly ONE of these categories: {categories_list}\n"
-        f"4. Keep the original text unchanged for the solution you keep.\n"
-        f"5. Also provide a summary of how many items in the ORIGINAL input batch fell into each category.\n\n"
-        f"Solutions:\n{solutions_text}\n\n"
-        f"Respond ONLY with valid JSON in this exact format:\n"
-        "{\n"
-        '  "unique_solutions": [\n'
-        '    {\n'
-        '      "solution_text": "original text of unique solution",\n'
-        '      "solution_count": <summed count>,\n'
-        '      "category": "<one of the 5 categories>"\n'
-        '    }\n'
-        '  ],\n'
-        '  "categories": [\n'
-        '    { "category_name": "<category>", "category_count": <count of items in this batch belonging to this category> }\n'
-        '  ],\n'
-        '  "reason_for_uniqueness": "Brief explanation of your deduplication process and criteria applied."\n'
-        "}"
-    )
+    # Render the tag_context Jinja2 template with variables
+    context_data = {
+        "solutions_text": solutions_text,
+        "categories_list": categories_list,
+    }
+    
+    template = Template(company_bot.tag_context)
+    prompt_text = template.render(context_data)
+    
+    logger.info(f"[solution_script] Rendered prompt for batch (first 500 chars): {prompt_text[:500]}")
     
     return [
         {
@@ -72,10 +62,16 @@ def build_user_message(batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def call_llm(batch: List[Dict[str, Any]], index: int) -> Dict[str, Any]:
     try:
-        messages = build_user_message(batch)
         company_bot = CompanyBot.objects.filter(route='/solutions_script').first()
         if not company_bot:
+            logger.error("[solution_script] CompanyBot with route '/solutions_script' not found.")
             return {"solutions": None, "categories": None}
+
+        if not company_bot.tag_context:
+            logger.error("[solution_script] tag_context is empty for CompanyBot route='/solutions_script'. Please set the prompt template in admin.")
+            return {"solutions": None, "categories": None}
+
+        messages = build_user_message(batch, company_bot)
 
         tool = company_bot.tool_context
         if tool and isinstance(tool, str):
