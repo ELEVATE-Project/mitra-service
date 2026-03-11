@@ -11,30 +11,40 @@ def translate_text(
     text: str,
     project_id: str,
     source_language_code: str,
-    target_language_code: str
+    target_language_code: str,
+    voice_provider: any,
 ):
     """Translating Text."""
     try:
+
+        other_params = voice_provider.other_params if voice_provider.other_params else {}
 
         credentials = service_account.Credentials.from_service_account_file(settings.SECRETS_JSON_PATH)
         client = translate.TranslationServiceClient(credentials=credentials)
         location = "global"
 
         parent = f"projects/{project_id}/locations/{location}"
+        location = other_params.get("location", "global")
+        glossary_id = other_params.get("glossary_id")
 
-        response = client.translate_text(
-            request={
-                "parent": parent,
-                "contents": [text],
-                "mime_type": "text/plain",
-                "source_language_code": source_language_code,
-                "target_language_code": target_language_code,
-            }
-        )
+        request = {
+            "parent": parent,
+            "contents": [text],
+            "mime_type": "text/plain",
+            "source_language_code": source_language_code,
+            "target_language_code": target_language_code,
+        }
 
+        if glossary_id:
+            glossary = client.glossary_path(project_id, location, glossary_id)
+            glossary_config = translate.TranslateTextGlossaryConfig(glossary=glossary)
+            request["glossary_config"] = glossary_config
+
+        response = client.translate_text(request=request)
         logger.info(f"Response from Google Text Translate: {response}")
+        translations = response.glossary_translations if glossary_id else response.translations
 
-        for translation in response.translations:
+        for translation in translations:
             return {
                 'status': 200,
                 'content': translation.translated_text
