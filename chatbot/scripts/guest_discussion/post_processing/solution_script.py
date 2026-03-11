@@ -1,46 +1,81 @@
-from chatbot.llm_models.llm_script import handle_bedrock_model
-from chatbot.models import CompanyBot, LLMModel
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from openai import OpenAI
+from typing import List, Dict, Any, Optional, Tuple
+from collections import defaultdict
 from tqdm import tqdm
-from typing import List, Dict, Any
+from chatbot.models import CompanyBot
 import json
-import json_repair
 import os
+import json_repair
+from retrying import retry
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from chatbot.llm_models.llm_script import handle_bedrock_model
+from chatbot.constants.post_processing_constants import SOLUTION_CATEGORIES
 
 
 # -------------- CONFIG ------------------
 INPUT_FILE = 'chatbot/scripts/solutions/all_solutions.json'
 OUTPUT_FILE = 'chatbot/scripts/solutions/llm_unique_solutions_output.json'
 SECOND_OUTPUT_FILE = 'chatbot/scripts/solutions/flat_solutions_output.json'
-BATCH_SIZE = 6000
-MAX_WORKERS = 1
-llm_retry_number = int(os.getenv('LLM_RETRY_NUMBER'))
+DEFAULT_BATCH_SIZE = 5
+DEFAULT_MAX_WORKERS = 2
+llm_retry_number = int(os.getenv('LLM_RETRY_NUMBER', '3'))
 AWS_KEY = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 
 # -------------- CORE FUNCTIONS ------------------
 
-def chunk_data(data: List[str], batch_size: int) -> List[List[str]]:
+def chunk_data(data: List[Dict[str, Any]], batch_size: int) -> List[List[Dict[str, Any]]]:
+    """Split list of solution dicts into batches."""
     return [data[i:i + batch_size] for i in range(0, len(data), batch_size)]
 
-def build_user_message(batch: List[str]) -> List[Dict[str, Any]]:
-    solutions_text = "\n".join([f"- {solution}" for solution in batch])
+
+def build_user_message(batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    solutions_text = "\n".join(
+        [f"- [count: {item['solution_count']}] {item['solution_text']}" for item in batch]
+    )
+    
+    categories_list = ", ".join(SOLUTION_CATEGORIES)
+    
+    prompt_text = (
+        f"Given the list of solutions below (each with a count representing how many times it appeared), "
+        f"identify and return unique and consolidated solutions.\n\n"
+        f"Rules:\n"
+        f"1. Deduplicate: merge solutions that are semantically identical or very similar.\n"
+        f"2. When merging duplicates, SUM their counts. For example, if solution A (count: 3) and solution B (count: 4) are duplicates, the merged result should have count: 7.\n"
+        f"3. Classify each unique solution into exactly ONE of these categories: {categories_list}\n"
+        f"4. Keep the original text unchanged for the solution you keep.\n"
+        f"5. Also provide a summary of how many items in the ORIGINAL input batch fell into each category.\n\n"
+        f"Solutions:\n{solutions_text}\n\n"
+        f"Respond ONLY with valid JSON in this exact format:\n"
+        "{\n"
+        '  "unique_solutions": [\n'
+        '    {\n'
+        '      "solution_text": "original text of unique solution",\n'
+        '      "solution_count": <summed count>,\n'
+        '      "category": "<one of the 5 categories>"\n'
+        '    }\n'
+        '  ],\n'
+        '  "categories": [\n'
+        '    { "category_name": "<category>", "category_count": <count of items in this batch belonging to this category> }\n'
+        '  ],\n'
+        '  "reason_for_uniqueness": "Brief explanation of your deduplication process and criteria applied."\n'
+        "}"
+    )
+    
     return [
         {
             'role': 'user',
             'content': [{
-                'text': f"""Given the list of solutions below, identify and return a JSON list of **unique and consolidated** solutions:\n\n{solutions_text}\n\nRespond ONLY in this format:\n[\n  "unique solution 1",\n  "unique solution 2"\n]"""
+                'text': prompt_text
             }]
         }
     ]
 
-def call_llm(batch: List[str], index: int) -> Dict[str, Any]:
+def call_llm(batch: List[Dict[str, Any]], index: int) -> Dict[str, Any]:
     try:
         messages = build_user_message(batch)
         company_bot = CompanyBot.objects.filter(route='/solutions_script').first()
         if not company_bot:
-            return {f"batch_{index}_error": "No Bot Found"}
+            return {"solutions": None, "categories": None}
 
         tool = company_bot.tool_context
         if tool and isinstance(tool, str):
@@ -67,26 +102,24 @@ def call_llm(batch: List[str], index: int) -> Dict[str, Any]:
         # )
 
         if output:
-            output=get_clean_output(response=output)
+            parsed = get_clean_output(response=output)
+            return parsed if parsed else {"solutions": None, "categories": None}
 
-        key = f"solution"
-        return {key: output}
+        return {"solutions": None, "categories": None}
     except Exception as e:
         print(f"Error in call_llm for batch {index}: {str(e)}")
-        return {"solution": None}
+        return {"solutions": None, "categories": None}
 
 
-def process_all_batches(data: List[str], batch_size: int = BATCH_SIZE, max_workers: int = MAX_WORKERS, save_to_file: bool = True) -> Dict[str, Any]:
+def process_all_batches(
+    data: List[Dict[str, Any]],
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    max_workers: int = DEFAULT_MAX_WORKERS,
+    save_to_file: bool = False,
+    output_file: str = OUTPUT_FILE
+) -> Dict[str, Any]:
     chunks = chunk_data(data, batch_size)
     results = {}
-
-    # Load existing output if present and saving to file
-    if save_to_file and os.path.exists(OUTPUT_FILE):
-        with open(OUTPUT_FILE, "r") as f:
-            try:
-                results = json.load(f)
-            except json.JSONDecodeError:
-                print("⚠️ Warning: Output file is corrupted or empty, starting fresh.")
 
     print(f"🚀 Starting processing of {len(chunks)} batches with {max_workers} workers...")
 
@@ -103,159 +136,136 @@ def process_all_batches(data: List[str], batch_size: int = BATCH_SIZE, max_worke
         for future in tqdm(as_completed(futures), total=len(futures), desc="Batches Completed"):
             idx, result = future.result()
             batch_key = f"solution_{idx}"
-            results[batch_key] = result.get("solution")
+            results[batch_key] = {
+                "solutions": result.get("solutions"),
+                "categories": result.get("categories")
+            }
 
     if save_to_file:
-        with open(OUTPUT_FILE, "w") as f:
+        with open(output_file, "w") as f:
             json.dump(results, f, indent=2)
-        print(f"✅ Saved {len(chunks)} batches to {OUTPUT_FILE}")
-    
+        print(f"✅ Saved {len(chunks)} batches to {output_file}")
+
     return results
-
-
-# -------------- DB FETCHING ------------------
-def fetch_solutions_from_db(date_from: str, date_till: str) -> List[str]:
-    from datetime import datetime
-    from chatbot.models import Story, SessionFlowName
-    
-    try:
-        # Parse dates (DD-MM-YYYY format)
-        start_date = datetime.strptime(date_from, '%d-%m-%Y')
-        end_date = datetime.strptime(date_till, '%d-%m-%Y')
-        
-        # Make end_date inclusive by setting to end of day
-        end_date = end_date.replace(hour=23, minute=59, second=59)
-        
-        # Query stories in date range
-        stories = Story.objects.filter(
-            created_at__gte=start_date,
-            created_at__lte=end_date
-        ).values_list('other_params', flat=True)
-        
-        solutions = []
-        guest_discussion_flow = SessionFlowName.GuestDiscussion.value  # 'guest-discussion'
-        
-        for other_params in stories:
-            if other_params and isinstance(other_params, dict):
-                # Filter by flow
-                flow = other_params.get('flow')
-                if flow != guest_discussion_flow:
-                    continue
-                
-                # Extract solutions from 'solutions_discussed'
-                solutions_discussed = other_params.get('solutions_discussed')
-                
-                if solutions_discussed:
-                    # Handle both list and string formats
-                    if isinstance(solutions_discussed, list):
-                        for solution in solutions_discussed:
-                            if isinstance(solution, str) and solution.strip():
-                                solutions.append(solution.strip())
-                    elif isinstance(solutions_discussed, str) and solutions_discussed.strip():
-                        # Single string - add it directly
-                        solutions.append(solutions_discussed.strip())
-        
-        # Handle empty results
-        if not solutions:
-            print(f"⚠️ No solutions found in date range {date_from} to {date_till}")
-            print(f"   Stories fetched: {stories.count()}, Flow filter: {guest_discussion_flow}")
-            return []
-        
-        print(f"✓ Fetched {len(solutions)} solutions from {stories.count()} stories")
-        print(f"  Date range: {date_from} to {date_till}")
-        return solutions
-        
-    except Exception as e:
-        print(f"❌ Error fetching from database: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
 
 
 # -------------- ENTRY POINT ------------------
 def run_unique_solution_processing(
-    start: int = 0, 
-    end: int = None, 
+    start: int = 0,
+    end: int = None,
     input_file: str = None,
-    input_data: List[str] = None,
-    date_from: str = None,
-    date_till: str = None,
-    batch_size: int = BATCH_SIZE,
-    max_workers: int = MAX_WORKERS
-):
-    solutions = None
-    
-    # Priority: input_data > date_range > input_file
-    if input_data:
-        print(f"📥 Using provided input data")
+    input_data: List[Dict[str, Any]] = None,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    max_workers: int = DEFAULT_MAX_WORKERS,
+    save_to_file: bool = False,
+    output_file: str = OUTPUT_FILE,
+    second_output_file: str = SECOND_OUTPUT_FILE
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    # Get solutions from input_data or input_file
+    if input_data is not None:
         solutions = input_data
-    elif date_from and date_till:
-        print(f"📅 Fetching solutions from database: {date_from} to {date_till}")
-        solutions = fetch_solutions_from_db(date_from, date_till)
-        if not solutions:
-            print("❌ No solutions fetched from database. Exiting.")
-            return
     elif input_file:
-        print(f"📂 Loading solutions from file: {input_file}")
         with open(input_file, "r") as f:
-            solutions = json.load(f)
+            raw = json.load(f)
+        solutions = _ensure_solution_dicts(raw)
     else:
-        print("❌ No input source provided. Please provide input_data, date range, or input_file.")
-        return
-
-    # Normalize solutions to list of strings
-    if isinstance(solutions, list) and all(isinstance(c, dict) and 'solution' in c for c in solutions):
-        solutions = [c['solution'] for c in solutions]
+        input_file = INPUT_FILE
+        with open(input_file, "r") as f:
+            raw = json.load(f)
+        solutions = _ensure_solution_dicts(raw)
 
     total = len(solutions)
     end = end if end is not None else total
     selected_solutions = solutions[start:end]
 
-    print(f"🚀 Processing {len(selected_solutions)} solutions from index {start} to {end} (Total available: {total})")
+    print(f"🚀 Loaded {len(selected_solutions)} solutions from index {start} to {end} (Total available: {total})")
     
-    return process_all_batches(selected_solutions, batch_size=batch_size, max_workers=max_workers, save_to_file=True)
+    # Process batches
+    batch_results = process_all_batches(
+        selected_solutions,
+        batch_size=batch_size,
+        max_workers=max_workers,
+        save_to_file=save_to_file,
+        output_file=output_file
+    )
+
+    # Combine batch results (pass expected_total for cross-batch normalization)
+    expected_total = sum(c.get('solution_count', 1) for c in selected_solutions)
+    combined = combine_batch_results(
+        batch_results=batch_results,
+        expected_total=expected_total,
+        save_to_file=save_to_file,
+        save_file_path=second_output_file
+    )
+    
+    return batch_results, combined
+
+
+def _ensure_solution_dicts(data: list) -> List[Dict[str, Any]]:
+    """Convert raw data (strings or dicts) into the standard solution dict format."""
+    result = []
+    if not isinstance(data, list):
+        return result
+    for item in data:
+        if isinstance(item, str) and item.strip():
+            result.append({
+                'solution_text': item.strip(),
+                'solution_count': 1,
+                'category': ''
+            })
+        elif isinstance(item, dict):
+            # Support both old {'solution': '...'} and new {'solution_text': '...'} formats
+            text = item.get('solution_text') or item.get('solution') or ''
+            if isinstance(text, str) and text.strip():
+                result.append({
+                    'solution_text': text.strip(),
+                    'solution_count': item.get('solution_count', 1),
+                    'category': item.get('category', '')
+                })
+    return result
 
 
 
 def retry_if_result_none(result):
     return result is None
 
-def get_clean_output(response):
+
+def get_clean_output(response) -> Optional[Dict[str, Any]]:
+    """Parse LLM response and extract solutions + categories."""
     try:
-        print("Cleaning: ", response)
-        
         if isinstance(response, str):
             try:
                 response = json_repair.repair_json(response, return_objects=True)
             except Exception:
                 return None
 
-        if isinstance(response, list):
-            cleaned = []
-
-            for item in response:
-                if isinstance(item, str):
-                    cleaned.append(item.strip())
-
-                elif isinstance(item, dict) and "solution" in item:
-                    val = item.get("solution")
-                    if isinstance(val, str) and val.strip():
-                        cleaned.append(val.strip())
-
-            return cleaned if cleaned else None
-
+        # Unwrap tool-call wrappers
         if isinstance(response, dict):
             if 'type' in response and 'value' in response:
                 return get_clean_output(response.get('value'))
             
-            # Extract from common parameter keys
-            extracted = (
-                response.get("parameters")
-                or response.get("input")
-                or response.get("unique_solutions")
-            )
-
-            return get_clean_output(extracted)
+            # Unwrap common wrapper keys
+            if 'parameters' in response:
+                return get_clean_output(response.get('parameters'))
+            if 'input' in response and 'unique_solutions' not in response:
+                return get_clean_output(response.get('input'))
+            
+            # --- Main parsing: expect {unique_solutions: [...], categories: [...]} ---
+            # LLM sometimes uses 'solutions' instead of 'unique_solutions'
+            raw_solutions = response.get('unique_solutions') or response.get('solutions')
+            raw_categories = response.get('categories')
+            
+            if raw_solutions is not None:
+                solutions = _parse_solution_items(raw_solutions)
+                categories = _parse_category_items(raw_categories)
+                if solutions:
+                    return {"solutions": solutions, "categories": categories}
+        
+        # Handle case where LLM returns a plain list (backward compat)
+        if isinstance(response, list):
+            solutions = _parse_solution_items(response)
+            if solutions:
+                return {"solutions": solutions, "categories": []}
 
         return None
     except Exception as e:
@@ -263,148 +273,180 @@ def get_clean_output(response):
         return None
 
 
-def convert_solutions_to_flat_list(batch_results: Dict[str, Any] = None, output_file_path=OUTPUT_FILE, save_to_file: bool = True, save_file_path=SECOND_OUTPUT_FILE) -> List[str]:
-    flat_solutions = []
+def _parse_solution_items(data) -> List[Dict[str, Any]]:
+    """Parse a list of solution items from LLM output.
+    Handles both actual lists and stringified JSON arrays from tool-use responses.
+    """
+    # Handle stringified JSON (LLM sometimes returns arrays as strings in tool-use)
+    if isinstance(data, str):
+        try:
+            data = json_repair.repair_json(data, return_objects=True)
+        except Exception:
+            return []
+    
+    if not isinstance(data, list):
+        return []
+    
+    cleaned = []
+    for item in data:
+        if isinstance(item, dict):
+            text = item.get('solution_text', '')
+            if isinstance(text, str) and text.strip():
+                cleaned.append({
+                    'solution_text': text.strip(),
+                    'solution_count': item.get('solution_count', 1),
+                    'category': item.get('category', '')
+                })
+        elif isinstance(item, str) and item.strip():
+            # Backward compat: plain string → wrap as dict with count 1
+            cleaned.append({
+                'solution_text': item.strip(),
+                'solution_count': 1,
+                'category': ''
+            })
+    return cleaned
 
+
+def _parse_category_items(data) -> List[Dict[str, Any]]:
+    """Parse category count items from LLM output.
+    Handles: list of {category_name, category_count}, dict of {name: count},
+    and stringified JSON versions of both.
+    """
+    # Handle stringified JSON
+    if isinstance(data, str):
+        try:
+            data = json_repair.repair_json(data, return_objects=True)
+        except Exception:
+            return []
+    
+    # Handle dict format: {"Solution Proposals": 83, ...}
+    if isinstance(data, dict):
+        cleaned = []
+        for name, count in data.items():
+            if name and isinstance(count, (int, float)):
+                cleaned.append({
+                    'category_name': str(name),
+                    'category_count': int(count)
+                })
+        return cleaned
+    
+    if not isinstance(data, list):
+        return []
+    
+    cleaned = []
+    for item in data:
+        if isinstance(item, dict):
+            name = item.get('category_name', '')
+            count = item.get('category_count', 0)
+            if name:
+                cleaned.append({
+                    'category_name': str(name),
+                    'category_count': int(count) if count else 0
+                })
+    return cleaned
+
+
+
+def _normalize_solution_counts(solutions: List[Dict[str, Any]], expected_total: int) -> List[Dict[str, Any]]:
+    """Normalize solution counts so they sum to expected_total (scales both up and down)."""
+    if not solutions or expected_total <= 0:
+        return solutions
+
+    actual_total = sum(c.get('solution_count', 1) for c in solutions)
+    if actual_total == expected_total or actual_total == 0:
+        return solutions
+
+    ratio = expected_total / actual_total
+    for c in solutions:
+        c['solution_count'] = max(1, round(c['solution_count'] * ratio))
+
+    # Fix any rounding drift (±1 or ±2) by adjusting the largest items
+    diff = expected_total - sum(c['solution_count'] for c in solutions)
+    solutions.sort(key=lambda c: c['solution_count'], reverse=True)
+    for c in solutions:
+        if diff == 0:
+            break
+        adj = 1 if diff > 0 else -1
+        if c['solution_count'] + adj >= 1:
+            c['solution_count'] += adj
+            diff -= adj
+
+    return solutions
+
+def combine_batch_results(
+    batch_results: Dict[str, Any] = None,
+    expected_total: int = None,
+    output_file_path: str = OUTPUT_FILE,
+    save_to_file: bool = False,
+    save_file_path: str = SECOND_OUTPUT_FILE
+) -> Dict[str, Any]:
+    """
+    Combine batch-wise LLM output into a single result.
+    If expected_total is provided, normalizes combined counts to match it.
+    """
+    all_solutions = []
+    category_counts = defaultdict(int)
+    
     # Use provided batch_results or load from file
     if batch_results is not None:
         solutions_dict = batch_results
     else:
-        # Check if output file exists
         if not os.path.exists(output_file_path):
             print(f"⚠️ Warning: Output file {output_file_path} not found.")
-            return flat_solutions
+            return {"solutions": [], "category_counts": {}}
 
-        # Read data from output file
         try:
             with open(output_file_path, "r") as f:
                 solutions_dict = json.load(f)
-        except json.JSONDecodeError:
-            print(f"⚠️ Warning: Output file {output_file_path} is corrupted or empty.")
-            return flat_solutions
         except Exception as e:
-            print(f"❌ Error reading file {output_file_path}: {e}")
-            return flat_solutions
+            print(f"❌ Error reading {output_file_path}: {e}")
+            return {"solutions": [], "category_counts": {}}
 
-    # Iterate through all solution batches and extract plain strings
-    for batch_key, solutions_list in solutions_dict.items():
-        # Check if the value is a list and not None
+    # Combine solutions and aggregate category counts from all batches
+    for _, batch_data in solutions_dict.items():
+        if not isinstance(batch_data, dict):
+            continue
+        
+        # Collect solutions
+        solutions_list = batch_data.get("solutions")
         if isinstance(solutions_list, list):
-            # Add each solution string directly (not as dict)
-            for solution_item in solutions_list:
-                if isinstance(solution_item, str) and solution_item.strip():
-                    # Already a string
-                    flat_solutions.append(solution_item.strip())
-                elif isinstance(solution_item, dict) and 'solution' in solution_item:
-                    # Extract string from dict
-                    solution_text = solution_item['solution']
-                    if isinstance(solution_text, str) and solution_text.strip():
-                        flat_solutions.append(solution_text.strip())
+            for solution in solutions_list:
+                if isinstance(solution, dict) and solution.get('solution_text', '').strip():
+                    all_solutions.append({
+                        'solution_text': solution['solution_text'].strip(),
+                        'solution_count': solution.get('solution_count', 1),
+                        'category': solution.get('category', '')
+                    })
+        
+    # Normalize solution counts to match expected_total (once, at combine level)
+    if expected_total is not None:
+        all_solutions = _normalize_solution_counts(all_solutions, expected_total)
 
-    print("Len flat_solutions: ", len(flat_solutions))
+    # Compute category counts from the normalized solution items (so both are consistent)
+    for solution in all_solutions:
+        cat = solution.get('category', '')
+        if cat:
+            category_counts[cat] += solution.get('solution_count', 1)
 
-    # Save the flat solutions to a new file only if requested
+    # Save if requested
     if save_to_file:
         try:
+            save_data = {
+                "solutions": all_solutions,
+                "category_counts": dict(category_counts)
+            }
             with open(save_file_path, "w") as f:
-                json.dump(flat_solutions, f, indent=2)
-            print(f"✅ Converted solutions saved to {save_file_path}")
+                json.dump(save_data, f, indent=2)
+            print(f"✅ Combined results saved to {save_file_path}")
         except Exception as e:
-            print(f"❌ Error saving to file {save_file_path}: {e}")
+            print(f"❌ Error saving file: {e}")
 
-    return flat_solutions
-
-
-def handle_openai_model(
-        messages, max_token=None, temperature=None, company_bot=None, model_name=None, is_json_response=True,
-        stream=False, key_name='OPENAI_API_KEY', is_actual_key=False, tools=None, tool_choice=None, client_choice=None,
-        top_p=None, system_prompt=None
-):
-    if client_choice:
-        client = client_choice
-    else:
-        client = OpenAI()
-
-    if is_actual_key:
-        client_api_key = key_name
-    else:
-        client_api_key = os.getenv(key_name)
-
-    client.api_key = client_api_key
-
-    if not client.api_key:
-        raise ValueError(f"No API key found for '{key_name}'. Please set the environment variable correctly.")
-
-    if model_name:
-        model_to_use = model_name
-    elif company_bot:
-        model_to_use = company_bot.llm_model
-    else:
-        model_to_use = LLMModel.GPT4_O_MINI
-
-    if system_prompt and isinstance(system_prompt, list):
-        messages = system_prompt+messages
-
-    request_data = {
-        "model": model_to_use,
-        "messages": messages,
+    print(f"Combined solutions count: {len(all_solutions)}")
+    return {
+        "solutions": all_solutions,
+        "category_counts": dict(category_counts)
     }
 
-    if max_token:
-        request_data["max_tokens"]= max_token
-    if temperature:
-        request_data['temperature']= temperature
-    if is_json_response:
-        request_data["response_format"] = {"type": "json_object"}
-    if stream:
-        request_data["stream"] = stream
-    if tools:
-        request_data["tools"]= tools
-        if tool_choice:
-            request_data["tool_choice"]= tool_choice
-    if top_p:
-        request_data['top_p'] = top_p
-    print("request_data: ", request_data)
-    response = client.chat.completions.create(**request_data)
-    print("raw res: ", response)
-    if is_json_response:
-        response_content = response.choices[0].message.content
-        response_json = None
-        if response_content:
-            response_json = json.loads(response_content)
-        return response_json
-    elif tools:
-        tool_calls = response.choices[0].message.tool_calls
-        if tool_calls and len(tool_calls) > 0:
-            return {}
-        return response.choices[0].message.content if response.choices else response
-    else:
-        return response.choices[0].message.content if response.choices else response
 
-
-# -------------- MAIN EXECUTION ------------------
 if __name__ == "__main__":
-    # Hardcoded date range for testing
-    DATE_FROM = "01-01-2026"  # DD-MM-YYYY
-    DATE_TILL = "10-02-2026"  # DD-MM-YYYY
-    
-    print(f"\n{'='*60}")
-    print(f"🚀 SOLUTION SCRIPT - DIRECT EXECUTION")
-    print(f"{'='*60}")
-    print(f"📅 Date Range: {DATE_FROM} to {DATE_TILL}")
-    print(f"{'='*60}\n")
-    
-    # Run the processing
-    run_unique_solution_processing(
-        date_from=DATE_FROM,
-        date_till=DATE_TILL
-    )
-    
-    print(f"\n{'='*60}")
-    print(f"✅ Script execution completed!")
-    print(f"{'='*60}\n")
-    
-    # Convert to flat list
-    print("🔄 Converting to flat list...")
-    convert_solutions_to_flat_list()
-    print("✅ Flat list conversion completed!")
+    run_unique_solution_processing()

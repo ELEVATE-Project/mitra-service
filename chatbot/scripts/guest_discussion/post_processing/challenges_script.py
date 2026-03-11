@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from chatbot.utils.llm import LLM
 from chatbot.models.enums import LLMProvider
 from chatbot.llm_models.llm_script import handle_bedrock_model
+from chatbot.constants.post_processing_constants import CHALLENGE_CATEGORIES
 
 
 # -------------- CONFIG ------------------
@@ -22,15 +23,6 @@ llm_retry_number = int(os.getenv('LLM_RETRY_NUMBER', '3'))
 AWS_KEY = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 
-# -------------- CATEGORIES ------------------
-CHALLENGE_CATEGORIES = [
-    "Challenges",
-    "Positive Observations",
-    "Advocacy/Activity Logs",
-    "Vague/Incomplete/Nonsense",
-    "Redundant/Repetitive",
-    "Solutions"
-]
 # -------------- CORE FUNCTIONS ------------------
 
 def chunk_data(data: List[Dict[str, Any]], batch_size: int) -> List[List[Dict[str, Any]]]:
@@ -266,7 +258,8 @@ def get_clean_output(response) -> Optional[Dict[str, Any]]:
                 return get_clean_output(response.get('input'))
             
             # --- Main parsing: expect {unique_challenges: [...], categories: [...]} ---
-            raw_challenges = response.get('unique_challenges')
+            # LLM sometimes uses 'challenges' instead of 'unique_challenges'
+            raw_challenges = response.get('unique_challenges') or response.get('challenges')
             raw_categories = response.get('categories')
             
             if raw_challenges is not None:
@@ -289,7 +282,15 @@ def get_clean_output(response) -> Optional[Dict[str, Any]]:
 
 def _parse_challenge_items(data) -> List[Dict[str, Any]]:
     """Parse a list of challenge items from LLM output.
+    Handles both actual lists and stringified JSON arrays from tool-use responses.
     """
+    # Handle stringified JSON (LLM sometimes returns arrays as strings in tool-use)
+    if isinstance(data, str):
+        try:
+            data = json_repair.repair_json(data, return_objects=True)
+        except Exception:
+            return []
+    
     if not isinstance(data, list):
         return []
     
@@ -314,7 +315,28 @@ def _parse_challenge_items(data) -> List[Dict[str, Any]]:
 
 
 def _parse_category_items(data) -> List[Dict[str, Any]]:
-    """Parse category count items from LLM output."""
+    """Parse category count items from LLM output.
+    Handles: list of {category_name, category_count}, dict of {name: count},
+    and stringified JSON versions of both.
+    """
+    # Handle stringified JSON
+    if isinstance(data, str):
+        try:
+            data = json_repair.repair_json(data, return_objects=True)
+        except Exception:
+            return []
+    
+    # Handle dict format: {"Challenges": 83, "Positive Observations": 4, ...}
+    if isinstance(data, dict):
+        cleaned = []
+        for name, count in data.items():
+            if name and isinstance(count, (int, float)):
+                cleaned.append({
+                    'category_name': str(name),
+                    'category_count': int(count)
+                })
+        return cleaned
+    
     if not isinstance(data, list):
         return []
     
@@ -333,10 +355,13 @@ def _parse_category_items(data) -> List[Dict[str, Any]]:
 
 
 def _normalize_challenge_counts(challenges: List[Dict[str, Any]], expected_total: int) -> List[Dict[str, Any]]:
-    """Normalize challenge counts so they sum to expected_total.
+    """Normalize challenge counts so they sum to expected_total (scales both up and down).
     """
+    if not challenges or expected_total <= 0:
+        return challenges
+
     actual_total = sum(c.get('challenge_count', 1) for c in challenges)
-    if actual_total <= expected_total or actual_total == 0:
+    if actual_total == expected_total or actual_total == 0:
         return challenges
 
     ratio = expected_total / actual_total

@@ -142,6 +142,7 @@ def run_unique_solutions_task(self, config: Dict[str, Any], input_file_content: 
                 'output_file': result.get('output_file'),
                 'iterations': result.get('iterations_completed'),
                 'final_count': len(result.get('final_solutions', [])),
+                'category_counts': result.get('category_counts', {}),
                 'stats': result.get('stats', [])
             }
         else:
