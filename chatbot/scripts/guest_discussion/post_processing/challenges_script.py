@@ -203,9 +203,11 @@ def run_unique_challenge_processing(
         output_file=output_file
     )
 
-    # Combine batch results
+    # Combine batch results (pass expected_total for cross-batch normalization)
+    expected_total = sum(c.get('challenge_count', 1) for c in selected_challenges)
     combined = combine_batch_results(
         batch_results=batch_results,
+        expected_total=expected_total,
         save_to_file=save_to_file,
         save_file_path=second_output_file
     )
@@ -330,14 +332,40 @@ def _parse_category_items(data) -> List[Dict[str, Any]]:
 
 
 
+def _normalize_challenge_counts(challenges: List[Dict[str, Any]], expected_total: int) -> List[Dict[str, Any]]:
+    """Normalize challenge counts so they sum to expected_total.
+    """
+    actual_total = sum(c.get('challenge_count', 1) for c in challenges)
+    if actual_total <= expected_total or actual_total == 0:
+        return challenges
+
+    ratio = expected_total / actual_total
+    for c in challenges:
+        c['challenge_count'] = max(1, round(c['challenge_count'] * ratio))
+
+    # Fix any rounding drift (±1 or ±2) by adjusting the largest items
+    diff = expected_total - sum(c['challenge_count'] for c in challenges)
+    challenges.sort(key=lambda c: c['challenge_count'], reverse=True)
+    for c in challenges:
+        if diff == 0:
+            break
+        adj = 1 if diff > 0 else -1
+        if c['challenge_count'] + adj >= 1:
+            c['challenge_count'] += adj
+            diff -= adj
+
+    return challenges
+
 def combine_batch_results(
     batch_results: Dict[str, Any] = None,
+    expected_total: int = None,
     output_file_path: str = OUTPUT_FILE,
     save_to_file: bool = False,
     save_file_path: str = SECOND_OUTPUT_FILE
 ) -> Dict[str, Any]:
     """
     Combine batch-wise LLM output into a single result.
+    If expected_total is provided, normalizes combined counts to match it.
     """
     all_challenges = []
     category_counts = defaultdict(int)
@@ -373,12 +401,15 @@ def combine_batch_results(
                         'category': challenge.get('category', '')
                     })
         
-        # Aggregate category counts
-        categories_list = batch_data.get("categories")
-        if isinstance(categories_list, list):
-            for cat in categories_list:
-                if isinstance(cat, dict) and cat.get('category_name'):
-                    category_counts[cat['category_name']] += cat.get('category_count', 0)
+    # Normalize challenge counts to match expected_total (once, at combine level)
+    if expected_total is not None:
+        all_challenges = _normalize_challenge_counts(all_challenges, expected_total)
+
+    # Compute category counts from the normalized challenge items (so both are consistent)
+    for challenge in all_challenges:
+        cat = challenge.get('category', '')
+        if cat:
+            category_counts[cat] += challenge.get('challenge_count', 1)
 
     # Save if requested
     if save_to_file:
