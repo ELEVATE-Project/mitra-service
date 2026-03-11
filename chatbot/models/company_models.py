@@ -561,8 +561,13 @@ class Flow(models.Model):
                 'languages': "Languages must be a list of language codes."
             })
 
+        if len(self.languages) != len(list(set(self.languages))):
+            raise ValidationError({
+                'languages': "Language codes must be unique."
+            })
+
     def save(self, *args, **kwargs):
-        self.full_clean()
+        self.clean()
         super().save(*args, **kwargs)
 
 
