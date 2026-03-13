@@ -19,6 +19,7 @@ import traceback
 
 @api_view(['POST'])
 def end_story(request):
+    error_type='generic_error'
     try:
         profile_id = request.data['profile_id']
         session = request.data['session']
@@ -31,10 +32,11 @@ def end_story(request):
             return Response({
                 'status': 'error',
                 'message': 'session is mandatory',
-                'error_message': 'session is mandatory'
+                'error_message': 'session is mandatory',
+                'error_type': error_type,
             }, status=400)
         else:
-            id, content, error_msg = create_story_object(
+            id, content, error_msg, error_type = create_story_object(
                 profile_id=profile_id, session=session,
                 access_token=access_token, flow=flow, language=language
             )
@@ -43,7 +45,8 @@ def end_story(request):
                 return Response({
                     'status': 'error',
                     'message': error_msg,
-                    'error_message': error_msg
+                    'error_message': error_msg,
+                    'error_type': error_type,
                 }, status=400)
 
             return Response({
@@ -51,14 +54,14 @@ def end_story(request):
                 'message': 'Story created',
                 'id': id,
                 'content': content,
-                'error_message': error_msg
             }, status=200)
     except Exception as e:
         traceback.print_exc()
         return Response({
             'status': 'error',
             'message': '',
-            'error_message': f'{e}'
+            'error_message': f'{e}',
+            'error_type': error_type,
         }, status=500)
 
 
