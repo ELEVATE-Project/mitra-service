@@ -24,11 +24,12 @@ VOICE_PROVIDER_DEFAULTS = {
         VoiceType.SpeechToText: {
             "chunk_duration": 10,
             "model": "latest_long",
-            "enable_automatic_punctuation": True,
-            "enable_spoken_punctuation": True,
+            "location":"global",
+            "enable_automatic_punctuation": False,
+            "enable_spoken_punctuation": False,
             "enable_spoken_emojis": False,
             "max_alternatives": 1,
-            "profanity_filter": True,
+            "profanity_filter": False,
             "enable_word_time_offsets": False,
             "boost_words": []
         },
