@@ -389,6 +389,7 @@ class LanguageMapping:
         "hi": {"IN": "hi-IN"},
         "kn": {"IN": "kn-IN"},
         "te": {"IN": "te-IN"},
+        "or": {"IN": "od-IN"},
     }
 
     @classmethod

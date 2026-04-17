@@ -61,6 +61,14 @@ VOICE_PROVIDER_DEFAULTS = {
             "output_script": "fully-native",
             "numerals_format": "native"
         },
+        VoiceType.TextToSpeech: {
+            "model": "bulbul:v3",
+            "speaker": "shubh",
+            "speech_sample_rate": 24000,
+            "output_audio_codec": "wav",
+            "pace": 1.0,
+            "temperature": 0.6
+        },
 
         VoiceType.Transliterate: {
             "numerals_format": "native",
