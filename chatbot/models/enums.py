@@ -279,6 +279,7 @@ class StoryLanguageChoices(models.TextChoices):
     HINDI = 'hi', _('Hindi')
     KANNADA = 'kn', _('Kannada')
     TELUGU = 'te', _('Telugu')
+    ODIA = 'or', _('Odia')
 
 
 class StorySourceChoices(models.TextChoices):
@@ -354,6 +355,7 @@ class RouteLanguageChoices(models.TextChoices):
     HINDI = 'hi', _('/hindi')
     KANNADA = 'kn', _('/kannada')
     TELUGU = 'te', _('/telugu')
+    ODIA = 'or', _('/odia')
 
 
 class VoiceProvider(models.TextChoices):
@@ -389,6 +391,7 @@ class LanguageMapping:
         "hi": {"IN": "hi-IN"},
         "kn": {"IN": "kn-IN"},
         "te": {"IN": "te-IN"},
+        "or": {"IN": "od-IN"},
     }
 
     @classmethod
