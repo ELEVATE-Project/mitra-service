@@ -30,7 +30,14 @@ def transcribe_chunk(client, project_id, location, config, chunk_number, chunk):
                     transcript += res_result.alternatives[0].transcript + " "
         return (chunk_number, transcript.strip())
     except Exception as e:
-        logger.error('Error during API request for chunk %s : %s', chunk_number, e, exc_info=True)
+        logger.error(
+            'Error during API request for chunk %s : %s | location=%s recognizer=%s',
+            chunk_number,
+            e,
+            location,
+            request.recognizer,
+            exc_info=True,
+        )
         traceback.print_exc()
         return (chunk_number, "")
 
@@ -44,8 +51,6 @@ def transcribe_multiple_languages_v2(
 
     try:
         other_params = voice_provider.other_params or {}
-
-        logger.info("language_codes %s", language_codes)
         location = other_params.get("location", "global")
 
         client_options = None
@@ -126,7 +131,6 @@ def transcribe_multiple_languages_v2(
                 results.append((chunk_number, transcript))
 
         results.sort()  # Ensure correct order
-        logger.info("sorted results %s", results)
         full_transcript = " ".join(transcript for _, transcript in results)
 
         return {'status': 200, 'content': full_transcript}

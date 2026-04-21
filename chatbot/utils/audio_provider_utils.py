@@ -12,6 +12,10 @@ from chatbot.translate.sarvam.sarvam import SarvamLanguageService
 from chatbot.translate.sarvam.speech_to_text import transcribe_sarvam_multiple_chunks
 from chatbot.translate.sarvam.text_to_speech import sarvam_text_to_speech
 from django.conf import settings
+import logging
+
+
+logger = logging.getLogger('django')
 
 
 def get_voice_provider(company_bot, voice_type, source_language=None, target_language=None):
@@ -22,8 +26,7 @@ def get_voice_provider(company_bot, voice_type, source_language=None, target_lan
         else source_language if source_language and source_language.lower() != "en"
         else "en"
     )
-    print("voice_type: ", voice_type)
-    print("language: ", language)
+
     voice = Voice.objects.filter(
         company_bot=company_bot,
         type=voice_type,
@@ -77,6 +80,12 @@ def speech_text_provider(company_bot, base64, audio_format, source_language):
     voice_provider = get_voice_provider(
         company_bot=company_bot, voice_type=VoiceType.SpeechToText, source_language=source_language
     )
+    if not voice_provider:
+        return {
+            'status': 500,
+            'content': "No voice configuration found!"
+        }
+
     if voice_provider.provider == VoiceProvider.AI4Bharat:
         response = transcribe_ai4bharat_multiple_chunks(
             base64_audio_file=base64, source_language=source_language, audio_format=audio_format,
@@ -102,7 +111,7 @@ def speech_text_provider(company_bot, base64, audio_format, source_language):
     elif voice_provider.provider == VoiceProvider.SARVAM:
         response = transcribe_sarvam_multiple_chunks(
             base64_audio_file=base64, audio_format=audio_format,
-            source_language=LanguageMapping.get_mapped_language(source_language),
+            source_language=LanguageMapping.get_sarvam_language(source_language),
             voice_provider=voice_provider
         )
 
@@ -130,15 +139,17 @@ def text_translate_provider(message_body, target_language, source_language, voic
             secret = settings.SECRETS
             response = translate_text(
                 project_id=secret.get('project_id'), text=message_body,
-                source_language_code=LanguageMapping.get_mapped_language(source_language),
-                target_language_code=LanguageMapping.get_mapped_language(target_language),
+                source_language_code=LanguageMapping.get_google_translate_language(source_language),
+                target_language_code=LanguageMapping.get_google_translate_language(target_language),
                 voice_provider=voice_provider
             )
         elif voice_provider.provider == VoiceProvider.SARVAM:
             service = SarvamLanguageService()
             response = service.translate(
-                input_text=message_body, source_lang=LanguageMapping.get_mapped_language(source_language),
-                target_lang=LanguageMapping.get_mapped_language(target_language), voice_provider=voice_provider
+                input_text=message_body,
+                source_lang=LanguageMapping.get_sarvam_language(source_language),
+                target_lang=LanguageMapping.get_sarvam_language(target_language),
+                voice_provider=voice_provider
             )
         elif voice_provider.provider == VoiceProvider.CUSTOM_LLM:
             other = getattr(voice_provider, "other_params", {}) or {}
