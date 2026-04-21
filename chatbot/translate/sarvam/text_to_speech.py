@@ -27,7 +27,7 @@ def sarvam_text_to_speech(message, source_language, voice_provider):
 
         payload = {
             "text": message,
-            "target_language_code": LanguageMapping.get_mapped_language(source_language),
+            "target_language_code": LanguageMapping.get_sarvam_language(source_language),
             "model": other.get("model", "bulbul:v3"),
             "speaker": requested_speaker or "shubh",
             "speech_sample_rate": other.get("speech_sample_rate", 24000),
