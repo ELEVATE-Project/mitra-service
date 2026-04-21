@@ -2,6 +2,7 @@ import traceback
 from typing import List
 from google.cloud.speech_v2 import SpeechClient
 from google.cloud.speech_v2.types import cloud_speech
+from google.api_core.client_options import ClientOptions
 import base64
 import concurrent.futures
 import logging
@@ -11,10 +12,10 @@ from chatbot.translate.base.speech_to_text import is_silent_chunk, split_audio
 logger = logging.getLogger('django')
 
 
-def transcribe_chunk(client, project_id, config, chunk_number, chunk):
+def transcribe_chunk(client, project_id, location, config, chunk_number, chunk):
     """Transcribes a single chunk of audio."""
     request = cloud_speech.RecognizeRequest(
-        recognizer=f"projects/{project_id}/locations/global/recognizers/_",
+        recognizer=f"projects/{project_id}/locations/{location}/recognizers/_",
         config=config,
         content=chunk,
     )
@@ -40,12 +41,21 @@ def transcribe_multiple_languages_v2(
         audio_file: str,
         voice_provider: any
 ) -> dict:
-    client = SpeechClient()
 
     try:
         other_params = voice_provider.other_params or {}
 
         logger.info("language_codes %s", language_codes)
+        location = other_params.get("location", "global")
+
+        client_options = None
+
+        if location != "global":
+            client_options = ClientOptions(
+                api_endpoint=f"{location}-speech.googleapis.com"
+            )
+
+        client = SpeechClient(client_options=client_options)
 
         config_kwargs = {
             "auto_decoding_config": cloud_speech.AutoDetectDecodingConfig(),
@@ -104,7 +114,9 @@ def transcribe_multiple_languages_v2(
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_to_chunk = {
-                executor.submit(transcribe_chunk, client, project_id, config, chunk_number, chunk): chunk_number
+                executor.submit(
+                    transcribe_chunk, client, project_id, location, config, chunk_number, chunk
+                ): chunk_number
                 for chunk_number, chunk in chunks
             }
 

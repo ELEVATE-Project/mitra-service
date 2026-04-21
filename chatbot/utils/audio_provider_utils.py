@@ -10,6 +10,7 @@ from chatbot.translate.google.google_tts import google_text_to_speech
 from chatbot.translate.openai.openai_stt import transcribe_audio
 from chatbot.translate.sarvam.sarvam import SarvamLanguageService
 from chatbot.translate.sarvam.speech_to_text import transcribe_sarvam_multiple_chunks
+from chatbot.translate.sarvam.text_to_speech import sarvam_text_to_speech
 from django.conf import settings
 
 
@@ -43,6 +44,12 @@ def text_speech_provider(company_bot, text, source_language):
     voice_provider = get_voice_provider(
         company_bot=company_bot, voice_type=VoiceType.TextToSpeech, source_language=source_language
     )
+    if not voice_provider:
+        return {
+            'status': 500,
+            'content': "No voice configuration found!"
+        }
+
     if voice_provider.provider == VoiceProvider.AI4Bharat:
         response = ai4bharat_text_speech(
             text=text, gender=voice_provider.gender, source_language=source_language,
@@ -52,6 +59,10 @@ def text_speech_provider(company_bot, text, source_language):
         response = google_text_to_speech(
             message=text, language_code=LanguageMapping.get_mapped_language(source_language),
             voice_provider=voice_provider
+        )
+    elif voice_provider.provider == VoiceProvider.SARVAM:
+        response = sarvam_text_to_speech(
+            message=text, source_language=source_language, voice_provider=voice_provider
         )
     else:
         return {
