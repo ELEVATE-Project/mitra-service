@@ -39,6 +39,9 @@ class ChatSession(models.Model):
         else:
             company_bot = CompanyBot.objects.filter(route='/mohini_title').first()
 
+        if not company_bot:
+            return
+
         messages = get_guided_chat(
             company_bot=company_bot, company_chats=company_chats
         )
