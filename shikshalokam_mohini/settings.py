@@ -427,6 +427,7 @@ LOGGING = {
             'interval': 1,        # 1 day interval
             'backupCount': 30,     # Keep 30 backup copies
             'formatter': 'verbose',
+            "delay": False,
         },
         'info_file': {
             'level': 'INFO',
@@ -436,6 +437,7 @@ LOGGING = {
             'interval': 1,        # 1 day interval
             'backupCount': 30,     # Keep 30 backup copies
             'formatter': 'verbose',
+            "delay": False,
         },
         'warning_file': {
             'level': 'WARNING',
@@ -445,6 +447,7 @@ LOGGING = {
             'interval': 1,        # 1 day interval
             'backupCount': 30,     # Keep 30 backup copies
             'formatter': 'verbose',
+            "delay": False,
         },
         'error_file': {
             'level': 'ERROR',
@@ -454,6 +457,7 @@ LOGGING = {
             'interval': 1,        # 1 day interval
             'backupCount': 30,     # Keep 30 backup copies
             'formatter': 'verbose',
+            "delay": False,
         },
     },
     'loggers': {
