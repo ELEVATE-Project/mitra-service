@@ -428,7 +428,7 @@ class FlowAdminForm(ModelForm):
         super().__init__(*args, **kwargs)
 
         value = self.instance.languages if self.instance and self.instance.pk else None
-        self.fields["languages"].initial = value or ["en", "hi", "kn", "te", "or"]
+        self.fields["languages"].initial = value or ["en", "hi", "kn", "te"]
 
     def clean_languages(self):
         value = self.cleaned_data.get("languages", [])
