@@ -489,5 +489,7 @@ CRONJOBS = [
     ('0 12 * * *', 'chatbot.cron_tasks.shiksha_samvad.story_creation.create_story',
     '>> /tmp/shiksha_samvad_story_creation.log 2>&1'),
     ('0 */2 * * *', 'chatbot.cron_tasks.telangana_ptm_pilot.school_classification.main',
-    '>> /tmp/telangana_ptm_pilot_school_classification.log 2>&1')
+    '>> /tmp/telangana_ptm_pilot_school_classification.log 2>&1'),
+    ('0 12 * * *', 'chatbot.scripts.translate_vern_responses.translate_untranslated_bot_chats',
+    '>> /tmp/translate_vern_responses.log 2>&1')
 ]
