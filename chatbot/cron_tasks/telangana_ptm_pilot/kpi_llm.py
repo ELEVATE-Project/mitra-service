@@ -1,4 +1,3 @@
-import hashlib
 import json
 import logging
 import traceback
@@ -9,30 +8,6 @@ logger = logging.getLogger('django')
 
 BOT_ROUTE = '/telangana-ptm-metrics'
 LLM_BATCH_SIZE = 25
-
-
-def _sha1(text: str) -> str:
-    return hashlib.sha1(text.encode()).hexdigest()
-
-
-def _dedup(items: list) -> tuple:
-    """
-    items: list of (session_id, field, text)
-    Returns (unique_items, hash_to_sessions)
-    hash_to_sessions: {(field, sha1): [session_id, ...]}
-    """
-    seen = {}
-    unique = []
-    hash_to_sessions = {}
-
-    for session_id, field, text in items:
-        key = (field, _sha1(text))
-        if key not in seen:
-            seen[key] = len(unique)
-            unique.append((session_id, field, text))
-        hash_to_sessions.setdefault(key, []).append(session_id)
-
-    return unique, hash_to_sessions
 
 
 def _build_messages(batch: list) -> list:
@@ -52,19 +27,14 @@ def _parse_response(response) -> dict:
         return {}
 
 
-def llm_classify_batch(items: list, company_bot) -> dict:
+def llm_classify_batches(items: list, company_bot):
     """
     items: list of (session_id, field, text)
-    Returns {session_id: {field: label_dict}}
+    Yields (batch_session_ids: set[str], result: {session_id: {field: label_dict}}) per batch.
     """
-    if not items:
-        return {}
-
-    unique, hash_to_sessions = _dedup(items)
-    output = {}
-
-    for i in range(0, len(unique), LLM_BATCH_SIZE):
-        batch = unique[i:i + LLM_BATCH_SIZE]
+    for i in range(0, len(items), LLM_BATCH_SIZE):
+        batch = items[i:i + LLM_BATCH_SIZE]
+        batch_session_ids = {str(sid) for sid, _, _ in batch}
         messages = _build_messages(batch)
         try:
             response = handle_bedrock_model(
@@ -79,14 +49,4 @@ def llm_classify_batch(items: list, company_bot) -> dict:
         except Exception:
             logger.error('LLM batch %d-%d failed:\n%s', i, i + LLM_BATCH_SIZE, traceback.format_exc())
             parsed = {}
-
-        # Fan-out deduped results to all sessions sharing same (field, text)
-        for rep_session_id, field, text in batch:
-            key = (field, _sha1(text))
-            field_result = parsed.get(str(rep_session_id), {}).get(field)
-            if field_result is None:
-                continue
-            for sid in hash_to_sessions.get(key, [rep_session_id]):
-                output.setdefault(str(sid), {})[field] = field_result
-
-    return output
+        yield batch_session_ids, parsed

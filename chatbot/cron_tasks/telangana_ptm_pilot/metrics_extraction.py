@@ -1,4 +1,5 @@
 import logging
+import traceback
 from collections import defaultdict
 from datetime import timedelta
 
@@ -14,7 +15,7 @@ from chatbot.cron_tasks.telangana_ptm_pilot.kpi_rules import (
     STAGE_CLASSIFIERS,
     CONFIDENCE_THRESHOLD,
 )
-from chatbot.cron_tasks.telangana_ptm_pilot.kpi_llm import llm_classify_batch
+from chatbot.cron_tasks.telangana_ptm_pilot.kpi_llm import llm_classify_batches
 
 logger = logging.getLogger('django')
 
@@ -25,10 +26,15 @@ def load_sessions_for_metrics() -> list:
         session=OuterRef('session'),
         created_at__gte=one_hour_ago,
     )
+    already_processed = Story.objects.filter(
+        session=OuterRef('session'),
+        other_params__kpi_processed=True,
+    )
     return list(
         ChatSession.objects
         .filter(session_type='telangana-ptm-pilot')
         .exclude(Exists(recent_story))
+        .exclude(Exists(already_processed))
         .values_list('session', flat=True)
     )
 
@@ -50,6 +56,25 @@ def _effective_text(chat: dict) -> str:
     return chat['translated_message'] or chat['message'] or ''
 
 
+def _classify_stage_kpis(session_id: str, chats: list, keywords: dict) -> tuple:
+    rule_metrics = {}
+    llm_queue = []
+    stage_texts = {}
+    for chat in chats:
+        if chat['sender_id'] != 1 and chat['stage'] in STAGE_CLASSIFIERS:
+            stage_texts[chat['stage']] = _effective_text(chat)
+    for stage, text in stage_texts.items():
+        if not text:
+            continue
+        field_name, classifier_fn = STAGE_CLASSIFIERS[stage]
+        label, conf = classifier_fn(text, keywords)
+        if label is not None and conf >= CONFIDENCE_THRESHOLD:
+            rule_metrics[field_name] = label
+        else:
+            llm_queue.append((session_id, field_name, text))
+    return rule_metrics, llm_queue
+
+
 def _extract_kpi_for_session(session_id: str, chats: list, keywords: dict) -> tuple:
     """
     Returns (rule_metrics: dict, llm_queue: list of (session_id, field, text))
@@ -57,10 +82,8 @@ def _extract_kpi_for_session(session_id: str, chats: list, keywords: dict) -> tu
     rule_metrics = {}
     llm_queue = []
 
-    # Sentiment: concat all user messages
     user_texts = [_effective_text(c) for c in chats if c['sender_id'] != 1]
     transcript = ' '.join(user_texts).strip()
-
     if transcript:
         label, conf = classify_sentiment(transcript, keywords)
         if label is not None and conf >= CONFIDENCE_THRESHOLD:
@@ -68,31 +91,22 @@ def _extract_kpi_for_session(session_id: str, chats: list, keywords: dict) -> tu
         else:
             llm_queue.append((session_id, 'sentiment', transcript))
 
-    # Stage KPIs: last user message per stage
-    stage_texts = {}
-    for chat in chats:
-        if chat['sender_id'] != 1 and chat['stage'] in STAGE_CLASSIFIERS:
-            stage_texts[chat['stage']] = _effective_text(chat)
-
-    for stage, text in stage_texts.items():
-        field_name, classifier_fn = STAGE_CLASSIFIERS[stage]
-        if not text:
-            continue
-        label, conf = classifier_fn(text, keywords)
-        if label is not None and conf >= CONFIDENCE_THRESHOLD:
-            rule_metrics[field_name] = label
-        else:
-            llm_queue.append((session_id, field_name, text))
+    stage_metrics, stage_llm = _classify_stage_kpis(session_id, chats, keywords)
+    rule_metrics.update(stage_metrics)
+    llm_queue.extend(stage_llm)
 
     return rule_metrics, llm_queue
 
 
-def _merge_metrics_into_story(session_id: str, new_metrics: dict) -> None:
+def _save_story_kpi(session_id: str, metrics: dict, error: str = None) -> None:
     story = Story.objects.filter(session=session_id).first()
     if not story:
         logger.info('No Story for session=%s, skipping', session_id)
         return
-    story.other_params = {**(story.other_params or {}), **new_metrics}
+    params = {**(story.other_params or {}), **metrics, 'kpi_processed': True}
+    if error:
+        params['kpi_error'] = error
+    story.other_params = params
     story.save(update_fields=['other_params', 'updated_at'])
 
 
@@ -110,32 +124,44 @@ def extract_metrics():
         logger.info('No sessions to process for KPI metrics extraction.')
         return
 
-    logger.info('Processing %d sessions for KPI metrics', len(sessions))
+    logger.info('KPI extraction starting — %d sessions to process', len(sessions))
     chat_map = _build_session_chat_map(sessions)
 
     all_rule_metrics = {}
     all_llm_queue = []
+    failed_sessions = {}
 
     for session_id in sessions:
-        chats = chat_map.get(session_id, [])
-        rule_metrics, llm_queue = _extract_kpi_for_session(session_id, chats, keywords)
-        all_rule_metrics[session_id] = rule_metrics
+        try:
+            chats = chat_map.get(session_id, [])
+            rule_metrics, llm_queue = _extract_kpi_for_session(session_id, chats, keywords)
+            all_rule_metrics[str(session_id)] = rule_metrics
+            all_llm_queue.extend(llm_queue)
+        except Exception:
+            err = traceback.format_exc()
+            logger.error('Rule extraction failed for session=%s:\n%s', session_id, err)
+            failed_sessions[str(session_id)] = err
 
-        # Save rule-classified fields immediately — no need to wait for LLM
-        if rule_metrics:
-            _merge_metrics_into_story(session_id, rule_metrics)
+    sessions_needing_llm = {str(sid) for sid, _, _ in all_llm_queue}
 
-        all_llm_queue.extend(llm_queue)
+    saved = 0
+    for session_id in sessions:
+        sid = str(session_id)
+        if sid not in sessions_needing_llm:
+            _save_story_kpi(sid, dict(all_rule_metrics.get(sid, {})), failed_sessions.get(sid))
+            saved += 1
 
     if all_llm_queue:
         logger.info('Sending %d items to LLM for KPI classification', len(all_llm_queue))
-        llm_results = llm_classify_batch(all_llm_queue, company_bot)
+        for batch_sids, batch_result in llm_classify_batches(all_llm_queue, company_bot):
+            for sid in batch_sids:
+                merged = dict(all_rule_metrics.get(sid, {}))
+                for field, value in batch_result.get(sid, {}).items():
+                    if field not in merged:
+                        merged[field] = value
+                if sid not in batch_result and sid not in failed_sessions:
+                    failed_sessions[sid] = 'LLM classification returned no results'
+                _save_story_kpi(sid, merged, failed_sessions.get(sid))
+                saved += 1
 
-        # Merge LLM results per session as they arrive; rule metrics already saved, so rule wins
-        for session_id, field_results in llm_results.items():
-            rule_fields = set(all_rule_metrics.get(session_id, {}).keys())
-            llm_only = {f: v for f, v in field_results.items() if f not in rule_fields}
-            if llm_only:
-                _merge_metrics_into_story(session_id, llm_only)
-
-    logger.info('KPI metrics extraction complete.')
+    logger.info('KPI extraction complete — %d/%d sessions saved', saved, len(sessions))
