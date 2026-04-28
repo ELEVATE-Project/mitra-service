@@ -219,7 +219,12 @@ def get_story_html(story, profile, flow):
         elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/chaupal-story')
         else:
-            company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
+            flow_obj = Flow.objects.filter(flow_route=flow).first() or \
+                       Flow.objects.filter(flow_route=f'/{flow}').first()
+            if flow_obj and flow_obj.story_bot:
+                company_bot = flow_obj.story_bot
+            else:
+                company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
     else:
         if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.Reflection]:
             company_bot = CompanyBot.objects.get(route='/story')
@@ -228,7 +233,12 @@ def get_story_html(story, profile, flow):
         elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
             company_bot = CompanyBot.objects.get(route='/chaupal-story')
         else:
-            company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
+            flow_obj = Flow.objects.filter(flow_route=flow).first() or \
+                       Flow.objects.filter(flow_route=f'/{flow}').first()
+            if flow_obj and flow_obj.story_bot:
+                company_bot = flow_obj.story_bot
+            else:
+                company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
 
     translation_languages = list(story.translations.values_list('language', flat=True))
     chat_session = ChatSession.objects.filter(session=story.session).first()
@@ -435,10 +445,17 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         print("profile: ", profile)
         print("story: ", story.title)
         print("story format: ", story.formatted_content)
-        if isinstance(flow, str):
-            html_content = get_story_html(story=story, profile=profile, flow=flow)
+        language = chatsession.get("language", StoryLanguageChoices.ENGLISH)
+        flow_obj = Flow.objects.filter(flow_route=flow).first() or \
+                   Flow.objects.filter(flow_route=f'/{flow}').first()
+        has_pdf_template = flow_obj and PDFTemplates.objects.filter(flow=flow_obj).exists()
+        if has_pdf_template:
+            html_content = get_html_from_template(
+                story=story, profile=profile, flow=flow,
+                auth=(profile is not None), language=language
+            )
         else:
-            html_content = get_html_from_template(story=story, profile=profile, flow=flow, language=chatsession.get("language", StoryLanguageChoices.ENGLISH))
+            html_content = get_story_html(story=story, profile=profile, flow=flow)
 
         pdf_generated = generate_pdf_with_gotenberg(html_content)
         # print("pdf_generated: ", pdf_generated)
