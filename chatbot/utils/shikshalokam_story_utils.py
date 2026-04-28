@@ -219,8 +219,7 @@ def get_story_html(story, profile, flow):
         elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/chaupal-story')
         else:
-            flow_obj = Flow.objects.filter(flow_route=flow).first() or \
-                       Flow.objects.filter(flow_route=f'/{flow}').first()
+            flow_obj = Flow.objects.filter(flow_route=flow).first()
             if flow_obj and flow_obj.story_bot:
                 company_bot = flow_obj.story_bot
             else:
@@ -233,8 +232,7 @@ def get_story_html(story, profile, flow):
         elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
             company_bot = CompanyBot.objects.get(route='/chaupal-story')
         else:
-            flow_obj = Flow.objects.filter(flow_route=flow).first() or \
-                       Flow.objects.filter(flow_route=f'/{flow}').first()
+            flow_obj = Flow.objects.filter(flow_route=flow).first()
             if flow_obj and flow_obj.story_bot:
                 company_bot = flow_obj.story_bot
             else:
