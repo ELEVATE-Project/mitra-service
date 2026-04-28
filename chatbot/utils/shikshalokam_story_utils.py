@@ -219,11 +219,7 @@ def get_story_html(story, profile, flow):
         elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
             company_bot = CompanyBot.objects.get(company=profile.company, route='/chaupal-story')
         else:
-            flow_obj = Flow.objects.filter(flow_route=flow).first()
-            if flow_obj and flow_obj.story_bot:
-                company_bot = flow_obj.story_bot
-            else:
-                company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
+            company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
     else:
         if flow in [SessionFlowName.LoginMiStory, SessionFlowName.SsoFlow, SessionFlowName.Reflection]:
             company_bot = CompanyBot.objects.get(route='/story')
@@ -232,11 +228,7 @@ def get_story_html(story, profile, flow):
         elif flow in [SessionFlowName.GuestDiscussion, SessionFlowName.LoginDiscussion]:
             company_bot = CompanyBot.objects.get(route='/chaupal-story')
         else:
-            flow_obj = Flow.objects.filter(flow_route=flow).first()
-            if flow_obj and flow_obj.story_bot:
-                company_bot = flow_obj.story_bot
-            else:
-                company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
+            company_bot = CompanyBot.objects.get(company=profile.company, route=f'/{flow}-story')
 
     translation_languages = list(story.translations.values_list('language', flat=True))
     chat_session = ChatSession.objects.filter(session=story.session).first()
@@ -444,8 +436,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         print("story: ", story.title)
         print("story format: ", story.formatted_content)
         language = chatsession.get("language", StoryLanguageChoices.ENGLISH)
-        flow_obj = Flow.objects.filter(flow_route=flow).first() or \
-                   Flow.objects.filter(flow_route=f'/{flow}').first()
+        flow_obj = Flow.objects.filter(flow_route=flow).first()
         has_pdf_template = flow_obj and PDFTemplates.objects.filter(flow=flow_obj).exists()
         if has_pdf_template:
             html_content = get_html_from_template(
@@ -472,11 +463,11 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         story_media.file.save(pdf_file_name, pdf_content)
         story_media.include_in_story = False
         story_media.save()
-        print("StoryMedia updated and saved successfully.")
-        print(f"Updated name: {story_media.name}")
-        print(f"Updated file path: {story_media.file}")
-        print(f"Include in story: {story_media.include_in_story}")
-        print(f"Public url: {story_media.get_public_url()}")
+        logger.info("StoryMedia updated and saved successfully.")
+        logger.info(f"Updated name: {story_media.name}")
+        logger.info(f"Updated file path: {story_media.file}")
+        logger.info(f"Include in story: {story_media.include_in_story}")
+        logger.info(f"Public url: {story_media.get_public_url()}")
         chat_session = ChatSession.objects.get(session=session)
         project_id = chat_session.project_id
 
