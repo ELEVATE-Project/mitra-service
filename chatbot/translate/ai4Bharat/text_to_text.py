@@ -45,7 +45,14 @@ def call_ai4bharat_translation_api(voice_provider, source_language, target_langu
     }
 
     try:
-        response = requests.post(api_url, json=payload, headers=headers, timeout=10)
+        request_timeout = other_params.get("request_timeout", 10)
+
+        try:
+            request_timeout = float(request_timeout)
+        except Exception:
+            request_timeout = 10
+
+        response = requests.post(api_url, json=payload, headers=headers, timeout=request_timeout)
         print("Response: ", response)
         print("Res text: ", response.json())
         logger.info(f"Response from AI4Bharat Text Translation {response}")
