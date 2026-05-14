@@ -223,8 +223,17 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
                 continue
             try:
                 google_glossary.sync_glossary_for_voice(inst)
+
+                messages.success(
+                    request,
+                    f"Google glossary synced successfully for Voice id={inst.pk}",
+                )
             except Exception as e:
-                logger.exception("Glossary sync failed for Voice id=%s", inst.pk)
+                logger.error(
+                    "Glossary sync failed for Voice id=%s",
+                    inst.pk,
+                    exc_info=True
+                )
                 messages.error(
                     request,
                     f"Google glossary sync failed for Voice id={inst.pk} (save completed): {e}",

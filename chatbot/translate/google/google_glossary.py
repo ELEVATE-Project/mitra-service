@@ -72,7 +72,11 @@ def delete_glossary_if_exists(client: translate.TranslationServiceClient, glossa
     except NotFound:
         logger.debug("No existing glossary to delete: %s", glossary_resource_name)
     except Exception:
-        logger.exception("Failed while deleting glossary: %s", glossary_resource_name)
+        logger.error(
+            "Failed while deleting glossary: %s",
+            glossary_resource_name,
+            exc_info=True
+        )
 
 
 def create_glossary(
@@ -142,3 +146,9 @@ def sync_glossary_for_voice(voice: Voice) -> None:
     params["location"] = location
     Voice.objects.filter(pk=voice.pk).update(other_params=params)
     voice.other_params = params
+
+    logger.info(
+        "Google glossary synced successfully for Voice id=%s glossary_id=%s",
+        voice.pk,
+        glossary_id
+    )
