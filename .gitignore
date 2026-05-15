@@ -1,1 +1,16 @@
 /node-module
+
+/logs/
+*.log
+.env
+.idea
+shikshalokam_mohini/**/__pycache__/
+build/
+.envrc
+dist/
+**__pycache__/
+
+.vscode/
+.claude/
+.deepeval/
+config/
