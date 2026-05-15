@@ -7,12 +7,13 @@ from chatbot.filter.admin_filter import (CompanyChatCompanyFilter, ChatSessionFi
                                          ProfileStateFilter, ProfileCompanyChatFilter, ProfileEmailFilter)
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import Company, Profile, ProfileType, CompanyBot, CompanyChat, ChatSession, \
-    CompanyBotTypeChoices, Voice, ImageConfiguration, Flow
+    CompanyBotTypeChoices, Voice, VoiceProvider, VoiceType, ImageConfiguration, Flow
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.resources.resource import CompanyChatResource
 from chatbot.resources.company_resource import ChatSessionResource
 from django.shortcuts import redirect
 from django.contrib import messages
+import logging
 from django.urls import path
 from django.http import HttpResponseRedirect
 from django.urls import reverse
@@ -185,6 +186,59 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
             # This example assumes not.
             self.inlines = [VoiceProviderAdmin]
         return super().changeform_view(request, object_id, form_url, extra_context)
+
+    # Sync Google glossary for TextToText voice providers after inline save
+    def save_formset(self, request, form, formset, change):
+        if getattr(formset, "model", None) is not Voice:
+            return super().save_formset(request, form, formset, change)
+
+        from chatbot.translate.google import google_glossary
+
+        logger = logging.getLogger("django")
+
+        old_entries_by_pk = {}
+        for f in formset.forms:
+            if f.instance.pk:
+                v = Voice.objects.filter(pk=f.instance.pk).only("other_params").first()
+                if v and v.other_params and "glossary_entries" in v.other_params:
+                    old_entries_by_pk[v.pk] = google_glossary.normalize_glossary_entries(
+                        v.other_params.get("glossary_entries")
+                    )
+
+        super().save_formset(request, form, formset, change)
+
+        for f in formset.forms:
+            if not f.instance.pk or f.cleaned_data.get("DELETE"):
+                continue
+            inst = Voice.objects.filter(pk=f.instance.pk).first()
+            if not inst or inst.provider != VoiceProvider.GOOGLE or inst.type != VoiceType.TextToText:
+                continue
+            params = inst.other_params or {}
+            if "glossary_entries" not in params:
+                continue
+            new_entries = google_glossary.normalize_glossary_entries(params.get("glossary_entries"))
+            if not new_entries:
+                continue
+            if new_entries == old_entries_by_pk.get(inst.pk):
+                continue
+            try:
+                google_glossary.sync_glossary_for_voice(inst)
+
+                messages.success(
+                    request,
+                    f"Google glossary synced successfully for Voice id={inst.pk}",
+                )
+            except Exception as e:
+                logger.error(
+                    "Glossary sync failed for Voice id=%s",
+                    inst.pk,
+                    exc_info=True
+                )
+                messages.error(
+                    request,
+                    f"Google glossary sync failed for Voice id={inst.pk} (save completed): {e}",
+                )
+
 
     def duplicate_bot(self, request, queryset):
         if queryset.count() != 1:
