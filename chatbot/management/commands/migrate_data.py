@@ -737,7 +737,6 @@ def migrate_chat_sessions(ctx, scope, batch_size, dry_run, stdout):
         for src in batch:
             s.processed += 1
             if src.session in existing:
-                s.skipped += 1
                 ctx.skipped_sessions.add(src.session)
                 ctx.log_skip("ChatSession", src.id, f"session '{src.session}' exists in target")
                 continue
@@ -773,6 +772,7 @@ def migrate_chat_sessions(ctx, scope, batch_size, dry_run, stdout):
 
 def migrate_company_chats(ctx, scope, batch_size, dry_run, stdout):
     s = ctx.stat("CompanyChat")
+    valid_sessions = set(ChatSession.objects.values_list("session", flat=True))
     date_filter = _date_filter(scope)
     qs = CompanyChat.objects.using(SRC).filter(**date_filter)
 
@@ -781,6 +781,9 @@ def migrate_company_chats(ctx, scope, batch_size, dry_run, stdout):
             s.processed += 1
             if src.session in ctx.skipped_sessions:
                 s.skipped += 1
+                continue
+            if src.session not in valid_sessions:
+                ctx.log_skip("CompanyChat", src.id, f"session '{src.session}' has no parent ChatSession in source")
                 continue
             if dry_run:
                 continue
@@ -826,7 +829,6 @@ def migrate_stories(ctx, scope, batch_size, dry_run, stdout):
         for src in batch:
             s.processed += 1
             if src.session in existing:
-                s.skipped += 1
                 ctx.skipped_sessions.add(src.session)
                 ctx.log_skip("Story", src.id, f"session '{src.session}' exists in target")
                 continue
