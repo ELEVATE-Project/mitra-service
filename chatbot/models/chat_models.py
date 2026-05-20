@@ -9,6 +9,11 @@ from chatbot.utils.chat_utils import get_guided_chat
 
 
 class ChatSession(models.Model):
+    """
+    Represents an active chat session between a user profile and a company bot.
+    Stores session metadata, conversation state, and handles title generation using LLMs.
+    """
+
     session = models.CharField(max_length=255, unique=True)
     profile = models.ForeignKey(Profile, on_delete=models.DO_NOTHING, null=True, blank=True)
     company_bot = models.ForeignKey(CompanyBot, on_delete=models.SET_NULL, null=True, blank=True)
@@ -21,18 +26,21 @@ class ChatSession(models.Model):
     session_status = models.CharField(max_length=20, choices=ChatStatus.choices, null=True, blank=True)
     project_id = models.CharField(max_length=400, null=True, blank=True)
     user_id = models.CharField(max_length=400, null=True, blank=True)
-    session_type = models.CharField(max_length=100, choices=ChatType.choices, null=True, blank=True)
+    session_type = models.CharField(max_length=255, null=True, blank=True)
     other_params = models.JSONField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def save_title(self, language='en'):
-        company_chats = CompanyChat.objects.filter(session=self.session).order_by('created_at')
+        company_chats = CompanyChat.objects.select_related('sender', 'receiver').filter(session=self.session).order_by('created_at').values("receiver", "receiver__id", "translated_message", "message", "status", "created_at")
         if self.profile:
             company_bot = CompanyBot.objects.filter(company=self.profile.company, route='/mohini_title').first()
         else:
             company_bot = CompanyBot.objects.filter(route='/mohini_title').first()
+
+        if not company_bot:
+            return
 
         messages = get_guided_chat(
             company_bot=company_bot, company_chats=company_chats

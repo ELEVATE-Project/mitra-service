@@ -1,3 +1,4 @@
+import json_repair
 from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -77,7 +78,7 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
 
         source_child_qs = Media.objects.filter(
             parent=OuterRef('pk'),
-            key_values__key__iregex=r'^document[_\s]type$',
+            key_values__key__iregex=r'^document[_\\s]type$',
             key_values__value__icontains='source document'
         ).order_by('id')
 
@@ -150,7 +151,7 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
         source_document_media = KeyValue.objects.annotate(
             norm_key=Lower('key', output_field=TextField())
         ).filter(
-            norm_key__iregex=r'^document[_\s]type$',
+            norm_key__iregex=r'^document[_\\s]type$',
             value__icontains='source document'
         ).values_list('media_id', flat=True)
 
@@ -186,7 +187,7 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
 
         doc_type_subquery = KeyValue.objects.filter(
             media=OuterRef('pk'),
-            key__iregex=r'^document[_\s]type$'
+            key__iregex=r'^document[_\\s]type$'
         ).values('value')[:1]
 
         queryset = queryset.annotate(
@@ -496,7 +497,7 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
                         id__in=Subquery(
                             KeyValue.objects.filter(
                                 media=OuterRef('pk'),
-                                key__iregex=r'^document[_\s]type$',
+                                key__iregex=r'^document[_\\s]type$',
                                 value__icontains=rt
                             ).values('media__id')
                         )
@@ -664,7 +665,7 @@ class MediaViewSet(viewsets.ReadOnlyModelViewSet):
         document_type_data = (
             KeyValue.objects
             .filter(
-                key__iregex=r'^document[_\s]type$',
+                key__iregex=r'^document[_\\s]type$',
                 media__in=queryset
             )
             .values('value')
@@ -823,15 +824,25 @@ class MediaSearchV2View(APIView):
         
         # Fetch large batch for proper sorting and pagination
         top_k = max(1000, offset + limit * 2)
-        
+        from chatbot.models import CompanyBot
+        company_bot = CompanyBot.objects.filter(route='/sg_search_bot').first()
+        filter_score = company_bot.filter_score if company_bot else 0
+
+        other_params = company_bot.other_params if company_bot.other_params else {}
+        if other_params and isinstance(other_params, str):
+            other_params = json_repair.repair_json(other_params, return_objects=True)
+        detail_filter_score = other_params.get("detail_filter_score", None)
+
         # Query vector database
         vector_response = query_database_with_metadata(
             query=query if query else None,
             top_k=top_k,
+            filter_score=filter_score,
+            detail_filter_score=detail_filter_score,
             categories=tags if tags else None,
             organizations=organizations if organizations else None,
             resource_type=resource_types if resource_types else None,
-            file_type=media_types if media_types else None
+            file_type=None
         )
         
         if vector_response.get('error'):
@@ -851,13 +862,19 @@ class MediaSearchV2View(APIView):
             }, status=error_status)
         
         all_results = vector_response.get('results', [])
-        
+        print("all_results len: ", len(all_results))
         # Apply content exclusion filter
         all_results = self._apply_content_exclusion_filter_v2(
             all_results
         )
+        print("all_results len: ", len(all_results))
+
+        if media_types:
+            all_results = self._apply_media_type_filter(all_results, media_types)
+
         total_results = len(all_results)
-        
+        print("total_results len: ", total_results)
+
         # Apply ordering
         if ordering_field and all_results:
             all_results = self._apply_ordering(
@@ -913,6 +930,7 @@ class MediaSearchV2View(APIView):
             if media_types:
                 previous_url += f"&media_types={','.join(media_types)}"
         
+        print("len(serializer.data): ", len(serializer.data))
         response_data = {
             "count": total_results,
             "next": next_url,
@@ -932,6 +950,51 @@ class MediaSearchV2View(APIView):
         }
         
         return Response(response_data, status=status.HTTP_200_OK)
+
+    def _apply_media_type_filter(self, results, requested_media_types):
+        """
+        Filter results by actual media type, considering source document children.
+        This ensures that when a source document child exists, we filter by the child's
+        media type, not the parent's media type.
+        """
+        filtered_results = []
+
+        for result in results:
+            source_id = result.get('source_id')
+            try:
+                source_id_int = int(source_id) if source_id else None
+            except (ValueError, TypeError):
+                source_id_int = None
+
+            if not source_id_int:
+                continue
+
+            try:
+                media_obj = Media.objects.prefetch_related(
+                    'subdocuments',
+                    'subdocuments__key_values'
+                ).only('id', 'media_type').get(id=source_id_int)
+
+                source_child = media_obj.subdocuments.filter(
+                    key_values__key__iregex=r'^document[_\\s]type$',
+                    key_values__value__icontains='source document'
+                ).first()
+
+                # Use source child's media type if exists, otherwise parent's
+                actual_media_type = source_child.media_type if source_child else media_obj.media_type
+
+                # Check if actual media type matches any requested media type
+                if actual_media_type in requested_media_types:
+                    filtered_results.append(result)
+
+            except Media.DoesNotExist:
+                # If media object doesn't exist, skip this result
+                continue
+            except Exception:
+                # If any error occurs, skip this result
+                continue
+
+        return filtered_results
     
     def _apply_content_exclusion_filter_v2(self, results):
         # Exclude source documents, low scores, and non-visible media
@@ -939,23 +1002,23 @@ class MediaSearchV2View(APIView):
         company_bot = CompanyBot.objects.get(route='/sg_search_bot')
         
         # Filter by relevance score
-        score_filtered_results = []
+        score_filtered_results = results
         
-        for result in results:
-            if not isinstance(result, dict):
-                continue
-            
-            relevance_score = result.get('score', 0)
-            
-            if relevance_score >= company_bot.filter_score:
-                score_filtered_results.append(result)
+        # for result in results:
+        #     if not isinstance(result, dict):
+        #         continue
+        #
+        #     relevance_score = result.get('score', 0)
+        #
+        #     if relevance_score >= company_bot.filter_score:
+        #         score_filtered_results.append(result)
         
         # Get source document media IDs
         source_document_media_ids = set(
             KeyValue.objects.annotate(
                 norm_key=Lower('key', output_field=TextField())
             ).filter(
-                norm_key__iregex=r'^document[_\s]type$',
+                norm_key__iregex=r'^document[_\\s]type$',
                 value__icontains='source document'
             ).values_list('media_id', flat=True)
         )

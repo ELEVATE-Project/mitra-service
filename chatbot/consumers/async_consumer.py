@@ -1,16 +1,17 @@
 import json
 import traceback
 import os
+from django.conf import settings
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.consumers.async_base_consumer import AsyncBaseConsumer
-from chatbot.models import ChatStatus, ChatSession, Profile, Voice, VoiceType, TextConversionType, CompanyBotTypeChoices
+from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType, ChatType, CompanyChat, \
+    TextConversionType, CompanyBotTypeChoices
 from chatbot.celery_tasks.flow_tasks import get_flow_response
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.audio_provider_utils import text_translate_provider
 import logging
 from channels.db import database_sync_to_async
 from chatbot.utils.transliterate_utils import transliterate_text
-from chatbot.utils.company_bot import get_company_bot
 import jwt
 
 logger = logging.getLogger('django')
@@ -32,7 +33,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
 
     async def disconnect(self, code):
         try:
-            logger.info("Websocket closed with code: %s", code)
+            logger.info(f"Websocket closed with code: %s", code)
         except Exception as e:
             logger.error('Disconnect Error: %s', e, exc_info=True)
         finally:
@@ -41,6 +42,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
 
     async def receive(self, text_data):
         try:
+            logger.info(f"Received text data via common websocket: {text_data}")
             text_data_json = json.loads(text_data)
             message_type = text_data_json.get('type', None)
             company_chat_status = None
@@ -54,14 +56,13 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
 
                 profile = await self.get_profile(self.profile_id)
                 logger.info(
-                    "channel_name: %s, session_id: %s, profile_id: %s, route: %s",
+                    f"channel_name: %s, session_id: %s, profile_id: %s, route: %s",
                     self.channel_name, self.session_id, self.profile_id, self.route
                 )
 
                 user_id = await self.handle_access_token(self.access_token)
 
-                self.company_bot = await database_sync_to_async(get_company_bot)(route=self.bot_route, profile=profile)
-
+                self.company_bot = await self.get_company_bot(profile, self.bot_route)
 
                 # Create chat session asynchronously
                 await self.create_chat_session(
@@ -129,18 +130,15 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 )
 
             logger.info(
-                "channel_name: %s, session_id: %s, profile_id: %s, route: %s",
+                f"channel_name: %s, session_id: %s, profile_id: %s, route: %s",
                 self.channel_name, self.session_id, self.profile_id, self.route
             )
 
             if message_type != 'authenticate':
                 # Start the Celery task but don't wait for it
-                bot_strategy = 'common'
-                if self.bot_route == '/study_teacher_interview':
-                    bot_strategy = 'common_new'
                 get_flow_response.delay(
                     self.channel_name, self.session_id, self.profile_id, self.route,
-                    bot_strategy, self.bot_route
+                    'common', self.bot_route
                 )
 
         except Exception as e:
@@ -149,7 +147,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
 
     async def connect(self):
         try:
-            logger.info("Attempting to connect to websocket")
+            logger.info(f"Attempting to connect to websocket")
             await super().connect()
         except Exception as e:
             logger.error('Connect Error: %s', e, exc_info=True)
@@ -164,18 +162,32 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
     @database_sync_to_async
     def handle_access_token(self, access_token):
         user_id = None
-        try:
-            if access_token:
-                decoded = jwt.decode(self.access_token, options={"verify_signature": False})
-                print(decoded)
-                if decoded:
-                    user_id = decoded.get('data', {}).get('id')
-        except Exception as e:
-            print("Exception occurred while decoding access token.")
-            logger.error('Access token Decode Error: %s', e, exc_info=True)
-        logger.info("User_id: %s", user_id)
 
+        if access_token:
+            print("Access Token: ", access_token)
+
+            try:
+                decoded = jwt.decode(
+                    access_token,
+                    PUBLIC_KEY,
+                    algorithms=["HS256"]
+                )
+                print("Decoded JWT: ", decoded)
+                if decoded:
+                    user_id = decoded.get("data", {}).get("id")
+            except Exception as e:
+                logger.error('JWT Decode Error: %s', e, exc_info=True)
+                print(f"JWT Decode Error: {e}")
+
+        logger.info("User_id: %s", user_id)
         return user_id
+
+    @database_sync_to_async
+    def get_company_bot(self, profile, route):
+        if profile:
+            return CompanyBot.objects.get(company=profile.company, route=route)
+        else:
+            return CompanyBot.objects.get(route=route)
 
     @database_sync_to_async
     def create_chat_session(self, session_id, profile, company_bot, ip_address, user_id):
@@ -200,7 +212,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 'session_type': self.flow_name
             }
         )
-        logger.info("Chatsession: %s %s", cs, cs_created)
+        logger.info(f"Chatsession: %s %s", cs, cs_created)
 
         if not cs_created:
             if cs.language != self.route:

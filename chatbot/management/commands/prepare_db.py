@@ -440,3 +440,4 @@ class Command(BaseCommand):
         
         # Allow alphanumeric, underscores, and hyphens only
         return bool(re.match(r'^[a-zA-Z0-9_-]+$', schema_name))
+

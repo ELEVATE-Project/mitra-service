@@ -2,6 +2,7 @@ import json
 import traceback
 import logging
 import re
+from chatbot.exceptions.story_exceptions import StoryDomainError, StoryValidationError, StoryError, StorySaveError
 from chatbot.models import StoryStatusChoices, Story, Voice, VoiceType, StoryTranslation
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.story_llama_utils import translate_field
@@ -98,6 +99,20 @@ def transliterate_to_english_if_needed(text, voice_provider, source_language):
         return text
 
 
+def normalize_list_field(value):
+    if isinstance(value, str):
+        value = value.strip()
+        if value in ("[]", ""):
+            return []
+        try:
+            parsed = json.loads(value)
+            if isinstance(parsed, list):
+                return parsed
+        except Exception:
+            return [value]
+    return value
+
+
 def save_chaupal_report(
         response_json_story, language, company_bot, voice_provider, profile, session, combined_reason, flow=None,
         messages=[]
@@ -112,6 +127,11 @@ def save_chaupal_report(
                 company_bot=company_bot, type=VoiceType.Transliterate, language=language
             ).first()
 
+        is_within_domain = response_json_story.get('is_within_domain', True)
+
+        if not is_within_domain:
+            raise StoryDomainError()
+
         # Extract and translate fields to English
         raw_title = response_json_story.get('title', '')
         english_title = clean_escaped_text(
@@ -121,6 +141,9 @@ def save_chaupal_report(
         # Handle challenges and solutions (can be arrays)
         raw_challenges_faced = response_json_story.get('challenges_faced', [])
         raw_solutions_discussed = response_json_story.get('solutions_discussed', [])
+
+        raw_challenges_faced = normalize_list_field(raw_challenges_faced)
+        raw_solutions_discussed = normalize_list_field(raw_solutions_discussed)
 
         # Translate challenges and solutions
         if isinstance(raw_challenges_faced, list):
@@ -223,6 +246,13 @@ def save_chaupal_report(
         else:
             location = user_location
 
+        if isinstance(english_challenges_faced, str):
+            english_challenges_faced = [english_challenges_faced]
+
+        if not isinstance(english_challenges_faced, list) or not english_challenges_faced:
+            raise StoryValidationError()
+
+
         other_params = {
             'challenges_faced': list(english_challenges_faced) if isinstance(
                 english_challenges_faced, list) else english_challenges_faced,
@@ -284,10 +314,14 @@ def save_chaupal_report(
             )
 
         return story, None
+
+    except StoryError:
+        raise
+
     except Exception as e:
         logger.error('Error Occurred: %s', e, exc_info=True)
         traceback.print_exc()
-        raise Exception("Failed to save chaupal report")
+        raise StorySaveError()
 
 
 def create_chaupal_translation(story, language, english_title, english_challenges_faced, english_solutions_discussed,

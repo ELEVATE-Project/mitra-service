@@ -7,7 +7,14 @@ from chatbot.utils.sql_utils import get_todays_date
 
 def get_creation_promt(company_bot, profile):
     context = company_bot.context
-    address = ProfileAddress.objects.filter(profile=profile)
+
+
+    address = []
+
+    if isinstance(profile, Profile):
+        address = ProfileAddress.objects.filter(profile=profile)
+    elif isinstance(profile, dict):
+        address = profile.get('profile_address', [])
 
     state_machines = company_bot.companystatemachine_set.all().order_by('step')
     master_question = None
@@ -78,7 +85,13 @@ def get_creation_promt(company_bot, profile):
 def get_validation_prompt(
         response_json_story, validate_bot, response_json_content, tag_context, project_data, profile
 ):
-    address = ProfileAddress.objects.filter(profile=profile)
+
+    address = []
+
+    if isinstance(profile, Profile):
+        address = ProfileAddress.objects.filter(profile=profile)
+    elif isinstance(profile, dict):
+        address = profile.get('profile_address', [])
 
     state_machines = validate_bot.companystatemachine_set.all().order_by('step')
     master_question = None

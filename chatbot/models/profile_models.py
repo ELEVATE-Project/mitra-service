@@ -5,10 +5,14 @@ from simple_history.models import HistoricalRecords
 from chatbot.models.enums import (
     EntityStatus, GenderChoices, ProfileType, SessionFlowName
 )
-from chatbot.models.company_models import Company
+from chatbot.models.company_models import Company, Flow
 
 
 class Profile(models.Model):
+    """
+    Represents a user profile associated with a company.
+    Stores personal details, authentication data, and metadata for chatbot interactions.
+    """
 
     def get_file_upload_path(self, filename):
         folder_name = self.company.slug+'/'+'profile'+'/'+self.email
@@ -40,6 +44,7 @@ class Profile(models.Model):
     source = models.CharField(max_length=1000, null=True, blank=True)
     preferred_route = models.CharField(max_length=1000, null=True, blank=True)
     latest_flow_used = models.CharField(max_length=500, choices=SessionFlowName.choices, null=True, blank=True)
+    latest_flow = models.ForeignKey(Flow, on_delete=models.DO_NOTHING, null=True, blank=True)
     history = HistoricalRecords()
 
     def __str__(self):

@@ -33,8 +33,13 @@ class OneShotBotStrategy(BotStrategy):
         if not remaining_stages and self._should_get_remaining_stages(intro_mssg, messages):
 
             remaining_stages_response = get_remaining_strands(
-                messages=messages, company_chats=company_chats, oneshot_bot=company_bot,
-                profile=profile, intro=intro_mssg, other_info=other_info, extra_params=self.extra_params
+                messages=messages,
+                company_chats=company_chats,
+                oneshot_bot=company_bot,
+                profile=profile,
+                intro=intro_mssg,
+                other_info=other_info,
+                extra_params=self.extra_params
             )
 
             if remaining_stages_response and remaining_stages_response.get('error'):

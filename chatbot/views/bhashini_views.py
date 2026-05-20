@@ -6,7 +6,9 @@ from chatbot.translate.ai4Bharat.text_lang_detect import call_ai4bharat_text_lan
 from chatbot.utils.audio_converter_utils import convert_s3_audio_to_wav_base64
 from chatbot.utils.audio_provider_utils import text_speech_provider, speech_text_provider, text_translate_provider
 from chatbot.utils.transliterate_utils import transliterate_text
-import requests
+import logging
+
+logger = logging.getLogger('django')
 
 
 ai4bharat_api_key = os.getenv("BHASHANI_API_KEY")
@@ -27,12 +29,8 @@ def text_speech_view(request):
             }, status=500)
 
         company_bot = CompanyBot.objects.filter(route=route).first()
-        voice_provider = Voice.objects.filter(
-            company_bot=company_bot, type=VoiceType.TextToSpeech, language=source_language
-        ).first()
-        print("voice_provider: ", voice_provider)
         response = text_speech_provider(
-            voice_provider=voice_provider, text=text, gender=voice_provider.gender, source_language=source_language
+            company_bot=company_bot, text=text, source_language=source_language
         )
 
         if response.get('status') == 200:
@@ -62,14 +60,9 @@ def speech_text(request):
         source_language = body.get('source_language', 'en')
         route = body.get('route')
 
-        response = requests.get(s3_url)
-        response.raise_for_status()
         company_bot = CompanyBot.objects.filter(route=route).first()
         if not company_bot:
             company_bot = CompanyBot.objects.filter(route='/common_bot').first()
-        voice_provider = Voice.objects.filter(
-            company_bot=company_bot, type=VoiceType.SpeechToText, language=source_language
-        ).first()
 
         encoded_audio = convert_s3_audio_to_wav_base64(s3_url=s3_url)
 
@@ -80,7 +73,7 @@ def speech_text(request):
             }, status=500)
 
         response = speech_text_provider(
-            voice_provider=voice_provider, base64=encoded_audio, audio_format=audio_format,
+            company_bot=company_bot, base64=encoded_audio, audio_format=audio_format,
             source_language=source_language
         )
 
@@ -96,6 +89,7 @@ def speech_text(request):
             }, status=response.get('status'))
 
     except Exception as e:
+        logger.error("Error in speech_text: %s", e, exc_info=True)
         return Response({
             'status': 'error',
             'message': str(e)
@@ -119,12 +113,9 @@ def text_translation_view(request):
             }, status=500)
 
         company_bot = CompanyBot.objects.filter(route=route).first()
-        voice_provider = Voice.objects.filter(
-            company_bot=company_bot, type=VoiceType.TextToText, language=target_language
-        ).first()
 
         response = text_translate_provider(
-            voice_provider=voice_provider, message_body=message_body, target_language=target_language,
+            company_bot=company_bot, message_body=message_body, target_language=target_language,
             source_language=source_language
         )
 
@@ -163,10 +154,6 @@ def text_transliterate_view(request):
             }, status=500)
 
         company_bot = CompanyBot.objects.filter(route=route).first()
-        voice_provider = Voice.objects.filter(
-            company_bot=company_bot, type=VoiceType.Transliterate, language=target_language
-        ).first()
-
         if detect_language:
             detected_body = call_ai4bharat_text_lang_detect_api(message_body=message_body)
             if detected_body and detected_body.get('content'):
@@ -175,7 +162,7 @@ def text_transliterate_view(request):
         print("setting source_language: ", source_language)
 
         response = transliterate_text(
-            voice_provider=voice_provider, message_body=message_body, target_language=target_language,
+            company_bot=company_bot, message_body=message_body, target_language=target_language,
             source_language=source_language
         )
 

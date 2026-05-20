@@ -1,6 +1,8 @@
 import traceback
 import logging
 import re
+
+from chatbot.exceptions.story_exceptions import StoryDomainError, StoryValidationError, StorySaveError, StoryError
 from chatbot.models import StoryStatusChoices, Story, SessionFlowName, Voice, VoiceType, StoryTranslation
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.story_llama_utils import translate_field, create_project
@@ -120,6 +122,11 @@ def save_story(
         raw_problem_statement = response_json_story.get('problem_statement', '')
         raw_blurb = response_json_story.get('blurb', '')
 
+        is_within_domain = response_json_story.get('is_within_domain', True)
+
+        if not is_within_domain:
+            raise StoryDomainError()
+
         # Translate main content fields to English
         english_title = clean_escaped_text(
             text=translate_to_english_if_needed(raw_title, translation_voice_provider, language)
@@ -189,8 +196,10 @@ def save_story(
                 else:
                     location = ""
 
-        if not english_title or not english_objective or not english_action_steps or not english_problem_statement:
-            raise Exception("Empty fields found")
+        if (not english_title or not english_objective or not english_action_steps or not
+            english_problem_statement or not english_content or not english_blurb
+        ):
+            raise StoryValidationError()
 
         if flow in [SessionFlowName.Reflection] and project_id:
             logger.info(f"project_id: %s", project_id)
@@ -277,15 +286,18 @@ def save_story(
         create_project(
             response_json=response_json_story, title=english_title, objective=english_objective, story=story,
             profile=profile, problem_statement=english_problem_statement, language=language,
-            voice_provider=voice_provider,
-            project_id=project_id
+            voice_provider=voice_provider, project_id=project_id, action_steps=english_action_steps
         )
 
         return story, english_problem_statement
+
+    except StoryError:
+        raise
+
     except Exception as e:
         logger.error('Error Occurred: %s', e, exc_info=True)
         traceback.print_exc()
-        raise Exception("Failed to save mi story")
+        raise StorySaveError()
 
 
 def create_story_translation(story, language, english_data, voice_provider, flow, company_bot, other_data):
