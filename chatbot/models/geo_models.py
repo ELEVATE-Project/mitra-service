@@ -4,6 +4,11 @@ from chatbot.models import Profile
 
 
 class ProfileAddress(models.Model):
+    """
+    Stores address and geolocation details associated with a user profile.
+    Includes full address fields along with optional latitude and longitude.
+    """
+
     profile = models.ForeignKey(Profile, related_name='profile_address', on_delete=models.CASCADE)
     address_line_1 = models.CharField(max_length=1000, null=True, blank=True)
     address_line_2 = models.CharField(max_length=1000, null=True, blank=True)

@@ -31,7 +31,7 @@ class Command(BaseCommand):
         Main command handler to create schemas
         """
         # Get schemas from command argument or environment variable
-        schemas_str = options.get('schemas') or os.getenv('POSTGRES_SCHEMAS', '')
+        schemas_str = options.get('schemas') or os.getenv('POSTGRES_SCHEMAS', '') or ["shikshalokam"]
         
         if not schemas_str:
             self.stdout.write(

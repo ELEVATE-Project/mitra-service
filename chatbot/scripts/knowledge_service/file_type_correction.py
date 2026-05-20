@@ -3,8 +3,8 @@ import django
 import sys
 from pathlib import Path
 
-project_root = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(project_root))
+# project_root = Path(__file__).resolve().parent.parent
+# sys.path.insert(0, str(project_root))
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'shikshalokam.settings')
 django.setup()
@@ -128,10 +128,22 @@ def fix_single_media_type(media_info):
     Fix media type for a single media object
     """
     try:
-        media = Media.objects.get(id=media_info['id'])
+        # media = Media.objects.get(id=media_info['id'])
+        # old_type = media.media_type
+        # media.media_type = media_info['expected_type']
+        # media.save()
+        media_id = media_info['id']
+        new_type = media_info['expected_type']
+
+        media = Media.objects.only('id', 'media_type').get(id=media_id)
         old_type = media.media_type
-        media.media_type = media_info['expected_type']
-        media.save()
+
+        if old_type == new_type:
+            return True, "No change needed"
+
+        Media.objects.filter(id=media_id).update(
+            media_type=new_type
+        )
 
         return True, f"Changed from {old_type} to {media_info['expected_type']}"
 
@@ -209,5 +221,5 @@ def fix_media_types():
     print("=" * 50)
 
 
-if __name__ == "__main__":
-    fix_media_types()
+# if __name__ == "__main__":
+#     fix_media_types()

@@ -1,22 +1,25 @@
-from import_export.admin import ExportActionMixin, ImportExportModelAdmin
 from django.contrib import admin
 from django.db.models import Q
+from pydantic import ValidationError
 from simple_history.admin import SimpleHistoryAdmin
 from .generic_upload_admin import BatchUploadMixin
 from chatbot.filter.admin_filter import (CompanyChatCompanyFilter, ChatSessionFilter, ProfileCityFilter,
                                          ProfileStateFilter, ProfileCompanyChatFilter, ProfileEmailFilter)
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import Company, Profile, ProfileType, CompanyBot, CompanyChat, ChatSession, \
-    CompanyBotTypeChoices, Voice, VoiceProvider
+    CompanyBotTypeChoices, Voice, VoiceProvider, VoiceType, ImageConfiguration, Flow
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.resources.resource import CompanyChatResource
 from chatbot.resources.company_resource import ChatSessionResource
-from chatbot.resources.bot_resource import CompanyBotResource
 from django.shortcuts import redirect
 from django.contrib import messages
+import logging
 from django.urls import path
 from django.http import HttpResponseRedirect
 from django.urls import reverse
+from django.forms import ModelForm, MultipleChoiceField, CheckboxSelectMultiple
+from ..utils.admin_config.export_mixin import ExportAllFieldsMixin
+
 
 class CompanyStateMachineAdmin(admin.TabularInline):
     model = CompanyStateMachine
@@ -26,6 +29,7 @@ class CompanyStateMachineAdmin(admin.TabularInline):
     fields = (
         'name', 'step', 'use_stage_chats', 'text_conversion_type',
         'bot_question', 'completion_criteria', 'context', 'tool_context',
+        'operation_type', 'skip_if_authenticated',
         'preprocess_type', 'preprocess_prompt', 'preprocess_bot', 'preprocess_output_mode',
         'postprocess_type', 'postprocess_prompt', 'postprocess_bot', 'postprocess_output_mode',
         'skip_to_step',
@@ -44,6 +48,12 @@ class VoiceProviderAdmin(admin.TabularInline):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.order_by('type', 'language')
+
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        if db_field.name == "other_params":
+            kwargs["help_text"] = "Leave empty to auto-load provider defaults."
+
+        return super().formfield_for_dbfield(db_field, request, **kwargs)
 
 
 class CompanyAdmin(admin.ModelAdmin):
@@ -177,6 +187,59 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
             self.inlines = [VoiceProviderAdmin]
         return super().changeform_view(request, object_id, form_url, extra_context)
 
+    # Sync Google glossary for TextToText voice providers after inline save
+    def save_formset(self, request, form, formset, change):
+        if getattr(formset, "model", None) is not Voice:
+            return super().save_formset(request, form, formset, change)
+
+        from chatbot.translate.google import google_glossary
+
+        logger = logging.getLogger("django")
+
+        old_entries_by_pk = {}
+        for f in formset.forms:
+            if f.instance.pk:
+                v = Voice.objects.filter(pk=f.instance.pk).only("other_params").first()
+                if v and v.other_params and "glossary_entries" in v.other_params:
+                    old_entries_by_pk[v.pk] = google_glossary.normalize_glossary_entries(
+                        v.other_params.get("glossary_entries")
+                    )
+
+        super().save_formset(request, form, formset, change)
+
+        for f in formset.forms:
+            if not f.instance.pk or f.cleaned_data.get("DELETE"):
+                continue
+            inst = Voice.objects.filter(pk=f.instance.pk).first()
+            if not inst or inst.provider != VoiceProvider.GOOGLE or inst.type != VoiceType.TextToText:
+                continue
+            params = inst.other_params or {}
+            if "glossary_entries" not in params:
+                continue
+            new_entries = google_glossary.normalize_glossary_entries(params.get("glossary_entries"))
+            if not new_entries:
+                continue
+            if new_entries == old_entries_by_pk.get(inst.pk):
+                continue
+            try:
+                google_glossary.sync_glossary_for_voice(inst)
+
+                messages.success(
+                    request,
+                    f"Google glossary synced successfully for Voice id={inst.pk}",
+                )
+            except Exception as e:
+                logger.error(
+                    "Glossary sync failed for Voice id=%s",
+                    inst.pk,
+                    exc_info=True
+                )
+                messages.error(
+                    request,
+                    f"Google glossary sync failed for Voice id={inst.pk} (save completed): {e}",
+                )
+
+
     def duplicate_bot(self, request, queryset):
         if queryset.count() != 1:
             self.message_user(request, "Please select exactly one bot to duplicate.", level=messages.ERROR)
@@ -230,7 +293,7 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
 
 
 @admin.register(CompanyChat)
-class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
+class CompanyChatAdmin(ExportAllFieldsMixin, admin.ModelAdmin):
     list_display = ('session', 'sender', 'receiver', 'message', 'translated_message', 'created_at', 'stage')
     list_filter = (
         CustomAdvanceDateFilter,
@@ -241,13 +304,12 @@ class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
         'stage'
     )
     search_fields = ('session', 'message__icontains', 'translated_message__icontains')
-    actions = ['export_selected']
-    list_export = ('csv', 'xlsx')
     list_per_page = 20
     raw_id_fields = ('sender', 'receiver')
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
 
+    export_filename = "company_chats.xlsx"
     resource_class = CompanyChatResource
 
     def get_queryset(self, request):
@@ -291,7 +353,7 @@ class CompanyChatAdmin(ExportActionMixin, admin.ModelAdmin):
 
 
 @admin.register(ChatSession)
-class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
+class ChatSessionAdmin(ExportAllFieldsMixin, admin.ModelAdmin):
     list_display = (
         'session', 'get_first_name', 'session_status', 'session_type', 'current_question', 'total_steps',
         'created_at'
@@ -363,3 +425,127 @@ class ChatSessionAdmin(ExportActionMixin, admin.ModelAdmin):
 
 
 admin.site.register(Company, CompanyAdmin)
+
+
+@admin.register(ImageConfiguration)
+class ImageConfigurationAdmin(admin.ModelAdmin):
+    """Admin interface for Image Configuration model."""
+    list_display = ('name', 'max_images', 'get_image_size_mb', 'created_at')
+    list_filter = ('created_at', 'max_images')
+    search_fields = ('name',)
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('name',)
+        }),
+        ('Image Constraints', {
+            'fields': ('max_images', 'image_size'),
+            'description': 'Configure image upload limits for this configuration.'
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ('created_at', 'updated_at')
+
+    def get_image_size_mb(self, obj):
+        """Display image size in MB."""
+        return f"{obj.image_size / 1048576:.2f} MB"
+    get_image_size_mb.short_description = 'Max Image Size'
+
+LANGUAGE_CHOICES = [
+    ("en", "English"),
+    ("hi", "Hindi"),
+    ("kn", "Kannada"),
+    ("te", "Telugu"),
+    ("or", "Odia"),
+]
+
+
+class FlowAdminForm(ModelForm):
+    languages = MultipleChoiceField(
+        choices=LANGUAGE_CHOICES,
+        required=False,
+        widget=CheckboxSelectMultiple,
+        help_text="Select one or more supported languages."
+    )
+
+    class Meta:
+        model = Flow
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        value = self.instance.languages if self.instance and self.instance.pk else None
+        self.fields["languages"].initial = value or ["en", "hi", "kn", "te"]
+
+    def clean_languages(self):
+        value = self.cleaned_data.get("languages", [])
+
+        if not isinstance(value, list):
+            raise ValidationError("Languages must be a list of language codes.")
+
+        if len(value) != len(set(value)):
+            raise ValidationError("Language codes must be unique.")
+
+        allowed = {code for code, _ in LANGUAGE_CHOICES}
+        invalid = [code for code in value if code not in allowed]
+        if invalid:
+            raise ValidationError(f"Invalid language codes: {', '.join(invalid)}")
+
+        return value
+
+
+@admin.register(Flow)
+class FlowAdmin(SimpleHistoryAdmin):
+    """Admin interface for Flow model."""
+    form = FlowAdminForm
+
+    list_display = (
+        'flow_name', 'flow_route', 'bot', 'active', 'hidden', 
+        'user_type', 'created_at'
+    )
+    list_filter = (
+        'active', 'hidden', 'user_type',
+        'bot__company', CustomAdvanceDateFilter, 'create_story'
+    )
+    search_fields = ('flow_name', 'flow_route', 'bot__name')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
+    raw_id_fields = ('bot', 'story_bot', 'parent_flow', 'image_config', 'story_validation_bot')
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('flow_name', 'flow_route', 'languages')
+        }),
+        ('Bot Configuration', {
+            'fields': ('bot', 'story_bot', 'story_validation_bot'),
+            'description': 'Configure the bots associated with this flow.'
+        }),
+        ('Flow Settings', {
+            'fields': ('active', 'hidden', 'user_type', 'parent_flow', 'image_config', 'create_story'),
+        }),
+        ('Advanced Settings', {
+            'fields': ('websocket_url',),
+            'classes': ('collapse',)
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
+    
+    readonly_fields = ('created_at', 'updated_at')
+    
+    def formfield_for_dbfield(self, db_field, request, **kwargs):
+        """Customize form field for languages JSONField."""
+        if db_field.name == 'languages':
+            kwargs['help_text'] = 'Enter languages as JSON array, e.g., ["en", "hi", "kn"]'
+        elif db_field.name == 'websocket_url':
+            kwargs['help_text'] = 'Enter WebSocket route only (e.g., "ws/common/"). Do not include the full URL.'
+        return super().formfield_for_dbfield(db_field, request, **kwargs)

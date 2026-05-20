@@ -10,12 +10,18 @@ from django.core.files.base import ContentFile
 from PIL import Image, UnidentifiedImageError
 import requests
 
+from chatbot.services.storage import StorageFactory
 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 register_heif_opener()
 
 
 class Story(models.Model):
+    """
+    Represents a story created by a user or AI within a chat session.
+    Stores content, metadata, language, status, and translation support.
+    """
+
     title = models.CharField(max_length=1000)
     author = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True)
     content = models.TextField(null=True, blank=True)
@@ -79,6 +85,10 @@ class Story(models.Model):
 
 
 class StoryMedia(models.Model):
+    """
+    Stores media files associated with a story.
+    Handles file uploads, format conversion, and base64 encoding.
+    """
 
     def get_file_upload_path(self, filename):
         folder_name = 'chatbot/storymedia/{}'.format(self.story.id)
@@ -107,10 +117,16 @@ class StoryMedia(models.Model):
     def save(self, *args, **kwargs):
         try:
             if self.file_url:
-                response = requests.get(self.file_url)
-                response.raise_for_status()
-                self.base64_str = base64.b64encode(response.content).decode('utf-8')
-                print("Encoded base64 from file_url")
+                if self.file_url.startswith("s3://"):
+                    storage_handler = StorageFactory.get_storage_handler()
+                    response_content = storage_handler.get_file_from_store(self.file_url)
+                    self.base64_str = base64.b64encode(response_content).decode('utf-8')
+                    print("Encoded base64 from file_url")
+                else:
+                    response = requests.get(self.file_url)
+                    response.raise_for_status()
+                    self.base64_str = base64.b64encode(response.content).decode('utf-8')
+                    print("Encoded base64 from file_url")
 
             if not self.file:
                 super().save(*args, **kwargs)
@@ -151,6 +167,11 @@ class StoryMedia(models.Model):
 
 
 class Tag(models.Model):
+    """
+    Represents a reusable tag used to categorize stories.
+    Can be company-specific and linked to a creator profile.
+    """
+
     name = models.CharField(max_length=1000, unique=True, null=False, blank=False,
                             validators=[MinLengthValidator(limit_value=3)])
     status = models.CharField(max_length=100, choices=TagChoices.choices, default=TagChoices.PENDING)
@@ -175,6 +196,11 @@ class Tag(models.Model):
 
 
 class StoryTag(models.Model):
+    """
+    Maps tags to stories with optional primary tag designation.
+    Ensures a story cannot have duplicate tags.
+    """
+
     story = models.ForeignKey(Story, on_delete=models.CASCADE)
     tag = models.ForeignKey(Tag, on_delete=models.DO_NOTHING)
     is_primary = models.BooleanField(default=False)
@@ -191,6 +217,11 @@ class StoryTag(models.Model):
 
 
 class StoryTranslation(models.Model):
+    """
+    Stores translated versions of a story in different languages.
+    Maintains localized content while linking to the original story.
+    """
+
     story = models.ForeignKey(Story, related_name='translations', on_delete=models.CASCADE)
     language = models.CharField(max_length=10, choices=StoryLanguageChoices.choices)
 

@@ -4,6 +4,11 @@ from chatbot.models import CompanyBot
 
 
 class StoryVernacular(models.Model):
+    """
+    Stores language-specific translations for story-related bot content.
+    Links a company bot to translated JSON text for a given language.
+    """
+
     company_bot = models.ForeignKey(CompanyBot, on_delete=models.SET_NULL, related_name='story_vernacular', null=True)
 
     translation_json = models.JSONField(

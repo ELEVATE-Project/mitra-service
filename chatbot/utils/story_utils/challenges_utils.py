@@ -54,6 +54,11 @@ def handle_challenges_solutions(challenges_faced, solutions_discussed, profile, 
         reorder_steps = response_json.get('reorder_steps', [])
         if reorder_steps and isinstance(reorder_steps, str):
             reorder_steps = json_repair.repair_json(reorder_steps, return_objects=True)
+        if reorder_steps and not isinstance(reorder_steps, list):
+            logger.info('reordersteps is not a list, getting values')
+            if reorder_steps.get('value'):
+                reorder_steps = reorder_steps.get('value')
+                      
         logger.info(f"reorder_steps: %s", reorder_steps)
 
         seen = set()

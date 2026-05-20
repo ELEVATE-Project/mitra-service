@@ -1,11 +1,16 @@
 import django_filters
 from rest_framework import generics
+from rest_framework.response import Response
+from rest_framework import status
 from chatbot.filter.drf_filter import ChatSessionProfileFilter
 from chatbot.models import ChatSession, BotVernacular, SessionFlowName, ChatType
-from chatbot.models.company_models import CompanyChat, CompanyBot
+from chatbot.models.company_models import CompanyChat, CompanyBot, Flow
 from chatbot.models.profile_models import Profile
 from chatbot.serializer.base_serializer import ChatSessionSerializer
-from chatbot.serializer.company_serializer import CompanyBotSerializer, BotVernacularSerializer
+from chatbot.serializer.company_serializer import (
+    CompanyBotSerializer, BotVernacularSerializer, ImageConfigurationSerializer,
+    FlowLanguagesSerializer, FlowConnectionInfoSerializer
+)
 from chatbot.serializer.profile_serializer import ProfileSerializer, CompanyChatSerializer
 
 
@@ -63,18 +68,6 @@ class ChatSessionListCreateView(generics.ListCreateAPIView):
     filter_backends = [django_filters.rest_framework.DjangoFilterBackend, ChatSessionProfileFilter]
     filterset_fields = ['session', 'project_id', 'user_id', 'profile', 'session_type']
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        flow = self.request.query_params.get('flow')
-        if flow in [SessionFlowName.LoginMiStory.value, SessionFlowName.SsoFlow, SessionFlowName.GuestMiStory.value]:
-            queryset = queryset.filter(session_type__in=[
-                ChatType.guidedReflection.value, ChatType.oneStepReflection.value
-            ])
-        elif flow == SessionFlowName.LoginDiscussion.value:
-            queryset = queryset.filter(session_type=ChatType.shikshaChaupal.value)
-
-        return queryset
-
 
 class ChatSessionRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):
     queryset = ChatSession.objects.all()
@@ -87,3 +80,114 @@ class ChatSessionRetrieveUpdateDestroyViewSession(generics.RetrieveUpdateAPIView
     queryset = ChatSession.objects.all()
     serializer_class = ChatSessionSerializer
     lookup_field = 'session'
+
+
+class FlowImageConfigView(generics.GenericAPIView):
+    """
+    API endpoint to get image configuration for a specific flow route.
+    Query param: flow_route (required)
+    Returns: ImageConfiguration object or 404
+    """
+    serializer_class = ImageConfigurationSerializer
+
+    def get(self, request, *args, **kwargs):
+        flow_route = request.query_params.get('flow_route')
+        
+        if not flow_route:
+            return Response(
+                {'error': 'flow_route query parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            flow = Flow.objects.select_related('image_config_id').get(
+                flow_route=flow_route,
+                active=True
+            )
+            
+            if not flow.image_config_id:
+                return Response(
+                    {'error': 'No image configuration found for this flow'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            serializer = self.get_serializer(flow.image_config_id)
+            return Response(serializer.data)
+            
+        except Flow.DoesNotExist:
+            return Response(
+                {'error': 'Flow not found or inactive'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class FlowLanguagesView(generics.GenericAPIView):
+    """
+    API endpoint to get supported languages for a specific flow route.
+    Query param: flow_route (required)
+    Returns: List of language codes
+    """
+    serializer_class = FlowLanguagesSerializer
+    
+    def get(self, request, *args, **kwargs):
+        flow_route = request.query_params.get('flow_route')
+        
+        if not flow_route:
+            return Response(
+                {'error': 'flow_route query parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            flow = Flow.objects.get(
+                flow_route=flow_route,
+                active=True
+            )
+            
+            serializer = self.get_serializer(flow)
+            return Response(serializer.data)
+            
+        except Flow.DoesNotExist:
+            return Response(
+                {'error': 'Flow not found or inactive'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class FlowConnectionInfoView(generics.GenericAPIView):
+    """
+    API endpoint to get websocket URL and bot route for a flow.
+    Query param: flow_route (required)
+    Returns: websocket_url, bot route, isParentFlow flag, children flows, and image configuration
+    """
+    serializer_class = FlowConnectionInfoSerializer
+    
+    def get(self, request, *args, **kwargs):
+        flow_route = request.query_params.get('flow_route')
+        
+        if not flow_route:
+            return Response(
+                {'error': 'flow_route query parameter is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            flow = Flow.objects.select_related('bot', 'image_config').prefetch_related('child_flows').get(
+                flow_route=flow_route
+            )
+            
+            # Check if flow is active
+            if not flow.active:
+                return Response(
+                    {'error': 'Flow is inactive'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            serializer = self.get_serializer(flow)
+            return Response(serializer.data)
+            
+        except Flow.DoesNotExist:
+            return Response(
+                {'error': 'Flow not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )

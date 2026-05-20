@@ -32,7 +32,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = '__all__'
+        exclude = ['password', ]
 
     def list(self, request, *args, **kwargs):
         print("GET request received")

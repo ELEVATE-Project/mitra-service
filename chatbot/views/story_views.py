@@ -1,27 +1,28 @@
-import json
-import traceback
-from chatbot.models import Story, StoryMedia, ChatSession, SessionFlowName, StoryTranslation, VoiceType, Voice
-from chatbot.serializer.story_serializer import StoryCreateSerializer, StoryRetrieveSerializer, \
-    StoryMediaRetrieveSerializer, StoryFullSerializer
-from chatbot.utils.media_utils import upload_to_cloud
+from chatbot.models import Story, StoryMedia, SessionFlowName
+from chatbot.models.base_models import Flow
+from chatbot.models.enums import CreateStoryChoices
+from chatbot.models.media_models import ProfileMedia
+from chatbot.serializer.profile_serializer import ProfileMediaSerializer
+from chatbot.serializer.story_serializer import StoryCreateSerializer, StoryRetrieveSerializer, StoryMediaRetrieveSerializer, StoryFullSerializer
+from chatbot.utils.recreate_story_utils import re_create_story_object
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf
-import django_filters
+from chatbot.utils.story_utils.base.story_update_utils import extract_update_data, get_or_create_translation, update_translation_fields, sync_to_main_story
+from chatbot.utils.story_utils.base.translation_mixins import LanguageDetectionMixin
+from chatbot.utils.story_utils.story_utils import create_story_object, generate_story
+from django.contrib.auth import PermissionDenied
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from chatbot.models.media_models import ProfileMedia
-from chatbot.serializer.profile_serializer import ProfileMediaSerializer
-from chatbot.utils.recreate_story_utils import re_create_story_object
-from chatbot.utils.story_llama_utils import translate_field
-from chatbot.utils.story_utils.base.story_update_utils import extract_update_data, get_or_create_translation, \
-    update_translation_fields, sync_to_main_story
-from chatbot.utils.story_utils.base.translation_mixins import LanguageDetectionMixin
-from chatbot.utils.story_utils.format_utils import get_formatted_story
-from chatbot.utils.story_utils.story_utils import create_story_object
+import django_filters
+import traceback
+import logging
+
+logger = logging.getLogger('django')
 
 
 @api_view(['POST'])
 def end_story(request):
+    error_type='generic_error'
     try:
         profile_id = request.data['profile_id']
         session = request.data['session']
@@ -34,27 +35,95 @@ def end_story(request):
             return Response({
                 'status': 'error',
                 'message': 'session is mandatory',
-                'error_message': 'session is mandatory'
+                'error_message': 'session is mandatory',
+                'error_type': error_type,
             }, status=400)
         else:
-            id, content, error_msg = create_story_object(
+            id, content, error_msg, error_type = create_story_object(
                 profile_id=profile_id, session=session,
                 access_token=access_token, flow=flow, language=language
             )
+
+            if error_msg:
+                return Response({
+                    'status': 'error',
+                    'message': error_msg,
+                    'error_message': error_msg,
+                    'error_type': error_type,
+                }, status=400)
 
             return Response({
                 'status': 'ok',
                 'message': 'Story created',
                 'id': id,
                 'content': content,
-                'error_message': error_msg
             }, status=200)
     except Exception as e:
         traceback.print_exc()
         return Response({
             'status': 'error',
             'message': '',
-            'error_message': f'{e}'
+            'error_message': f'{e}',
+            'error_type': error_type,
+        }, status=500)
+
+
+@api_view(['POST'])
+def end_story_v2(request):
+    error_type='generic_error'
+    try:
+        profile_id = request.data['profile_id']
+        session = request.data['session']
+        access_token = request.headers.get('Authorization', "Bearer: ")[7:]
+        flow = request.data.get('flow')
+        language = request.data.get('language', 'en')
+
+        if isinstance(access_token, str):
+            access_token = access_token.strip()
+            if access_token == "":
+                access_token = None
+
+        if session is None:
+            return Response({
+                'status': 'error',
+                'message': 'session is mandatory',
+                'error_message': 'session is mandatory',
+                'error_type': error_type
+            }, status=400)
+
+        id, content, error_msg, error_type = generate_story(
+            profile_id=profile_id, session=session,
+            access_token=access_token, flow=flow, language=language
+        )
+        if error_msg:
+            return Response({
+                'status': 'error',
+                'message': error_msg,
+                'error_message': error_msg,
+                'error_type': error_type,
+            }, status=400)
+
+        return Response({
+            'status': 'ok',
+            'message': 'Story created',
+            'id': id,
+            'content': content,
+        }, status=200)
+    except Flow.DoesNotExist:
+        return Response({
+            'status': 'error',
+            'message': '',
+            'error_message': "Invalid flow",
+            'error_type': error_type
+        }, status=404)
+
+    except Exception as e:
+        traceback.print_exc()
+        return Response({
+            'status': 'error',
+            'message': '',
+            'error_message': f'{e}',
+            'error_type': error_type
         }, status=500)
 
 
@@ -174,6 +243,12 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
         session_value = request.data.get('session')
         access_token = request.data.get('access_token')
         flow = request.data.get('flow')
+        file_url = request.data.get('file_url')
+
+        if file_url is not None and file_url.startswith("s3://"):
+            file_url = "https://" + file_url[len("s3://"):]
+            request.data["file_url"] = file_url
+
         print("session_value: ", session_value)
         print("flow: ", flow)
         print("access_token: ", access_token)
@@ -189,7 +264,7 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
             return response
 
         except Exception as e:
-            print("Error occurred: ", str(e))
+            logger.error("Error: %s", e, exc_info=True)
             raise
 
 

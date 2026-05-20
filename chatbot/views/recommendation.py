@@ -1,4 +1,6 @@
 import os
+from django.conf import settings
+from jwt import ExpiredSignatureError, InvalidTokenError
 from rest_framework.decorators import api_view
 import requests
 from django.http import JsonResponse
@@ -11,6 +13,8 @@ import jwt
 from shikshalokam.utils.recommendation_utils import get_expert_projects
 
 recommendation_base_url = os.getenv("RECOMMENDATION_BASE_URL")
+PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")
+
 
 
 @api_view(["GET"])
@@ -29,25 +33,34 @@ def generate_recommendation(request):
     }
 
     try:
+        decoded = jwt.decode(
+        access_token,
+        PUBLIC_KEY,
+        algorithms=["HS256"]
+        )
+        user_id = decoded.get("data", {}).get("id")
 
-        decoded = jwt.decode(access_token, options={"verify_signature": False})
-        if decoded:
-            user_id = decoded.get('data', {}).get('id')
-        else:
+        if not user_id:
             return JsonResponse(default_response, status=200, safe=False)
+        
+    except ExpiredSignatureError:
+        return JsonResponse(default_response, status=200, safe=False)
+    except InvalidTokenError:
+        return JsonResponse(default_response, status=200, safe=False)
 
+    try:
+        res_profile = create_profile_utils(access_token=access_token)
+        current_profile = Profile.objects.get(userid=user_id)
+    except Profile.DoesNotExist:
         try:
-            res_profile = create_profile_utils(access_token=access_token)
+            create_profile_utils(access_token=access_token)
             current_profile = Profile.objects.get(userid=user_id)
+            print("Profile successfully created and retrieved.")
         except Profile.DoesNotExist:
-            try:
-                create_profile_utils(access_token=access_token)
-                current_profile = Profile.objects.get(userid=user_id)
-                print("Profile successfully created and retrieved.")
-            except Profile.DoesNotExist:
-                print("Failed to create or retrieve profile.")
-                return JsonResponse(default_response, status=200, safe=False)
-
+            print("Failed to create or retrieve profile.")
+            return JsonResponse(default_response, status=200, safe=False)
+    
+    try:
         current_profile_serialized = ProfileSerializer(current_profile).data
         project_templates = get_expert_projects(language=language)
         if not project_templates:
