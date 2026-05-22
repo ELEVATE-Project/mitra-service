@@ -1,6 +1,7 @@
 from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_model
 from chatbot.models import ChatSession, CompanyBot, CompanyChat, Story, ChatStatus
 from chatbot.models.enums import LLMProvider, StoryStatusChoices
+from chatbot.utils.story_utils.story_utils import generate_story
 from datetime import timedelta
 from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
@@ -306,40 +307,56 @@ def create_story():
             logger.error('No CompanyBot found for route=%s', ODISHA_YOUTH_BOT_ROUTE)
             return
 
-        odisha_session_for_story = ChatSession.objects.filter(
-            session=OuterRef('session'),
-            session_type=ODISHA_YOUTH_SESSION_TYPE,
-        )
-        matching_stories = Story.objects.filter(Exists(odisha_session_for_story))
+        odisha_session_ids = ChatSession.objects.filter(
+            session_type=ODISHA_YOUTH_SESSION_TYPE
+        ).values('session')
 
-        sessions_missing_story = chat_sessions_without_story()
+        stories_missing_location = Story.objects.filter(
+            session__in=odisha_session_ids
+        ).filter(
+            Q(other_params__isnull=True) | ~Q(other_params__has_key='Match Level')
+        ).select_related('author')
 
         logger.info(
-            'Creating story for Odisha Youth (%s stories, %s chat sessions without story)',
-            matching_stories.count(),
-            sessions_missing_story.count(),
+            'Processing %s Odisha Youth stories missing location classification',
+            stories_missing_location.count(),
         )
-        for session in sessions_missing_story.values_list('session', flat=True):
-            response = _generate_story_for_session(company_bot=company_bot, session=session)
 
-            if response is None:
-                logger.error(
-                    'No valid story after %s LLM attempts for session=%s',
-                    STORY_LLM_MAX_ATTEMPTS,
-                    session,
-                )
+        for story in stories_missing_location:
+            chat_session = ChatSession.objects.filter(session=story.session).first()
+            if not chat_session:
+                logger.warning('No ChatSession for story id=%s session=%s', story.id, story.session)
                 continue
 
-            story = _persist_story_from_llm_response(session_id=session, response=response)
-            logger.info(
-                'Created story id=%s session=%s route=%s title=%s other_params_keys=%s',
-                story.id,
-                session,
-                ODISHA_YOUTH_BOT_ROUTE,
-                story.title,
-                list(story.other_params.keys()) if story.other_params else [],
-            )
-            _apply_location_classification(story, session, company_bot)
+            language = chat_session.language if chat_session.language else 'en'
+            profile_id = story.author_id
+
+            _apply_location_classification(story, story.session, company_bot)
+
+            try:
+                story_id, story_content, error_message, error_type = generate_story(
+                    profile_id=profile_id,
+                    session=story.session,
+                    access_token=None,
+                    flow=ODISHA_YOUTH_SESSION_TYPE,
+                    language=language,
+                )
+                if error_message:
+                    logger.error(
+                        'generate_story failed story_id=%s session=%s error_type=%s error=%s',
+                        story.id, story.session, error_type, error_message,
+                    )
+                else:
+                    logger.info(
+                        'generate_story completed story_id=%s session=%s new_story_id=%s',
+                        story.id, story.session, story_id,
+                    )
+            except Exception as e:
+                logger.error(
+                    'generate_story exception story_id=%s session=%s: %s',
+                    story.id, story.session, e,
+                    exc_info=True,
+                )
 
     except Exception as e:
         logger.error('Error creating story for Odisha Youth: %s', e)
