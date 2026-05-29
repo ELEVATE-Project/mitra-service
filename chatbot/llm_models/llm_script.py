@@ -342,6 +342,9 @@ def handle_bedrock_model(
                 final_output = json_repair.repair_json(content_tool, return_objects=True)
             else:
                 final_output = content_tool
+            if isinstance(final_output, dict) and not final_output.get('toolUseId'):
+                logger.error(f"Tool call missing toolUseId, retrying: {final_output}")
+                return None
         else:
             content_text = content.get('text')
             json_start = content_text.find('{')
