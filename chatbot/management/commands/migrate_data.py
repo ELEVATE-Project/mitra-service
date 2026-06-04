@@ -500,13 +500,16 @@ def migrate_pdf_templates(ctx, scope, batch_size, dry_run, stdout):
 
 def migrate_bot_submodels(ctx, scope, batch_size, dry_run, stdout):
     new_src_ids = ctx.new_bot_source_ids
+    all_src_ids = set(ctx.bot_id_map.keys())
     if not new_src_ids:
         stdout.write("  No newly created bots — skipping sub-models")
+        if all_src_ids:
+            _migrate_bot_vernacular(ctx, all_src_ids, batch_size, dry_run, stdout)
         return
     _migrate_state_machines(ctx, new_src_ids, batch_size, dry_run, stdout)
     _migrate_voices(ctx, new_src_ids, batch_size, dry_run, stdout)
     _migrate_themes(ctx, new_src_ids, batch_size, dry_run, stdout)
-    _migrate_bot_vernacular(ctx, new_src_ids, batch_size, dry_run, stdout)
+    _migrate_bot_vernacular(ctx, all_src_ids, batch_size, dry_run, stdout)
     _migrate_story_vernacular(ctx, new_src_ids, batch_size, dry_run, stdout)
 
 
@@ -616,9 +619,9 @@ def _migrate_themes(ctx, new_src_ids, batch_size, dry_run, stdout):
     stdout.write(f"  Theme: {s.processed} processed")
 
 
-def _migrate_bot_vernacular(ctx, new_src_ids, batch_size, dry_run, stdout):
+def _migrate_bot_vernacular(ctx, src_ids, batch_size, dry_run, stdout):
     s = ctx.stat("BotVernacular")
-    qs = BotVernacular.objects.using(SRC).filter(company_bot_id__in=new_src_ids)
+    qs = BotVernacular.objects.using(SRC).filter(company_bot_id__in=src_ids)
     for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
         for src in batch:
             s.processed += 1
@@ -626,17 +629,21 @@ def _migrate_bot_vernacular(ctx, new_src_ids, batch_size, dry_run, stdout):
             if tgt_bot_id is None or dry_run:
                 continue
             try:
-                obj = BotVernacular(
-                    language=src.language,
-                    introductory_message=src.introductory_message,
-                    alt_introductory_message=src.alt_introductory_message,
-                    name=src.name,
-                    error_message=src.error_message,
+                obj, created = BotVernacular.objects.update_or_create(
                     company_bot_id=tgt_bot_id,
+                    language=src.language,
+                    defaults={
+                        "introductory_message": src.introductory_message,
+                        "alt_introductory_message": src.alt_introductory_message,
+                        "name": src.name,
+                        "error_message": src.error_message,
+                    },
                 )
-                obj.save()
                 _save_timestamps(BotVernacular, obj.pk, src)
-                s.created += 1
+                if created:
+                    s.created += 1
+                else:
+                    s.updated += 1
             except Exception as exc:
                 ctx.log_error("BotVernacular", src.id, exc)
     stdout.write(f"  BotVernacular: {s.processed} processed")
