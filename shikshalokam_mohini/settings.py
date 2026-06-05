@@ -175,6 +175,18 @@ DATABASES = {
             'sslrootcert': os.getenv('PG_SSL_ROOT_CERT')
         },
     },
+    'source_db': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('SOURCE_DATABASE_NAME'),
+        'USER': os.getenv('SOURCE_DATABASE_USER'),
+        'PASSWORD': os.getenv('SOURCE_DATABASE_PASSWORD'),
+        'HOST': os.getenv('SOURCE_DATABASE_HOST'),
+        'PORT': os.getenv('SOURCE_DATABASE_PORT'),
+        'OPTIONS': {
+            'sslmode': os.getenv('PG_SSL_MODE'),
+            'sslrootcert': os.getenv('PG_SSL_ROOT_CERT')
+        },
+    },
 }
 
 
