@@ -186,6 +186,7 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
             self.inlines = [VoiceProviderAdmin]
         return super().changeform_view(request, object_id, form_url, extra_context)
 
+    # Sync Google glossary for TextToText voice providers after inline save
     def duplicate_bot(self, request, queryset):
         if queryset.count() != 1:
             self.message_user(request, "Please select exactly one bot to duplicate.", level=messages.ERROR)

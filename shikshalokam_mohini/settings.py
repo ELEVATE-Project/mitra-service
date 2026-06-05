@@ -504,4 +504,16 @@ CRONJOBS = [
     '>> /tmp/telangana_ptm_pilot_school_classification.log 2>&1'),
     ('15 */2 * * *', 'chatbot.cron_tasks.telangana_ptm_pilot.metrics_extraction.extract_metrics',
     '>> /tmp/telangana_ptm_pilot_metrics_extraction.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.community_FGD.story_creation.create_story',
+    '>> /tmp/community_FGD_story_creation.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.odisha_youth.story_creation.create_story',
+    '>> /tmp/odisha_youth_story_creation.log 2>&1'),
+    ('0 */2 * * *', 'chatbot.cron_tasks.stakeholder_fgd.district_classification.classify_districts',
+    '>> /tmp/stakeholder_fgd_district_classification.log 2>&1'),
+    ('0 */2 * * *', 'chatbot.cron_tasks.student_fgd.district_classification.classify_districts',
+    '>> /tmp/student_fgd_district_classification.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.stakeholder_fgd.story_creation.create_story',
+    '>> /tmp/stakeholder_fgd_story_creation.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.student_fgd.story_creation.create_story',
+    '>> /tmp/student_fgd_story_creation.log 2>&1')
 ]
