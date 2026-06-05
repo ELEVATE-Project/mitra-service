@@ -500,19 +500,23 @@ def migrate_pdf_templates(ctx, scope, batch_size, dry_run, stdout):
 
 def migrate_bot_submodels(ctx, scope, batch_size, dry_run, stdout):
     new_src_ids = ctx.new_bot_source_ids
-    if not new_src_ids:
-        stdout.write("  No newly created bots — skipping sub-models")
+    all_src_ids = set(ctx.bot_id_map.keys())
+    if not all_src_ids:
+        stdout.write("  No bots processed — skipping sub-models")
         return
-    _migrate_state_machines(ctx, new_src_ids, batch_size, dry_run, stdout)
-    _migrate_voices(ctx, new_src_ids, batch_size, dry_run, stdout)
+    _migrate_state_machines(ctx, all_src_ids, batch_size, dry_run, stdout)
+    _migrate_voices(ctx, all_src_ids, batch_size, dry_run, stdout)
+    _migrate_bot_vernacular(ctx, all_src_ids, batch_size, dry_run, stdout)
+    if not new_src_ids:
+        stdout.write("  No newly created bots — skipping theme and story vernacular sub-models")
+        return
     _migrate_themes(ctx, new_src_ids, batch_size, dry_run, stdout)
-    _migrate_bot_vernacular(ctx, new_src_ids, batch_size, dry_run, stdout)
     _migrate_story_vernacular(ctx, new_src_ids, batch_size, dry_run, stdout)
 
 
-def _migrate_state_machines(ctx, new_src_ids, batch_size, dry_run, stdout):
+def _migrate_state_machines(ctx, src_ids, batch_size, dry_run, stdout):
     s = ctx.stat("CompanyStateMachine")
-    qs = CompanyStateMachine.objects.using(SRC).filter(company_bot_id__in=new_src_ids)
+    qs = CompanyStateMachine.objects.using(SRC).filter(company_bot_id__in=src_ids)
     for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
         for src in batch:
             s.processed += 1
@@ -520,40 +524,51 @@ def _migrate_state_machines(ctx, new_src_ids, batch_size, dry_run, stdout):
             if tgt_bot_id is None or dry_run:
                 continue
             try:
-                obj = CompanyStateMachine(
-                    name=src.name,
-                    step=src.step,
-                    use_stage_chats=src.use_stage_chats,
-                    type=src.type,
-                    text_conversion_type=src.text_conversion_type,
-                    bot_question=src.bot_question,
-                    completion_criteria=src.completion_criteria,
-                    context=src.context,
-                    tool_context=src.tool_context,
-                    preprocess_type=src.preprocess_type,
-                    preprocess_prompt=src.preprocess_prompt,
-                    preprocess_output_mode=src.preprocess_output_mode,
-                    postprocess_type=src.postprocess_type,
-                    postprocess_prompt=src.postprocess_prompt,
-                    postprocess_output_mode=src.postprocess_output_mode,
-                    skip_to_step=src.skip_to_step,
-                    operation_type=src.operation_type,
-                    skip_if_authenticated=src.skip_if_authenticated,
+                obj, created = CompanyStateMachine.objects.update_or_create(
                     company_bot_id=tgt_bot_id,
-                    preprocess_bot_id=ctx.bot_id_map.get(src.preprocess_bot_id),
-                    postprocess_bot_id=ctx.bot_id_map.get(src.postprocess_bot_id),
+                    step=src.step,
+                    defaults={
+                        "name": src.name,
+                        "use_stage_chats": src.use_stage_chats,
+                        "type": src.type,
+                        "text_conversion_type": src.text_conversion_type,
+                        "bot_question": src.bot_question,
+                        "completion_criteria": src.completion_criteria,
+                        "context": src.context,
+                        "tool_context": src.tool_context,
+                        "preprocess_type": src.preprocess_type,
+                        "preprocess_prompt": src.preprocess_prompt,
+                        "preprocess_output_mode": src.preprocess_output_mode,
+                        "postprocess_type": src.postprocess_type,
+                        "postprocess_prompt": src.postprocess_prompt,
+                        "postprocess_output_mode": src.postprocess_output_mode,
+                        "skip_to_step": src.skip_to_step,
+                        "operation_type": src.operation_type,
+                        "skip_if_authenticated": src.skip_if_authenticated,
+                        "preprocess_bot_id": ctx.bot_id_map.get(src.preprocess_bot_id),
+                        "postprocess_bot_id": ctx.bot_id_map.get(src.postprocess_bot_id),
+                    },
                 )
-                obj.save()
                 _save_timestamps(CompanyStateMachine, obj.pk, src)
-                s.created += 1
+                if created:
+                    s.created += 1
+                else:
+                    s.updated += 1
             except Exception as exc:
                 ctx.log_error("CompanyStateMachine", src.id, exc)
     stdout.write(f"  CompanyStateMachine: {s.processed} processed")
 
 
-def _migrate_voices(ctx, new_src_ids, batch_size, dry_run, stdout):
+def _migrate_voices(ctx, src_ids, batch_size, dry_run, stdout):
     s = ctx.stat("Voice")
-    qs = Voice.objects.using(SRC).filter(company_bot_id__in=new_src_ids)
+    qs = Voice.objects.using(SRC).filter(company_bot_id__in=src_ids)
+    pre_existing_count = 0
+    if not dry_run:
+        # Voice has no unique natural key (multiple voices per bot+language are valid),
+        # so delete all existing voices for these bots and recreate from source.
+        tgt_bot_ids = [ctx.bot_id_map[sid] for sid in src_ids if sid in ctx.bot_id_map]
+        pre_existing_count = Voice.objects.filter(company_bot_id__in=tgt_bot_ids).count()
+        Voice.objects.filter(company_bot_id__in=tgt_bot_ids).delete()
     for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
         for src in batch:
             s.processed += 1
@@ -578,6 +593,10 @@ def _migrate_voices(ctx, new_src_ids, batch_size, dry_run, stdout):
                 s.created += 1
             except Exception as exc:
                 ctx.log_error("Voice", src.id, exc)
+    # Reclassify: voices that replaced pre-existing ones count as updated
+    replaced = min(pre_existing_count, s.created)
+    s.updated += replaced
+    s.created -= replaced
     stdout.write(f"  Voice: {s.processed} processed")
 
 
@@ -616,9 +635,9 @@ def _migrate_themes(ctx, new_src_ids, batch_size, dry_run, stdout):
     stdout.write(f"  Theme: {s.processed} processed")
 
 
-def _migrate_bot_vernacular(ctx, new_src_ids, batch_size, dry_run, stdout):
+def _migrate_bot_vernacular(ctx, src_ids, batch_size, dry_run, stdout):
     s = ctx.stat("BotVernacular")
-    qs = BotVernacular.objects.using(SRC).filter(company_bot_id__in=new_src_ids)
+    qs = BotVernacular.objects.using(SRC).filter(company_bot_id__in=src_ids)
     for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
         for src in batch:
             s.processed += 1
@@ -626,17 +645,21 @@ def _migrate_bot_vernacular(ctx, new_src_ids, batch_size, dry_run, stdout):
             if tgt_bot_id is None or dry_run:
                 continue
             try:
-                obj = BotVernacular(
-                    language=src.language,
-                    introductory_message=src.introductory_message,
-                    alt_introductory_message=src.alt_introductory_message,
-                    name=src.name,
-                    error_message=src.error_message,
+                obj, created = BotVernacular.objects.update_or_create(
                     company_bot_id=tgt_bot_id,
+                    language=src.language,
+                    defaults={
+                        "introductory_message": src.introductory_message,
+                        "alt_introductory_message": src.alt_introductory_message,
+                        "name": src.name,
+                        "error_message": src.error_message,
+                    },
                 )
-                obj.save()
                 _save_timestamps(BotVernacular, obj.pk, src)
-                s.created += 1
+                if created:
+                    s.created += 1
+                else:
+                    s.updated += 1
             except Exception as exc:
                 ctx.log_error("BotVernacular", src.id, exc)
     stdout.write(f"  BotVernacular: {s.processed} processed")
@@ -887,32 +910,33 @@ def migrate_story_translations(ctx, batch_size, dry_run, stdout):
             if dry_run:
                 continue
             try:
-                tgt, created = StoryTranslation.objects.update_or_create(
+                if StoryTranslation.objects.filter(story_id=tgt_story_id, language=src.language).exists():
+                    s.skipped += 1
+                    continue
+                obj = StoryTranslation(
                     story_id=tgt_story_id,
                     language=src.language,
-                    defaults={
-                        "title": src.title,
-                        "content": src.content,
-                        "blurb": src.blurb,
-                        "tweet": src.tweet,
-                        "objective": src.objective,
-                        "action_steps": src.action_steps,
-                        "impact": src.impact,
-                        "micro_improvement": src.micro_improvement,
-                        "formatted_content": src.formatted_content,
-                        "location": src.location,
-                        "district": src.district,
-                        "state": src.state,
-                        "block": src.block,
-                        "other_params": src.other_params,
-                    },
+                    title=src.title,
+                    content=src.content,
+                    blurb=src.blurb,
+                    tweet=src.tweet,
+                    objective=src.objective,
+                    action_steps=src.action_steps,
+                    impact=src.impact,
+                    micro_improvement=src.micro_improvement,
+                    formatted_content=src.formatted_content,
+                    location=src.location,
+                    district=src.district,
+                    state=src.state,
+                    block=src.block,
+                    other_params=src.other_params,
                 )
-                _save_timestamps(StoryTranslation, tgt.pk, src)
-                s.created += 1 if created else 0
-                s.updated += 0 if created else 1
+                obj.save()
+                _save_timestamps(StoryTranslation, obj.pk, src)
+                s.created += 1
             except Exception as exc:
                 ctx.log_error("StoryTranslation", src.id, exc)
-    stdout.write(f"  {s.processed} processed, {s.skipped} skipped (parent story not migrated)")
+    stdout.write(f"  {s.processed} processed, {s.skipped} skipped (already exists or parent story not migrated)")
 
 
 # ---------------------------------------------------------------------------
