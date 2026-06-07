@@ -108,6 +108,8 @@ class MigrationContext:
     new_bot_source_ids: set = field(default_factory=set)
     # Session strings that already exist in target — skip downstream records
     skipped_sessions: set = field(default_factory=set)
+    # Sessions that would be created in target (dry-run only) — used by CompanyChat counting
+    dry_run_migrated_sessions: set = field(default_factory=set)
     stats: dict = field(default_factory=dict)
     errors: list = field(default_factory=list)
 
@@ -358,6 +360,7 @@ def migrate_companies(ctx, scope, batch_size, dry_run, stdout):
         for src in batch:
             s.processed += 1
             if dry_run:
+                ctx.company_id_map[src.id] = src.id  # placeholder so downstream steps count correctly
                 continue
             try:
                 tgt, created = Company.objects.update_or_create(
@@ -395,6 +398,8 @@ def migrate_bots(ctx, scope, batch_size, dry_run, stdout):
                 ctx.log_error("CompanyBot", src.id, f"company_id {src.company_id} not mapped")
                 continue
             if dry_run:
+                ctx.bot_id_map[src.id] = src.id  # placeholder so downstream steps count correctly
+                ctx.new_bot_source_ids.add(src.id)
                 continue
             try:
                 tgt, created = CompanyBot.objects.update_or_create(
@@ -452,6 +457,7 @@ def migrate_image_configs(ctx, scope, batch_size, dry_run, stdout):
         for src in batch:
             s.processed += 1
             if dry_run:
+                ctx.image_config_id_map[src.id] = src.id  # placeholder so downstream steps count correctly
                 continue
             try:
                 tgt, created = ImageConfiguration.objects.update_or_create(
@@ -487,6 +493,7 @@ def migrate_flows(ctx, scope, batch_size, dry_run, stdout):
             ctx.log_error("Flow", src.id, f"bot_id {src.bot_id} not mapped")
             continue
         if dry_run:
+            ctx.flow_id_map[src.id] = src.id  # placeholder so downstream steps count correctly
             continue
         try:
             tgt, created = Flow.objects.update_or_create(
@@ -772,6 +779,7 @@ def migrate_profiles(ctx, scope, batch_size, dry_run, stdout):
                 ctx.log_error("Profile", src.id, f"company_id {src.company_id} not mapped")
                 continue
             if dry_run:
+                ctx.profile_id_map[src.id] = src.id  # placeholder so downstream steps count correctly
                 continue
             try:
                 tgt, created = Profile.objects.update_or_create(
@@ -831,6 +839,7 @@ def migrate_chat_sessions(ctx, scope, batch_size, dry_run, stdout):
                 ctx.log_skip("ChatSession", src.id, f"session '{src.session}' exists in target")
                 continue
             if dry_run:
+                ctx.dry_run_migrated_sessions.add(src.session)
                 continue
             try:
                 obj = ChatSession(
@@ -862,7 +871,7 @@ def migrate_chat_sessions(ctx, scope, batch_size, dry_run, stdout):
 
 def migrate_company_chats(ctx, scope, batch_size, dry_run, stdout):
     s = ctx.stat("CompanyChat")
-    valid_sessions = set(ChatSession.objects.values_list("session", flat=True))
+    valid_sessions = ctx.dry_run_migrated_sessions if dry_run else set(ChatSession.objects.values_list("session", flat=True))
     date_filter = _date_filter(scope)
     qs = CompanyChat.objects.using(SRC).filter(**date_filter)
 
@@ -931,6 +940,7 @@ def migrate_stories(ctx, scope, batch_size, dry_run, stdout):
                 ctx.log_skip("Story", src.id, f"session '{src.session}' exists in target")
                 continue
             if dry_run:
+                ctx.story_id_map[src.id] = src.id  # placeholder so downstream steps count correctly
                 continue
             try:
                 obj = Story(
