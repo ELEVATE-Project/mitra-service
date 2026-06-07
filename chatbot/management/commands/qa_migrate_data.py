@@ -4,12 +4,14 @@ Migrate data from a source Postgres DB to the target DB using Django ORM.
 Source DB must be configured as 'source_db' in DATABASES (via SOURCE_DATABASE_* env vars).
 
 Usage:
-    # Migrate everything
+    # Migrate everything (reference + transactional data)
     python manage.py migrate_data
 
-    # Migrate only transactional data within a date range, plus all referenced
-    # Company / CompanyBot / Flow / ImageConfiguration / PDFTemplates / Profile
-    python manage.py migrate_data --date-from 2024-01-01 --date-to 2024-12-31
+    # Migrate only transactional data within a date range:
+    #   Profile, ChatSession, CompanyChat, Story, StoryTranslation
+    #   Reference data (Company, CompanyBot, Flow, etc.) must already exist in target.
+    #   Records whose FK cannot be resolved in the target are skipped and logged.
+    python manage.py qa_migrate_data --date-from 2026-03-27 --date-to 2026-03-30
 
     # Dry run (count rows, no writes)
     python manage.py migrate_data --dry-run [--date-from ...] [--date-to ...]
@@ -220,6 +222,54 @@ def build_scope(date_from: Optional[date], date_to: Optional[date], stdout) -> M
 
 
 # ---------------------------------------------------------------------------
+# ID-map builder for date-range (transactional-only) runs
+# ---------------------------------------------------------------------------
+
+def build_id_maps_from_target(ctx, scope, stdout):
+    """
+    Populate ID maps by matching source records against already-existing target
+    records. Used when running a date-range migration so we skip re-migrating
+    reference data (Company, CompanyBot, Flow) while still resolving FKs.
+    """
+    stdout.write("Resolving ID maps from existing target records...")
+
+    if scope.company_ids:
+        src_rows = Company.objects.using(SRC).filter(id__in=scope.company_ids).values("id", "slug")
+        tgt_lookup = {c.slug: c.id for c in Company.objects.filter(slug__in=[r["slug"] for r in src_rows])}
+        for row in src_rows:
+            tgt_id = tgt_lookup.get(row["slug"])
+            if tgt_id:
+                ctx.company_id_map[row["id"]] = tgt_id
+            else:
+                stdout.write(f"  WARNING: Company slug='{row['slug']}' not found in target — dependent records will be skipped")
+
+    if scope.bot_ids:
+        src_rows = CompanyBot.objects.using(SRC).filter(id__in=scope.bot_ids).values("id", "route")
+        tgt_lookup = {b.route: b.id for b in CompanyBot.objects.filter(route__in=[r["route"] for r in src_rows])}
+        for row in src_rows:
+            tgt_id = tgt_lookup.get(row["route"])
+            if tgt_id:
+                ctx.bot_id_map[row["id"]] = tgt_id
+            else:
+                stdout.write(f"  WARNING: CompanyBot route='{row['route']}' not found in target — dependent records will be skipped")
+
+    if scope.flow_ids:
+        src_rows = Flow.objects.using(SRC).filter(id__in=scope.flow_ids).values("id", "flow_route")
+        tgt_lookup = {f.flow_route: f.id for f in Flow.objects.filter(flow_route__in=[r["flow_route"] for r in src_rows])}
+        for row in src_rows:
+            tgt_id = tgt_lookup.get(row["flow_route"])
+            if tgt_id:
+                ctx.flow_id_map[row["id"]] = tgt_id
+            else:
+                stdout.write(f"  WARNING: Flow flow_route='{row['flow_route']}' not found in target — dependent records will be skipped")
+
+    stdout.write(
+        f"  Resolved: {len(ctx.company_id_map)} companies, "
+        f"{len(ctx.bot_id_map)} bots, {len(ctx.flow_id_map)} flows"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Management command
 # ---------------------------------------------------------------------------
 
@@ -254,20 +304,33 @@ class Command(BaseCommand):
         scope = build_scope(date_from, date_to, self.stdout)
         ctx = MigrationContext()
 
-        steps = [
-            ("Company", lambda: migrate_companies(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("CompanyBot", lambda: migrate_bots(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("ImageConfiguration", lambda: migrate_image_configs(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("Flow (pass 1)", lambda: migrate_flows(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("PDFTemplates", lambda: migrate_pdf_templates(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("Bot sub-models", lambda: migrate_bot_submodels(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("Profile", lambda: migrate_profiles(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("ChatSession", lambda: migrate_chat_sessions(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("CompanyChat", lambda: migrate_company_chats(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("Story", lambda: migrate_stories(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("StoryMedia", lambda: migrate_story_media(ctx, batch_size, dry_run, self.stdout)),
-            ("StoryTranslation", lambda: migrate_story_translations(ctx, batch_size, dry_run, self.stdout)),
-        ]
+        if date_from or date_to:
+            # Date-range run: only migrate transactional data.
+            # Reference data (Company, CompanyBot, Flow, etc.) must already exist in target.
+            build_id_maps_from_target(ctx, scope, self.stdout)
+            steps = [
+                ("Profile", lambda: migrate_profiles(ctx, scope, batch_size, dry_run, self.stdout)),
+                ("ChatSession", lambda: migrate_chat_sessions(ctx, scope, batch_size, dry_run, self.stdout)),
+                ("CompanyChat", lambda: migrate_company_chats(ctx, scope, batch_size, dry_run, self.stdout)),
+                ("Story", lambda: migrate_stories(ctx, scope, batch_size, dry_run, self.stdout)),
+                ("StoryMedia", lambda: migrate_story_media(ctx, batch_size, dry_run, self.stdout)),
+                ("StoryTranslation", lambda: migrate_story_translations(ctx, batch_size, dry_run, self.stdout)),
+            ]
+        else:
+            steps = [
+                ("Company", lambda: migrate_companies(ctx, scope, batch_size, dry_run, self.stdout)),
+                ("CompanyBot", lambda: migrate_bots(ctx, scope, batch_size, dry_run, self.stdout)),
+                ("ImageConfiguration", lambda: migrate_image_configs(ctx, scope, batch_size, dry_run, self.stdout)),
+                ("Flow (pass 1)", lambda: migrate_flows(ctx, scope, batch_size, dry_run, self.stdout)),
+                ("PDFTemplates", lambda: migrate_pdf_templates(ctx, scope, batch_size, dry_run, self.stdout)),
+                ("Bot sub-models", lambda: migrate_bot_submodels(ctx, scope, batch_size, dry_run, self.stdout)),
+                ("Profile", lambda: migrate_profiles(ctx, scope, batch_size, dry_run, self.stdout)),
+                ("ChatSession", lambda: migrate_chat_sessions(ctx, scope, batch_size, dry_run, self.stdout)),
+                ("CompanyChat", lambda: migrate_company_chats(ctx, scope, batch_size, dry_run, self.stdout)),
+                ("Story", lambda: migrate_stories(ctx, scope, batch_size, dry_run, self.stdout)),
+                ("StoryMedia", lambda: migrate_story_media(ctx, batch_size, dry_run, self.stdout)),
+                ("StoryTranslation", lambda: migrate_story_translations(ctx, batch_size, dry_run, self.stdout)),
+            ]
 
         for label, fn in steps:
             self.stdout.write(f"\n--- {label} ---")
@@ -849,8 +912,16 @@ def migrate_company_chats(ctx, scope, batch_size, dry_run, stdout):
 def migrate_stories(ctx, scope, batch_size, dry_run, stdout):
     s = ctx.stat("Story")
     existing = set(Story.objects.values_list("session", flat=True))
-    date_filter = _date_filter(scope)
-    qs = Story.objects.using(SRC).filter(**date_filter)
+
+    qs = Story.objects.using(SRC)
+    if scope.date_from or scope.date_to:
+        # Stories may have been created before the date range but are linked to
+        # sessions within it — anchor on session created_at, not story created_at.
+        date_filter = _date_filter(scope)
+        scoped_sessions = set(
+            ChatSession.objects.using(SRC).filter(**date_filter).values_list("session", flat=True)
+        )
+        qs = qs.filter(session__in=scoped_sessions)
 
     for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
         for src in batch:
