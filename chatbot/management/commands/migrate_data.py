@@ -913,7 +913,7 @@ def migrate_stories(ctx, scope, batch_size, dry_run, stdout):
 
 def migrate_story_media(ctx, batch_size, dry_run, stdout):
     s = ctx.stat("StoryMedia")
-    src_s3_base = os.getenv("SOURCE_S3_MEDIA_URL", "").rstrip("/")
+    # src_s3_base = os.getenv("SOURCE_S3_MEDIA_URL", "").rstrip("/")
 
     qs = StoryMedia.objects.using(SRC).filter(story_id__in=ctx.story_id_map.keys())
     for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
@@ -923,26 +923,26 @@ def migrate_story_media(ctx, batch_size, dry_run, stdout):
             if tgt_story_id is None or dry_run:
                 continue
 
-            # Resolve source file URL — prefer file_url field, fall back to constructing from base
-            if src.file_url:
-                source_url = src.file_url
-            elif src.file and src_s3_base:
-                source_url = f"{src_s3_base}/{str(src.file)}"
-            else:
-                ctx.log_error("StoryMedia", src.id, "no source file URL available — set SOURCE_S3_MEDIA_URL env var")
-                continue
+            # # Resolve source file URL — prefer file_url field, fall back to constructing from base
+            # if src.file_url:
+            #     source_url = src.file_url
+            # elif src.file and src_s3_base:
+            #     source_url = f"{src_s3_base}/{str(src.file)}"
+            # else:
+            #     ctx.log_error("StoryMedia", src.id, "no source file URL available — set SOURCE_S3_MEDIA_URL env var")
+            #     continue
 
-            # Download file from source S3
-            try:
-                resp = requests.get(source_url, timeout=60)
-                resp.raise_for_status()
-                filename = os.path.basename(str(src.file)) if src.file else src.name
-                file_content = ContentFile(resp.content, name=filename)
-            except Exception as exc:
-                ctx.log_error("StoryMedia", src.id, f"download failed [{source_url}]: {exc}")
-                continue
+            # # Download file from source S3
+            # try:
+            #     resp = requests.get(source_url, timeout=60)
+            #     resp.raise_for_status()
+            #     filename = os.path.basename(str(src.file)) if src.file else src.name
+            #     file_content = ContentFile(resp.content, name=filename)
+            # except Exception as exc:
+            #     ctx.log_error("StoryMedia", src.id, f"download failed [{source_url}]: {exc}")
+            #     continue
 
-            # Create record then upload file to target S3
+            # Bucket names are identical — copy file path and URL directly without re-uploading
             try:
                 obj = StoryMedia(
                     story_id=tgt_story_id,
@@ -951,15 +951,18 @@ def migrate_story_media(ctx, batch_size, dry_run, stdout):
                     base64_str=src.base64_str,
                     source_path=src.source_path,
                     media_type=src.media_type,
+                    file=src.file,
+                    file_url=src.file_url,
                 )
                 obj.save()
-                try:
-                    obj.file.save(filename, file_content, save=True)
-                    StoryMedia.objects.filter(pk=obj.pk).update(file_url=obj.file.url)
-                except Exception as exc:
-                    obj.delete()
-                    ctx.log_error("StoryMedia", src.id, f"upload to target S3 failed: {exc}")
-                    continue
+                # # Upload file to target S3
+                # try:
+                #     obj.file.save(filename, file_content, save=True)
+                #     StoryMedia.objects.filter(pk=obj.pk).update(file_url=obj.file.url)
+                # except Exception as exc:
+                #     obj.delete()
+                #     ctx.log_error("StoryMedia", src.id, f"upload to target S3 failed: {exc}")
+                #     continue
                 _save_timestamps(StoryMedia, obj.pk, src)
                 s.created += 1
             except Exception as exc:
