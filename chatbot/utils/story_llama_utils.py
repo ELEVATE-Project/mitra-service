@@ -211,7 +211,7 @@ def parse_datetime(date_str):
     return None
 
 
-def translate_field(voice_provider, message_body, target_language, source_language="en"):
+def translate_field(voice_provider, message_body, target_language, source_language="en", company_bot=None):
     print(f"Trying to translate: {message_body}")
     logger.info(f"Trying to translate: {message_body}")
     if not message_body or message_body == '' or source_language == target_language:
@@ -223,7 +223,7 @@ def translate_field(voice_provider, message_body, target_language, source_langua
 
     response = text_translate_provider(
         voice_provider=voice_provider, message_body=message_body, target_language=target_language,
-        source_language=source_language
+        source_language=source_language, company_bot=company_bot
     )
     if response.get('status') == 200:
         logger.info(f"Got 200 response from translation service: {response.get('content')}")

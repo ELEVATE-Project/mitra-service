@@ -1,6 +1,6 @@
 /logs/
 *.log
-/config/secrets.json
+config/
 .env
 .idea
 shikshalokam_mohini/**/__pycache__/
@@ -13,10 +13,8 @@ report-task.txt
 
 .coverage
 
-
 .deepeval/
 graphify-out/
-config/qa-dev-prod-mitra-bucket.json
 .vscode/
 .claude/
 .venv/
