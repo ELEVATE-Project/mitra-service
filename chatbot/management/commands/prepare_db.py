@@ -240,6 +240,12 @@ class Command(BaseCommand):
                     )
                 )
 
+            # Reset sequence so next auto-id doesn't collide with explicitly inserted id=1
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT setval(pg_get_serial_sequence('chatbot_company', 'id'), MAX(id)) FROM chatbot_company"
+                )
+
             return 0
 
         except Exception as e:
@@ -326,6 +332,12 @@ class Command(BaseCommand):
                     )
                 )
 
+            # Reset sequence so next auto-id doesn't collide with explicitly inserted id=1
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT setval(pg_get_serial_sequence('chatbot_profile', 'id'), MAX(id)) FROM chatbot_profile"
+                )
+
             return 0
 
         except Exception as e:
@@ -349,7 +361,7 @@ class Command(BaseCommand):
         try:
             # Get environment variable
             null_user_email = "null@shikshalokam.org"
-            null_user_first_name = 'Null User'
+            null_user_first_name = ''
             company_name = os.environ.get('COMPANY_SLUG', 'shikshalokamstaging')
 
             self.stdout.write(f'  Null User Email: {null_user_email}')
