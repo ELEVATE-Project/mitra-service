@@ -16,12 +16,12 @@ def sarvam_text_to_speech(message, source_language, voice_provider):
             }
 
         other = voice_provider.other_params if voice_provider and voice_provider.other_params else {}
-        request_timeout = other.get("request_timeout", 20)
+        request_timeout = other.get("request_timeout", 60)
 
         try:
             request_timeout = float(request_timeout)
         except Exception:
-            request_timeout = 20
+            request_timeout = 60
 
         requested_speaker = other.get("speaker")
 

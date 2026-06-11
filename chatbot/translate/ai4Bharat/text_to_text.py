@@ -45,12 +45,12 @@ def call_ai4bharat_translation_api(voice_provider, source_language, target_langu
     }
 
     try:
-        request_timeout = other_params.get("request_timeout", 60)
+        request_timeout = other_params.get("request_timeout", 30)
 
         try:
             request_timeout = float(request_timeout)
         except Exception:
-            request_timeout = 60
+            request_timeout = 30
 
         response = requests.post(
             api_url,
