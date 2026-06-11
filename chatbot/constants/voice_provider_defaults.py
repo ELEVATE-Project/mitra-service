@@ -77,6 +77,18 @@ VOICE_PROVIDER_DEFAULTS = {
         }
     },
 
+    VoiceProvider.SHIKSHALOKAM: {
+        VoiceType.SpeechToText: {
+            "request_timeout": 60
+        },
+        VoiceType.TextToText: {
+            "request_timeout": 60
+        },
+        VoiceType.TextToSpeech: {
+            "request_timeout": 60
+        }
+    },
+
     VoiceProvider.CUSTOM_LLM: {
         VoiceType.SpeechToText: {},
         VoiceType.TextToText: {
