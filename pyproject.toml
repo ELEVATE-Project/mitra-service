@@ -37,6 +37,7 @@ dependencies = [
     "djangorestframework-simplejwt>=5.5.1",
     "gevent>=26.4.0",
     "google-cloud-speech>=2.36.0",
+    "google-cloud-storage>=3.11.0",
     "google-cloud-texttospeech>=2.34.0",
     "google-cloud-translate>=3.24.0",
     "import-export>=0.3.1",

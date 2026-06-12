@@ -18,6 +18,11 @@
 {# Upload button for Media model #}
 {% if opts.model_name == 'media' %}
 <li style="padding-left: 5px; list-style-type: none">
+  <a href="google-drive/" class="btn btn-info">
+    <i class="fas fa-cloud-upload-alt"></i> {% trans 'Connect Google Drive' %}
+  </a>
+</li>
+<li style="padding-left: 5px; list-style-type: none">
   <a href="{% url 'admin:chatbot_media_batch_upload' %}" class="btn btn-success">
     <i class="fas fa-upload"></i> {% trans 'Upload media' %}
   </a>

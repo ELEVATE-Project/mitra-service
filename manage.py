@@ -6,6 +6,8 @@ import sys
 import django
 
 
+os.environ['OAUTHLIB_INSECURE_TRANSPORT'] = '1'
+
 def main():
     """Run administrative tasks."""
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'shikshalokam_mohini.settings')

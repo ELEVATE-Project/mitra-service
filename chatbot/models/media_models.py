@@ -91,7 +91,7 @@ class Media(models.Model):
 
         if is_new:
             task = save_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
-            return
+            return task.id
         else:
             from chatbot.celery_tasks.knowledge_service.media_tasks import delete_from_vector_db
             try:
@@ -103,6 +103,7 @@ class Media(models.Model):
                 print(f"Vector DB deletion status for media_id {self.id}: {status_code}")
                 task = save_in_vector_db.apply_async(args=(self.id, company_slug), countdown=1)
                 from celery.result import AsyncResult
+                return task.id
             except Exception as e:
                 print(f"Error deleting from vector DB for media_id {self.id}: {str(e)}")
                 status_code = 500
