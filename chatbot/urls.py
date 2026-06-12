@@ -32,6 +32,7 @@ from chatbot.views.story_views import end_story, end_story_v2, StoryListCreateVi
     StoryRetrieveUpdateDestroyView, StoryMediaListCreateView, StoryMediaRetrieveUpdateDestroyView
 from rest_framework.routers import DefaultRouter
 from chatbot.views.Media.media_api_views import MediaViewSet
+from chatbot.views.Media import google_drive_integration
 
 app_name = "chatbot"
 
@@ -114,6 +115,7 @@ urlpatterns = [
 
     # path('admin/media/batch-upload/', BatchMediaUploadView.as_view(), name='batch_media_upload'),
     path('admin/media/batch-upload/', BatchMediaUploadView.as_view(), name='chatbot_media_batch_upload'),
+    path('admin/media/google-drive-auth/', google_drive_integration.GoogleDriveAuthView.as_view(), name='admin_google_drive_auth'),
     path('admin/media/batch-extract/', BatchMediaExtractView.as_view(), name='chatbot_media_batch_extract'),
     path('admin/media/batch-save/', BatchMediaSaveView.as_view(), name='chatbot_media_batch_save'),
     path('admin/media/batch-task-status/', BatchMediaTaskStatusView.as_view(), name='chatbot_media_task_status'),
@@ -137,6 +139,12 @@ urlpatterns = [
     # Media API endpoints
     path('api/v1/', include(router.urls)),
     path('api/v1/documents', DocumentUploadView.as_view(), name='document-upload'),
+    path('google-drive/', google_drive_integration.GoogleDriveIntegrationView.as_view(), name='google_drive_integration'),
+    path('google-drive/auth/', google_drive_integration.GoogleDriveAuthView.as_view(), name='google_drive_auth'),
+    path('google-drive/callback/', google_drive_integration.GoogleDriveCallbackView.as_view(), name='google_drive_callback'),
+    path('google-drive/files/', google_drive_integration.GoogleDriveFilesView.as_view(), name='google_drive_files'),
+    path('google-drive/files/<str:file_id>/download/', google_drive_integration.GoogleDriveFileDownloadView.as_view(), name='google_drive_file_download'),
+    path('google-drive/files/import/', google_drive_integration.GoogleDriveFileImportView.as_view(), name='google_drive_file_import'),
     
     # Media Search V2 - Vector Database powered search
     path('api/v2/media/', MediaSearchV2View.as_view(), name='media-search-v2'),

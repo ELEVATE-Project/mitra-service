@@ -14,6 +14,13 @@ from chatbot.views.Media.extract_views import BatchMediaExtractView, BatchMediaR
 from chatbot.views.Media.save_views import BatchMediaSaveView, BatchMediaRetrySaveView
 from chatbot.views.Media.status_views import BatchMediaTaskStatusView, VectorDBTaskStatusView
 from chatbot.views.Media.upload_views import BatchMediaUploadView
+from chatbot.views.Media.google_drive_integration import (
+    GoogleDriveAuthView,
+    GoogleDriveCallbackView,
+    GoogleDriveFilesView,
+    GoogleDriveFileImportView,
+    GoogleDriveIntegrationView,
+)
 
 
 class KeyValueInline(admin.TabularInline):
@@ -208,6 +215,21 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
             path('batch-upload/',
                  self.admin_site.admin_view(BatchMediaUploadView.as_view()),
                  name='chatbot_media_batch_upload'),
+            path('google-drive/',
+                 self.admin_site.admin_view(GoogleDriveIntegrationView.as_view()),
+                 name='chatbot_media_google_drive'),
+            path('google-drive/auth/',
+                 self.admin_site.admin_view(GoogleDriveAuthView.as_view()),
+                 name='chatbot_media_google_drive_auth'),
+            path('google-drive/callback/',
+                 self.admin_site.admin_view(GoogleDriveCallbackView.as_view()),
+                 name='chatbot_media_google_drive_callback'),
+            path('google-drive/files/',
+                 self.admin_site.admin_view(GoogleDriveFilesView.as_view()),
+                 name='chatbot_media_google_drive_files'),
+            path('google-drive/files/import/',
+                 self.admin_site.admin_view(GoogleDriveFileImportView.as_view()),
+                 name='chatbot_media_google_drive_file_import'),
             path('api/batch-extract/',
                  self.admin_site.admin_view(BatchMediaExtractView.as_view()),
                  name='chatbot_media_batch_extract'),
