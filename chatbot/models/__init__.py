@@ -8,3 +8,4 @@ from .theme_models import *
 from .profile_models import *
 from .company_models import *
 from .i18n_models import *
+from .repository_models import *
