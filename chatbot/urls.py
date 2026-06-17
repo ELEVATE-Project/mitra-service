@@ -142,8 +142,6 @@ urlpatterns = [
     path('google-drive/', google_drive_integration.GoogleDriveIntegrationView.as_view(), name='google_drive_integration'),
     path('google-drive/auth/', google_drive_integration.GoogleDriveAuthView.as_view(), name='google_drive_auth'),
     path('google-drive/callback/', google_drive_integration.GoogleDriveCallbackView.as_view(), name='google_drive_callback'),
-    path('google-drive/files/', google_drive_integration.GoogleDriveFilesView.as_view(), name='google_drive_files'),
-    path('google-drive/files/<str:file_id>/download/', google_drive_integration.GoogleDriveFileDownloadView.as_view(), name='google_drive_file_download'),
     path('google-drive/files/import/', google_drive_integration.GoogleDriveFileImportView.as_view(), name='google_drive_file_import'),
     
     # Media Search V2 - Vector Database powered search

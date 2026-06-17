@@ -15,11 +15,10 @@ from chatbot.views.Media.save_views import BatchMediaSaveView, BatchMediaRetrySa
 from chatbot.views.Media.status_views import BatchMediaTaskStatusView, VectorDBTaskStatusView
 from chatbot.views.Media.upload_views import BatchMediaUploadView
 from chatbot.views.Media.google_drive_integration import (
+    GoogleDriveIntegrationView,
     GoogleDriveAuthView,
     GoogleDriveCallbackView,
-    GoogleDriveFilesView,
-    GoogleDriveFileImportView,
-    GoogleDriveIntegrationView,
+    GoogleDriveFileImportView
 )
 
 
@@ -224,9 +223,6 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
             path('google-drive/callback/',
                  self.admin_site.admin_view(GoogleDriveCallbackView.as_view()),
                  name='chatbot_media_google_drive_callback'),
-            path('google-drive/files/',
-                 self.admin_site.admin_view(GoogleDriveFilesView.as_view()),
-                 name='chatbot_media_google_drive_files'),
             path('google-drive/files/import/',
                  self.admin_site.admin_view(GoogleDriveFileImportView.as_view()),
                  name='chatbot_media_google_drive_file_import'),
