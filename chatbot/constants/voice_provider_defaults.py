@@ -8,15 +8,18 @@ VOICE_PROVIDER_DEFAULTS = {
             "serviceId": "bhashini/iitm/asr-dravidian--gpu--t4",
             "samplingRate": 16000,
             "preProcessors": [],
-            "postProcessors": []
+            "postProcessors": [],
+            "request_timeout": 60
         },
         VoiceType.TextToText: {
-            "serviceId": "bhashini/iiith/nmt-all"
+            "serviceId": "bhashini/iiith/nmt-all",
+            "request_timeout": 30
         },
         VoiceType.Transliterate: {},
         VoiceType.TextToSpeech: {
             "serviceId": "Bhashini/IITM/TTS",
-            "samplingRate": 22050
+            "samplingRate": 22050,
+            "request_timeout": 30
         }
     },
 
