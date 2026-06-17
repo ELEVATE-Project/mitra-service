@@ -175,6 +175,18 @@ DATABASES = {
             'sslrootcert': os.getenv('PG_SSL_ROOT_CERT')
         },
     },
+    'source_db': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('SOURCE_DATABASE_NAME'),
+        'USER': os.getenv('SOURCE_DATABASE_USER'),
+        'PASSWORD': os.getenv('SOURCE_DATABASE_PASSWORD'),
+        'HOST': os.getenv('SOURCE_DATABASE_HOST'),
+        'PORT': os.getenv('SOURCE_DATABASE_PORT'),
+        'OPTIONS': {
+            'sslmode': os.getenv('PG_SSL_MODE'),
+            'sslrootcert': os.getenv('PG_SSL_ROOT_CERT')
+        },
+    },
 }
 
 
@@ -212,7 +224,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATIC_ROOT = os.getenv('STATIC_ROOT', '/var/www/shikshalokam/static/')
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static')
@@ -501,4 +513,14 @@ CRONJOBS = [
 
     ('0 12 * * *', 'chatbot.cron_tasks.pppi_set_2.story_creation.create_story',
     '>> /tmp/pppi_set_2_story_creation.log 2>&1')
+    ('0 */2 * * *', 'chatbot.cron_tasks.stakeholder_fgd.district_classification.classify_districts',
+    '>> /tmp/stakeholder_fgd_district_classification.log 2>&1'),
+    ('0 */2 * * *', 'chatbot.cron_tasks.student_fgd.district_classification.classify_districts',
+    '>> /tmp/student_fgd_district_classification.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.stakeholder_fgd.story_creation.create_story',
+    '>> /tmp/stakeholder_fgd_story_creation.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.student_fgd.story_creation.create_story',
+    '>> /tmp/student_fgd_story_creation.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.xylem.story_creation.create_story',
+    '>> /tmp/xylem_story_creation.log 2>&1')
 ]
