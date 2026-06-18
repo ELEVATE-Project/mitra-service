@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django import forms
 from django.shortcuts import render
 from django.http import HttpResponseRedirect
 from django.contrib.admin.decorators import action
@@ -267,14 +268,40 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
             )
 
 
+class MasterTagAdminForm(forms.ModelForm):
+    is_theme = forms.TypedChoiceField(
+        choices=((False, 'False'), (True, 'True')),
+        coerce=lambda value: value in (True, 'True', 'true', '1', 1),
+        initial=False,
+        required=True,
+        label='Is theme'
+    )
+
+    class Meta:
+        model = Tag
+        fields = '__all__'
+
+
 @admin.register(Tag)
 class MasterTagAdmin(BatchUploadMixin, admin.ModelAdmin):
-    list_display = ('name', 'status', 'source_type', 'created_by', 'created_at')
+    form = MasterTagAdminForm
+    list_display = ('name', 'status', 'is_theme_value', 'source_type', 'created_by', 'created_at')
     list_filter = (
         CustomAdvanceDateFilter,
         'name',
+        'is_theme',
         'created_by',
         'source_type'
+    )
+    fields = (
+        'name',
+        'status',
+        'description',
+        'is_theme',
+        'icon',
+        'source_type',
+        'company',
+        'created_by'
     )
     raw_id_fields = ('created_by',)
     readonly_fields = ('source_type', 'company', 'created_by')
@@ -283,7 +310,13 @@ class MasterTagAdmin(BatchUploadMixin, admin.ModelAdmin):
     ordering = ('-created_at',)
 
     enable_batch_upload = True
-    batch_upload_fields = ['name', 'status', 'description', 'created_by']
+    batch_upload_fields = ['name', 'status', 'description', 'is_theme', 'icon', 'created_by']
+
+    def is_theme_value(self, obj):
+        return 'True' if obj.is_theme else 'False'
+
+    is_theme_value.short_description = 'Is theme'
+    is_theme_value.admin_order_field = 'is_theme'
 
     def save_model(self, request, obj, form, change):
         print("In save")

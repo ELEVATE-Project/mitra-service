@@ -14,7 +14,7 @@ from chatbot.views.gotenberg_view import generate_pdf_view, generate_pdf_view_v2
 from chatbot.views.kafka_views import sync_user_project_view
 from chatbot.views.location_views import get_location_view, get_ip_location_view
 from chatbot.views.Media.media_views import MediaSearchView
-from chatbot.views.Media.media_api_views import MediaSearchV2View
+from chatbot.views.Media.media_api_views import FetchThemeView, MediaSearchV2View
 from chatbot.views.profile_views import create_profile_views
 from django.urls import path, include
 from chatbot.views import api_views
@@ -112,6 +112,8 @@ urlpatterns = [
          name="project-solution-download-track"),
 
     path("api/search/", MediaSearchView.as_view(), name="media-search"),
+    path("fetch-theme", FetchThemeView.as_view(), name="fetch-theme-no-slash"),
+    path("fetch-theme/", FetchThemeView.as_view(), name="fetch-theme"),
 
     # path('admin/media/batch-upload/', BatchMediaUploadView.as_view(), name='batch_media_upload'),
     path('admin/media/batch-upload/', BatchMediaUploadView.as_view(), name='chatbot_media_batch_upload'),
