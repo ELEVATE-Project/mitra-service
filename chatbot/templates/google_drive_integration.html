@@ -6,7 +6,7 @@
     <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
     &rsaquo; <a href="/admin/chatbot/">Chatbot</a>
     &rsaquo; <a href="/admin/chatbot/media/">Media</a>
-    &rsaquo; Google Drive Batch Upload
+    &rsaquo; Add Drive
 </div>
 {% endblock %}
 
@@ -88,14 +88,7 @@
                 </select>
             </div>
 
-            <div class="info-banner">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1976d2" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                <div>
-                    <p style="margin: 0 0 8px 0; font-weight: 600; color: #1976d2;">Template File Handling</p>
-                    <p style="margin: 0; line-height: 1.5; color: #333;">By default, files containing the keyword "template" in the title will be treated as templatized files that contain user-defined key-value pairs.</p>
-                </div>
-            </div>
-
+            
             <div style="text-align: center; border: 2px dashed #417690; background: #fff; border-radius: 8px; padding: 40px 20px; margin-bottom: 25px;">
                 <div id="auth-container">
                     <button id="connect-google-drive" class="gd-btn-primary" type="button">Connect Google Drive</button>
@@ -214,7 +207,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function showErrorModal(title, desc1, desc2) {
         document.getElementById('error-modal-title').innerHTML = `<svg style="width:20px;height:20px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg> ${title}`;
         document.getElementById('error-modal-desc1').innerText = desc1;
-        document.getElementById('error-modal-desc2').innerHTML = desc2;
+        document.getElementById('error-modal-desc2').textContent = desc2;
         document.getElementById('error-modal').style.setProperty('display', 'flex', 'important');
     }
 // CSRF token generation securely
@@ -229,7 +222,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function updateLoader(title, desc, percent) {
         document.getElementById('loader-title').innerText = title;
-        document.getElementById('loader-desc').innerHTML = desc;
+        document.getElementById('loader-desc').textContent = desc;
         if(document.getElementById('loader-progress-bar')) {
             document.getElementById('loader-progress-bar').style.width = percent + '%';
         }

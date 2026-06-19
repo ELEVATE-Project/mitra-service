@@ -278,6 +278,13 @@ class GoogleDriveFileImportView(View):
         # 1. Resolve organization
         company = Company.objects.filter(slug=company_id).first() if company_id else None
         company_bot = CompanyBot.objects.filter(id=bot_id).first() if bot_id else None
+        if company and company_bot and company_bot.company_id != company.id:
+            return JsonResponse(
+                {'success': False, 'error': 'company_bot_mismatch'},
+                status=400
+            )
+        if company_bot and not company:
+            company = company_bot.company
         if not company_bot and company:
             company_bot = CompanyBot.objects.filter(company=company, route='/tag_extractor').first()
         company_bot = company_bot or get_default_extraction_bot()
@@ -334,7 +341,8 @@ class GoogleDriveFileImportView(View):
                 dummy_file = DummyFile(original_name, len(content), content)
                 file_index = int(time.time() * 1000000) + i
                 file_key = CacheManager.cache_file(dummy_file, session_id, file_index)
-                
+                if not file_key:
+                    raise RuntimeError("cache_file_failed")
                 master_tags = TagProcessor.get_master_tags(company=company, other_params=company_bot.other_params if company_bot else None)
                 other_data = {"master_tag": master_tags, "original_filename": original_name}
                 

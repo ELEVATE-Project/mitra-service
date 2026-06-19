@@ -126,7 +126,14 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
         ]
 
         if obj and obj.pk:
-            if obj.tags.filter(created_by_id=1).exists():
+            has_auto_tags = obj.tags.filter(
+                source_type__in=[
+                    TagSourceChoices.AI_EXTRACTED,
+                    TagSourceChoices.AI_GENERATED,
+                ]
+            ).exists()
+
+            if has_auto_tags:
                 fieldsets.append(
                     ('Auto Tags', {
                         'fields': ('auto_tags',),

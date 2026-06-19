@@ -291,7 +291,7 @@ class BatchMediaSaveView(View):
 
                 media = Media(
                     name=item_data.get('title') or item_data.get('name') or filename,
-                    media_type=item_data.get('media_type', 'txt'),
+                    media_type=item_data.get('media_type', FileTypeChoices.TXT.value),
                     priority=item_data.get('priority', 'P1'),
                     description=description,
                     company_bot_id=company_bot_id,
