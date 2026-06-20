@@ -9,8 +9,8 @@ import logging
 
 logger = logging.getLogger('django')
 
-STUDY_TEACHER_SESSION_TYPE = 'study_teacher_interview'
-STUDY_TEACHER_BOT_ROUTE = '/story-creation-study-teacher'
+STUDENT_FGD_SESSION_TYPE = 'bihar-student-fgd'
+STUDENT_FGD_BOT_ROUTE = '/story-creation-student-fgd'
 STORY_LLM_MAX_ATTEMPTS = 3
 
 
@@ -22,7 +22,7 @@ def _story_response_has_title(response):
     return title is not None and str(title).strip() != ''
 
 
-def chat_sessions_without_story(session_type=STUDY_TEACHER_SESSION_TYPE):
+def chat_sessions_without_story(session_type=STUDENT_FGD_SESSION_TYPE):
     """
     ChatSession rows with session_status COMPLETED that have no Story with the same
     `session` string (Story links via Story.session, not a FK on ChatSession).
@@ -40,7 +40,7 @@ def chat_sessions_without_story(session_type=STUDY_TEACHER_SESSION_TYPE):
     return qs
 
 
-def chat_session_ids_without_story(session_type=STUDY_TEACHER_SESSION_TYPE):
+def chat_session_ids_without_story(session_type=STUDENT_FGD_SESSION_TYPE):
     """`session` values (string ids) for ChatSessions that have no matching Story."""
     return chat_sessions_without_story(session_type=session_type).values_list('session', flat=True)
 
@@ -53,6 +53,8 @@ def _build_chat_transcript(company_chats):
         if chat.sender_id == 1:
             question_index += 1
             message = chat.message
+            if chat.translated_message is not None and chat.translated_message != '':
+                message = chat.translated_message
             transcript_parts.append(
                 f"<question_{question_index}>\n{message}\n</question_{question_index}>"
             )
@@ -75,10 +77,6 @@ def _build_messages(company_bot, company_chats):
                 'role': 'user',
                 'content': [{'text': transcript}]
             },
-            {
-                'role': 'assistant',
-                'content': [{'text': "```json"}]
-            }
         ]
     return [{
         'role': 'user',
@@ -108,7 +106,6 @@ def _call_story_llm(company_bot, messages, system_prompt):
             top_p=company_bot.filter_score,
             model_name=company_bot.llm_model,
             is_json_response=False,
-            stop_sequences=["```"],
         )
 
     openai_messages = messages
@@ -156,6 +153,7 @@ def _generate_story_for_session(company_bot, session):
                 e,
                 exc_info=(attempt == STORY_LLM_MAX_ATTEMPTS),
             )
+
             continue
 
         if _story_response_has_title(response):
@@ -196,22 +194,21 @@ def _persist_story_from_llm_response(session_id, response):
 
 def create_story():
     try:
-        company_bot = CompanyBot.objects.filter(route=STUDY_TEACHER_BOT_ROUTE).first()
+        company_bot = CompanyBot.objects.filter(route=STUDENT_FGD_BOT_ROUTE).first()
         if not company_bot:
-            logger.error('No CompanyBot found for route=%s', STUDY_TEACHER_BOT_ROUTE)
+            logger.error('No CompanyBot found for route=%s', STUDENT_FGD_BOT_ROUTE)
             return
 
-        # INNER JOIN chatbot_chatsession ON session WHERE session_type = delhi-shiksha-samvad
         delhi_session_for_story = ChatSession.objects.filter(
             session=OuterRef('session'),
-            session_type=STUDY_TEACHER_SESSION_TYPE,
+            session_type=STUDENT_FGD_SESSION_TYPE,
         )
         matching_stories = Story.objects.filter(Exists(delhi_session_for_story))
 
         sessions_missing_story = chat_sessions_without_story()
 
         logger.info(
-            'Creating story for Delhi Shiksha Samvad (%s stories, %s chat sessions without story)',
+            'Creating story for Student FGD (%s stories, %s chat sessions without story)',
             matching_stories.count(),
             sessions_missing_story.count(),
         )
@@ -231,10 +228,10 @@ def create_story():
                 'Created story id=%s session=%s route=%s title=%s other_params_keys=%s',
                 story.id,
                 session,
-                STUDY_TEACHER_BOT_ROUTE,
+                STUDENT_FGD_BOT_ROUTE,
                 story.title,
                 list(story.other_params.keys()) if story.other_params else [],
             )
 
     except Exception as e:
-        logger.error('Error creating story for Delhi Shiksha Samvad: %s', e)
+        logger.error('Error creating story for Student FGD: %s', e)
