@@ -303,7 +303,7 @@ class CompanyChatAdmin(ExportAllFieldsMixin, admin.ModelAdmin):
 class ChatSessionAdmin(ExportAllFieldsMixin, admin.ModelAdmin):
     list_display = (
         'session', 'get_first_name', 'session_status', 'session_type', 'current_question', 'total_steps',
-        'created_at'
+        'total_cost', 'created_at'
     )
     list_filter = (
         'session',

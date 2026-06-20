@@ -28,9 +28,23 @@ class ChatSession(models.Model):
     user_id = models.CharField(max_length=400, null=True, blank=True)
     session_type = models.CharField(max_length=255, null=True, blank=True)
     other_params = models.JSONField(null=True, blank=True)
+    total_cost = models.DecimalField(max_digits=12, decimal_places=6, default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        # total_cost is incremented out-of-band via F() in record_usage_cost while a
+        # ChatSession instance may be held in memory for the rest of the turn; refresh
+        # it here so a later full save() of that stale instance doesn't clobber the increment.
+        update_fields = kwargs.get('update_fields')
+        if self.pk and (update_fields is None or 'total_cost' not in update_fields):
+            current_total_cost = ChatSession.objects.filter(pk=self.pk).values_list(
+                'total_cost', flat=True
+            ).first()
+            if current_total_cost is not None:
+                self.total_cost = current_total_cost
+        super().save(*args, **kwargs)
 
     def save_title(self, language='en'):
         company_chats = CompanyChat.objects.select_related('sender', 'receiver').filter(session=self.session).order_by('created_at').values("receiver", "receiver__id", "translated_message", "message", "status", "created_at")
