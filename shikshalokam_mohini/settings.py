@@ -175,6 +175,18 @@ DATABASES = {
             'sslrootcert': os.getenv('PG_SSL_ROOT_CERT')
         },
     },
+    'source_db': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('SOURCE_DATABASE_NAME'),
+        'USER': os.getenv('SOURCE_DATABASE_USER'),
+        'PASSWORD': os.getenv('SOURCE_DATABASE_PASSWORD'),
+        'HOST': os.getenv('SOURCE_DATABASE_HOST'),
+        'PORT': os.getenv('SOURCE_DATABASE_PORT'),
+        'OPTIONS': {
+            'sslmode': os.getenv('PG_SSL_MODE'),
+            'sslrootcert': os.getenv('PG_SSL_ROOT_CERT')
+        },
+    },
 }
 
 
@@ -495,5 +507,13 @@ CRONJOBS = [
     ('0 12 * * *', 'chatbot.cron_tasks.community_FGD.story_creation.create_story',
     '>> /tmp/community_FGD_story_creation.log 2>&1'),
     ('0 12 * * *', 'chatbot.cron_tasks.odisha_youth.story_creation.create_story',
-    '>> /tmp/odisha_youth_story_creation.log 2>&1')
+    '>> /tmp/odisha_youth_story_creation.log 2>&1'),
+    ('0 */2 * * *', 'chatbot.cron_tasks.stakeholder_fgd.district_classification.classify_districts',
+    '>> /tmp/stakeholder_fgd_district_classification.log 2>&1'),
+    ('0 */2 * * *', 'chatbot.cron_tasks.student_fgd.district_classification.classify_districts',
+    '>> /tmp/student_fgd_district_classification.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.stakeholder_fgd.story_creation.create_story',
+    '>> /tmp/stakeholder_fgd_story_creation.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.student_fgd.story_creation.create_story',
+    '>> /tmp/student_fgd_story_creation.log 2>&1')
 ]
