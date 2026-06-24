@@ -14,6 +14,7 @@ from chatbot.resources.story_resource import (
 )
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf, save_shikshalokam_story
 from chatbot.views.admin.post_processing_views import PostProcessingView
+from chatbot.views.admin.csv_correction_views import CsvCorrectionView
 from django.urls import path
 from django.shortcuts import render
 import tablib
@@ -121,12 +122,14 @@ class StoryAdmin(admin.ModelAdmin):
         custom_urls = [
             path('export_stories/', self.admin_site.admin_view(self.export_stories_view), name='export_stories'),
             path('post_processing/', self.admin_site.admin_view(PostProcessingView.as_view()), name='chatbot_story_post_processing'),
+            path('csv_correction/', self.admin_site.admin_view(CsvCorrectionView.as_view()), name='chatbot_story_csv_correction'),
         ]
         return custom_urls + urls
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
         extra_context['show_post_processing_button'] = True
+        extra_context['show_csv_correction_button'] = True
         return super().changelist_view(request, extra_context=extra_context)
 
     def export_stories_view(self, request):

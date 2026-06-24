@@ -33,6 +33,15 @@
 </li>
 {% endif %}
 
+{# CSV Correction Upload button for Story model #}
+{% if opts.model_name == 'story' and show_csv_correction_button %}
+<li style="padding-left: 5px; list-style-type: none">
+  <a href="{% url 'admin:chatbot_story_csv_correction' %}" class="btn btn-info" style="background-color: #17a2b8; color: #fff; padding: 8px 12px; border-radius: 4px; text-decoration: none;">
+    <i class="fas fa-file-csv"></i> {% trans 'Upload Correction CSV' %}
+  </a>
+</li>
+{% endif %}
+
 {# Export and Import buttons for CompanyBot model #}
 {% if opts.model_name == 'companybot' %}
 <li style="padding-left: 5px; list-style-type: none">
