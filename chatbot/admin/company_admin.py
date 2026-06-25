@@ -410,6 +410,7 @@ LANGUAGE_CHOICES = [
     ("kn", "Kannada"),
     ("te", "Telugu"),
     ("or", "Odia"),
+    ("ta", "Tamil"),
 ]
 
 
