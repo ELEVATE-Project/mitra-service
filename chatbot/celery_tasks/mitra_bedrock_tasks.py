@@ -59,7 +59,7 @@ def get_mitra_bedrock_response(channel_name, session_id, profile_id, route):
             translated_message = translate_and_send_message(
                 accumulated_message=error_message, current_channel_name=channel_name,
                 current_step_number=1, finish_reason="stop", route=route,
-                company_bot=company_bot
+                company_bot=company_bot, session_id=session_id, profile_id=profile_id
             )
             return translated_message
 
@@ -94,7 +94,8 @@ def get_mitra_bedrock_response(channel_name, session_id, profile_id, route):
             translated_message = translate_and_send_message(
                 accumulated_message=message, current_channel_name=channel_name,
                 current_step_number=1, finish_reason="stop", route=route,
-                extra_content=extra_content, company_bot=company_bot
+                extra_content=extra_content, company_bot=company_bot,
+                session_id=session_id, profile_id=profile_id
             )
             if not message or not str(message).strip():
                 message = "Understood."

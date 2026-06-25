@@ -115,7 +115,7 @@ def transcribe_multiple_languages_v2(
 
         audio_bytes = base64.b64decode(audio_file)
         duration = int(other_params.get('chunk_duration', 10))
-        chunks = split_audio(audio_bytes, chunk_duration=duration)
+        chunks, audio_duration_seconds = split_audio(audio_bytes, chunk_duration=duration)
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_to_chunk = {
@@ -133,7 +133,7 @@ def transcribe_multiple_languages_v2(
         results.sort()  # Ensure correct order
         full_transcript = " ".join(transcript for _, transcript in results)
 
-        return {'status': 200, 'content': full_transcript}
+        return {'status': 200, 'content': full_transcript, 'audio_duration_seconds': audio_duration_seconds}
 
     except Exception as e:
         logger.error('Error processing file: %s', e, exc_info=True)

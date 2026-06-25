@@ -81,16 +81,19 @@ def record_usage_cost(
         return None
 
 
-# Purpose: Reads cost_per_1k_units from Voice.other_params.pricing, mirroring
-#          the CompanyBot.other_params.model_pricing convention for LLM pricing.
+# Purpose: Reads pricing config from Voice.other_params.pricing.
 # Inputs:  voice_provider — Voice model instance.
-# Output:  Float cost per 1,000 units, or None if not configured.
-#          Returns None silently on missing or malformed config (never raises).
+# Output:  Dict with 'cost_per_1k_units' and/or 'cost_per_minute', or empty dict.
+#          Returns empty dict silently on missing or malformed config (never raises).
 def get_pricing_from_voice_provider(voice_provider):
     try:
         other_params = getattr(voice_provider, 'other_params', None) or {}
         pricing = other_params.get('pricing') or {}
-        cost_per_1k = pricing.get('cost_per_1k_units')
-        return float(cost_per_1k) if cost_per_1k is not None else None
+        result = {}
+        if pricing.get('cost_per_1k_units') is not None:
+            result['cost_per_1k_units'] = float(pricing['cost_per_1k_units'])
+        if pricing.get('cost_per_minute') is not None:
+            result['cost_per_minute'] = float(pricing['cost_per_minute'])
+        return result
     except (AttributeError, TypeError, ValueError):
-        return None
+        return {}

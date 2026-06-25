@@ -11,11 +11,10 @@ logger = logging.getLogger('django')
 
 def translate_and_send_message(
         accumulated_message, current_channel_name, current_step_number, finish_reason, route, company_bot,
-        extra_content=None
+        extra_content=None, session_id=None, profile_id=None
 ):
 
     if route != 'en' and accumulated_message and accumulated_message!= '':
-        # target_language_code = get_language_code_from_route(route)
         logger.info(f"target_language_code date: %s", route)
         voice_provider = Voice.objects.filter(
             company_bot=company_bot, type=VoiceType.TextToText, language=route
@@ -23,7 +22,7 @@ def translate_and_send_message(
 
         response = text_translate_provider(
             voice_provider=voice_provider, message_body=accumulated_message, target_language=route,
-            source_language='en'
+            source_language='en', session_id=session_id, profile_id=profile_id
         )
         if response.get('status') == 200:
             translated_messages =  response.get('content')

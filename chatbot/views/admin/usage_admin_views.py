@@ -12,7 +12,7 @@ import datetime
 
 from chatbot.models import ChatSession, CompanyBot, UsageCostLog
 
-SESSION_COST_CHART_PAGE_SIZE = 100
+SESSION_COST_CHART_PAGE_SIZE = 50
 
 
 # Purpose: Builds context for the "Sessions and Cost" table.
@@ -27,12 +27,31 @@ def _get_sessions_context(request, bot_id=None):
     if search_query:
         session_view = 'all'
 
+    start_date_str = request.GET.get('start_date', '').strip()
+    end_date_str = request.GET.get('end_date', '').strip()
+
     # Exclude zero-cost sessions (test/system calls) to keep the dashboard focused on real spend.
     sessions_qs = ChatSession.objects.filter(total_cost__gt=0).order_by('-total_cost')
     if bot_id:
         sessions_qs = sessions_qs.filter(company_bot_id=bot_id)
     if search_query:
         sessions_qs = sessions_qs.filter(session__icontains=search_query)
+
+    if session_view == 'all':
+        if start_date_str:
+            try:
+                start_dt = datetime.datetime.fromisoformat(start_date_str)
+                sessions_qs = sessions_qs.filter(created_at__gte=timezone.make_aware(start_dt) if timezone.is_naive(start_dt) else start_dt)
+            except ValueError:
+                pass
+        if end_date_str:
+            try:
+                end_dt = datetime.datetime.fromisoformat(end_date_str)
+                sessions_qs = sessions_qs.filter(created_at__lte=timezone.make_aware(end_dt) if timezone.is_naive(end_dt) else end_dt)
+            except ValueError:
+                pass
+
+    total_cost_all = sessions_qs.aggregate(total=Sum('total_cost'))['total'] or 0
 
     sessions_page = None
     if session_view == 'top1':
@@ -49,6 +68,9 @@ def _get_sessions_context(request, bot_id=None):
         'sessions_page': sessions_page,
         'session_view': session_view,
         'search_query': search_query,
+        'start_date': start_date_str,
+        'end_date': end_date_str,
+        'total_cost_all': float(total_cost_all),
     }
 
 
@@ -166,10 +188,17 @@ def usage_cost_session_detail(request, session_pk):
     chat_session = ChatSession.objects.filter(pk=session_pk).first()
     logs = UsageCostLog.objects.filter(session_id=session_pk).order_by('created_at')
 
+    by_provider = list(
+        logs.values('provider')
+        .annotate(total=Sum('total_cost'))
+        .order_by('-total')
+    )
+
     context = {
         **admin.site.each_context(request),
         'title': 'Session Cost Breakdown',
         'chat_session': chat_session,
         'logs': logs,
+        'by_provider': by_provider,
     }
     return render(request, 'admin/usage_cost_session_detail.html', context)

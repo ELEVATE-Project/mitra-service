@@ -12,7 +12,6 @@ from chatbot.utils.audio_provider_utils import text_translate_provider
 import logging
 from channels.db import database_sync_to_async
 from chatbot.utils.transliterate_utils import transliterate_text
-from chatbot.utils.usage_cost_context import set_usage_cost_context, reset_usage_cost_context
 import jwt
 
 logger = logging.getLogger('django')
@@ -257,7 +256,6 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
     # Falls back to the original message if the provider is not configured or the call fails.
     @database_sync_to_async
     def translate_message(self, message):
-        cost_context_token = set_usage_cost_context(session_id=self.session_id, profile_id=self.profile_id)
         try:
             if not self.company_bot:
                 return message
@@ -285,21 +283,27 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                     type=VoiceType.Transliterate,
                     language=self.route
                 ).first()
-                response =  transliterate_text(
-                    voice_provider=transliterate_voice_provider, source_language=self.route, target_language='en',
-                    message_body=message, is_sentence=True
-                )
-                print("Trans response: ", response)
-                if response and response.get('content'):
-                    content = response.get('content')
-                    print("Trans content: ", content)
-                    if content and isinstance(content, list) and len(content)>0:
-                        content = content[0]
-                    return content
+                if not transliterate_voice_provider:
+                    logger.warning(
+                        'No Transliterate Voice row for company_bot=%s language=%s, falling back to translate',
+                        self.company_bot, self.route
+                    )
+                else:
+                    response = transliterate_text(
+                        voice_provider=transliterate_voice_provider, source_language=self.route, target_language='en',
+                        message_body=message, is_sentence=True,
+                        session_id=self.session_id, profile_id=self.profile_id
+                    )
+                    if response and response.get('content'):
+                        content = response.get('content')
+                        if content and isinstance(content, list) and len(content) > 0:
+                            content = content[0]
+                        return content
             else:
                 response = text_translate_provider(
                     voice_provider=voice_provider, message_body=message,
-                    target_language='en', source_language=self.route
+                    target_language='en', source_language=self.route,
+                    session_id=self.session_id, profile_id=self.profile_id
                 )
 
                 if response.get('status') == 200:
@@ -310,5 +314,3 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
         except Exception as e:
             logger.error('Translation Error: %s', e, exc_info=True)
             return message
-        finally:
-            reset_usage_cost_context(cost_context_token)

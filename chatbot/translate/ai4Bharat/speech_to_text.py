@@ -36,7 +36,7 @@ def transcribe_ai4bharat_multiple_chunks(voice_provider, base64_audio_file, sour
         duration = 10
         if voice_provider.other_params:
             duration = int(voice_provider.other_params.get('chunk_duration', 10))
-        chunks = split_audio(audio_bytes, chunk_duration=duration)
+        chunks, audio_duration_seconds = split_audio(audio_bytes, chunk_duration=duration)
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [
@@ -50,7 +50,7 @@ def transcribe_ai4bharat_multiple_chunks(voice_provider, base64_audio_file, sour
             transcripts.sort()
 
         transcript = " ".join(content for _, content in transcripts)
-        return {'status': 200, 'content': transcript}
+        return {'status': 200, 'content': transcript, 'audio_duration_seconds': audio_duration_seconds}
 
     except Exception as e:
         logger.error('Error processing file: %s', e, exc_info=True)
