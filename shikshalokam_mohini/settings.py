@@ -168,11 +168,11 @@ DATABASES = {
         'NAME': os.getenv('DATABASE_NAME'),
         'USER': os.getenv('DATABASE_USER'),
         'PASSWORD': os.getenv('DATABASE_PASSWORD'),
-        'HOST': os.getenv('DATABASE_HOST'),
-        'PORT': os.getenv('DATABASE_PORT'),
+        'HOST': os.getenv('PGBOUNCER_HOST', '127.0.0.1'),
+        'PORT': os.getenv('PGBOUNCER_PORT', '6432'),
+        'CONN_MAX_AGE': 60,
         'OPTIONS': {
-            'sslmode': os.getenv('PG_SSL_MODE'),
-            'sslrootcert': os.getenv('PG_SSL_ROOT_CERT')
+            'sslmode': 'disable',  # loopback to PgBouncer, no SSL needed
         },
     },
     'source_db': {
@@ -188,6 +188,8 @@ DATABASES = {
         },
     },
 }
+
+DISABLE_SERVER_SIDE_CURSORS = True
 
 
 # Password validation
