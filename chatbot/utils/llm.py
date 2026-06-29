@@ -14,7 +14,7 @@ class LLM:
         top_p: Optional[float] = None,
         function_call: Optional[str] = None,
         tool_choice: Optional[Union[str, dict]] = None,
-        aws_bedrock_runtime_endpoint: Optional[str] = "https://bedrock-runtime.us-west-2.amazonaws.com",
+        aws_bedrock_runtime_endpoint: Optional[str] = None,
         max_tokens: Optional[int] = None
     ):
         if not isinstance(model, str):
@@ -29,11 +29,11 @@ class LLM:
         self.top_p = top_p
         self.function_call = function_call
         self.tool_choice = tool_choice
-        self.aws_bedrock_runtime_endpoint = aws_bedrock_runtime_endpoint
+        self.aws_bedrock_runtime_endpoint = aws_bedrock_runtime_endpoint if aws_bedrock_runtime_endpoint else os.environ.get("AWS_BEDROCK_RUNTIME_ENDPOINT", None)
         self.max_tokens = max_tokens
 
         # set the envs here
-        self.aws_region_name = "us-west-2"
+        self.aws_region_name = os.environ.get("AWS_REGION", "us-west-2")
         self.aws_access_key_val = os.environ["AWS_ACCESS_KEY_ID"]
         self.aws_secret_access_key_val = os.environ["AWS_SECRET_ACCESS_KEY"]
         self.api_key = os.environ["OPENAI_API_KEY"]

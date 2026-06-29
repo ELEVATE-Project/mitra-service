@@ -211,7 +211,7 @@ def retry_if_result_none(result):
 @retry(stop_max_attempt_number=llm_retry_number, retry_on_result=retry_if_result_none, wrap_exception=True)
 def handle_bedrock_model(
         company_bot, system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
-        model_name=None, region_name='us-west-2', tools=None, is_json_response=False, aws_key=None,
+        model_name=None, region_name=None, tools=None, is_json_response=False, aws_key=None,
         aws_secret_key=None, stop_sequences=None
 ):
     # Support company_bot as either dict or model instance
@@ -223,6 +223,9 @@ def handle_bedrock_model(
         connect_timeout = getattr(company_bot, 'connect_timeout', 5.0)
         read_timeout = getattr(company_bot, 'read_timeout', 10.0)
         chat_history_limit = getattr(company_bot, 'chat_history_limit', 1000)
+
+    if region_name is None:
+        region_name = os.environ.get("AWS_REGION", "us-west-2")
 
     boto_config = BotoConfig(
         connect_timeout=connect_timeout,
@@ -880,8 +883,11 @@ def handle_openai_response_api(
 
 def handle_bedrock_invoke_model(
         messages=None, max_token=None, temperature=None, top_p=None,
-        model_name=None, region_name='us-west-2', tools=None
+        model_name=None, region_name=None, tools=None
 ):
+
+    if region_name is None:
+        region_name = os.environ.get("AWS_REGION", "us-west-2")
 
     if model_name:
         model_id = model_name
