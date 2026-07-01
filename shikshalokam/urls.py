@@ -4,7 +4,7 @@ from shikshalokam.views.project_views import ProjectListCreateView, duplicate_pr
 from shikshalokam.views.story_views import create_story_from_project_view
 from shikshalokam.views.wishlist_views import wishlist_project_view
 from shikshalokam.views.mitra_views import paraphrase_view, generate_objectives_view, validate_objectives_view, validate_actions_view, generate_action_list_view, generate_title_view, validate_title_view, update_project_status_view
-from shikshalokam.views.profile_views import read_elevate_profile
+from shikshalokam.views.profile_views import read_elevate_profile, authenticate_profile_view
 
 app_name = "shikshalokam"
 
@@ -23,5 +23,8 @@ urlpatterns = [
     path('validate-title/', validate_title_view, name='validate-title'),
     path('update-project-status/', update_project_status_view, name='update-project-status'),
     path('read-elevate-profile/', read_elevate_profile, name='read-elevate-profile'),
+
+    ## route for AP auth
+    path('authenticate-profile/', authenticate_profile_view, name='authenticate-profile'),
 
 ]
