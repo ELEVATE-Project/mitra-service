@@ -4,7 +4,7 @@ from asgiref.sync import async_to_sync
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.celery_tasks.handle_message import translate_and_send_message
 from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_response_api
-from chatbot.models import ChatSession, ChatStatus, LLMProvider, CompanyBotTypeChoices
+from chatbot.models import BotVernacular, ChatSession, ChatStatus, LLMProvider, CompanyBotTypeChoices
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.models.enums import OperationTypeChoices, PreProcessOutputMode
 from chatbot.services.postprocessing.postprocessing_service import PostprocessingService
@@ -162,6 +162,19 @@ class BaseResponseHandler(ABC):
 
             streaming_completed = finish_reason == "stop" and use_streaming
 
+            if isinstance(response, dict) and response.get('error'):
+                bot_vernacular = BotVernacular.objects.filter(
+                    company_bot=company_bot, language=kwargs['language']
+                ).first()
+                error_message = bot_vernacular.error_message if (
+                        bot_vernacular and bot_vernacular.error_message
+                ) else self.default_error_message
+                self.translate_message(
+                    message=error_message, channel_name=kwargs['channel_name'],
+                    step_number=chat_session.current_step, language=kwargs['language'], company_bot=company_bot
+                )
+                return error_message
+
             # Only treat None as error
             if response is None:
                 if company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
@@ -315,7 +328,8 @@ class BaseResponseHandler(ABC):
                     temperature=company_bot.bot_temperature,
                     max_token=company_bot.max_token,
                     company_bot=company_bot,
-                    tools=tools
+                    tools=tools,
+                    return_validation_error=True
                 )
             except Exception as e:
                 logger.error(f"Bedrock Error: %s", e)
