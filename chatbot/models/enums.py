@@ -127,6 +127,7 @@ class LanguageChoices(models.TextChoices):
     INDIAN_HINDI = 'hi-IN', _('INDIAN HINDI')
     US_ENGLISH = 'en-US', _('US ENGLISH')
     INDIAN_KANNADA = 'kn-IN', _('INDIAN KANNADA')
+    INDIAN_TAMIL = 'ta-IN', _('INDIAN TAMIL')
 
 
 class MediaTypeChoices(models.TextChoices):
@@ -280,6 +281,7 @@ class StoryLanguageChoices(models.TextChoices):
     KANNADA = 'kn', _('Kannada')
     TELUGU = 'te', _('Telugu')
     ODIA = 'or', _('Odia')
+    TAMIL = 'ta', _('Tamil')
 
 
 class StorySourceChoices(models.TextChoices):
@@ -356,6 +358,7 @@ class RouteLanguageChoices(models.TextChoices):
     KANNADA = 'kn', _('/kannada')
     TELUGU = 'te', _('/telugu')
     ODIA = 'or', _('/odia')
+    TAMIL = 'ta', _('/tamil')
 
 
 class VoiceProvider(models.TextChoices):
@@ -368,6 +371,7 @@ class VoiceProvider(models.TextChoices):
     OPENAI_WHISPER = 'OPENAI_WHISPER', _('OpenAI Whisper')
     SARVAM = 'Sarvam', _('Sarvam')
     CUSTOM_LLM = 'CUSTOM_LLM', _('Custom LLM')
+    SHIKSHALOKAM = 'ShikshaLokam', _('ShikshaLokam')
 
 
 class VoiceType(models.TextChoices):
@@ -392,6 +396,7 @@ class LanguageMapping:
         "kn": {"IN": "kn-IN"},
         "te": {"IN": "te-IN"},
         "or": {"IN": "or-IN"},
+        "ta": {"IN": "ta-IN"},
     }
 
     @classmethod
