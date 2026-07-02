@@ -47,7 +47,15 @@ def ai4bharat_text_speech(voice_provider, text, gender, source_language):
             'content-type': 'application/json',
             'Authorization': ai4bharat_authorization,
         }
-        response = requests.post(api_url, json=payload, headers=headers, timeout=10)
+        request_timeout = other_params.get("request_timeout", 10)
+        print("REQUEST TIMEOUT VALUE:", request_timeout)
+
+        try:
+            request_timeout = float(request_timeout)
+        except Exception:
+            request_timeout = 10
+
+        response = requests.post(api_url, json=payload, headers=headers, timeout=request_timeout)
         if response.status_code == 200:
             audio_data = response.json()
             if isinstance(audio_data, dict) and 'pipelineResponse' in audio_data:
