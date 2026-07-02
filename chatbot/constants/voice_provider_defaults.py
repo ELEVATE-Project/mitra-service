@@ -16,7 +16,7 @@ VOICE_PROVIDER_DEFAULTS = {
             "pricing": {"cost_per_1k_units": 0, "currency": "USD"}
         },
         VoiceType.Transliterate: {
-            "pricing": {"cost_per_1k_units": 0, "currency": "USD"}
+            "pricing": {"cost_per_1k_units": 0, "currency": "USD"},
             "request_timeout": 60
         },
         VoiceType.TextToText: {
@@ -26,7 +26,7 @@ VOICE_PROVIDER_DEFAULTS = {
         VoiceType.TextToSpeech: {
             "serviceId": "Bhashini/IITM/TTS",
             "samplingRate": 22050,
-            "pricing": {"cost_per_1k_units": 0, "currency": "USD"}
+            "pricing": {"cost_per_1k_units": 0, "currency": "USD"},
             "request_timeout": 30
         }
     },
