@@ -17,14 +17,16 @@ def is_silent_chunk(audio_bytes: bytes, format="wav", silence_thresh_dbfs=-40):
 
 def split_audio(audio_bytes, chunk_duration=10):
     """
-    Splits audio into strictly 50-second chunks and skips silent ones.
+    Splits audio into chunks and skips silent ones.
+    Returns (chunks, audio_duration_seconds).
     """
     with wave.open(io.BytesIO(audio_bytes), "rb") as wf:
         frame_rate = wf.getframerate()
         num_channels = wf.getnchannels()
         samp_width = wf.getsampwidth()
         total_frames = wf.getnframes()
-        chunk_frames = chunk_duration * frame_rate  # Frames per 50s chunk
+        audio_duration_seconds = total_frames / frame_rate if frame_rate else 0
+        chunk_frames = chunk_duration * frame_rate
 
         chunks = []
         i = 0
@@ -54,12 +56,7 @@ def split_audio(audio_bytes, chunk_duration=10):
 
                 chunks.append((chunk_number, chunk_audio_bytes))
 
-            # chunk_seconds = chunk_size / frame_rate
-            # chunk_kb = len(output.getvalue()) / 1024
-            # logger.info("Chunk %s: %.2f sec, %.2f KB", chunk_number, chunk_seconds, chunk_kb)
-
-            # chunks.append((chunk_number, output.getvalue()))
             i += chunk_size
             chunk_number += 1
 
-    return chunks
+    return chunks, audio_duration_seconds

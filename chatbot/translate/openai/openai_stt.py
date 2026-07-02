@@ -36,7 +36,7 @@ def transcribe_audio(
         audio_bytes = base64.b64decode(base64_audio)
         print("Audio size:", len(audio_bytes))
         # -------- CHUNK AUDIO --------
-        chunks = split_audio(audio_bytes, chunk_duration=chunk_duration)
+        chunks, audio_duration_seconds = split_audio(audio_bytes, chunk_duration=chunk_duration)
         print("Number of chunks:", len(chunks))
         transcripts = []
 
@@ -71,7 +71,8 @@ def transcribe_audio(
 
         return {
             "status": 200,
-            "content": full_transcript
+            "content": full_transcript,
+            "audio_duration_seconds": audio_duration_seconds
         }
 
     except Exception as e:

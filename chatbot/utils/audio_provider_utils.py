@@ -139,15 +139,18 @@ def speech_text_provider(company_bot, base64, audio_format, source_language):
         }
 
     transcript = response.get('content') if isinstance(response, dict) else None
+    audio_duration = response.get('audio_duration_seconds') if isinstance(response, dict) else None
     _record_voice_usage_cost(
         call_type=UsageCallType.STT, voice_provider=voice_provider, company_bot=company_bot,
-        response=response, output_units=len(transcript) if isinstance(transcript, str) else 0
+        response=response, output_units=len(transcript) if isinstance(transcript, str) else 0,
+        audio_duration_seconds=audio_duration
     )
 
     return response
 
 
-def text_translate_provider(message_body, target_language, source_language, voice_provider=None, company_bot=None):
+def text_translate_provider(message_body, target_language, source_language, voice_provider=None, company_bot=None,
+                            session_id=None, profile_id=None):
     try:
         if not voice_provider and company_bot:
             voice_provider = get_voice_provider(
@@ -196,7 +199,8 @@ def text_translate_provider(message_body, target_language, source_language, voic
 
         _record_voice_usage_cost(
             call_type=UsageCallType.TRANSLATE, voice_provider=voice_provider, company_bot=company_bot,
-            response=response, input_units=len(message_body or '')
+            response=response, input_units=len(message_body or ''),
+            session_id=session_id, profile_id=profile_id
         )
 
         return response
@@ -207,30 +211,38 @@ def text_translate_provider(message_body, target_language, source_language, voic
         }
 
 
-def _record_voice_usage_cost(call_type, voice_provider, company_bot, response, input_units=0, output_units=0):
-    """
-    Logs a TTS/STT/TRANSLATE/TRANSLITERATE provider call against the ChatSession
-    currently in scope (set by ChatOrchestrator/FreeFlowService via contextvars).
-    No-ops outside chat flow (e.g. standalone bhashini API endpoints with no session).
-    """
+def _record_voice_usage_cost(
+        call_type, voice_provider, company_bot, response,
+        input_units=0, output_units=0, audio_duration_seconds=None,
+        session_id=None, profile_id=None
+):
     cost_context = get_usage_cost_context()
-    if not cost_context or not cost_context.get('session_id'):
+    resolved_session = (cost_context.get('session_id') if cost_context else None) or session_id
+    resolved_profile = (cost_context.get('profile_id') if cost_context else None) or profile_id
+
+    if not resolved_session:
         return
     if not response or response.get('status') != 200:
         return
 
     from chatbot.utils.usage_cost_utils import get_pricing_from_voice_provider, record_usage_cost
 
-    cost_per_1k = get_pricing_from_voice_provider(voice_provider)
-    units = input_units or output_units
-    total_cost = (units / 1000) * cost_per_1k if cost_per_1k else 0
+    pricing = get_pricing_from_voice_provider(voice_provider)
+
+    if call_type == UsageCallType.STT and audio_duration_seconds and pricing.get('cost_per_minute'):
+        total_cost = (audio_duration_seconds / 60) * pricing['cost_per_minute']
+        input_units = round(audio_duration_seconds, 2)
+    else:
+        cost_per_1k = pricing.get('cost_per_1k_units')
+        units = input_units or output_units
+        total_cost = (units / 1000) * cost_per_1k if cost_per_1k else 0
 
     record_usage_cost(
-        session=cost_context['session_id'],
+        session=resolved_session,
         call_type=call_type,
         provider=getattr(voice_provider, 'provider', None),
         model_name=getattr(voice_provider, 'name', None),
-        profile=cost_context.get('profile_id'),
+        profile=resolved_profile,
         company_bot=company_bot,
         input_units=input_units,
         output_units=output_units,

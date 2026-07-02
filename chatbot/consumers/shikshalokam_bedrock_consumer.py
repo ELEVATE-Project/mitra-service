@@ -126,7 +126,8 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
 
                     response = text_translate_provider(
                         voice_provider=voice_provider, message_body=text_data_json['text'], target_language='en',
-                        source_language=self.route
+                        source_language=self.route,
+                        session_id=self.session_id, profile_id=self.profile_id
                     )
                     if response.get('status') == 200:
                         translated_message = response.get('content')

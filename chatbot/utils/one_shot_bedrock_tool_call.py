@@ -27,7 +27,8 @@ def get_one_shot_bedrock_tool_call_response(system_prompt, messages, company_bot
         translated_message = translate_and_send_message(
             accumulated_message=bot_question, current_channel_name=channel_name,
             current_step_number=chat_session.current_step, finish_reason="stop", route=route,
-            company_bot=company_bot
+            company_bot=company_bot,
+            session_id=session_id, profile_id=profile_id
         )
 
         save_in_company_db(
@@ -110,7 +111,8 @@ def get_one_shot_bedrock_tool_call_response(system_prompt, messages, company_bot
         translated_message = translate_and_send_message(
             accumulated_message=bot_question, current_channel_name=channel_name,
             current_step_number=chat_session.current_step, finish_reason="stop", route=route,
-            company_bot=company_bot
+            company_bot=company_bot,
+            session_id=session_id, profile_id=profile_id
         )
         print("chat_status: ", chat_status)
 
@@ -125,7 +127,8 @@ def get_one_shot_bedrock_tool_call_response(system_prompt, messages, company_bot
         translated_message = translate_and_send_message(
             accumulated_message=response, current_channel_name=channel_name,
             current_step_number=current_step, finish_reason="stop", route=route,
-            company_bot=company_bot
+            company_bot=company_bot,
+            session_id=session_id, profile_id=profile_id
         )
         save_in_company_db(
             session_id=session_id, profile_id=profile_id, initiated_by='AI', message=response,

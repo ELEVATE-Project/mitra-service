@@ -6,7 +6,8 @@ from chatbot.utils.audio_provider_utils import get_voice_provider, _record_voice
 
 
 def transliterate_text(
-        source_language, target_language, message_body, is_sentence=False, voice_provider=None, company_bot=None
+        source_language, target_language, message_body, is_sentence=False, voice_provider=None, company_bot=None,
+        session_id=None, profile_id=None
 ):
     try:
         if not voice_provider and company_bot:
@@ -42,7 +43,8 @@ def transliterate_text(
 
         _record_voice_usage_cost(
             call_type=UsageCallType.TRANSLITERATE, voice_provider=voice_provider, company_bot=company_bot,
-            response=response, input_units=len(message_body or '')
+            response=response, input_units=len(message_body or ''),
+            session_id=session_id, profile_id=profile_id
         )
 
         return response

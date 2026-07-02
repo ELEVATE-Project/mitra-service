@@ -215,21 +215,21 @@ class AsyncShikshalokamChaupalConsumer(AsyncBaseConsumer):
                     type=VoiceType.Transliterate,
                     language=self.route
                 ).first()
-                response =  transliterate_text(
+                response = transliterate_text(
                     voice_provider=transliterate_voice_provider, source_language=self.route, target_language='en',
-                    message_body=message, is_sentence=True
+                    message_body=message, is_sentence=True,
+                    session_id=self.session_id, profile_id=self.profile_id
                 )
-                print("Trans response: ", response)
                 if response and response.get('content'):
                     content = response.get('content')
-                    print("Trans content: ", content)
                     if content and isinstance(content, list) and len(content)>0:
                         content = content[0]
                     return content
             else:
                 response = text_translate_provider(
                     voice_provider=voice_provider, message_body=message,
-                    target_language='en', source_language=self.route
+                    target_language='en', source_language=self.route,
+                    session_id=self.session_id, profile_id=self.profile_id
                 )
 
                 if response.get('status') == 200:

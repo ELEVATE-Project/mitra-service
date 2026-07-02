@@ -5,6 +5,9 @@
             session_view  — Active filter: top1 | top10 | all.
             search_query  — Current search string (empty if none).
             sessions_page — Django Page object (only present in "all" view).
+            start_date    — Start date string (YYYY-MM-DD) for date range filter.
+            end_date      — End date string (YYYY-MM-DD) for date range filter.
+            total_cost_all — Aggregate cost of all matching sessions.
   Behaviour: Filter buttons and pagination links emit relative ?-prefixed URLs that
              the dashboard JS intercepts to trigger AJAX reloads instead of navigation.
 {% endcomment %}
@@ -22,6 +25,26 @@
         {% endif %}
     </form>
 </div>
+{% if session_view == 'all' %}
+<div class="date-filter-row">
+    <form method="get" class="date-filter-form">
+        <input type="hidden" name="session_view" value="all">
+        {% if search_query %}<input type="hidden" name="q" value="{{ search_query }}">{% endif %}
+        <label for="start_date">From:</label>
+        <input type="datetime-local" id="start_date" name="start_date" value="{{ start_date }}">
+        <label for="end_date">To:</label>
+        <input type="datetime-local" id="end_date" name="end_date" value="{{ end_date }}">
+        <button type="submit">Apply</button>
+        {% if start_date or end_date %}
+        <a href="?session_view=all{% if search_query %}&q={{ search_query }}{% endif %}" class="clear-search">Clear dates</a>
+        {% endif %}
+    </form>
+</div>
+{% endif %}
+<div class="total-cost-banner">
+    <span class="total-cost-label">Total Cost</span>
+    <span class="total-cost-value">${{ total_cost_all }}</span>
+</div>
 <table>
     <thead>
         <tr><th>Session</th><th>Total Cost</th><th>Created At</th></tr>
@@ -30,7 +53,7 @@
         {% for session in top_sessions %}
         <tr>
             <td><a href="{% url 'admin:chatbot_usagecostlog_session_detail' session.pk %}">{{ session.session }}</a></td>
-            <td>{{ session.total_cost }}</td>
+            <td>${{ session.total_cost }}</td>
             <td>{{ session.created_at }}</td>
         </tr>
         {% empty %}
@@ -41,13 +64,13 @@
 {% if sessions_page %}
 <div class="pagination">
     {% if sessions_page.has_previous %}
-        <a href="?session_view=all&q={{ search_query }}&page=1">&laquo; First</a>
-        <a href="?session_view=all&q={{ search_query }}&page={{ sessions_page.previous_page_number }}">Previous</a>
+        <a href="?session_view=all&q={{ search_query }}&start_date={{ start_date }}&end_date={{ end_date }}&page=1">&laquo; First</a>
+        <a href="?session_view=all&q={{ search_query }}&start_date={{ start_date }}&end_date={{ end_date }}&page={{ sessions_page.previous_page_number }}">Previous</a>
     {% endif %}
     <span class="current-page">Page {{ sessions_page.number }} of {{ sessions_page.paginator.num_pages }}</span>
     {% if sessions_page.has_next %}
-        <a href="?session_view=all&q={{ search_query }}&page={{ sessions_page.next_page_number }}">Next</a>
-        <a href="?session_view=all&q={{ search_query }}&page={{ sessions_page.paginator.num_pages }}">Last &raquo;</a>
+        <a href="?session_view=all&q={{ search_query }}&start_date={{ start_date }}&end_date={{ end_date }}&page={{ sessions_page.next_page_number }}">Next</a>
+        <a href="?session_view=all&q={{ search_query }}&start_date={{ start_date }}&end_date={{ end_date }}&page={{ sessions_page.paginator.num_pages }}">Last &raquo;</a>
     {% endif %}
 </div>
 {% endif %}

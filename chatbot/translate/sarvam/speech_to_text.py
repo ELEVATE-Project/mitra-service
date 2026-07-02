@@ -60,7 +60,7 @@ def transcribe_sarvam_multiple_chunks(
 
         audio_bytes = base64.b64decode(base64_audio_file)
 
-        chunks = split_audio(audio_bytes, chunk_duration=duration)
+        chunks, audio_duration_seconds = split_audio(audio_bytes, chunk_duration=duration)
         client = SarvamAI(api_subscription_key=sarvam_api_key)
 
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -82,7 +82,7 @@ def transcribe_sarvam_multiple_chunks(
 
         transcript = " ".join(content for _, content in transcripts)
 
-        return {"status": 200, "content": transcript}
+        return {"status": 200, "content": transcript, "audio_duration_seconds": audio_duration_seconds}
 
     except Exception as e:
         logger.error("Error processing: %s", e, exc_info=True)
