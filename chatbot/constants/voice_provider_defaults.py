@@ -17,11 +17,17 @@ VOICE_PROVIDER_DEFAULTS = {
         },
         VoiceType.Transliterate: {
             "pricing": {"cost_per_1k_units": 0, "currency": "USD"}
+            "request_timeout": 60
+        },
+        VoiceType.TextToText: {
+            "serviceId": "bhashini/iiith/nmt-all",
+            "request_timeout": 30
         },
         VoiceType.TextToSpeech: {
             "serviceId": "Bhashini/IITM/TTS",
             "samplingRate": 22050,
             "pricing": {"cost_per_1k_units": 0, "currency": "USD"}
+            "request_timeout": 30
         }
     },
 
@@ -85,6 +91,18 @@ VOICE_PROVIDER_DEFAULTS = {
             "spoken_form": True,
             "spoken_form_numerals_language": "native",
             "pricing": {"cost_per_1k_units": 0, "currency": "USD"}
+        }
+    },
+
+    VoiceProvider.SHIKSHALOKAM: {
+        VoiceType.SpeechToText: {
+            "request_timeout": 60
+        },
+        VoiceType.TextToText: {
+            "request_timeout": 60
+        },
+        VoiceType.TextToSpeech: {
+            "request_timeout": 60
         }
     },
 

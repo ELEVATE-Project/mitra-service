@@ -224,7 +224,7 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 STATIC_ROOT = os.getenv('STATIC_ROOT', '/var/www/shikshalokam/static/')
 STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static')
@@ -508,6 +508,11 @@ CRONJOBS = [
     '>> /tmp/community_FGD_story_creation.log 2>&1'),
     ('0 12 * * *', 'chatbot.cron_tasks.odisha_youth.story_creation.create_story',
     '>> /tmp/odisha_youth_story_creation.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.pppi_set_1.story_creation.create_story',
+    '>> /tmp/pppi_set_1_story_creation.log 2>&1'),
+
+    ('0 12 * * *', 'chatbot.cron_tasks.pppi_set_2.story_creation.create_story',
+    '>> /tmp/pppi_set_2_story_creation.log 2>&1'),
     ('0 */2 * * *', 'chatbot.cron_tasks.stakeholder_fgd.district_classification.classify_districts',
     '>> /tmp/stakeholder_fgd_district_classification.log 2>&1'),
     ('0 */2 * * *', 'chatbot.cron_tasks.student_fgd.district_classification.classify_districts',
@@ -515,5 +520,7 @@ CRONJOBS = [
     ('0 12 * * *', 'chatbot.cron_tasks.stakeholder_fgd.story_creation.create_story',
     '>> /tmp/stakeholder_fgd_story_creation.log 2>&1'),
     ('0 12 * * *', 'chatbot.cron_tasks.student_fgd.story_creation.create_story',
-    '>> /tmp/student_fgd_story_creation.log 2>&1')
+    '>> /tmp/student_fgd_story_creation.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.xylem.story_creation.create_story',
+    '>> /tmp/xylem_story_creation.log 2>&1')
 ]
