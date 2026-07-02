@@ -12,6 +12,7 @@ from chatbot.utils.audio_provider_utils import text_translate_provider
 import logging
 from channels.db import database_sync_to_async
 from chatbot.utils.transliterate_utils import transliterate_text
+from chatbot.utils.usage_cost_context import set_usage_cost_context, reset_usage_cost_context
 import jwt
 
 logger = logging.getLogger('django')
@@ -40,6 +41,10 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
             # Don't call self.close() here - let the parent handle that
             await super().disconnect(code)
 
+    # Every WebSocket frame from the client lands here.
+    # The client MUST send type='authenticate' first before sending any chat messages —
+    # that first message sets up session/profile/bot context on this consumer instance.
+    # After authentication, all subsequent messages are treated as chat turns.
     async def receive(self, text_data):
         try:
             logger.info(f"Received text data via common websocket: {text_data}")
@@ -47,10 +52,12 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
             message_type = text_data_json.get('type', None)
             company_chat_status = None
             if message_type == 'authenticate':
+                # Store conversation context on the consumer instance so it is available
+                # for every subsequent message without hitting the DB again.
                 self.session_id = text_data_json.get('sessionid')
                 self.profile_id = text_data_json.get('profileid')
-                self.route = text_data_json.get('route')
-                self.bot_route = text_data_json.get('bot_route')
+                self.route = text_data_json.get('route')      # language code, e.g. 'en', 'hi'
+                self.bot_route = text_data_json.get('bot_route')  # identifies which CompanyBot to use
                 self.flow_name = text_data_json.get('flow_name')
                 self.ip_address = text_data_json.get('address')
 
@@ -64,12 +71,10 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
 
                 self.company_bot = await self.get_company_bot(profile, self.bot_route)
 
-                # Create chat session asynchronously
                 await self.create_chat_session(
                     self.session_id, profile, self.company_bot, self.ip_address, user_id
                 )
             else:
-                # Validate that user is authenticated before processing messages
                 if not self.session_id or not self.bot_route:
                     error_msg = "Authentication required. Please send authentication message first with type='authenticate', sessionid, profileid, route, and bot_route."
                     logger.error(f"Unauthenticated message attempt: {error_msg}")
@@ -88,6 +93,8 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 company_chat_status = await self.determine_company_chat_status_async(
                     session_id=self.session_id, profile_id=self.profile_id, route=self.bot_route
                 )
+                # Echo the user's message back through the channel layer so the frontend
+                # receives it via the same unified message stream as bot responses.
                 await self.channel_layer.send(
                     self.channel_name,
                     {
@@ -98,6 +105,8 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
 
             translated_message = None
             if self.route != 'en' and text_data_json and text_data_json.get('text'):
+                # Translate non-English input to English so the LLM always receives English text.
+                # The original message is preserved separately for display and audit.
                 translated_message = await self.translate_message(text_data_json['text'])
 
             if message_type != 'authenticate' and text_data_json and text_data_json.get('text'):
@@ -105,6 +114,8 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                     lambda: ChatSession.objects.filter(session=self.session_id).order_by('-created_at').first()
                 )()
 
+                # Capture the human-readable stage name (e.g. "CHALLENGES") for analytics —
+                # storing the step number alone makes historical records hard to interpret.
                 current_stage = None
                 if chat_session and self.company_bot and self.company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
                     try:
@@ -121,7 +132,6 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                             f"step={chat_session.current_step}. "
                             f"Please create state machines in admin panel."
                         )
-                # Use a task for database operations
                 await database_sync_to_async(save_in_company_db)(
                     session_id=self.session_id, profile_id=self.profile_id, initiated_by='User',
                     message=text_data_json['text'], chunks=None, status=company_chat_status,
@@ -135,7 +145,9 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
             )
 
             if message_type != 'authenticate':
-                # Start the Celery task but don't wait for it
+                # Hand off to Celery so the LLM call doesn't block this async consumer.
+                # The worker pushes the bot reply back via channel layer using channel_name as the address.
+                # This consumer returns immediately — the response arrives as a separate event.
                 get_flow_response.delay(
                     self.channel_name, self.session_id, self.profile_id, self.route,
                     'common', self.bot_route
@@ -159,6 +171,8 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
             return None
         return Profile.objects.filter(id=profile_id).first()
 
+    # Extracts user_id from the JWT so the session can be linked to an authenticated Elevate user.
+    # access_token is optional — anonymous/guest users proceed with user_id=None.
     @database_sync_to_async
     def handle_access_token(self, access_token):
         user_id = None
@@ -189,11 +203,16 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
         else:
             return CompanyBot.objects.get(route=route)
 
+    # get_or_create a ChatSession for this connection.
+    # If the session already exists (e.g. user reconnected), only language and ip_address are
+    # refreshed — step and status are preserved so the conversation resumes mid-flow.
     @database_sync_to_async
     def create_chat_session(self, session_id, profile, company_bot, ip_address, user_id):
         step_number = 1
         if profile and profile.first_name and profile.first_name != '':
             try:
+                # Profile already has a name, so skip the name-collection steps at the start
+                # of the state machine and jump directly to CHALLENGES.
                 challenges_step = CompanyStateMachine.objects.get(
                     company_bot=self.company_bot, name="CHALLENGES"
                 )
@@ -231,8 +250,14 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
 
         return cs
 
+    # Converts the user's regional-language message to English for LLM consumption.
+    # Which conversion to use depends on the state machine step config:
+    #   TRANSLITERATE — converts script only (e.g. Hindi in Roman chars → Devanagari → English phonetic)
+    #   TRANSLATE     — converts meaning (full language translation via configured provider)
+    # Falls back to the original message if the provider is not configured or the call fails.
     @database_sync_to_async
     def translate_message(self, message):
+        cost_context_token = set_usage_cost_context(session_id=self.session_id, profile_id=self.profile_id)
         try:
             if not self.company_bot:
                 return message
@@ -285,3 +310,5 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
         except Exception as e:
             logger.error('Translation Error: %s', e, exc_info=True)
             return message
+        finally:
+            reset_usage_cost_context(cost_context_token)

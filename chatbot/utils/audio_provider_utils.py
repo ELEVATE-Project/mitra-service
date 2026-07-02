@@ -1,4 +1,4 @@
-from chatbot.models import VoiceProvider, LanguageMapping, Voice, VoiceType, CompanyBot
+from chatbot.models import VoiceProvider, LanguageMapping, Voice, VoiceType, CompanyBot, UsageCallType
 from chatbot.translate.ai4Bharat.speech_to_text import transcribe_ai4bharat_multiple_chunks
 from chatbot.translate.ai4Bharat.text_to_speech import ai4bharat_text_speech
 from chatbot.translate.ai4Bharat.text_to_text import call_ai4bharat_translation_api
@@ -11,6 +11,7 @@ from chatbot.translate.openai.openai_stt import transcribe_audio
 from chatbot.translate.sarvam.sarvam import SarvamLanguageService
 from chatbot.translate.sarvam.speech_to_text import transcribe_sarvam_multiple_chunks
 from chatbot.translate.sarvam.text_to_speech import sarvam_text_to_speech
+from chatbot.utils.usage_cost_context import get_usage_cost_context
 from chatbot.translate.shikshalokam.speech_to_text import sl_speech_to_text
 from chatbot.translate.shikshalokam.text_to_speech import sl_text_to_speech
 from chatbot.translate.shikshalokam.text_to_text import sl_translate
@@ -80,6 +81,11 @@ def text_speech_provider(company_bot, text, source_language):
             'content': "No provider found!"
         }
 
+    _record_voice_usage_cost(
+        call_type=UsageCallType.TTS, voice_provider=voice_provider, company_bot=company_bot,
+        response=response, input_units=len(text or '')
+    )
+
     return response
 
 
@@ -131,6 +137,13 @@ def speech_text_provider(company_bot, base64, audio_format, source_language):
             'status': 500,
             'content': "No provider found!"
         }
+
+    transcript = response.get('content') if isinstance(response, dict) else None
+    _record_voice_usage_cost(
+        call_type=UsageCallType.STT, voice_provider=voice_provider, company_bot=company_bot,
+        response=response, output_units=len(transcript) if isinstance(transcript, str) else 0
+    )
+
     return response
 
 
@@ -180,9 +193,46 @@ def text_translate_provider(message_body, target_language, source_language, voic
                 'status': 500,
                 'content': "No provider found!"
             }
+
+        _record_voice_usage_cost(
+            call_type=UsageCallType.TRANSLATE, voice_provider=voice_provider, company_bot=company_bot,
+            response=response, input_units=len(message_body or '')
+        )
+
         return response
     except Exception as e:
         return {
             'status': 500,
             'content': str(e)
         }
+
+
+def _record_voice_usage_cost(call_type, voice_provider, company_bot, response, input_units=0, output_units=0):
+    """
+    Logs a TTS/STT/TRANSLATE/TRANSLITERATE provider call against the ChatSession
+    currently in scope (set by ChatOrchestrator/FreeFlowService via contextvars).
+    No-ops outside chat flow (e.g. standalone bhashini API endpoints with no session).
+    """
+    cost_context = get_usage_cost_context()
+    if not cost_context or not cost_context.get('session_id'):
+        return
+    if not response or response.get('status') != 200:
+        return
+
+    from chatbot.utils.usage_cost_utils import get_pricing_from_voice_provider, record_usage_cost
+
+    cost_per_1k = get_pricing_from_voice_provider(voice_provider)
+    units = input_units or output_units
+    total_cost = (units / 1000) * cost_per_1k if cost_per_1k else 0
+
+    record_usage_cost(
+        session=cost_context['session_id'],
+        call_type=call_type,
+        provider=getattr(voice_provider, 'provider', None),
+        model_name=getattr(voice_provider, 'name', None),
+        profile=cost_context.get('profile_id'),
+        company_bot=company_bot,
+        input_units=input_units,
+        output_units=output_units,
+        total_cost=total_cost,
+    )

@@ -6,6 +6,7 @@ from chatbot.translate.ai4Bharat.text_lang_detect import call_ai4bharat_text_lan
 from chatbot.utils.audio_converter_utils import convert_s3_audio_to_wav_base64
 from chatbot.utils.audio_provider_utils import text_speech_provider, speech_text_provider, text_translate_provider
 from chatbot.utils.transliterate_utils import transliterate_text
+from chatbot.utils.usage_cost_context import set_usage_cost_context, reset_usage_cost_context
 import logging
 
 logger = logging.getLogger('django')
@@ -29,9 +30,16 @@ def text_speech_view(request):
             }, status=500)
 
         company_bot = CompanyBot.objects.filter(route=route).first()
-        response = text_speech_provider(
-            company_bot=company_bot, text=text, source_language=source_language
+
+        cost_context_token = set_usage_cost_context(
+            session_id=body.get('sessionid'), profile_id=body.get('profileid')
         )
+        try:
+            response = text_speech_provider(
+                company_bot=company_bot, text=text, source_language=source_language
+            )
+        finally:
+            reset_usage_cost_context(cost_context_token)
 
         if response.get('status') == 200:
             return Response({
@@ -72,10 +80,16 @@ def speech_text(request):
                 'message': 'route is a required field'
             }, status=500)
 
-        response = speech_text_provider(
-            company_bot=company_bot, base64=encoded_audio, audio_format=audio_format,
-            source_language=source_language
+        cost_context_token = set_usage_cost_context(
+            session_id=body.get('sessionid'), profile_id=body.get('profileid')
         )
+        try:
+            response = speech_text_provider(
+                company_bot=company_bot, base64=encoded_audio, audio_format=audio_format,
+                source_language=source_language
+            )
+        finally:
+            reset_usage_cost_context(cost_context_token)
 
         if response.get('status') == 200:
             return Response({
@@ -114,10 +128,16 @@ def text_translation_view(request):
 
         company_bot = CompanyBot.objects.filter(route=route).first()
 
-        response = text_translate_provider(
-            company_bot=company_bot, message_body=message_body, target_language=target_language,
-            source_language=source_language
+        cost_context_token = set_usage_cost_context(
+            session_id=body.get('sessionid'), profile_id=body.get('profileid')
         )
+        try:
+            response = text_translate_provider(
+                company_bot=company_bot, message_body=message_body, target_language=target_language,
+                source_language=source_language
+            )
+        finally:
+            reset_usage_cost_context(cost_context_token)
 
         if response.get('status') == 200:
             return Response({
@@ -161,10 +181,16 @@ def text_transliterate_view(request):
             print("detected_body: ", detected_body)
         print("setting source_language: ", source_language)
 
-        response = transliterate_text(
-            company_bot=company_bot, message_body=message_body, target_language=target_language,
-            source_language=source_language
+        cost_context_token = set_usage_cost_context(
+            session_id=body.get('sessionid'), profile_id=body.get('profileid')
         )
+        try:
+            response = transliterate_text(
+                company_bot=company_bot, message_body=message_body, target_language=target_language,
+                source_language=source_language
+            )
+        finally:
+            reset_usage_cost_context(cost_context_token)
 
         if response:
             return Response({
