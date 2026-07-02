@@ -240,14 +240,19 @@ ASGI_APPLICATION = 'shikshalokam_mohini.asgi.application'
 REDIS_HOST = os.environ.get('REDIS_HOST', "127.0.0.1")
 REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
 REDIS_USE_SSL = os.environ.get('REDIS_USE_SSL', 'false').lower() == 'true'
+REDIS_SSL_CERT_REQS = os.environ.get('REDIS_SSL_CERT_REQS', 'CERT_NONE')
 
 # Build Redis connection URL with SSL support
 REDIS_PROTOCOL = 'rediss' if REDIS_USE_SSL else 'redis'
-REDIS_URL = f'{REDIS_PROTOCOL}://{REDIS_HOST}:{REDIS_PORT}'
+
+if REDIS_USE_SSL:
+    REDIS_URL = f'{REDIS_PROTOCOL}://{REDIS_HOST}:{REDIS_PORT}?ssl_cert_reqs={REDIS_SSL_CERT_REQS}'
+else:
+    REDIS_URL = f'{REDIS_PROTOCOL}://{REDIS_HOST}:{REDIS_PORT}'
 
 CHANNEL_LAYERS = {
     "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "BACKEND": "channels_redis.pubsub.RedisPubSubChannelLayer",
         "CONFIG": {
             "hosts": [REDIS_URL],
             "capacity": 100000,
