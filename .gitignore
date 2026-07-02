@@ -20,3 +20,8 @@ config/qa-dev-prod-mitra-bucket.json
 .vscode/
 .claude/
 .venv/
+CLAUDE.md
+.DS_Store
+memory.sh
+primer.md
+project-memory.md
