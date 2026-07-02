@@ -162,31 +162,24 @@ class BaseResponseHandler(ABC):
 
             streaming_completed = finish_reason == "stop" and use_streaming
 
-            if isinstance(response, dict) and response.get('error'):
+            # Only treat None as error
+            if response is None:
                 bot_vernacular = BotVernacular.objects.filter(
                     company_bot=company_bot, language=kwargs['language']
                 ).first()
                 error_message = bot_vernacular.error_message if (
                         bot_vernacular and bot_vernacular.error_message
                 ) else self.default_error_message
-                self.translate_message(
+                translated_message = self.translate_message(
                     message=error_message, channel_name=kwargs['channel_name'],
                     step_number=chat_session.current_step, language=kwargs['language'], company_bot=company_bot
                 )
+                self.save_message(
+                    session_id=session_id, profile_id=kwargs['profile_id'], message=error_message,
+                    chunks=chunks, status=ChatStatus.IN_PROGRESS, translated_message=translated_message,
+                    stage=state_machine.name if state_machine else None
+                )
                 return error_message
-
-            # Only treat None as error
-            if response is None:
-                if company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
-                    response = {
-                        "toolUseId": "tooluse_fallback", "name": "get_state_information",
-                        "input": {
-                            "next_state_name": "SAMPLE",
-                            "reason": "LLM returned no response"
-                        }
-                    }
-                else:
-                    response = self.default_error_message
 
         if is_function_call and response is None:
             response = early_return
@@ -328,8 +321,7 @@ class BaseResponseHandler(ABC):
                     temperature=company_bot.bot_temperature,
                     max_token=company_bot.max_token,
                     company_bot=company_bot,
-                    tools=tools,
-                    return_validation_error=True
+                    tools=tools
                 )
             except Exception as e:
                 logger.error(f"Bedrock Error: %s", e)

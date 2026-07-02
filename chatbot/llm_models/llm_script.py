@@ -213,7 +213,7 @@ def retry_if_result_none(result):
 def handle_bedrock_model(
         company_bot, system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
         model_name=None, region_name='us-west-2', tools=None, is_json_response=False, aws_key=None,
-        aws_secret_key=None, stop_sequences=None, return_validation_error: bool = False
+        aws_secret_key=None, stop_sequences=None
 ):
     # Support company_bot as either dict or model instance
     if isinstance(company_bot, dict):
@@ -371,7 +371,6 @@ def handle_bedrock_model(
         return final_output
     except ClientError as e:
         error_response = e.response
-        error_code = error_response["Error"]["Code"]
         logger.error("❌ Bedrock ClientError:")
         logger.error(f"Error Code: {error_response['Error']['Code']}")
         logger.error(f"Error Message: {error_response['Error']['Message']}")
@@ -380,8 +379,6 @@ def handle_bedrock_model(
         print("Error Code:", error_response["Error"]["Code"])
         print("Error Message:", error_response["Error"]["Message"])
         print("Request ID:", error_response.get("ResponseMetadata", {}).get("RequestId"))
-        if return_validation_error and error_code == "ValidationException":
-            return {"error": f"{error_code}: {error_response['Error']['Message']}"}
     except Exception as e:
         logger.error('Error processing request: %s', e, exc_info=True)
         print(f'❌ Error processing Bedrock request: {e}')
