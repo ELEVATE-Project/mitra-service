@@ -4,7 +4,7 @@ from asgiref.sync import async_to_sync
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.celery_tasks.handle_message import translate_and_send_message
 from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_response_api
-from chatbot.models import ChatSession, ChatStatus, LLMProvider, CompanyBotTypeChoices
+from chatbot.models import BotVernacular, ChatSession, ChatStatus, LLMProvider, CompanyBotTypeChoices
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.models.enums import OperationTypeChoices, PreProcessOutputMode
 from chatbot.services.postprocessing.postprocessing_service import PostprocessingService
@@ -164,16 +164,22 @@ class BaseResponseHandler(ABC):
 
             # Only treat None as error
             if response is None:
-                if company_bot.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
-                    response = {
-                        "toolUseId": "tooluse_fallback", "name": "get_state_information",
-                        "input": {
-                            "next_state_name": "SAMPLE",
-                            "reason": "LLM returned no response"
-                        }
-                    }
-                else:
-                    response = self.default_error_message
+                bot_vernacular = BotVernacular.objects.filter(
+                    company_bot=company_bot, language=kwargs['language']
+                ).first()
+                error_message = bot_vernacular.error_message if (
+                        bot_vernacular and bot_vernacular.error_message
+                ) else self.default_error_message
+                translated_message = self.translate_message(
+                    message=error_message, channel_name=kwargs['channel_name'],
+                    step_number=chat_session.current_step, language=kwargs['language'], company_bot=company_bot
+                )
+                self.save_message(
+                    session_id=session_id, profile_id=kwargs['profile_id'], message=error_message,
+                    chunks=chunks, status=ChatStatus.IN_PROGRESS, translated_message=translated_message,
+                    stage=state_machine.name if state_machine else None
+                )
+                return error_message
 
         if is_function_call and response is None:
             response = early_return
