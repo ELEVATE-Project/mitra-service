@@ -118,12 +118,24 @@ def create_chatsession(request):
     bot_route = body.get("bot_route")
     language = body.get("language", "en")
 
-    c, created = ChatSession.objects.get_or_create(
-        session=session,
-        defaults={
-            "session_status": ChatStatus.IN_PROGRESS,
-            "profile": profile,
-        },
+    c, created = (
+        ChatSession.objects.select_related("company_bot")
+        .only(
+            "id",
+            "session",
+            "session_status",
+            "current_step",
+            "session_type",
+            "profile_id",
+            "company_bot__id",
+        )
+        .get_or_create(
+            session=session,
+            defaults={
+                "session_status": ChatStatus.IN_PROGRESS,
+                "profile": profile,
+            },
+        )
     )
 
     first_bot_question = None
@@ -272,19 +284,27 @@ def non_llm_chat_view(request):
         f
         for f, v in [
             ("session", session),
-            ("profile_id", profile_id),
             ("message", message),
-            ("flow_name", flow_name),
-            ("company_bot", company_bot),
         ]
         if not v
     ]
     if missing:
         return Response({"error": f"{', '.join(missing)} are required."}, status=400)
 
+    is_new_session = False
     try:
-        chat_session = ChatSession.objects.select_related("company_bot").get(
-            session=session
+        chat_session = (
+            ChatSession.objects
+            .only(
+                "id",
+                "session",
+                "session_status",
+                "current_step",
+                "session_type",
+                "profile_id",
+                "company_bot_id",
+            )
+            .get(session=session)
         )
     except ChatSession.DoesNotExist:
         chat_session = ChatSession(
@@ -297,9 +317,11 @@ def non_llm_chat_view(request):
             session=session,
         )
         chat_session.save()
+        is_new_session = True
         # return Response({"error": "Chat session not found."}, status=404)
 
-    company_bot = chat_session.company_bot
+    company_bot_id = chat_session.company_bot_id
+
     if not company_bot:
         return Response({"error": "No bot configured for this session."}, status=400)
 
@@ -307,16 +329,22 @@ def non_llm_chat_view(request):
         chat_session.current_step if chat_session.current_step is not None else 0
     )
 
-    try:
-        state_machine = CompanyStateMachine.objects.get(
-            company_bot=company_bot, step=current_step
-        )
-    except CompanyStateMachine.DoesNotExist:
+    next_step = current_step + 1
+    state_machines = CompanyStateMachine.objects.filter(
+        company_bot_id=company_bot_id, step__in=(current_step, next_step)
+    ).values("step", "name", "operation_type", "bot_question", "translations")
+
+    states = {}
+    for state in state_machines:
+        states[state["step"]] = state
+
+    state_machine = states.get(current_step)
+    if not state_machine:
         return Response(
             {"error": f"No state machine found for step {current_step}."}, status=400
         )
 
-    if state_machine.operation_type != OperationTypeChoices.NON_LLM:
+    if state_machine["operation_type"] != OperationTypeChoices.NON_LLM:
         return Response({"error": "Current step is not a NON_LLM step."}, status=400)
 
     try:
@@ -340,7 +368,7 @@ def non_llm_chat_view(request):
         status=ChatStatus.COMPLETED,
         sender_id=sender_id,
         receiver=ai_profile,
-        stage=state_machine.name,
+        stage=state_machine["name"],
     )
 
     logger.info(
@@ -351,11 +379,10 @@ def non_llm_chat_view(request):
         company_chat.id, source_language=language, target_language="en"
     )
 
-    total_steps = CompanyStateMachine.objects.filter(company_bot=company_bot).count()
-    next_step = current_step + 1
     chat_session.current_step = next_step
+    next_state = states.get(next_step)
 
-    if next_step > total_steps:
+    if not next_state:
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=["current_step", "session_status"])
         logger.info(
@@ -367,27 +394,19 @@ def non_llm_chat_view(request):
                 "step": next_step,
                 "bot_message": None,
                 "operation_type": None,
+                "is_new_session": is_new_session,
             },
             status=200,
         )
 
     chat_session.save(update_fields=["current_step"])
 
-    try:
-        next_state = CompanyStateMachine.objects.get(
-            company_bot=company_bot, step=next_step
-        )
-    except CompanyStateMachine.DoesNotExist:
-        return Response(
-            {"error": f"No state machine found for step {next_step}."}, status=400
-        )
-
-    bot_message = next_state.bot_question
+    bot_message = next_state["bot_question"]
     translated_bot_message = None
     audio_s3_url = None
 
     if language and language != "en" and bot_message:
-        cached = (next_state.translations or {}).get(language, {})
+        cached = (next_state["translations"] or {}).get(language, {})
         translated_bot_message = cached.get("text")
         audio_s3_url = cached.get("audio_s3")
         if not translated_bot_message:
@@ -406,7 +425,7 @@ def non_llm_chat_view(request):
                 )
 
     logger.info(
-        f"non_llm_chat_view: session={session} advancing to step={next_step} operation_type={next_state.operation_type}"
+        f"non_llm_chat_view: session={session} advancing to step={next_step} operation_type={next_state['operation_type']}"
     )
 
     return Response(
@@ -416,7 +435,8 @@ def non_llm_chat_view(request):
             "bot_message": bot_message,
             "translated_bot_message": translated_bot_message,
             "audio_s3_url": audio_s3_url,
-            "operation_type": next_state.operation_type,
+            "operation_type": next_state["operation_type"],
+            "is_new_session": is_new_session,
         },
         status=200,
     )

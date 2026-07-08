@@ -33,14 +33,11 @@ only migrate for CompanyBots newly created in this run.
 """
 
 import json
-import os
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from itertools import islice
 from typing import Optional, Set
 
-import requests
-from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
 
 from chatbot.models.bot_vernacular_model import BotVernacular
@@ -118,11 +115,15 @@ class MigrationContext:
 
     def log_error(self, entity, source_id, exc):
         self.stat(entity).errored += 1
-        self.errors.append({"entity": entity, "source_id": source_id, "error": str(exc)})
+        self.errors.append(
+            {"entity": entity, "source_id": source_id, "error": str(exc)}
+        )
 
     def log_skip(self, entity, source_id, reason):
         self.stat(entity).skipped += 1
-        self.errors.append({"entity": entity, "source_id": source_id, "skipped": reason})
+        self.errors.append(
+            {"entity": entity, "source_id": source_id, "skipped": reason}
+        )
 
     def print_summary(self, stdout):
         stdout.write("\n=== Migration Summary ===")
@@ -137,6 +138,7 @@ class MigrationContext:
 # Date-range scope discovery
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class MigrationScope:
     """
@@ -144,6 +146,7 @@ class MigrationScope:
     transactional records (ChatSession, CompanyChat, Story) in that range.
     None means "migrate all".
     """
+
     date_from: Optional[date] = None
     date_to: Optional[date] = None
     # Source IDs to restrict each entity (None = all)
@@ -154,7 +157,9 @@ class MigrationScope:
     profile_ids: Optional[Set[int]] = None
 
 
-def build_scope(date_from: Optional[date], date_to: Optional[date], stdout) -> MigrationScope:
+def build_scope(
+    date_from: Optional[date], date_to: Optional[date], stdout
+) -> MigrationScope:
     if not date_from and not date_to:
         return MigrationScope()
 
@@ -171,7 +176,9 @@ def build_scope(date_from: Optional[date], date_to: Optional[date], stdout) -> M
     chats_qs = CompanyChat.objects.using(SRC).filter(**date_filter)
     stories_qs = Story.objects.using(SRC).filter(**date_filter)
 
-    bot_ids = set(sessions_qs.values_list("company_bot_id", flat=True).distinct()) - {None}
+    bot_ids = set(sessions_qs.values_list("company_bot_id", flat=True).distinct()) - {
+        None
+    }
     profile_ids = (
         set(sessions_qs.values_list("profile_id", flat=True).distinct())
         | set(chats_qs.values_list("sender_id", flat=True).distinct())
@@ -181,10 +188,14 @@ def build_scope(date_from: Optional[date], date_to: Optional[date], stdout) -> M
 
     # Company IDs from both bots and profiles
     company_ids_from_bots = set(
-        CompanyBot.objects.using(SRC).filter(id__in=bot_ids).values_list("company_id", flat=True)
+        CompanyBot.objects.using(SRC)
+        .filter(id__in=bot_ids)
+        .values_list("company_id", flat=True)
     )
     company_ids_from_profiles = set(
-        Profile.objects.using(SRC).filter(id__in=profile_ids).values_list("company_id", flat=True)
+        Profile.objects.using(SRC)
+        .filter(id__in=profile_ids)
+        .values_list("company_id", flat=True)
     )
     company_ids = company_ids_from_bots | company_ids_from_profiles
 
@@ -194,13 +205,15 @@ def build_scope(date_from: Optional[date], date_to: Optional[date], stdout) -> M
     )
     # Also include flows referenced by profiles (latest_flow)
     flow_ids |= set(
-        Profile.objects.using(SRC).filter(id__in=profile_ids, latest_flow_id__isnull=False)
+        Profile.objects.using(SRC)
+        .filter(id__in=profile_ids, latest_flow_id__isnull=False)
         .values_list("latest_flow_id", flat=True)
     )
 
     # ImageConfiguration IDs from those flows
     image_config_ids = set(
-        Flow.objects.using(SRC).filter(id__in=flow_ids, image_config_id__isnull=False)
+        Flow.objects.using(SRC)
+        .filter(id__in=flow_ids, image_config_id__isnull=False)
         .values_list("image_config_id", flat=True)
     )
 
@@ -225,12 +238,15 @@ def build_scope(date_from: Optional[date], date_to: Optional[date], stdout) -> M
 # Management command
 # ---------------------------------------------------------------------------
 
+
 class Command(BaseCommand):
     help = "Migrate data from source_db to the default (target) DB"
 
     def add_arguments(self, parser):
         parser.add_argument("--batch-size", type=int, default=1000)
-        parser.add_argument("--dry-run", action="store_true", help="Print counts only, no writes")
+        parser.add_argument(
+            "--dry-run", action="store_true", help="Print counts only, no writes"
+        )
         parser.add_argument(
             "--date-from",
             type=lambda s: datetime.strptime(s, "%Y-%m-%d").date(),
@@ -257,18 +273,66 @@ class Command(BaseCommand):
         ctx = MigrationContext()
 
         steps = [
-            ("Company", lambda: migrate_companies(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("CompanyBot", lambda: migrate_bots(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("ImageConfiguration", lambda: migrate_image_configs(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("Flow (pass 1)", lambda: migrate_flows(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("PDFTemplates", lambda: migrate_pdf_templates(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("Bot sub-models", lambda: migrate_bot_submodels(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("Profile", lambda: migrate_profiles(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("ChatSession", lambda: migrate_chat_sessions(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("CompanyChat", lambda: migrate_company_chats(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("Story", lambda: migrate_stories(ctx, scope, batch_size, dry_run, self.stdout)),
-            ("StoryMedia", lambda: migrate_story_media(ctx, batch_size, dry_run, self.stdout)),
-            ("StoryTranslation", lambda: migrate_story_translations(ctx, batch_size, dry_run, self.stdout)),
+            (
+                "Company",
+                lambda: migrate_companies(ctx, scope, batch_size, dry_run, self.stdout),
+            ),
+            (
+                "CompanyBot",
+                lambda: migrate_bots(ctx, scope, batch_size, dry_run, self.stdout),
+            ),
+            (
+                "ImageConfiguration",
+                lambda: migrate_image_configs(
+                    ctx, scope, batch_size, dry_run, self.stdout
+                ),
+            ),
+            (
+                "Flow (pass 1)",
+                lambda: migrate_flows(ctx, scope, batch_size, dry_run, self.stdout),
+            ),
+            (
+                "PDFTemplates",
+                lambda: migrate_pdf_templates(
+                    ctx, scope, batch_size, dry_run, self.stdout
+                ),
+            ),
+            (
+                "Bot sub-models",
+                lambda: migrate_bot_submodels(
+                    ctx, scope, batch_size, dry_run, self.stdout
+                ),
+            ),
+            (
+                "Profile",
+                lambda: migrate_profiles(ctx, scope, batch_size, dry_run, self.stdout),
+            ),
+            (
+                "ChatSession",
+                lambda: migrate_chat_sessions(
+                    ctx, scope, batch_size, dry_run, self.stdout
+                ),
+            ),
+            (
+                "CompanyChat",
+                lambda: migrate_company_chats(
+                    ctx, scope, batch_size, dry_run, self.stdout
+                ),
+            ),
+            (
+                "Story",
+                lambda: migrate_stories(ctx, scope, batch_size, dry_run, self.stdout),
+            ),
+            (
+                "StoryMedia",
+                lambda: migrate_story_media(ctx, batch_size, dry_run, self.stdout),
+            ),
+            (
+                "StoryTranslation",
+                lambda: migrate_story_translations(
+                    ctx, batch_size, dry_run, self.stdout
+                ),
+            ),
         ]
 
         for label, fn in steps:
@@ -281,12 +345,15 @@ class Command(BaseCommand):
             with open("migration_errors.jsonl", "w") as f:
                 for entry in ctx.errors:
                     f.write(json.dumps(entry, default=str) + "\n")
-            self.stdout.write(self.style.ERROR(f"\nErrors/skips logged to migration_errors.jsonl"))
+            self.stdout.write(
+                self.style.ERROR("\nErrors/skips logged to migration_errors.jsonl")
+            )
 
 
 # ---------------------------------------------------------------------------
 # Company
 # ---------------------------------------------------------------------------
+
 
 def migrate_companies(ctx, scope, batch_size, dry_run, stdout):
     s = ctx.stat("Company")
@@ -297,7 +364,9 @@ def migrate_companies(ctx, scope, batch_size, dry_run, stdout):
         for src in batch:
             s.processed += 1
             if dry_run:
-                ctx.company_id_map[src.id] = src.id  # placeholder so downstream steps count correctly
+                ctx.company_id_map[src.id] = (
+                    src.id
+                )  # placeholder so downstream steps count correctly
                 continue
             try:
                 tgt, created = Company.objects.update_or_create(
@@ -322,6 +391,7 @@ def migrate_companies(ctx, scope, batch_size, dry_run, stdout):
 # CompanyBot
 # ---------------------------------------------------------------------------
 
+
 def migrate_bots(ctx, scope, batch_size, dry_run, stdout):
     s = ctx.stat("CompanyBot")
     qs = CompanyBot.objects.using(SRC)
@@ -332,10 +402,14 @@ def migrate_bots(ctx, scope, batch_size, dry_run, stdout):
             s.processed += 1
             tgt_company_id = ctx.company_id_map.get(src.company_id)
             if tgt_company_id is None:
-                ctx.log_error("CompanyBot", src.id, f"company_id {src.company_id} not mapped")
+                ctx.log_error(
+                    "CompanyBot", src.id, f"company_id {src.company_id} not mapped"
+                )
                 continue
             if dry_run:
-                ctx.bot_id_map[src.id] = src.id  # placeholder so downstream steps count correctly
+                ctx.bot_id_map[src.id] = (
+                    src.id
+                )  # placeholder so downstream steps count correctly
                 ctx.new_bot_source_ids.add(src.id)
                 continue
             try:
@@ -378,12 +452,15 @@ def migrate_bots(ctx, scope, batch_size, dry_run, stdout):
                     s.updated += 1
             except Exception as exc:
                 ctx.log_error("CompanyBot", src.id, exc)
-    stdout.write(f"  {s.processed} processed, {len(ctx.new_bot_source_ids)} newly created")
+    stdout.write(
+        f"  {s.processed} processed, {len(ctx.new_bot_source_ids)} newly created"
+    )
 
 
 # ---------------------------------------------------------------------------
 # ImageConfiguration
 # ---------------------------------------------------------------------------
+
 
 def migrate_image_configs(ctx, scope, batch_size, dry_run, stdout):
     s = ctx.stat("ImageConfiguration")
@@ -394,7 +471,9 @@ def migrate_image_configs(ctx, scope, batch_size, dry_run, stdout):
         for src in batch:
             s.processed += 1
             if dry_run:
-                ctx.image_config_id_map[src.id] = src.id  # placeholder so downstream steps count correctly
+                ctx.image_config_id_map[src.id] = (
+                    src.id
+                )  # placeholder so downstream steps count correctly
                 continue
             try:
                 tgt, created = ImageConfiguration.objects.update_or_create(
@@ -416,6 +495,7 @@ def migrate_image_configs(ctx, scope, batch_size, dry_run, stdout):
 # Flow  (2-pass for parent_flow self-ref)
 # ---------------------------------------------------------------------------
 
+
 def migrate_flows(ctx, scope, batch_size, dry_run, stdout):
     s = ctx.stat("Flow")
     qs = Flow.objects.using(SRC)
@@ -430,7 +510,9 @@ def migrate_flows(ctx, scope, batch_size, dry_run, stdout):
             ctx.log_error("Flow", src.id, f"bot_id {src.bot_id} not mapped")
             continue
         if dry_run:
-            ctx.flow_id_map[src.id] = src.id  # placeholder so downstream steps count correctly
+            ctx.flow_id_map[src.id] = (
+                src.id
+            )  # placeholder so downstream steps count correctly
             continue
         try:
             tgt, created = Flow.objects.update_or_create(
@@ -439,7 +521,9 @@ def migrate_flows(ctx, scope, batch_size, dry_run, stdout):
                     "flow_name": src.flow_name,
                     "bot_id": tgt_bot_id,
                     "story_bot_id": ctx.bot_id_map.get(src.story_bot_id),
-                    "story_validation_bot_id": ctx.bot_id_map.get(src.story_validation_bot_id),
+                    "story_validation_bot_id": ctx.bot_id_map.get(
+                        src.story_validation_bot_id
+                    ),
                     "image_config_id": ctx.image_config_id_map.get(src.image_config_id),
                     "parent_flow": None,  # resolved in pass 2
                     "languages": src.languages,
@@ -476,6 +560,7 @@ def migrate_flows(ctx, scope, batch_size, dry_run, stdout):
 # PDFTemplates
 # ---------------------------------------------------------------------------
 
+
 def migrate_pdf_templates(ctx, scope, batch_size, dry_run, stdout):
     s = ctx.stat("PDFTemplates")
     qs = PDFTemplates.objects.using(SRC)
@@ -509,6 +594,7 @@ def migrate_pdf_templates(ctx, scope, batch_size, dry_run, stdout):
 # Bot sub-models  (only for newly created bots)
 # ---------------------------------------------------------------------------
 
+
 def migrate_bot_submodels(ctx, scope, batch_size, dry_run, stdout):
     new_src_ids = ctx.new_bot_source_ids
     all_src_ids = set(ctx.bot_id_map.keys())
@@ -519,7 +605,9 @@ def migrate_bot_submodels(ctx, scope, batch_size, dry_run, stdout):
     _migrate_voices(ctx, all_src_ids, batch_size, dry_run, stdout)
     _migrate_bot_vernacular(ctx, all_src_ids, batch_size, dry_run, stdout)
     if not new_src_ids:
-        stdout.write("  No newly created bots — skipping theme and story vernacular sub-models")
+        stdout.write(
+            "  No newly created bots — skipping theme and story vernacular sub-models"
+        )
         return
     _migrate_themes(ctx, new_src_ids, batch_size, dry_run, stdout)
     _migrate_story_vernacular(ctx, new_src_ids, batch_size, dry_run, stdout)
@@ -557,7 +645,9 @@ def _migrate_state_machines(ctx, src_ids, batch_size, dry_run, stdout):
                         "operation_type": src.operation_type,
                         "skip_if_authenticated": src.skip_if_authenticated,
                         "preprocess_bot_id": ctx.bot_id_map.get(src.preprocess_bot_id),
-                        "postprocess_bot_id": ctx.bot_id_map.get(src.postprocess_bot_id),
+                        "postprocess_bot_id": ctx.bot_id_map.get(
+                            src.postprocess_bot_id
+                        ),
                     },
                 )
                 _save_timestamps(CompanyStateMachine, obj.pk, src)
@@ -578,7 +668,9 @@ def _migrate_voices(ctx, src_ids, batch_size, dry_run, stdout):
         # Voice has no unique natural key (multiple voices per bot+language are valid),
         # so delete all existing voices for these bots and recreate from source.
         tgt_bot_ids = [ctx.bot_id_map[sid] for sid in src_ids if sid in ctx.bot_id_map]
-        pre_existing_count = Voice.objects.filter(company_bot_id__in=tgt_bot_ids).count()
+        pre_existing_count = Voice.objects.filter(
+            company_bot_id__in=tgt_bot_ids
+        ).count()
         Voice.objects.filter(company_bot_id__in=tgt_bot_ids).delete()
     for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
         for src in batch:
@@ -703,6 +795,7 @@ def _migrate_story_vernacular(ctx, new_src_ids, batch_size, dry_run, stdout):
 # Profile
 # ---------------------------------------------------------------------------
 
+
 def migrate_profiles(ctx, scope, batch_size, dry_run, stdout):
     s = ctx.stat("Profile")
     qs = Profile.objects.using(SRC)
@@ -713,10 +806,14 @@ def migrate_profiles(ctx, scope, batch_size, dry_run, stdout):
             s.processed += 1
             tgt_company_id = ctx.company_id_map.get(src.company_id)
             if tgt_company_id is None:
-                ctx.log_error("Profile", src.id, f"company_id {src.company_id} not mapped")
+                ctx.log_error(
+                    "Profile", src.id, f"company_id {src.company_id} not mapped"
+                )
                 continue
             if dry_run:
-                ctx.profile_id_map[src.id] = src.id  # placeholder so downstream steps count correctly
+                ctx.profile_id_map[src.id] = (
+                    src.id
+                )  # placeholder so downstream steps count correctly
                 continue
             try:
                 tgt, created = Profile.objects.update_or_create(
@@ -745,7 +842,9 @@ def migrate_profiles(ctx, scope, batch_size, dry_run, stdout):
                         "source": src.source,
                         "preferred_route": src.preferred_route,
                         "latest_flow_used": src.latest_flow_used,
-                        "latest_flow_id": ctx.flow_id_map.get(src.latest_flow_id) if src.latest_flow_id else None,
+                        "latest_flow_id": ctx.flow_id_map.get(src.latest_flow_id)
+                        if src.latest_flow_id
+                        else None,
                     },
                 )
                 _save_timestamps(Profile, tgt.pk, src)
@@ -761,6 +860,7 @@ def migrate_profiles(ctx, scope, batch_size, dry_run, stdout):
 # ChatSession
 # ---------------------------------------------------------------------------
 
+
 def migrate_chat_sessions(ctx, scope, batch_size, dry_run, stdout):
     s = ctx.stat("ChatSession")
     existing = set(ChatSession.objects.values_list("session", flat=True))
@@ -773,7 +873,9 @@ def migrate_chat_sessions(ctx, scope, batch_size, dry_run, stdout):
             s.processed += 1
             if src.session in existing:
                 ctx.skipped_sessions.add(src.session)
-                ctx.log_skip("ChatSession", src.id, f"session '{src.session}' exists in target")
+                ctx.log_skip(
+                    "ChatSession", src.id, f"session '{src.session}' exists in target"
+                )
                 continue
             if dry_run:
                 ctx.dry_run_migrated_sessions.add(src.session)
@@ -781,8 +883,12 @@ def migrate_chat_sessions(ctx, scope, batch_size, dry_run, stdout):
             try:
                 obj = ChatSession(
                     session=src.session,
-                    profile_id=ctx.profile_id_map.get(src.profile_id) if src.profile_id else None,
-                    company_bot_id=ctx.bot_id_map.get(src.company_bot_id) if src.company_bot_id else None,
+                    profile_id=ctx.profile_id_map.get(src.profile_id)
+                    if src.profile_id
+                    else None,
+                    company_bot_id=ctx.bot_id_map.get(src.company_bot_id)
+                    if src.company_bot_id
+                    else None,
                     language=src.language,
                     title=src.title,
                     summary=src.summary,
@@ -806,9 +912,14 @@ def migrate_chat_sessions(ctx, scope, batch_size, dry_run, stdout):
 # CompanyChat
 # ---------------------------------------------------------------------------
 
+
 def migrate_company_chats(ctx, scope, batch_size, dry_run, stdout):
     s = ctx.stat("CompanyChat")
-    valid_sessions = ctx.dry_run_migrated_sessions if dry_run else set(ChatSession.objects.values_list("session", flat=True))
+    valid_sessions = (
+        ctx.dry_run_migrated_sessions
+        if dry_run
+        else set(ChatSession.objects.values_list("session", flat=True))
+    )
     date_filter = _date_filter(scope)
     qs = CompanyChat.objects.using(SRC).filter(**date_filter)
 
@@ -819,7 +930,11 @@ def migrate_company_chats(ctx, scope, batch_size, dry_run, stdout):
                 s.skipped += 1
                 continue
             if src.session not in valid_sessions:
-                ctx.log_skip("CompanyChat", src.id, f"session '{src.session}' has no parent ChatSession in source")
+                ctx.log_skip(
+                    "CompanyChat",
+                    src.id,
+                    f"session '{src.session}' has no parent ChatSession in source",
+                )
                 continue
             if dry_run:
                 continue
@@ -828,8 +943,12 @@ def migrate_company_chats(ctx, scope, batch_size, dry_run, stdout):
                     message=src.message,
                     translated_message=src.translated_message,
                     chunks=src.chunks,
-                    sender_id=ctx.profile_id_map.get(src.sender_id) if src.sender_id else None,
-                    receiver_id=ctx.profile_id_map.get(src.receiver_id) if src.receiver_id else None,
+                    sender_id=ctx.profile_id_map.get(src.sender_id)
+                    if src.sender_id
+                    else None,
+                    receiver_id=ctx.profile_id_map.get(src.receiver_id)
+                    if src.receiver_id
+                    else None,
                     session=src.session,
                     created_at=src.created_at,  # not auto_now_add — settable directly
                     status=src.status,
@@ -844,7 +963,9 @@ def migrate_company_chats(ctx, scope, batch_size, dry_run, stdout):
                 )
                 obj.save()
                 if src.updated_at:
-                    CompanyChat.objects.filter(pk=obj.pk).update(updated_at=src.updated_at)
+                    CompanyChat.objects.filter(pk=obj.pk).update(
+                        updated_at=src.updated_at
+                    )
                 s.created += 1
             except Exception as exc:
                 ctx.log_error("CompanyChat", src.id, exc)
@@ -854,6 +975,7 @@ def migrate_company_chats(ctx, scope, batch_size, dry_run, stdout):
 # ---------------------------------------------------------------------------
 # Story
 # ---------------------------------------------------------------------------
+
 
 def migrate_stories(ctx, scope, batch_size, dry_run, stdout):
     s = ctx.stat("Story")
@@ -866,15 +988,21 @@ def migrate_stories(ctx, scope, batch_size, dry_run, stdout):
             s.processed += 1
             if src.session in existing:
                 ctx.skipped_sessions.add(src.session)
-                ctx.log_skip("Story", src.id, f"session '{src.session}' exists in target")
+                ctx.log_skip(
+                    "Story", src.id, f"session '{src.session}' exists in target"
+                )
                 continue
             if dry_run:
-                ctx.story_id_map[src.id] = src.id  # placeholder so downstream steps count correctly
+                ctx.story_id_map[src.id] = (
+                    src.id
+                )  # placeholder so downstream steps count correctly
                 continue
             try:
                 obj = Story(
                     title=src.title,
-                    author_id=ctx.profile_id_map.get(src.author_id) if src.author_id else None,
+                    author_id=ctx.profile_id_map.get(src.author_id)
+                    if src.author_id
+                    else None,
                     content=src.content,
                     blurb=src.blurb,
                     tweet=src.tweet,
@@ -910,6 +1038,7 @@ def migrate_stories(ctx, scope, batch_size, dry_run, stdout):
 # ---------------------------------------------------------------------------
 # StoryMedia
 # ---------------------------------------------------------------------------
+
 
 def migrate_story_media(ctx, batch_size, dry_run, stdout):
     s = ctx.stat("StoryMedia")
@@ -974,9 +1103,12 @@ def migrate_story_media(ctx, batch_size, dry_run, stdout):
 # StoryTranslation
 # ---------------------------------------------------------------------------
 
+
 def migrate_story_translations(ctx, batch_size, dry_run, stdout):
     s = ctx.stat("StoryTranslation")
-    qs = StoryTranslation.objects.using(SRC).filter(story_id__in=ctx.story_id_map.keys())
+    qs = StoryTranslation.objects.using(SRC).filter(
+        story_id__in=ctx.story_id_map.keys()
+    )
     for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
         for src in batch:
             s.processed += 1
@@ -987,7 +1119,9 @@ def migrate_story_translations(ctx, batch_size, dry_run, stdout):
             if dry_run:
                 continue
             try:
-                if StoryTranslation.objects.filter(story_id=tgt_story_id, language=src.language).exists():
+                if StoryTranslation.objects.filter(
+                    story_id=tgt_story_id, language=src.language
+                ).exists():
                     s.skipped += 1
                     continue
                 obj = StoryTranslation(
@@ -1013,12 +1147,15 @@ def migrate_story_translations(ctx, batch_size, dry_run, stdout):
                 s.created += 1
             except Exception as exc:
                 ctx.log_error("StoryTranslation", src.id, exc)
-    stdout.write(f"  {s.processed} processed, {s.skipped} skipped (already exists or parent story not migrated)")
+    stdout.write(
+        f"  {s.processed} processed, {s.skipped} skipped (already exists or parent story not migrated)"
+    )
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _date_filter(scope: MigrationScope) -> dict:
     f = {}
