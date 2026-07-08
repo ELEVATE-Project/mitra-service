@@ -1,41 +1,41 @@
 import logging
 import os
+
+import jwt
+from django.http import JsonResponse
 from jwt import ExpiredSignatureError, InvalidTokenError
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
-from chatbot.models import CompanyChat, ChatSession, ChatStatus, Profile, Company, TextConversionType, Voice, VoiceType
+
+from chatbot.celery_tasks.non_llm_tasks import translate_user_answer
+from chatbot.models import ChatSession, ChatStatus, Company, CompanyChat, Profile
 from chatbot.models.company_models import CompanyBot, CompanyStateMachine
 from chatbot.models.enums import OperationTypeChoices
-import jwt
-from django.http import JsonResponse
-from chatbot.celery_tasks.ptm_report_tasks import create_ptm_report
 from chatbot.utils.audio_provider_utils import text_translate_provider
+from chatbot.utils.chat_utils import get_ai_profile
 from chatbot.utils.ptm_utils.chat_utils import save_question_answer_utils
-from chatbot.utils.transliterate_utils import transliterate_text
-from django.utils import timezone
 
-JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")
+JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY", "")
 
-logger = logging.getLogger('django')
+logger = logging.getLogger("django")
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 def save_chats_view(request):
     body = request.data
-    message = body.get('message')
-    session = body.get('session')
-    status = body.get('status', 'COMPLETED')
-    role = body.get('role')
-    chunks = body.get('chunks')
+    message = body.get("message")
+    session = body.get("session")
+    status = body.get("status", "COMPLETED")
+    role = body.get("role")
+    chunks = body.get("chunks")
     user_profile = None
     if not message or not session:
         return Response({"error": "message and session are required."}, status=400)
 
     print("message: ", message)
 
-
     try:
-        ai_user = Profile.objects.get(id=1)
+        ai_user = get_ai_profile()
     except Profile.DoesNotExist:
         return Response({"error": "AI profile not found."}, status=400)
 
@@ -46,11 +46,10 @@ def save_chats_view(request):
     except ChatSession.DoesNotExist:
         return Response({"error": "chat_session not found."}, status=400)
 
-
-    if role == 'bot':
+    if role == "bot":
         sender = ai_user
         receiver = user_profile
-    elif role == 'user':
+    elif role == "user":
         sender = user_profile
         receiver = ai_user
     else:
@@ -62,33 +61,27 @@ def save_chats_view(request):
         status=status,
         sender=sender,
         receiver=receiver,
-        chunks=chunks
+        chunks=chunks,
+    )
+
+    return Response(
+        {"status": "ok", "message": "Message saved successfully!"}, status=200
     )
 
 
-    return Response({
-        'status': 'ok',
-        'message': 'Message saved successfully!'
-    }, status=200)
-
-
-@api_view(['POST'])
+@api_view(["POST"])
 def create_chatsession(request):
     body = request.data
-    session = body.get('session')
-    email = body.get('email')
-    preferred_language =  body.get('preferred_language', {}).get('value')
+    session = body.get("session")
+    email = body.get("email")
+    preferred_language = body.get("preferred_language", {}).get("value")
 
     access_token = request.headers.get("X-auth-token")
     if not access_token:
         return JsonResponse({"message": "Access token missing"}, status=401)
 
     try:
-        decoded = jwt.decode(
-            access_token,
-            JWT_PUBLIC_KEY,
-            algorithms=["HS256"]
-        )
+        decoded = jwt.decode(access_token, JWT_PUBLIC_KEY, algorithms=["HS256"])
         user_id = decoded.get("data", {}).get("id")
         first_name = decoded.get("data", {}).get("name")
         user_roles = decoded.get("roles", [])
@@ -99,7 +92,6 @@ def create_chatsession(request):
     except InvalidTokenError:
         return JsonResponse({"message": "Invalid access token"}, status=401)
 
-
     if not session:
         return Response({"error": "session is required."}, status=400)
 
@@ -107,31 +99,31 @@ def create_chatsession(request):
         return Response({"error": "Email is required."}, status=400)
 
     try:
-        company = Company.objects.get(slug='shikshalokamstaging')
+        company = Company.objects.get(slug="shikshalokamstaging")
     except Exception as e:
         return Response({"error": f"{e}"}, status=400)
 
     profile, created = Profile.objects.get_or_create(
-        userid = user_id,
+        userid=user_id,
         defaults={
-            'first_name': first_name,
-            'email': email,
-            'password': 'grit@123',
-            'preferred_route': preferred_language,
-            'company': company,
-            "designation": user_roles
-        }
+            "first_name": first_name,
+            "email": email,
+            "password": "grit@123",
+            "preferred_route": preferred_language,
+            "company": company,
+            "designation": user_roles,
+        },
     )
 
-    bot_route = body.get('bot_route')
-    language = body.get('language', 'en')
+    bot_route = body.get("bot_route")
+    language = body.get("language", "en")
 
     c, created = ChatSession.objects.get_or_create(
         session=session,
         defaults={
-            'session_status': ChatStatus.IN_PROGRESS,
-            'profile': profile,
-        }
+            "session_status": ChatStatus.IN_PROGRESS,
+            "profile": profile,
+        },
     )
 
     first_bot_question = None
@@ -144,7 +136,9 @@ def create_chatsession(request):
         company_bot = CompanyBot.objects.filter(route=bot_route).first()
         if company_bot and not c.company_bot:
             c.company_bot = company_bot
-            c.save(update_fields=['company_bot'])
+            c.save(update_fields=["company_bot"])
+
+    first_bot_audio_s3_url = None
 
     if company_bot:
         step = c.current_step if c.current_step is not None else 0
@@ -152,66 +146,93 @@ def create_chatsession(request):
             company_bot=company_bot, step=step
         ).first()
 
-        if first_state and first_state.operation_type == OperationTypeChoices.NON_LLM:
+        if first_state:
             first_bot_question = first_state.bot_question
             first_operation_type = first_state.operation_type
-            if language and language != 'en' and first_bot_question:
-                try:
-                    translation_result = text_translate_provider(
-                        message_body=first_bot_question,
-                        target_language=language,
-                        source_language='en',
-                        company_bot=company_bot,
-                    )
-                    if translation_result and translation_result.get('status') == 200:
-                        translated_bot_question = translation_result.get('content')
-                except Exception as e:
-                    logger.info(f"Translation failed for first_bot_question: {e}")
+            if language and language != "en" and first_bot_question:
+                cached = (first_state.translations or {}).get(language, {})
+                translated_bot_question = cached.get("text")
+                first_bot_audio_s3_url = cached.get("audio_s3")
+                if not translated_bot_question:
+                    try:
+                        translation_result = text_translate_provider(
+                            message_body=first_bot_question,
+                            target_language=language,
+                            source_language="en",
+                            company_bot=company_bot,
+                        )
+                        if (
+                            translation_result
+                            and translation_result.get("status") == 200
+                        ):
+                            translated_bot_question = translation_result.get("content")
+                    except Exception as e:
+                        logger.info(f"Translation failed for first_bot_question: {e}")
 
-    logger.info(f"create_chatsession: session={session}, created={created}, first_bot_question={bool(first_bot_question)}")
+    logger.info(
+        f"create_chatsession: session={session}, created={created}, first_bot_question={bool(first_bot_question)}"
+    )
 
-    return Response({
-        'status': 'ok',
-        'message': 'Chatsession created!' if created else 'Chatsession already exists!',
-        'chatsession': {
-            'session': c.session,
-            'session_status': c.session_status,
-            'profile_id': profile.id
+    return Response(
+        {
+            "status": "ok",
+            "message": "Chatsession created!"
+            if created
+            else "Chatsession already exists!",
+            "chatsession": {
+                "session": c.session,
+                "session_status": c.session_status,
+                "profile_id": profile.id,
+            },
+            "first_bot_question": first_bot_question,
+            "translated_bot_question": translated_bot_question,
+            "first_bot_audio_s3_url": first_bot_audio_s3_url,
+            "current_step": current_step,
+            "operation_type": first_operation_type,
         },
-        'first_bot_question': first_bot_question,
-        'translated_bot_question': translated_bot_question,
-        'current_step': current_step,
-        'operation_type': first_operation_type,
-    }, status=200)
+        status=200,
+    )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 def save_ptm_chats(request):
     body = request.data
-    session = body.get('session')
-    status = body.get('status', 'COMPLETED')
-    flow = body.get('flow')
-    profile_id = body.get('profile_id')
-    question_id = body.get('id')
-    answer_id = body.get('answer_id')
-    sequence = body.get('sequence')
-    question = body.get('question')
-    translated_message = body.get('translated_question')
-    answer = body.get('answer')
-    language = body.get('language')
-    sent_at = body.get('sent_at')
-    audio_file = body.get('audio_url')
-    service = body.get('service')
+    session = body.get("session")
+    status = body.get("status", "COMPLETED")
+    flow = body.get("flow")
+    profile_id = body.get("profile_id")
+    question_id = body.get("id")
+    answer_id = body.get("answer_id")
+    sequence = body.get("sequence")
+    question = body.get("question")
+    translated_message = body.get("translated_question")
+    answer = body.get("answer")
+    language = body.get("language")
+    sent_at = body.get("sent_at")
+    audio_file = body.get("audio_url")
+    service = body.get("service")
     # should_transliterate = body.get('should_transliterate', False)
 
     if not question or not session or not answer:
-        return Response({"error": "question, answer and session are required."}, status=400)
+        return Response(
+            {"error": "question, answer and session are required."}, status=400
+        )
 
     res = save_question_answer_utils(
-        profile_id=profile_id, flow=flow, session=session, sequence=sequence, status=status,
-        language=language, question_id=question_id, sent_at=sent_at, question=question,
-        translated_message=translated_message, answer=answer,
-        audio_file=audio_file, answer_id=answer_id, service=service
+        profile_id=profile_id,
+        flow=flow,
+        session=session,
+        sequence=sequence,
+        status=status,
+        language=language,
+        question_id=question_id,
+        sent_at=sent_at,
+        question=question,
+        translated_message=translated_message,
+        answer=answer,
+        audio_file=audio_file,
+        answer_id=answer_id,
+        service=service,
         # should_transliterate=should_transliterate,
     )
 
@@ -226,55 +247,90 @@ def save_ptm_chats(request):
     #         language=language
     #     )
 
-    return Response({
-        "status": "ok",
-        "message": res.get("message", "Message saved successfully!")
-    }, status=200)
+    return Response(
+        {"status": "ok", "message": res.get("message", "Message saved successfully!")},
+        status=200,
+    )
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 def non_llm_chat_view(request):
     """
     Guest HTTP endpoint for NON_LLM state machine steps.
     No auth required. Saves user message, advances step, returns next bot question.
     """
-    from chatbot.celery_tasks.non_llm_tasks import translate_user_answer
 
     body = request.data
-    session = body.get('session')
-    profile_id = body.get('profile_id')
-    message = body.get('message')
-    language = body.get('language', 'en')
+    session = body.get("session")
+    profile_id = body.get("profile_id")
+    message = body.get("message")
+    language = body.get("language", "en")
+    flow_name = body.get("flow_name", None)
+    company_bot = body.get("company_bot", None)
 
-    if not session or not message:
-        return Response({"error": "session and message are required."}, status=400)
+    missing = [
+        f
+        for f, v in [
+            ("session", session),
+            ("profile_id", profile_id),
+            ("message", message),
+            ("flow_name", flow_name),
+            ("company_bot", company_bot),
+        ]
+        if not v
+    ]
+    if missing:
+        return Response({"error": f"{', '.join(missing)} are required."}, status=400)
 
     try:
-        chat_session = ChatSession.objects.select_related('company_bot').get(session=session)
+        chat_session = ChatSession.objects.select_related("company_bot").get(
+            session=session
+        )
     except ChatSession.DoesNotExist:
-        return Response({"error": "Chat session not found."}, status=404)
+        chat_session = ChatSession(
+            profile_id=profile_id,
+            current_step=1,
+            language=language,
+            company_bot_id=company_bot,
+            session_status=ChatStatus.IN_PROGRESS,
+            session_type=flow_name,
+            session=session,
+        )
+        chat_session.save()
+        # return Response({"error": "Chat session not found."}, status=404)
 
     company_bot = chat_session.company_bot
     if not company_bot:
         return Response({"error": "No bot configured for this session."}, status=400)
 
-    current_step = chat_session.current_step if chat_session.current_step is not None else 0
+    current_step = (
+        chat_session.current_step if chat_session.current_step is not None else 0
+    )
 
     try:
-        state_machine = CompanyStateMachine.objects.get(company_bot=company_bot, step=current_step)
+        state_machine = CompanyStateMachine.objects.get(
+            company_bot=company_bot, step=current_step
+        )
     except CompanyStateMachine.DoesNotExist:
-        return Response({"error": f"No state machine found for step {current_step}."}, status=400)
+        return Response(
+            {"error": f"No state machine found for step {current_step}."}, status=400
+        )
 
     if state_machine.operation_type != OperationTypeChoices.NON_LLM:
         return Response({"error": "Current step is not a NON_LLM step."}, status=400)
 
     try:
-        sender = Profile.objects.get(id=profile_id) if profile_id else chat_session.profile
+        sender_id: None | int = None
+        if profile_id:
+            sender = Profile.objects.values("id").get(id=profile_id)
+            sender_id = sender["id"]
+        else:
+            sender_id = chat_session.profile.id
     except Profile.DoesNotExist:
         sender = chat_session.profile
 
     try:
-        ai_profile = Profile.objects.get(id=1)
+        ai_profile = get_ai_profile()
     except Profile.DoesNotExist:
         return Response({"error": "AI profile not found."}, status=400)
 
@@ -282,54 +338,85 @@ def non_llm_chat_view(request):
         message=message,
         session=session,
         status=ChatStatus.COMPLETED,
-        sender=sender,
+        sender_id=sender_id,
         receiver=ai_profile,
         stage=state_machine.name,
     )
 
-    logger.info(f"non_llm_chat_view: saved CompanyChat id={company_chat.id} for session={session} step={current_step}")
+    logger.info(
+        f"non_llm_chat_view: saved CompanyChat id={company_chat.id} for session={session} step={current_step}"
+    )
 
-    translate_user_answer.delay(company_chat.id, source_language=language, target_language='en')
+    translate_user_answer.delay(
+        company_chat.id, source_language=language, target_language="en"
+    )
 
     total_steps = CompanyStateMachine.objects.filter(company_bot=company_bot).count()
     next_step = current_step + 1
     chat_session.current_step = next_step
 
-    if next_step >= total_steps:
+    if next_step > total_steps:
         chat_session.session_status = ChatStatus.COMPLETED
-        chat_session.save(update_fields=['current_step', 'session_status'])
-        logger.info(f"non_llm_chat_view: session={session} completed at step={next_step}")
-        return Response({"is_complete": True, "step": next_step, "bot_message": None, "operation_type": None}, status=200)
+        chat_session.save(update_fields=["current_step", "session_status"])
+        logger.info(
+            f"non_llm_chat_view: session={session} completed at step={next_step}"
+        )
+        return Response(
+            {
+                "is_complete": True,
+                "step": next_step,
+                "bot_message": None,
+                "operation_type": None,
+            },
+            status=200,
+        )
 
-    chat_session.save(update_fields=['current_step'])
+    chat_session.save(update_fields=["current_step"])
 
     try:
-        next_state = CompanyStateMachine.objects.get(company_bot=company_bot, step=next_step)
+        next_state = CompanyStateMachine.objects.get(
+            company_bot=company_bot, step=next_step
+        )
     except CompanyStateMachine.DoesNotExist:
-        return Response({"error": f"No state machine found for step {next_step}."}, status=400)
+        return Response(
+            {"error": f"No state machine found for step {next_step}."}, status=400
+        )
 
     bot_message = next_state.bot_question
     translated_bot_message = None
+    audio_s3_url = None
 
-    if language and language != 'en' and bot_message:
-        try:
-            translation_result = text_translate_provider(
-                message_body=bot_message,
-                target_language=language,
-                source_language='en',
-                company_bot=company_bot,
-            )
-            if translation_result and translation_result.get('status') == 200:
-                translated_bot_message = translation_result.get('content')
-        except Exception as e:
-            logger.info(f"non_llm_chat_view: translation failed for step {next_step}: {e}")
+    if language and language != "en" and bot_message:
+        cached = (next_state.translations or {}).get(language, {})
+        translated_bot_message = cached.get("text")
+        audio_s3_url = cached.get("audio_s3")
+        if not translated_bot_message:
+            try:
+                translation_result = text_translate_provider(
+                    message_body=bot_message,
+                    target_language=language,
+                    source_language="en",
+                    company_bot=company_bot,
+                )
+                if translation_result and translation_result.get("status") == 200:
+                    translated_bot_message = translation_result.get("content")
+            except Exception as e:
+                logger.info(
+                    f"non_llm_chat_view: translation failed for step {next_step}: {e}"
+                )
 
-    logger.info(f"non_llm_chat_view: session={session} advancing to step={next_step} operation_type={next_state.operation_type}")
+    logger.info(
+        f"non_llm_chat_view: session={session} advancing to step={next_step} operation_type={next_state.operation_type}"
+    )
 
-    return Response({
-        "is_complete": False,
-        "step": next_step,
-        "bot_message": bot_message,
-        "translated_bot_message": translated_bot_message,
-        "operation_type": next_state.operation_type,
-    }, status=200)
+    return Response(
+        {
+            "is_complete": False,
+            "step": next_step,
+            "bot_message": bot_message,
+            "translated_bot_message": translated_bot_message,
+            "audio_s3_url": audio_s3_url,
+            "operation_type": next_state.operation_type,
+        },
+        status=200,
+    )

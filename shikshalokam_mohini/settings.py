@@ -9,33 +9,34 @@ https://docs.djangoproject.com/en/4.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
+
 import json
 import os
 import re
 from datetime import timedelta
+
 import sentry_sdk
 from dotenv import load_dotenv
-from socket import gethostbyname
-from socket import gethostname
 
 load_dotenv()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CODE_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-LOGGING_DIR = CODE_BASE_DIR + '/logs'
+LOGGING_DIR = CODE_BASE_DIR + "/logs"
+
 
 def load_secrets():
     paths_to_try = [
-        '/home/ubuntu/shikshalokam-mohini-service/config/secrets.json',
+        "/home/ubuntu/shikshalokam-mohini-service/config/secrets.json",
         os.path.join(CODE_BASE_DIR, "config/secrets.json"),
-        os.path.join(os.getcwd(), "config/secrets.json")
+        os.path.join(os.getcwd(), "config/secrets.json"),
     ]
 
     for path in paths_to_try:
         print(f"[DEBUG] Trying secrets file at: {path}")
         try:
-            with open(path, 'r') as f:
+            with open(path, "r") as f:
                 print(f"[DEBUG] Loaded secrets from: {path}")
                 return json.load(f), path
         except FileNotFoundError:
@@ -51,38 +52,38 @@ SECRETS, SECRETS_JSON_PATH = load_secrets()
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-#7!xudzh7f@!yih9^l5d)my*$7=^j-@i#qla(k1mae5u(qs_c^'
+SECRET_KEY = "django-insecure-#7!xudzh7f@!yih9^l5d)my*$7=^j-@i#qla(k1mae5u(qs_c^"
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True if os.getenv('SETTINGS_DEBUG') == 'True' else False
+DEBUG = True if os.getenv("SETTINGS_DEBUG") == "True" else False
 
 CORS_ALLOW_HEADERS = [
-    'accept',
-    'accept-encoding',
-    'authorization',
-    'content-type',
-    'dnt',
-    'origin',
-    'user-agent',
-    'x-csrftoken',
-    'x-requested-with',
-    'access-control-allow-origin',
-    'x-auth-token'
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+    "access-control-allow-origin",
+    "x-auth-token",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
 
-CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS').split(',')
+CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS").split(",")
 
 CORS_ALLOWED_METHODS = [
-    'GET',
-    'POST',
-    'PUT',
-    'DELETE',
-    'OPTIONS'  # Include the OPTIONS method for preflight requests
+    "GET",
+    "POST",
+    "PUT",
+    "DELETE",
+    "OPTIONS",  # Include the OPTIONS method for preflight requests
 ]
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
+ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "").split(",")
 
 # ALLOWED_HOSTS.append(gethostbyname(gethostname()))
 
@@ -90,101 +91,98 @@ ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 # Application definition
 
 INSTALLED_APPS = [
-    'rangefilter',
-    'observability',
-    'daphne',
-    'chatbot',
-    'shikshalokam',
-    'jazzmin',
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'tailwind',
-    'django_extensions',
-    'rest_framework',
-    'corsheaders',
-    'django_countries',
-    'django_s3_storage',
-    'import_export',
-    'simple_history',
-    'storages',
-    'django_crontab',
+    "rangefilter",
+    "observability",
+    "daphne",
+    "chatbot",
+    "shikshalokam",
+    "jazzmin",
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+    "django.contrib.messages",
+    "django.contrib.staticfiles",
+    "tailwind",
+    "django_extensions",
+    "rest_framework",
+    "corsheaders",
+    "django_countries",
+    "django_s3_storage",
+    "import_export",
+    "simple_history",
+    "storages",
+    "django_crontab",
 ]
 
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
     ## extra middlwares
-    'chatbot.middlewares.VerifyAuthToken'
+    "chatbot.middlewares.VerifyAuthToken",
 ]
 
 if DEBUG:
-    MIDDLEWARE.extend([
-        'querycount.middleware.QueryCountMiddleware'
-    ])
+    MIDDLEWARE.extend(["querycount.middleware.QueryCountMiddleware"])
 
 
-ROOT_URLCONF = 'shikshalokam_mohini.urls'
+ROOT_URLCONF = "shikshalokam_mohini.urls"
 
 TEMPLATES = [
     {
-        'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
-        'APP_DIRS': True,
-        'OPTIONS': {
-            'context_processors': [
-                'django.template.context_processors.debug',
-                'django.template.context_processors.request',
-                'django.contrib.auth.context_processors.auth',
-                'django.contrib.messages.context_processors.messages',
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.debug",
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
             ],
         },
     },
 ]
 
 QUERYCOUNT = {
-    'DISPLAY_DUPLICATES': 5,
+    "DISPLAY_DUPLICATES": 5,
 }
 
-WSGI_APPLICATION = 'shikshalokam_mohini.wsgi.application'
+WSGI_APPLICATION = "shikshalokam_mohini.wsgi.application"
 
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DATABASE_NAME'),
-        'USER': os.getenv('DATABASE_USER'),
-        'PASSWORD': os.getenv('DATABASE_PASSWORD'),
-        'HOST': os.getenv('DATABASE_HOST'),
-        'PORT': os.getenv('DATABASE_PORT'),
-        'OPTIONS': {
-            'sslmode': os.getenv('PG_SSL_MODE'),
-            'sslrootcert': os.getenv('PG_SSL_ROOT_CERT')
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.getenv("DATABASE_NAME"),
+        "USER": os.getenv("DATABASE_USER"),
+        "PASSWORD": os.getenv("DATABASE_PASSWORD"),
+        "HOST": os.getenv("DATABASE_HOST"),
+        "PORT": os.getenv("DATABASE_PORT"),
+        "OPTIONS": {
+            "sslmode": os.getenv("PG_SSL_MODE"),
+            "sslrootcert": os.getenv("PG_SSL_ROOT_CERT"),
         },
     },
-    'source_db': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('SOURCE_DATABASE_NAME'),
-        'USER': os.getenv('SOURCE_DATABASE_USER'),
-        'PASSWORD': os.getenv('SOURCE_DATABASE_PASSWORD'),
-        'HOST': os.getenv('SOURCE_DATABASE_HOST'),
-        'PORT': os.getenv('SOURCE_DATABASE_PORT'),
-        'OPTIONS': {
-            'sslmode': os.getenv('PG_SSL_MODE'),
-            'sslrootcert': os.getenv('PG_SSL_ROOT_CERT')
+    "source_db": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.getenv("SOURCE_DATABASE_NAME"),
+        "USER": os.getenv("SOURCE_DATABASE_USER"),
+        "PASSWORD": os.getenv("SOURCE_DATABASE_PASSWORD"),
+        "HOST": os.getenv("SOURCE_DATABASE_HOST"),
+        "PORT": os.getenv("SOURCE_DATABASE_PORT"),
+        "OPTIONS": {
+            "sslmode": os.getenv("PG_SSL_MODE"),
+            "sslrootcert": os.getenv("PG_SSL_ROOT_CERT"),
         },
     },
 }
@@ -195,16 +193,16 @@ DATABASES = {
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
     {
-        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
 
@@ -212,9 +210,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/4.2/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = "en-us"
 
-TIME_ZONE = 'Asia/Kolkata'
+TIME_ZONE = "Asia/Kolkata"
 
 USE_I18N = True
 
@@ -224,35 +222,37 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
-STATIC_URL = '/static/'
-STATIC_ROOT = os.getenv('STATIC_ROOT', '/var/www/shikshalokam/static/')
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static')
-]
+STATIC_URL = "/static/"
+STATIC_ROOT = os.getenv("STATIC_ROOT", "/var/www/shikshalokam/static/")
+STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
-DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-ASGI_APPLICATION = 'shikshalokam_mohini.asgi.application'
+ASGI_APPLICATION = "shikshalokam_mohini.asgi.application"
 
-REDIS_HOST = os.environ.get('REDIS_HOST', "127.0.0.1")
-REDIS_PORT = int(os.environ.get('REDIS_PORT', 6379))
-REDIS_USE_SSL = os.environ.get('REDIS_USE_SSL', 'false').lower() == 'true'
-REDIS_SSL_CERT_REQS = os.environ.get('REDIS_SSL_CERT_REQS', 'CERT_NONE')
+REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
+REDIS_USE_SSL = os.environ.get("REDIS_USE_SSL", "false").lower() == "true"
+REDIS_SSL_CERT_REQS = os.environ.get("REDIS_SSL_CERT_REQS", "CERT_NONE")
 
 # Build Redis connection URL with SSL support
-REDIS_PROTOCOL = 'rediss' if REDIS_USE_SSL else 'redis'
+REDIS_PROTOCOL = "rediss" if REDIS_USE_SSL else "redis"
 
 if REDIS_USE_SSL:
-    REDIS_URL = f'{REDIS_PROTOCOL}://{REDIS_HOST}:{REDIS_PORT}?ssl_cert_reqs={REDIS_SSL_CERT_REQS}'
+    REDIS_URL = f"{REDIS_PROTOCOL}://{REDIS_HOST}:{REDIS_PORT}?ssl_cert_reqs={REDIS_SSL_CERT_REQS}"
 else:
-    REDIS_URL = f'{REDIS_PROTOCOL}://{REDIS_HOST}:{REDIS_PORT}'
+    REDIS_URL = f"{REDIS_PROTOCOL}://{REDIS_HOST}:{REDIS_PORT}"
+
+CHANNEL_LAYERS_BACKEND = os.getenv(
+    "CHANNEL_LAYERS_BACKEND", "channels_redis.pubsub.RedisPubSubChannelLayer"
+)
 
 CHANNEL_LAYERS = {
     "default": {
-        "BACKEND": "channels_redis.pubsub.RedisPubSubChannelLayer",
+        "BACKEND": CHANNEL_LAYERS_BACKEND,
         "CONFIG": {
             "hosts": [REDIS_URL],
             "capacity": 100000,
@@ -260,28 +260,28 @@ CHANNEL_LAYERS = {
                 "http.request": 50000,
                 "http.response!*": 50000,
                 re.compile(r"^websocket.send\!.+"): 100000,
-            }
+            },
         },
     },
 }
 
 CACHES = {
-    'default': {
-        'BACKEND': 'django_redis.cache.RedisCache',
-        'LOCATION': f'{REDIS_URL}/1',  # Use database 1 (different from channels)
-        'OPTIONS': {
-            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            'CONNECTION_POOL_KWARGS': {
-                'max_connections': 50,
-                'retry_on_timeout': True,
-                'socket_connect_timeout': 5,
-                'socket_timeout': 5,
-                'health_check_interval': 30,
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": f"{REDIS_URL}/1",  # Use database 1 (different from channels)
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "CONNECTION_POOL_KWARGS": {
+                "max_connections": 50,
+                "retry_on_timeout": True,
+                "socket_connect_timeout": 5,
+                "socket_timeout": 5,
+                "health_check_interval": 30,
             },
-            'SERIALIZER': 'django_redis.serializers.pickle.PickleSerializer',
-            'COMPRESSOR': 'django_redis.compressors.zlib.ZlibCompressor',
+            "SERIALIZER": "django_redis.serializers.pickle.PickleSerializer",
+            "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
         },
-        'TIMEOUT': 7200,
+        "TIMEOUT": 7200,
     }
 }
 
@@ -293,40 +293,43 @@ INTERNAL_IPS = [
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 50000
 SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
-CSRF_TRUSTED_ORIGINS = os.environ.get("CSRF_TRUSTED_ORIGINS", "https://*.shikshalokam.org,https://*.127.0.0.1,https://*.gritworks.ai,http://localhost:3000").split(',')
+CSRF_TRUSTED_ORIGINS = os.environ.get(
+    "CSRF_TRUSTED_ORIGINS",
+    "https://*.shikshalokam.org,https://*.127.0.0.1,https://*.gritworks.ai,http://localhost:3000",
+).split(",")
 
-STORAGE_CLOUD_PROVIDER = os.environ.get('STORAGE_CLOUD_PROVIDER', 'AWS').upper()
+STORAGE_CLOUD_PROVIDER = os.environ.get("STORAGE_CLOUD_PROVIDER", "AWS").upper()
 
 # Storage backend configurations
 STORAGE_BACKENDS = {
-    'AWS': {
-        'backend': 'storages.backends.s3boto3.S3Boto3Storage',
-        'options': {
-            'bucket_name': os.getenv('S3_BUCKET_NAME'),
-            'region_name': os.getenv('AWS_REGION'),
+    "AWS": {
+        "backend": "storages.backends.s3boto3.S3Boto3Storage",
+        "options": {
+            "bucket_name": os.getenv("S3_BUCKET_NAME"),
+            "region_name": os.getenv("AWS_REGION"),
         },
     },
-    'GCP': {
-        'backend': 'storages.backends.gcloud.GoogleCloudStorage',
-        'options': {
-            'bucket_name': os.getenv('GCS_BUCKET_NAME'),
-            'project_id': os.getenv('GCP_PROJECT_ID'),
-            'credentials': os.getenv('GCP_CREDENTIALS_PATH'),
+    "GCP": {
+        "backend": "storages.backends.gcloud.GoogleCloudStorage",
+        "options": {
+            "bucket_name": os.getenv("GCS_BUCKET_NAME"),
+            "project_id": os.getenv("GCP_PROJECT_ID"),
+            "credentials": os.getenv("GCP_CREDENTIALS_PATH"),
         },
     },
-    'AZURE': {
-        'backend': 'storages.backends.azure_storage.AzureStorage',
-        'options': {
-            'account_name': os.getenv('AZURE_ACCOUNT_NAME'),
-            'account_key': os.getenv('AZURE_ACCOUNT_KEY'),
-            'azure_container': os.getenv('AZURE_CONTAINER_NAME'),
+    "AZURE": {
+        "backend": "storages.backends.azure_storage.AzureStorage",
+        "options": {
+            "account_name": os.getenv("AZURE_ACCOUNT_NAME"),
+            "account_key": os.getenv("AZURE_ACCOUNT_KEY"),
+            "azure_container": os.getenv("AZURE_CONTAINER_NAME"),
         },
     },
-    'LOCAL': {
-        'backend': 'django.core.files.storage.FileSystemStorage',
-        'options': {
-            'location': os.path.join(BASE_DIR, 'media'),
-            'base_url': '/media/',
+    "LOCAL": {
+        "backend": "django.core.files.storage.FileSystemStorage",
+        "options": {
+            "location": os.path.join(BASE_DIR, "media"),
+            "base_url": "/media/",
         },
     },
 }
@@ -334,15 +337,15 @@ STORAGE_BACKENDS = {
 # Configure storage based on provider
 if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
     config = STORAGE_BACKENDS[STORAGE_CLOUD_PROVIDER]
-    
-    if STORAGE_CLOUD_PROVIDER == 'LOCAL':
-        MEDIA_ROOT = config['options']['location']
-        MEDIA_URL = config['options']['base_url']
-        
+
+    if STORAGE_CLOUD_PROVIDER == "LOCAL":
+        MEDIA_ROOT = config["options"]["location"]
+        MEDIA_URL = config["options"]["base_url"]
+
         STORAGES = {
             "default": {
-                "BACKEND": config['backend'],
-                "OPTIONS": config['options'],
+                "BACKEND": config["backend"],
+                "OPTIONS": config["options"],
             },
             "staticfiles": {
                 "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
@@ -351,17 +354,17 @@ if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
     else:
         # For cloud storage (AWS/GCP/Azure), still set MEDIA_ROOT and MEDIA_URL
         # These are needed for our storage handler to work correctly
-        MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
-        MEDIA_URL = '/media/'
-        
+        MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+        MEDIA_URL = "/media/"
+
         STORAGES = {
             "default": {
-                "BACKEND": config['backend'],
-                "OPTIONS": config['options'],
+                "BACKEND": config["backend"],
+                "OPTIONS": config["options"],
             },
             "staticfiles": {
-                "BACKEND": config['backend'],
-                "OPTIONS": config['options'],
+                "BACKEND": config["backend"],
+                "OPTIONS": config["options"],
             },
         }
 else:
@@ -372,24 +375,24 @@ else:
 
 
 # AWS Configurations
-AWS_ACCESS_KEY_ID = os.getenv('AWS_ACCESS_KEY_ID')
-AWS_SECRET_ACCESS_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'Your Project API',
-    'DESCRIPTION': 'Your project description',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
+    "TITLE": "Your Project API",
+    "DESCRIPTION": "Your project description",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=7),
-    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=7),
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
-    'AUTH_HEADER_TYPES': ('Bearer',),
-    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-    'TOKEN_SERIALIZER': 'chatbot.serializers.ProfileTokenObtainPairSerializer'
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=7),
+    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(days=7),
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,
+    "AUTH_HEADER_TYPES": ("Bearer",),
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_SERIALIZER": "chatbot.serializers.ProfileTokenObtainPairSerializer",
 }
 
 SESSION_COOKIE_HTTPONLY = False
@@ -397,7 +400,7 @@ SESSION_COOKIE_SAMESITE = None
 
 
 sentry_sdk.init(
-    dsn=os.getenv('SENTRY_DSN'),
+    dsn=os.getenv("SENTRY_DSN"),
     # Set traces_sample_rate to 1.0 to capture 100%
     # of transactions for performance monitoring.
     traces_sample_rate=1.0,
@@ -408,86 +411,83 @@ sentry_sdk.init(
 )
 
 JAZZMIN_SETTINGS = {
-    'site_title': 'Shikshalokam',
-    'site_header': 'Shikshalokam',
-    'site_brand': ' ',
-    'site_logo': 'fe-images/PNG/Shikshalokam/shikshalokam-logo.png',
-    'login_logo': 'fe-images/PNG/Shikshalokam/shikshalokam-logo.png',
-    'site_logo_classes': 'img-fluid',
-    'welcome_sign': '',
-    'copyright': 'Shikshalokam',
-    'show_ui_builder': False,
-    'changeform_format': 'single',
-
+    "site_title": "Shikshalokam",
+    "site_header": "Shikshalokam",
+    "site_brand": " ",
+    "site_logo": "fe-images/PNG/Shikshalokam/shikshalokam-logo.png",
+    "login_logo": "fe-images/PNG/Shikshalokam/shikshalokam-logo.png",
+    "site_logo_classes": "img-fluid",
+    "welcome_sign": "",
+    "copyright": "Shikshalokam",
+    "show_ui_builder": False,
+    "changeform_format": "single",
 }
 
-JAZZMIN_UI_TWEAKS = {
-    'navbar_fixed': True
-}
+JAZZMIN_UI_TWEAKS = {"navbar_fixed": True}
 
 REST_FRAMEWORK = {
-    'DEFAULT_FILTER_BACKENDS': ['django_filters.rest_framework.DjangoFilterBackend'],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
-    'PAGE_SIZE': 100,
-    'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.coreapi.AutoSchema'
+    "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.LimitOffsetPagination",
+    "PAGE_SIZE": 100,
+    "DEFAULT_SCHEMA_CLASS": "rest_framework.schemas.coreapi.AutoSchema",
 }
 
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'debug_file': {
-            'level': 'DEBUG',
-            'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': os.path.join(LOGGING_DIR, 'debug.log'),
-            'when': 'midnight',  # Rotate daily
-            'interval': 1,        # 1 day interval
-            'backupCount': 30,     # Keep 30 backup copies
-            'formatter': 'verbose',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "debug_file": {
+            "level": "DEBUG",
+            "class": "logging.handlers.TimedRotatingFileHandler",
+            "filename": os.path.join(LOGGING_DIR, "debug.log"),
+            "when": "midnight",  # Rotate daily
+            "interval": 1,  # 1 day interval
+            "backupCount": 30,  # Keep 30 backup copies
+            "formatter": "verbose",
             "delay": False,
         },
-        'info_file': {
-            'level': 'INFO',
-            'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': os.path.join(LOGGING_DIR, 'info.log'),
-            'when': 'midnight',  # Rotate daily
-            'interval': 1,        # 1 day interval
-            'backupCount': 30,     # Keep 30 backup copies
-            'formatter': 'verbose',
+        "info_file": {
+            "level": "INFO",
+            "class": "logging.handlers.TimedRotatingFileHandler",
+            "filename": os.path.join(LOGGING_DIR, "info.log"),
+            "when": "midnight",  # Rotate daily
+            "interval": 1,  # 1 day interval
+            "backupCount": 30,  # Keep 30 backup copies
+            "formatter": "verbose",
             "delay": False,
         },
-        'warning_file': {
-            'level': 'WARNING',
-            'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': os.path.join(LOGGING_DIR, 'error.log'),
-            'when': 'midnight',  # Rotate daily
-            'interval': 1,        # 1 day interval
-            'backupCount': 30,     # Keep 30 backup copies
-            'formatter': 'verbose',
+        "warning_file": {
+            "level": "WARNING",
+            "class": "logging.handlers.TimedRotatingFileHandler",
+            "filename": os.path.join(LOGGING_DIR, "error.log"),
+            "when": "midnight",  # Rotate daily
+            "interval": 1,  # 1 day interval
+            "backupCount": 30,  # Keep 30 backup copies
+            "formatter": "verbose",
             "delay": False,
         },
-        'error_file': {
-            'level': 'ERROR',
-            'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': os.path.join(LOGGING_DIR, 'error.log'),
-            'when': 'midnight',  # Rotate daily
-            'interval': 1,        # 1 day interval
-            'backupCount': 30,     # Keep 30 backup copies
-            'formatter': 'verbose',
+        "error_file": {
+            "level": "ERROR",
+            "class": "logging.handlers.TimedRotatingFileHandler",
+            "filename": os.path.join(LOGGING_DIR, "error.log"),
+            "when": "midnight",  # Rotate daily
+            "interval": 1,  # 1 day interval
+            "backupCount": 30,  # Keep 30 backup copies
+            "formatter": "verbose",
             "delay": False,
         },
     },
-    'loggers': {
-        'django': {
-            'handlers': ['debug_file', 'info_file', 'warning_file', 'error_file'],
-            'level': os.getenv('DEFAULT_LOG_LEVEL', 'INFO'),
-            'propagate': False,
+    "loggers": {
+        "django": {
+            "handlers": ["debug_file", "info_file", "warning_file", "error_file"],
+            "level": os.getenv("DEFAULT_LOG_LEVEL", "INFO"),
+            "propagate": False,
         },
     },
-    'formatters': {
-        'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
-            'style': '{',
+    "formatters": {
+        "verbose": {
+            "format": "{levelname} {asctime} {module} {message}",
+            "style": "{",
         },
     },
 }
@@ -497,35 +497,79 @@ ASGI_APPLICATION_SHUTDOWN_TIMEOUT = 30
 CRONJOBS = [
     # ('30 2 * * *', 'chatbot.cron_tasks.chaupal.chaupal_cront_tasks.handle_story_cleanup_cron',
     #  '>> /tmp/handle_story_cleanup_cron.log 2>&1'),
-    ('30 3 * * *', 'chatbot.cron_tasks.chaupal.chaupal_cront_tasks.handle_village_ingestion_cron',
-     '>> /tmp/handle_village_ingestion_cron.log 2>&1'),
-    ('0 22 * * *', 'chatbot.cron_tasks.translation_cron.handle_non_english_fix_cron',
-     '>> /tmp/handle_non_english_fix_cron.log 2>&1'),
-     ('0 12 * * *', 'chatbot.cron_tasks.delhi_shiksha_samvad.story_creation.create_story',
-    '>> /tmp/delhi_shiksha_samvad_story_creation.log 2>&1'),
-    ('0 12 * * *', 'chatbot.cron_tasks.shiksha_samvad.story_creation.create_story',
-    '>> /tmp/shiksha_samvad_story_creation.log 2>&1'),
-    ('0 */2 * * *', 'chatbot.cron_tasks.telangana_ptm_pilot.school_classification.main',
-    '>> /tmp/telangana_ptm_pilot_school_classification.log 2>&1'),
-    ('15 */2 * * *', 'chatbot.cron_tasks.telangana_ptm_pilot.metrics_extraction.extract_metrics',
-    '>> /tmp/telangana_ptm_pilot_metrics_extraction.log 2>&1'),
-    ('0 12 * * *', 'chatbot.cron_tasks.community_FGD.story_creation.create_story',
-    '>> /tmp/community_FGD_story_creation.log 2>&1'),
-    ('0 12 * * *', 'chatbot.cron_tasks.odisha_youth.story_creation.create_story',
-    '>> /tmp/odisha_youth_story_creation.log 2>&1'),
-    ('0 12 * * *', 'chatbot.cron_tasks.pppi_set_1.story_creation.create_story',
-    '>> /tmp/pppi_set_1_story_creation.log 2>&1'),
-
-    ('0 12 * * *', 'chatbot.cron_tasks.pppi_set_2.story_creation.create_story',
-    '>> /tmp/pppi_set_2_story_creation.log 2>&1'),
-    ('0 */2 * * *', 'chatbot.cron_tasks.stakeholder_fgd.district_classification.classify_districts',
-    '>> /tmp/stakeholder_fgd_district_classification.log 2>&1'),
-    ('0 */2 * * *', 'chatbot.cron_tasks.student_fgd.district_classification.classify_districts',
-    '>> /tmp/student_fgd_district_classification.log 2>&1'),
-    ('0 12 * * *', 'chatbot.cron_tasks.stakeholder_fgd.story_creation.create_story',
-    '>> /tmp/stakeholder_fgd_story_creation.log 2>&1'),
-    ('0 12 * * *', 'chatbot.cron_tasks.student_fgd.story_creation.create_story',
-    '>> /tmp/student_fgd_story_creation.log 2>&1'),
-    ('0 12 * * *', 'chatbot.cron_tasks.xylem.story_creation.create_story',
-    '>> /tmp/xylem_story_creation.log 2>&1')
+    (
+        "30 3 * * *",
+        "chatbot.cron_tasks.chaupal.chaupal_cront_tasks.handle_village_ingestion_cron",
+        ">> /tmp/handle_village_ingestion_cron.log 2>&1",
+    ),
+    (
+        "0 22 * * *",
+        "chatbot.cron_tasks.translation_cron.handle_non_english_fix_cron",
+        ">> /tmp/handle_non_english_fix_cron.log 2>&1",
+    ),
+    (
+        "0 12 * * *",
+        "chatbot.cron_tasks.delhi_shiksha_samvad.story_creation.create_story",
+        ">> /tmp/delhi_shiksha_samvad_story_creation.log 2>&1",
+    ),
+    (
+        "0 12 * * *",
+        "chatbot.cron_tasks.shiksha_samvad.story_creation.create_story",
+        ">> /tmp/shiksha_samvad_story_creation.log 2>&1",
+    ),
+    (
+        "0 */2 * * *",
+        "chatbot.cron_tasks.telangana_ptm_pilot.school_classification.main",
+        ">> /tmp/telangana_ptm_pilot_school_classification.log 2>&1",
+    ),
+    (
+        "15 */2 * * *",
+        "chatbot.cron_tasks.telangana_ptm_pilot.metrics_extraction.extract_metrics",
+        ">> /tmp/telangana_ptm_pilot_metrics_extraction.log 2>&1",
+    ),
+    (
+        "0 12 * * *",
+        "chatbot.cron_tasks.community_FGD.story_creation.create_story",
+        ">> /tmp/community_FGD_story_creation.log 2>&1",
+    ),
+    (
+        "0 12 * * *",
+        "chatbot.cron_tasks.odisha_youth.story_creation.create_story",
+        ">> /tmp/odisha_youth_story_creation.log 2>&1",
+    ),
+    (
+        "0 12 * * *",
+        "chatbot.cron_tasks.pppi_set_1.story_creation.create_story",
+        ">> /tmp/pppi_set_1_story_creation.log 2>&1",
+    ),
+    (
+        "0 12 * * *",
+        "chatbot.cron_tasks.pppi_set_2.story_creation.create_story",
+        ">> /tmp/pppi_set_2_story_creation.log 2>&1",
+    ),
+    (
+        "0 */2 * * *",
+        "chatbot.cron_tasks.stakeholder_fgd.district_classification.classify_districts",
+        ">> /tmp/stakeholder_fgd_district_classification.log 2>&1",
+    ),
+    (
+        "0 */2 * * *",
+        "chatbot.cron_tasks.student_fgd.district_classification.classify_districts",
+        ">> /tmp/student_fgd_district_classification.log 2>&1",
+    ),
+    (
+        "0 12 * * *",
+        "chatbot.cron_tasks.stakeholder_fgd.story_creation.create_story",
+        ">> /tmp/stakeholder_fgd_story_creation.log 2>&1",
+    ),
+    (
+        "0 12 * * *",
+        "chatbot.cron_tasks.student_fgd.story_creation.create_story",
+        ">> /tmp/student_fgd_story_creation.log 2>&1",
+    ),
+    (
+        "0 12 * * *",
+        "chatbot.cron_tasks.xylem.story_creation.create_story",
+        ">> /tmp/xylem_story_creation.log 2>&1",
+    ),
 ]

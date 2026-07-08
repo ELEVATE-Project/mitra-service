@@ -1,37 +1,176 @@
+import base64
 import logging
+import os
 
+import boto3
+
+from chatbot.models import ChatSession, CompanyBot, CompanyChat, Voice, VoiceType
+from chatbot.models.company_models import CompanyStateMachine
+from chatbot.utils.audio_provider_utils import (
+    text_speech_provider,
+    text_translate_provider,
+)
 from shikshalokam_mohini.celery_config import app
-from chatbot.models import CompanyChat, ChatSession
-from chatbot.utils.audio_provider_utils import text_translate_provider
 
-logger = logging.getLogger('django')
+logger = logging.getLogger("django")
+
+S3_MEDIA_URL = os.getenv("S3_MEDIA_URL", "")
+S3_BUCKET_NAME = os.getenv("S3_BUCKET_NAME", "")
+AWS_REGION = os.getenv("AWS_REGION", "")
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+
+
+def _upload_audio_to_s3(audio_bytes, company_bot_id, state_machine_id, audio_format):
+    """Upload audio bytes to S3, return full URL or None."""
+    try:
+        key = f"state_machine_audio/{company_bot_id}/{state_machine_id}.{audio_format}"
+        s3 = boto3.client(
+            "s3",
+            region_name=AWS_REGION,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        )
+        s3.put_object(
+            Bucket=S3_BUCKET_NAME,
+            Key=key,
+            Body=audio_bytes,
+            ContentType=f"audio/{audio_format}",
+        )
+        return f"{S3_MEDIA_URL}{key}"
+    except Exception as e:
+        logger.info(
+            f"generate_translations: S3 upload failed for sm={state_machine_id} lang: {e}"
+        )
+        return None
 
 
 @app.task
-def translate_user_answer(company_chat_id, source_language='en', target_language='en'):
+def generate_state_machine_translations(company_bot_id, language=None):
+    """
+    Generate cached translations + TTS audio for all CompanyStateMachines on a bot.
+    If language is provided, only process that language (used for new-language auto-trigger).
+    """
+    try:
+        company_bot = CompanyBot.objects.get(id=company_bot_id)
+    except CompanyBot.DoesNotExist:
+        logger.info(f"generate_translations: CompanyBot id={company_bot_id} not found")
+        return
+
+    ttt_voices = Voice.objects.filter(
+        company_bot=company_bot, type=VoiceType.TextToText
+    )
+    tts_voices = Voice.objects.filter(
+        company_bot=company_bot, type=VoiceType.TextToSpeech
+    )
+
+    if language:
+        languages = [language]
+    else:
+        languages = list(ttt_voices.values_list("language", flat=True))
+
+    tts_voice_map = {v.language: v for v in tts_voices}
+
+    state_machines = CompanyStateMachine.objects.filter(company_bot=company_bot)
+
+    for sm in state_machines:
+        if not sm.bot_question:
+            continue
+
+        cached = dict(sm.translations or {})
+
+        for lang in languages:
+            if lang == "en":
+                continue
+            lang_data = dict(cached.get(lang, {}))
+
+            # Text translation
+            try:
+                result = text_translate_provider(
+                    message_body=sm.bot_question,
+                    target_language=lang,
+                    source_language="en",
+                    company_bot=company_bot,
+                )
+                if result and result.get("status") == 200:
+                    lang_data["text"] = result["content"]
+            except Exception as e:
+                logger.info(
+                    f"generate_translations: text translation failed sm={sm.id} lang={lang}: {e}"
+                )
+
+            # TTS
+            tts_voice = tts_voice_map.get(lang)
+            try:
+                tts_text = lang_data.get("text") or sm.bot_question
+                tts_result = text_speech_provider(
+                    company_bot=company_bot,
+                    text=tts_text,
+                    source_language=lang,
+                )
+                if tts_result and tts_result.get("status") == 200:
+                    audio_b64 = tts_result["content"]
+                    # Strip data URI prefix if present
+                    if ";base64," in audio_b64:
+                        audio_b64 = audio_b64.split(";base64,", 1)[1]
+                    audio_bytes = base64.b64decode(audio_b64)
+                    audio_format = "wav"
+                    if tts_voice and tts_voice.other_params:
+                        audio_format = tts_voice.other_params.get(
+                            "output_audio_codec", "wav"
+                        )
+                    url = _upload_audio_to_s3(
+                        audio_bytes, company_bot_id, sm.id, audio_format
+                    )
+                    if url:
+                        lang_data["audio_s3"] = url
+            except Exception as e:
+                logger.info(
+                    f"generate_translations: TTS failed sm={sm.id} lang={lang}: {e}"
+                )
+
+            if lang_data:
+                cached[lang] = lang_data
+
+        CompanyStateMachine.objects.filter(pk=sm.pk).update(translations=cached)
+        logger.info(f"generate_translations: updated sm={sm.id} languages={languages}")
+
+
+@app.task
+def translate_user_answer(company_chat_id, source_language="en", target_language="en"):
     """
     Async task: translate a user's NON_LLM answer from vernacular to English.
     Updates CompanyChat.translated_message with the result.
     """
     if source_language == target_language:
-        logger.info(f"translate_user_answer: source==target ({source_language}), skipping for chat_id={company_chat_id}")
+        logger.info(
+            f"translate_user_answer: source==target ({source_language}), skipping for chat_id={company_chat_id}"
+        )
         return
 
     try:
         company_chat = CompanyChat.objects.get(id=company_chat_id)
     except CompanyChat.DoesNotExist:
-        logger.info(f"translate_user_answer: CompanyChat id={company_chat_id} not found")
+        logger.info(
+            f"translate_user_answer: CompanyChat id={company_chat_id} not found"
+        )
         return
 
     try:
-        chat_session = ChatSession.objects.select_related('company_bot').get(session=company_chat.session)
+        chat_session = ChatSession.objects.select_related("company_bot").get(
+            session=company_chat.session
+        )
         company_bot = chat_session.company_bot
     except ChatSession.DoesNotExist:
-        logger.info(f"translate_user_answer: ChatSession not found for session={company_chat.session}")
+        logger.info(
+            f"translate_user_answer: ChatSession not found for session={company_chat.session}"
+        )
         return
 
     if not company_bot:
-        logger.info(f"translate_user_answer: no company_bot on session={company_chat.session}")
+        logger.info(
+            f"translate_user_answer: no company_bot on session={company_chat.session}"
+        )
         return
 
     try:
@@ -41,11 +180,17 @@ def translate_user_answer(company_chat_id, source_language='en', target_language
             source_language=source_language,
             company_bot=company_bot,
         )
-        if result and result.get('status') == 200:
-            company_chat.translated_message = result.get('content')
-            company_chat.save(update_fields=['translated_message'])
-            logger.info(f"translate_user_answer: translated chat_id={company_chat_id} from {source_language} to {target_language}")
+        if result and result.get("status") == 200:
+            company_chat.translated_message = result.get("content")
+            company_chat.save(update_fields=["translated_message"])
+            logger.info(
+                f"translate_user_answer: translated chat_id={company_chat_id} from {source_language} to {target_language}"
+            )
         else:
-            logger.info(f"translate_user_answer: translation failed for chat_id={company_chat_id}: {result}")
+            logger.info(
+                f"translate_user_answer: translation failed for chat_id={company_chat_id}: {result}"
+            )
     except Exception as e:
-        logger.info(f"translate_user_answer: exception for chat_id={company_chat_id}: {e}")
+        logger.info(
+            f"translate_user_answer: exception for chat_id={company_chat_id}: {e}"
+        )
