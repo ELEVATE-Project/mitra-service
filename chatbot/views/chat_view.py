@@ -330,8 +330,9 @@ def non_llm_chat_view(request):
     )
 
     next_step = current_step + 1
+    next_to_next_step = current_step + 2
     state_machines = CompanyStateMachine.objects.filter(
-        company_bot_id=company_bot_id, step__in=(current_step, next_step)
+        company_bot_id=company_bot_id, step__in=(current_step, next_step, next_to_next_step)
     ).values("step", "name", "operation_type", "bot_question", "translations")
 
     states = {}
@@ -381,23 +382,24 @@ def non_llm_chat_view(request):
 
     chat_session.current_step = next_step
     next_state = states.get(next_step)
+    next_to_next_state = states.get(next_to_next_step)
 
-    if not next_state:
+    if not next_to_next_state:
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=["current_step", "session_status"])
         logger.info(
             f"non_llm_chat_view: session={session} completed at step={next_step}"
         )
-        return Response(
-            {
-                "is_complete": True,
-                "step": next_step,
-                "bot_message": None,
-                "operation_type": None,
-                "is_new_session": is_new_session,
-            },
-            status=200,
-        )
+        # return Response(
+        #     {
+        #         "is_complete": True,
+        #         "step": next_step,
+        #         "bot_message": None,
+        #         "operation_type": None,
+        #         "is_new_session": is_new_session,
+        #     },
+        #     status=200,
+        # )
 
     chat_session.save(update_fields=["current_step"])
 
@@ -430,7 +432,7 @@ def non_llm_chat_view(request):
 
     return Response(
         {
-            "is_complete": False,
+            "is_complete": False if next_to_next_state is not None else True,
             "step": next_step,
             "bot_message": bot_message,
             "translated_bot_message": translated_bot_message,
