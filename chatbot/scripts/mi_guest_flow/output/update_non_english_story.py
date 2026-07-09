@@ -14,7 +14,7 @@ OUTPUT_FILE = "guest_mi_story_fix_report.txt"
 
 # ---------- LANGUAGE DETECTION ----------
 ENGLISH_LETTER_REGEX = re.compile(r'[A-Za-z]')
-ANY_LETTER_REGEX = re.compile(r'[A-Za-z\u00C0-\u024F\u0900-\u097F]')
+ANY_LETTER_REGEX = re.compile(r'[A-Za-z\u00C0-\u024F\u0900-\u097F\u0C80-\u0CFF]')
 
 
 def is_non_english_text(text):
@@ -237,7 +237,7 @@ def fix_guest_mi_story_stories():
                 source_language=source_language,
                 is_sentence=" " in story.location
             )
-            story.location = get_transliteration_output(result)
+            story.location = get_transliteration_output(result) or story.location
             updated = True
 
         # ---------- TRANSLITERATE PERSONAL INFO IN OTHER_PARAMS ----------
@@ -252,7 +252,7 @@ def fix_guest_mi_story_stories():
                     source_language=source_language,
                     is_sentence=" " in val
                 )
-                other_params[field] = get_transliteration_output(result)
+                other_params[field] = get_transliteration_output(result) or val
                 updated = True
 
         # ---------- TRANSLATE DURATION ----------
