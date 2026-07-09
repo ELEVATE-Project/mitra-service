@@ -12,11 +12,14 @@ logger = logging.getLogger('django')
 
 
 # Purpose: Transliterates a word or sentence from source_language script to target_language script
-#          using the AI4Bharat Bhashani pipeline API. Returns up to 7 suggestions.
+#          using the AI4Bharat Bhashani pipeline API. Only the first of up to 7 requested
+#          suggestions is returned.
 # Inputs:  source_language — ISO language code (e.g. 'en'); target_language — target script code;
 #          message_body — text to transliterate; is_sentence — False for single words (default)
-# Output:  {"status": 200, "content": [list of suggestions]} on success;
-#          {"status": 500, "content": original message_body} on API error (never raises)
+# Output:  {"status": 200, "content": <transliterated string>} on success;
+#          {"status": 200, "content": original message_body} on non-200 response or unexpected
+#          payload shape (silent fallback, not an error signal);
+#          {"status": 500, "content": original message_body} only if an exception is raised
 # Side effects: External HTTP call to AI4Bharat Bhashani API
 def call_ai4bharat_transliterate_api(source_language, target_language, message_body, is_sentence=False):
     logger.info(f"Trying to transliterate {message_body}.")
