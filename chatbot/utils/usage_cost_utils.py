@@ -8,6 +8,7 @@
 import logging
 from decimal import Decimal
 
+from django.db import transaction
 from django.db.models import F
 
 from chatbot.models import ChatSession, CompanyBot, Profile, UsageCostLog
@@ -55,25 +56,30 @@ def record_usage_cost(
         # Convert via str to avoid float-to-Decimal precision loss.
         total_cost = Decimal(str(total_cost or 0))
 
-        usage_log = UsageCostLog.objects.create(
-            session=chat_session,
-            profile=profile,
-            company_bot=company_bot,
-            call_type=call_type,
-            provider=provider,
-            model_name=model_name,
-            input_units=input_units or 0,
-            output_units=output_units or 0,
-            input_cost=Decimal(str(input_cost or 0)),
-            output_cost=Decimal(str(output_cost or 0)),
-            total_cost=total_cost,
-            other_params=other_params,
-        )
+        # Atomic so a failure in the total_cost increment rolls back the log row too -
+        # otherwise a partial failure leaves an audit row with no matching increment,
+        # desyncing ChatSession.total_cost from the UsageCostLog rows the dashboard also
+        # aggregates from directly.
+        with transaction.atomic():
+            usage_log = UsageCostLog.objects.create(
+                session=chat_session,
+                profile=profile,
+                company_bot=company_bot,
+                call_type=call_type,
+                provider=provider,
+                model_name=model_name,
+                input_units=input_units or 0,
+                output_units=output_units or 0,
+                input_cost=Decimal(str(input_cost or 0)),
+                output_cost=Decimal(str(output_cost or 0)),
+                total_cost=total_cost,
+                other_params=other_params,
+            )
 
-        # F() expression performs the increment at DB level, avoiding race
-        # conditions when multiple Celery workers record cost for the same session.
-        if total_cost:
-            ChatSession.objects.filter(pk=chat_session.pk).update(total_cost=F('total_cost') + total_cost)
+            # F() expression performs the increment at DB level, avoiding race
+            # conditions when multiple Celery workers record cost for the same session.
+            if total_cost:
+                ChatSession.objects.filter(pk=chat_session.pk).update(total_cost=F('total_cost') + total_cost)
 
         return usage_log
     except Exception as e:
