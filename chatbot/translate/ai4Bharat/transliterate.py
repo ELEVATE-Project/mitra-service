@@ -21,7 +21,7 @@ logger = logging.getLogger('django')
 #          payload shape (silent fallback, not an error signal);
 #          {"status": 500, "content": original message_body} only if an exception is raised
 # Side effects: External HTTP call to AI4Bharat Bhashani API
-def call_ai4bharat_transliterate_api(source_language, target_language, message_body, is_sentence=False):
+def call_ai4bharat_transliterate_api(source_language, target_language, message_body, is_sentence=False, timeout=30):
     logger.info(f"Trying to transliterate {message_body}.")
     api_url = ai4bharat_base_url
     service_id = None
