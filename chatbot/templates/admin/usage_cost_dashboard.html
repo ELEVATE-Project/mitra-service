@@ -297,10 +297,16 @@
     </div>
 </div>
 
+{# json_script HTML-escapes <, >, & so a value containing </script> can't break out of the inline script block below. #}
+{{ daily_trend_labels|json_script:"daily-trend-labels" }}
+{{ daily_trend_values|json_script:"daily-trend-values" }}
+{{ session_cost_chart_labels|json_script:"session-cost-chart-labels" }}
+{{ session_cost_chart_values|json_script:"session-cost-chart-values" }}
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    const dailyLabels = {{ daily_trend_labels|safe }};
-    const dailyValues = {{ daily_trend_values|safe }};
+    const dailyLabels = JSON.parse(document.getElementById('daily-trend-labels').textContent);
+    const dailyValues = JSON.parse(document.getElementById('daily-trend-values').textContent);
     const callTypeLabels = [{% for row in by_call_type %}"{{ row.call_type }}",{% endfor %}];
     const callTypeValues = [{% for row in by_call_type %}{{ row.total|default:0 }},{% endfor %}];
     const providerLabels = [{% for row in by_provider %}"{{ row.provider|default:"unknown" }}",{% endfor %}];
@@ -374,10 +380,10 @@
         const sessionCostChart = new Chart(document.getElementById('sessionCostChart'), {
             type: 'bar',
             data: {
-                labels: {{ session_cost_chart_labels|safe }},
+                labels: JSON.parse(document.getElementById('session-cost-chart-labels').textContent),
                 datasets: [{
                     label: 'Total Cost ($)',
-                    data: {{ session_cost_chart_values|safe }},
+                    data: JSON.parse(document.getElementById('session-cost-chart-values').textContent),
                     backgroundColor: 'rgba(230, 115, 0, 0.75)',
                     borderColor: 'rgba(200, 80, 0, 1)',
                     borderWidth: 1,
