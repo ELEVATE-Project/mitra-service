@@ -231,7 +231,7 @@
         <select id="bot-select" onchange="applyBotFilter(this.value)">
             <option value="">All Bots</option>
             {% for bot in bots %}
-            <option value="{{ bot.id }}" {% if selected_bot == bot.id|stringformat:"s" %}selected{% endif %}>{{ bot.name }}</option>
+            <option value="{{ bot.id }}" {% if selected_bot == bot.id %}selected{% endif %}>{{ bot.name }}</option>
             {% endfor %}
         </select>
     </div>
