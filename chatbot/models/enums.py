@@ -72,6 +72,8 @@ class LLMModel(models.TextChoices):
     LLAMA_3_1_8B_INSTRUCT = 'meta.llama3-1-8b-instruct-v1:0', _('LLAMA_3_1_8B_INSTRUCT')
     LLAMA_3_3_70B_INSTRUCT = 'us.meta.llama3-3-70b-instruct-v1:0', _('LLAMA_3_3_70B_INSTRUCT')
     LLAMA_3_3_8B_INSTRUCT = 'us.meta.llama3-3-8b-instruct-v1:0', _('LLAMA_3_3_8B_INSTRUCT')
+    LLAMA_3_70B_INSTRUCT_COMMON = 'meta.llama3-70b-instruct-v1:0', _('LLAMA_3_70B_INSTRUCT_COMMON')
+    LLAMA_3_70B_INSTRUCT_AP = 'ap.meta.llama3-70b-instruct-v1:0', _('LLAMA_3_70B_INSTRUCT_AP')
     MIXTRAL_8X70B_32768 = 'mixtral-8x7b-32768', _('MIXTRAL_8X70B_32768')
     GPT4_O = 'gpt-4o', _('GPT4_O')
     GPT4_O_MINI = 'gpt-4o-mini', _('GPT4_O_MINI')

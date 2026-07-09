@@ -2,6 +2,7 @@ from botocore.client import Config as BotoConfig
 from botocore.exceptions import ClientError
 from chatbot.models import LLMModel
 from chatbot.models.enums import LLMProvider
+from chatbot.utils.env_parser import load_env_to_dict
 from chatbot.utils.llm import LLM
 from typing import Optional, List, Dict
 from django.core.validators import URLValidator
@@ -251,6 +252,10 @@ def handle_bedrock_model(
         connect_timeout = getattr(company_bot, 'connect_timeout', 5.0)
         read_timeout = getattr(company_bot, 'read_timeout', 10.0)
         chat_history_limit = getattr(company_bot, 'chat_history_limit', 1000)
+
+    env_dict = load_env_to_dict(company_bot.provider_keys)
+    if env_dict.get("AWS_REGION"):
+        region_name = env_dict.get("AWS_REGION")
 
     boto_config = BotoConfig(
         connect_timeout=connect_timeout,

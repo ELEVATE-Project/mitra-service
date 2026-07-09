@@ -66,7 +66,7 @@ def call_ai4bharat_transliterate_api(source_language, target_language, message_b
     }
 
     try:
-        response = requests.post(api_url, json=payload, headers=headers, timeout=10)
+        response = requests.post(api_url, json=payload, headers=headers, timeout=timeout)
         print("Response: ", response)
         print("Res text: ", response.json())
         logger.info(f"Response from AI4Bharat Transliteration: {response}")
