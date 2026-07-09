@@ -303,7 +303,9 @@
 {{ session_cost_chart_labels|json_script:"session-cost-chart-labels" }}
 {{ session_cost_chart_values|json_script:"session-cost-chart-values" }}
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"
+        integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ"
+        crossorigin="anonymous"></script>
 <script>
     const dailyLabels = JSON.parse(document.getElementById('daily-trend-labels').textContent);
     const dailyValues = JSON.parse(document.getElementById('daily-trend-values').textContent);
