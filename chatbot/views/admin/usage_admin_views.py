@@ -15,6 +15,18 @@ from chatbot.models import ChatSession, CompanyBot, UsageCostLog
 SESSION_COST_CHART_PAGE_SIZE = 100
 
 
+# Purpose: Safely parses the optional 'bot' query param into an int PK.
+# Output:  int, or None if absent/non-numeric (falls back to "all bots" instead of a 500).
+def _get_bot_id_param(request):
+    bot_id = request.GET.get('bot')
+    if not bot_id:
+        return None
+    try:
+        return int(bot_id)
+    except ValueError:
+        return None
+
+
 # Purpose: Builds context for the "Sessions and Cost" table.
 # Inputs:  request — GET params: session_view (top1|top10|all), q (search), page.
 #          bot_id  — Optional CompanyBot PK; when set, only sessions for that bot are shown.
@@ -76,7 +88,7 @@ def _get_session_cost_chart_data(request, page_param='page', bot_id=None):
 # Inputs:  request — GET params: page, bot.
 # Output:  JSON: {labels, values, page, num_pages}.
 def usage_cost_session_chart(request):
-    bot_id = request.GET.get('bot') or None
+    bot_id = _get_bot_id_param(request)
     return JsonResponse(_get_session_cost_chart_data(request, bot_id=bot_id))
 
 
@@ -86,7 +98,7 @@ def usage_cost_session_chart(request):
 # Inputs:  request — GET params: session_view, q, page, bot.
 # Output:  Rendered HTML fragment (usage_cost_sessions_table.html).
 def usage_cost_sessions_partial(request):
-    bot_id = request.GET.get('bot') or None
+    bot_id = _get_bot_id_param(request)
     context = {
         **admin.site.each_context(request),
         **_get_sessions_context(request, bot_id=bot_id),
@@ -103,7 +115,7 @@ def usage_cost_sessions_partial(request):
 # Side effects: None (read-only).
 # Note:         admin.site.each_context injects jazzmin sidebar/nav/permission context.
 def usage_cost_dashboard(request):
-    bot_id = request.GET.get('bot') or None
+    bot_id = _get_bot_id_param(request)
     since = timezone.now() - datetime.timedelta(days=30)
 
     usage_qs = UsageCostLog.objects.filter(company_bot_id=bot_id) if bot_id else UsageCostLog.objects
