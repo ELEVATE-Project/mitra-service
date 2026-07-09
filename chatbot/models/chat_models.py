@@ -34,16 +34,15 @@ class ChatSession(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-        # total_cost is incremented out-of-band via F() in record_usage_cost while a
-        # ChatSession instance may be held in memory for the rest of the turn; refresh
-        # it here so a later full save() of that stale instance doesn't clobber the increment.
+        # total_cost is mutated exclusively via F() in record_usage_cost, out-of-band
+        # from any in-memory ChatSession instance. Exclude it from generic saves so an
+        # UPDATE never touches that column - nothing to clobber, no refresh needed.
         update_fields = kwargs.get('update_fields')
-        if self.pk and (update_fields is None or 'total_cost' not in update_fields):
-            current_total_cost = ChatSession.objects.filter(pk=self.pk).values_list(
-                'total_cost', flat=True
-            ).first()
-            if current_total_cost is not None:
-                self.total_cost = current_total_cost
+        if self.pk and update_fields is None:
+            kwargs['update_fields'] = [
+                f.name for f in self._meta.concrete_fields
+                if f.name not in (self._meta.pk.attname, 'total_cost')
+            ]
         super().save(*args, **kwargs)
 
     def save_title(self, language='en'):
