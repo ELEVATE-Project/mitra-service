@@ -8,6 +8,7 @@ ENV PYTHONUNBUFFERED=1 \
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     postgresql-client \
+    pgbouncer \
     gcc \
     g++ \
     libpq-dev \
@@ -16,20 +17,27 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
-WORKDIR /app
+# Install uv and verify the binary actually works
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:${PATH}"
+RUN uv --version
 
-RUN mkdir -p /app/backend
+WORKDIR /app/backend
 
-# Copy requirements file
-COPY requirement.txt /app/backend
-
-# Install Python dependencies with increased timeout and retries
-RUN cd /app/backend && pip install --no-cache-dir --upgrade pip --default-timeout=100 && \
-    pip install --no-cache-dir --default-timeout=100 --retries 5 -r requirement.txt
-
-# Copy project files
+# Copy project files (pyproject.toml has no [tool.uv] package=false, so `uv sync`
+# self-installs the project and needs README.md + source present, not just the manifests)
 COPY . /app/backend
+
+# Create the venv and put it on PATH — equivalent of `source .venv/bin/activate`
+# for every later RUN/CMD, since each RUN is its own shell and a literal `source`
+# would not persist across layers.
+RUN uv venv .venv
+ENV VIRTUAL_ENV="/app/backend/.venv" \
+    PATH="/app/backend/.venv/bin:${PATH}"
+
+RUN uv sync --frozen
+
+RUN chmod +x /app/backend/docker/entrypoint.sh
 
 # Create logs directory
 RUN mkdir -p /app/backend/logs
@@ -41,6 +49,9 @@ RUN mkdir -p /var/www/shikshalokam/static
 EXPOSE 9000
 
 WORKDIR /app/backend
+
+# Starts a local PgBouncer, points DATABASE_HOST/PORT at it, then execs the real command
+ENTRYPOINT ["docker/entrypoint.sh"]
 
 # Default command - can be overridden in docker-compose or run command
 # For production, you might want to use daphne or gunicorn

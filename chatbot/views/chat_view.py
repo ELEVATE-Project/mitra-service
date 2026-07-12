@@ -318,7 +318,9 @@ def non_llm_chat_view(request):
         )
         chat_session.save()
         is_new_session = True
-        # return Response({"error": "Chat session not found."}, status=404)
+
+    if chat_session.session_status == ChatStatus.COMPLETED:
+        return Response({ "error": "Chat session is already marked as completed" }, status=400)
 
     company_bot_id = chat_session.company_bot_id
 
@@ -363,6 +365,15 @@ def non_llm_chat_view(request):
     except Profile.DoesNotExist:
         return Response({"error": "AI profile not found."}, status=400)
 
+    chat_session.current_step = next_step
+    next_state = states.get(next_step)
+    next_to_next_state = states.get(next_to_next_step)
+
+    if not next_state:
+        return Response({
+            "error": "Chat session is already marked as completed"
+        }, status=400)
+
     company_chat = CompanyChat.objects.create(
         message=message,
         session=session,
@@ -380,26 +391,12 @@ def non_llm_chat_view(request):
         company_chat.id, source_language=language, target_language="en"
     )
 
-    chat_session.current_step = next_step
-    next_state = states.get(next_step)
-    next_to_next_state = states.get(next_to_next_step)
-
     if not next_to_next_state:
         chat_session.session_status = ChatStatus.COMPLETED
         chat_session.save(update_fields=["current_step", "session_status"])
         logger.info(
             f"non_llm_chat_view: session={session} completed at step={next_step}"
         )
-        # return Response(
-        #     {
-        #         "is_complete": True,
-        #         "step": next_step,
-        #         "bot_message": None,
-        #         "operation_type": None,
-        #         "is_new_session": is_new_session,
-        #     },
-        #     status=200,
-        # )
 
     chat_session.save(update_fields=["current_step"])
 

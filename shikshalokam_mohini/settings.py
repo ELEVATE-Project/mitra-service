@@ -163,15 +163,15 @@ WSGI_APPLICATION = "shikshalokam_mohini.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("DATABASE_NAME"),
-        "USER": os.getenv("DATABASE_USER"),
-        "PASSWORD": os.getenv("DATABASE_PASSWORD"),
-        "HOST": os.getenv("DATABASE_HOST"),
-        "PORT": os.getenv("DATABASE_PORT"),
-        "OPTIONS": {
-            "sslmode": os.getenv("PG_SSL_MODE"),
-            "sslrootcert": os.getenv("PG_SSL_ROOT_CERT"),
-        },
+        "NAME": os.getenv("PGBOUNCER_DATABASE_NAME"),
+        "USER": os.getenv("PGBOUNCER_DATABASE_USER"),
+        "PASSWORD": os.getenv("PGBOUNCER_DATABASE_PASSWORD"),
+        "HOST": os.getenv("PGBOUNCER_DATABASE_HOST"),
+        "PORT": os.getenv("PGBOUNCER_DATABASE_PORT"),
+        # "OPTIONS": {
+        #     "sslmode": os.getenv("PG_SSL_MODE"),
+        #     "sslrootcert": os.getenv("PG_SSL_ROOT_CERT"),
+        # },
     },
     "source_db": {
         "ENGINE": "django.db.backends.postgresql",
