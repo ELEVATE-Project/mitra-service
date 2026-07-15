@@ -15,12 +15,10 @@ Description=Mitra ASGI server (uvicorn)
 # Channels needs Redis as its channel layer to route WebSocket messages
 # between uvicorn's multiple worker processes (they don't share memory).
 #
-# NOTE / ASSUMPTION: this assumes Redis is itself managed as a systemd unit
-# named "redis.service" on this host. If Redis actually runs elsewhere
-# (a Docker container, a managed service, a different unit name), update
-# this line to match - otherwise this ordering constraint is silently
-# ignored rather than enforced.
-After=network.target redis.service
+# Confirmed on the dev host: Redis runs as the standard Debian/Ubuntu
+# package unit "redis-server.service" (enabled, listening on 127.0.0.1:6379)
+# - not "redis.service". Update this if a future host names it differently.
+After=network.target redis-server.service
 
 [Service]
 # "simple" = systemd considers the unit started as soon as ExecStart's

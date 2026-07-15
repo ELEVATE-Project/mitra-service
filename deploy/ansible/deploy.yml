@@ -1,12 +1,12 @@
 ---
 # =============================================================================
-# Mohini Service Deployment Playbook
+# Mitra Service Deployment Playbook
 # =============================================================================
 # Single flat playbook (deliberately no roles/ - this deploys one service to
 # one set of hosts, not a reusable abstraction across multiple apps).
 #
-# Deploys shikshalokam-mohini-service (uvicorn + celery) to a target EC2 host
-# using a DELETE-AND-REPLACE strategy: clone into a temporary release folder,
+# Deploys the Mitra service (uvicorn + celery; repo: shikshalokam-mohini-service)
+# to a target EC2 host using a DELETE-AND-REPLACE strategy: clone into a temporary release folder,
 # install deps + fetch secrets + migrate there, then delete the old live
 # directory and move the new one into its place. Downtime during that swap
 # is expected and accepted (this project intentionally does NOT use an
@@ -29,7 +29,7 @@
 # forgets to pass one, rather than silently deploying the wrong thing.
 # =============================================================================
 
-- name: Deploy Mohini service (uvicorn + celery)
+- name: Deploy Mitra service (uvicorn + celery)
   # "all" rather than a named inventory group - there is no static inventory
   # file; Jenkins passes the target host directly via `-i "<ip>,"` (note the
   # trailing comma - that's what tells Ansible this is an inline host list,
@@ -74,19 +74,17 @@
     # the existing deployment-automation findings doc.
     # ---------------------------------------------------------------------
 
-    # Base Vault API URL. Can be overridden with -e vault_address=... from
-    # Jenkins if it differs per environment; kept as a plain var (not a
-    # required one) since it's infrastructure, not a per-deploy choice.
-    vault_address: "https://vault.internal:8200/v1/"
+    # Base Vault API URL, including the KV v2 mount + literal "data/"
+    # segment for this environment - e.g. ".../v1/Dev_env/data/". Overridden
+    # with -e vault_address=... from Jenkins (see the VAULT_ADDRESS
+    # environment{} var there) since the whole thing (host + mount) differs
+    # per environment; this is just the fallback if Jenkins doesn't pass it.
+    vault_address: "https://10.0.136.199:8200/v1/Dev_env/data/"
 
-    # PLACEHOLDER - path holding the general .env key/values for this
-    # environment. Update once the real Vault path is created.
-    vault_env_path: "mohini-service/{{ env_name }}"
-
-    # PLACEHOLDER - path holding config/secrets.json (e.g. GCP service
-    # account creds, used when STORAGE_CLOUD_PROVIDER=GCP). Update once
-    # the real Vault path is created.
-    vault_secrets_path: "mohini-service/{{ env_name }}/gcp"
+    # Secret names under vault_address above - assumed identical across
+    # environments (only vault_address itself changes per env).
+    vault_env_path: "mitra_backend_service_env"
+    vault_secrets_path: "mitra_gcp_credentials"
 
     # ---------------------------------------------------------------------
     # Uvicorn / Celery tuning - these ARE meant to be overridden via -e

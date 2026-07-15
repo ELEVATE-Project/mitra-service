@@ -14,9 +14,10 @@ Description=Mitra Celery worker (LLM task processing)
 # broker AND the Django Channels layer it publishes bot responses through
 # back to whichever uvicorn worker process holds the relevant WebSocket.
 #
-# NOTE / ASSUMPTION: same as the uvicorn unit - this assumes Redis is a
-# systemd unit named "redis.service" on this host. Update if that's wrong.
-After=network.target redis.service
+# Confirmed on the dev host: Redis runs as the standard Debian/Ubuntu
+# package unit "redis-server.service" (enabled, listening on 127.0.0.1:6379)
+# - not "redis.service". Update this if a future host names it differently.
+After=network.target redis-server.service
 
 [Service]
 Type=simple
