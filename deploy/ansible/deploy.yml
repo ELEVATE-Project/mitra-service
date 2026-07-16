@@ -61,11 +61,15 @@
     # every deploy - there is no history of past releases kept on disk.
     current_path: "{{ project_path }}/mitra-backend-service"
 
-    # Temporary directory this deploy's code is cloned and built in,
-    # BEFORE it replaces current_path. Timestamped so back-to-back deploys
-    # (or a re-run after a failure) never collide with each other.
-    release_timestamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
-    release_path: "{{ project_path }}/releases/{{ release_timestamp }}"
+    # release_timestamp / release_path are deliberately NOT defined here as
+    # plain vars using lookup('pipe', 'date ...') - a lookup() inside vars:
+    # is NOT computed once and cached, it re-runs on every single reference
+    # across the play. Since real time passes between tasks, that let
+    # release_path silently resolve to a DIFFERENT string later in the play
+    # than what earlier tasks actually created, causing a "No such file or
+    # directory" failure on a directory that genuinely existed. Instead,
+    # they're computed once via `set_fact` in the first task below - facts
+    # ARE cached/fixed for the rest of the play, unlike vars: lookups.
 
     # ---------------------------------------------------------------------
     # Vault settings - PLACEHOLDERS. Vault paths for this service don't
@@ -116,6 +120,22 @@
     # =====================================================================
     - name: Build and deploy the new release
       block:
+        # =================================================================
+        # STEP 0 - Freeze release_timestamp/release_path as facts, computed
+        # exactly once here. Every later task in this play references
+        # {{ release_path }} expecting the SAME value used by this task -
+        # see the comment on vars: above for why a plain lookup()-based var
+        # would NOT guarantee that.
+        # =================================================================
+
+        - name: Compute this run's release path (once, cached as a fact)
+          set_fact:
+            release_timestamp: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+
+        - name: Derive release_path from the frozen timestamp
+          set_fact:
+            release_path: "{{ project_path }}/releases/{{ release_timestamp }}"
+
         # =================================================================
         # STEP 1 - Clone the requested code into a fresh, temporary release
         # directory. current_path is completely untouched so far.
