@@ -117,7 +117,15 @@ def ai4bharat_speech_text(voice_provider, base64, audio_format, source_language)
             'userID': ai4bharat_user_id,
             'ulcaApiKey': ai4bharat_api_key
         }
-        response = requests.post(ai4bharat_base_url, json=payload, headers=headers, timeout=30)
+
+        request_timeout = other_params.get("request_timeout", 30)
+
+        try:
+            request_timeout = float(request_timeout)
+        except Exception:
+            request_timeout = 30
+
+        response = requests.post(ai4bharat_base_url, json=payload, headers=headers, timeout=request_timeout)
 
         if response.status_code == 200:
             print("response: ", response.text)
