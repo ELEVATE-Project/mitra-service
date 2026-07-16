@@ -158,3 +158,8 @@ django-redis
 ############################
 coreapi
 coreschema
+
+############################
+# Text Normalization
+############################
+indic-itn==0.1.0

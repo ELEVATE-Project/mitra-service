@@ -3,7 +3,7 @@ name = "shikshalokam-mohini-service"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "asgiref>=3.11.0",
     "beautifulsoup4>=4.14.3",
@@ -83,6 +83,7 @@ dependencies = [
     "tqdm>=4.67.1",
     "uuid>=1.30",
     "uvicorn>=0.40.0",
+    "indic-itn==0.1.0",
 ]
 
 [dependency-groups]

@@ -25,7 +25,16 @@ def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language, 
     )
     logger.info(f"response: {response}")
     if response['status'] == 200:
-        return (chunk_number, response['content'])
+        content = response['content']
+        if source_language == 'hi':
+            try:
+                print("content: ", content)
+                from indic_itn import HindiITN
+                itn = HindiITN()
+                content = itn.normalize(content)
+            except Exception as itn_err:
+                logger.error("Error during Hindi ITN normalization in chunk: %s", itn_err, exc_info=True)
+        return (chunk_number, content)
     else:
         return (chunk_number, '')
 
@@ -50,6 +59,14 @@ def transcribe_ai4bharat_multiple_chunks(voice_provider, base64_audio_file, sour
             transcripts.sort()
 
         transcript = " ".join(content for _, content in transcripts)
+        if source_language == 'hi':
+            try:
+                print("final transcript: ", transcript)
+                from indic_itn import HindiITN
+                itn = HindiITN()
+                transcript = itn.normalize(transcript)
+            except Exception as itn_err:
+                logger.error("Error during Hindi ITN normalization: %s", itn_err, exc_info=True)
         return {'status': 200, 'content': transcript}
 
     except Exception as e:
