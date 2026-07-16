@@ -35,10 +35,7 @@ dependencies = [
     "django-tailwind>=4.2.0",
     "djangorestframework>=3.16.1",
     "djangorestframework-simplejwt>=5.5.1",
-<<<<<<< HEAD
     "gevent>=26.4.0",
-=======
->>>>>>> shikshalokam/release-2.0.0
     "google-cloud-speech>=2.36.0",
     "google-cloud-texttospeech>=2.34.0",
     "google-cloud-translate>=3.24.0",
@@ -86,10 +83,7 @@ dependencies = [
     "tqdm>=4.67.1",
     "uuid>=1.30",
     "uvicorn>=0.40.0",
-<<<<<<< HEAD
     "indic-itn==0.1.0",
-=======
->>>>>>> shikshalokam/release-2.0.0
 ]
 
 [dependency-groups]

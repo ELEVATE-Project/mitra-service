@@ -116,6 +116,7 @@ importlib-metadata==8.7.1
 importlib-resources==6.5.2
 incremental==24.11.0
 indic-itn==0.1.0
+    # via -r requirements.in
 iniconfig==2.3.0
 instructor==1.14.5
 itypes==1.2.0
@@ -172,6 +173,19 @@ nest-asyncio==1.6.0
 networkx==3.4.2
 nltk==3.9.2
 numpy==1.26.4
+    # via
+    #   -r requirements.in
+    #   chromadb
+    #   datasets
+    #   lancedb
+    #   llama-index-core
+    #   onnxruntime
+    #   pandas
+    #   qdrant-client
+    #   scikit-learn
+    #   scipy
+    #   sentence-transformers
+    #   transformers
 oauthlib==3.3.1
 onnxruntime==1.23.2
 openai==2.16.0
