@@ -392,7 +392,7 @@
           register: health_result
           # The service just restarted and needs a moment to boot - retry
           # for up to 15 seconds (5 attempts, 3s apart) before giving up.
-          retries: 5
+          retries: 10
           delay: 5
           until: health_result.status is defined and health_result.status == 200
 
