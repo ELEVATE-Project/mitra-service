@@ -201,6 +201,22 @@
             state: directory
             mode: "0755"
 
+        - name: DEBUG - TEMPORARY - print secrets.json Vault URL
+          debug:
+            msg: "{{ vault_address }}{{ vault_secrets_path }}"
+
+        - name: DEBUG - TEMPORARY - raw Vault response for secrets.json
+          shell: >
+            curl --silent --insecure --location --write-out '\nHTTP_STATUS:%{http_code}'
+            --request GET '{{ vault_address }}{{ vault_secrets_path }}'
+            --header 'X-Vault-Token: {{ vault_token_raw.content | b64decode }}'
+          register: vault_secrets_debug
+          changed_when: false
+
+        - name: DEBUG - TEMPORARY - print raw Vault response for secrets.json
+          debug:
+            msg: "{{ vault_secrets_debug.stdout }}"
+
         - name: Fetch secrets.json from Vault
           # 1. curl GETs the secret from Vault, authenticating with the token
           #    read above (decoded from base64 first).
@@ -270,6 +286,22 @@
         # now that the code is already in its final location. See step 4's
         # comment for why this has to happen after the move, not before.
         # =================================================================
+
+        - name: DEBUG - TEMPORARY - print .env Vault URL
+          debug:
+            msg: "{{ vault_address }}{{ vault_env_path }}"
+
+        - name: DEBUG - TEMPORARY - raw Vault response for .env
+          shell: >
+            curl --silent --insecure --location --write-out '\nHTTP_STATUS:%{http_code}'
+            --request GET '{{ vault_address }}{{ vault_env_path }}'
+            --header 'X-Vault-Token: {{ vault_token_raw.content | b64decode }}'
+          register: vault_env_debug
+          changed_when: false
+
+        - name: DEBUG - TEMPORARY - print raw Vault response for .env
+          debug:
+            msg: "{{ vault_env_debug.stdout }}"
 
         - name: Fetch env config from Vault and write .env
           shell: >
