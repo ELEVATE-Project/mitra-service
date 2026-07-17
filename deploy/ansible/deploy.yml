@@ -104,9 +104,9 @@
     # ---------------------------------------------------------------------
     uvicorn_host: "0.0.0.0"
     uvicorn_port: 9000
-    uvicorn_workers: 9
+    uvicorn_workers: 4
     ws_ping_interval: 30
-    ws_ping_timeout: 600
+    ws_ping_timeout: 300
 
     celery_pool: threads
     celery_concurrency: 50
