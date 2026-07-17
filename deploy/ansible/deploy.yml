@@ -205,18 +205,6 @@
           debug:
             msg: "{{ vault_address }}{{ vault_secrets_path }}"
 
-        - name: DEBUG - TEMPORARY - raw Vault response for secrets.json
-          shell: >
-            curl --silent --insecure --location --write-out '\nHTTP_STATUS:%{http_code}'
-            --request GET '{{ vault_address }}{{ vault_secrets_path }}'
-            --header 'X-Vault-Token: {{ vault_token_raw.content | b64decode | trim }}'
-          register: vault_secrets_debug
-          changed_when: false
-
-        - name: DEBUG - TEMPORARY - print raw Vault response for secrets.json
-          debug:
-            msg: "{{ vault_secrets_debug.stdout }}"
-
         - name: Fetch secrets.json from Vault
           # 1. curl GETs the secret from Vault, authenticating with the token
           #    read above (decoded from base64 first).
@@ -290,18 +278,6 @@
         - name: DEBUG - TEMPORARY - print .env Vault URL
           debug:
             msg: "{{ vault_address }}{{ vault_env_path }}"
-
-        - name: DEBUG - TEMPORARY - raw Vault response for .env
-          shell: >
-            curl --silent --insecure --location --write-out '\nHTTP_STATUS:%{http_code}'
-            --request GET '{{ vault_address }}{{ vault_env_path }}'
-            --header 'X-Vault-Token: {{ vault_token_raw.content | b64decode | trim }}'
-          register: vault_env_debug
-          changed_when: false
-
-        - name: DEBUG - TEMPORARY - print raw Vault response for .env
-          debug:
-            msg: "{{ vault_env_debug.stdout }}"
 
         - name: Fetch env config from Vault and write .env
           shell: >
@@ -404,6 +380,10 @@
         # reporting success.
         # =================================================================
 
+        - name: DEBUG - TEMPORARY - print health check URL
+          debug:
+            msg: "http://localhost:{{ uvicorn_port }}/health/"
+
         - name: Health check the new deployment
           uri:
             url: "http://localhost:{{ uvicorn_port }}/health/"
@@ -415,6 +395,10 @@
           retries: 5
           delay: 3
           until: health_result.status is defined and health_result.status == 200
+
+        - name: DEBUG - TEMPORARY - print health check response
+          debug:
+            msg: "status={{ health_result.status | default('n/a') }} body={{ health_result.json | default(health_result.content | default('n/a')) }}"
 
         # If the uri task above never reaches a 200, Ansible's default
         # behavior (no ignore_errors here) already fails the play right there
