@@ -3,7 +3,7 @@
 #
 # This file is a Jinja2 TEMPLATE - it is never edited directly. Ansible's
 # `template` task in deploy.yml renders it to /etc/systemd/system/mitra-uvicorn.service
-# on the target host, filling in every {{ }} below from deploy.yml's `vars:`
+# on the target host, filling in every templated variable below from deploy.yml's `vars:`
 # section (or whatever Jenkins overrode via -e extra-vars).
 # =============================================================================
 
