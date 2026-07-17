@@ -209,7 +209,7 @@
           #    json2env conversion - config/secrets.json is consumed as raw
           #    JSON by the app, per this project's CLAUDE.md).
           shell: >
-            curl --silent --location --request GET
+            curl --silent --insecure --location --request GET
             '{{ vault_address }}{{ vault_secrets_path }}'
             --header 'X-Vault-Token: {{ vault_token_raw.content | b64decode }}'
             | jq '.data.data' > {{ release_path }}/config/secrets.json
@@ -273,7 +273,7 @@
 
         - name: Fetch env config from Vault and write .env
           shell: >
-            curl --silent --location --request GET
+            curl --silent --insecure --location --request GET
             '{{ vault_address }}{{ vault_env_path }}'
             --header 'X-Vault-Token: {{ vault_token_raw.content | b64decode }}'
             | jq '.data.data'
