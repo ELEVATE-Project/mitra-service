@@ -209,7 +209,7 @@
           shell: >
             curl --silent --insecure --location --write-out '\nHTTP_STATUS:%{http_code}'
             --request GET '{{ vault_address }}{{ vault_secrets_path }}'
-            --header 'X-Vault-Token: {{ vault_token_raw.content | b64decode }}'
+            --header 'X-Vault-Token: {{ vault_token_raw.content | b64decode | trim }}'
           register: vault_secrets_debug
           changed_when: false
 
@@ -227,7 +227,7 @@
           shell: >
             curl --silent --insecure --location --request GET
             '{{ vault_address }}{{ vault_secrets_path }}'
-            --header 'X-Vault-Token: {{ vault_token_raw.content | b64decode }}'
+            --header 'X-Vault-Token: {{ vault_token_raw.content | b64decode | trim }}'
             | jq '.data.data' > {{ release_path }}/config/secrets.json
           args:
             creates: "{{ release_path }}/config/secrets.json"
@@ -295,7 +295,7 @@
           shell: >
             curl --silent --insecure --location --write-out '\nHTTP_STATUS:%{http_code}'
             --request GET '{{ vault_address }}{{ vault_env_path }}'
-            --header 'X-Vault-Token: {{ vault_token_raw.content | b64decode }}'
+            --header 'X-Vault-Token: {{ vault_token_raw.content | b64decode | trim }}'
           register: vault_env_debug
           changed_when: false
 
@@ -307,7 +307,7 @@
           shell: >
             curl --silent --insecure --location --request GET
             '{{ vault_address }}{{ vault_env_path }}'
-            --header 'X-Vault-Token: {{ vault_token_raw.content | b64decode }}'
+            --header 'X-Vault-Token: {{ vault_token_raw.content | b64decode | trim }}'
             | jq '.data.data'
             | {{ current_path }}/scripts/json2env.sh > {{ current_path }}/.env
           args:
