@@ -54,7 +54,12 @@
     # Root directory for this service on the server, per the directory
     # migration decision (moving off /home/ubuntu/, matching elevate's
     # /opt/backend/deployment/ convention).
-    project_path: /opt/deployments/backend/mitra-service
+    project_path: /opt/deployment/backend/mitra-service
+
+    # Vault token file lives at the top level of the shared deployment
+    # directory (not nested under this service's own project_path) - it's
+    # a one-time-per-host prerequisite shared across services on this box.
+    vault_token_path: /opt/deployment/.token
 
     # The one, fixed, always-live app directory. Unlike a symlink-swap
     # design, this is a REAL directory that gets deleted and recreated on
@@ -187,7 +192,7 @@
           # prerequisite placed outside of any release directory, so it
           # survives every deploy untouched.
           slurp:
-            src: "{{ project_path }}/.token"
+            src: "{{ vault_token_path }}"
           register: vault_token_raw
 
         - name: Ensure config directory exists for secrets.json
