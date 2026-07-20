@@ -36,7 +36,7 @@ def normalize_glossary_entries(raw: Any) -> List[Tuple[str, str]]:
             tgt = str(row.get("target", "")).strip()
         else:
             continue
-        if not src and not tgt:
+        if not src or not tgt:
             continue
         pairs.append((src, tgt))
     return sorted(pairs)
