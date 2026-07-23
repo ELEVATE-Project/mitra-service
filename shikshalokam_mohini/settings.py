@@ -15,8 +15,6 @@ import re
 from datetime import timedelta
 import sentry_sdk
 from dotenv import load_dotenv
-from socket import gethostbyname
-from socket import gethostname
 
 load_dotenv()
 
@@ -334,11 +332,11 @@ STORAGE_BACKENDS = {
 # Configure storage based on provider
 if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
     config = STORAGE_BACKENDS[STORAGE_CLOUD_PROVIDER]
-    
+
     if STORAGE_CLOUD_PROVIDER == 'LOCAL':
         MEDIA_ROOT = config['options']['location']
         MEDIA_URL = config['options']['base_url']
-        
+
         STORAGES = {
             "default": {
                 "BACKEND": config['backend'],
@@ -353,7 +351,7 @@ if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
         # These are needed for our storage handler to work correctly
         MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
         MEDIA_URL = '/media/'
-        
+
         STORAGES = {
             "default": {
                 "BACKEND": config['backend'],
@@ -364,6 +362,8 @@ if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
                 "OPTIONS": config['options'],
             },
         }
+        STORAGES["staticfiles"]["OPTIONS"]["location"] = "static"
+
 else:
     raise ValueError(
         f"Unsupported STORAGE_CLOUD_PROVIDER: {STORAGE_CLOUD_PROVIDER}. "
