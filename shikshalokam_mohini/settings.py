@@ -363,6 +363,11 @@ if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
             },
         }
 
+        STORAGES["staticfiles"]["OPTIONS"] = {
+            **STORAGES["staticfiles"]["OPTIONS"],
+            "location": "static",
+        }
+
 else:
     raise ValueError(
         f"Unsupported STORAGE_CLOUD_PROVIDER: {STORAGE_CLOUD_PROVIDER}. "
