@@ -88,7 +88,7 @@
     # with -e vault_address=... from Jenkins (see the VAULT_ADDRESS
     # environment{} var there) since the whole thing (host + mount) differs
     # per environment; this is just the fallback if Jenkins doesn't pass it.
-    vault_address: "https://10.0.136.199:8200/v1/Dev_env/data/"
+    vault_address: "https://demo-vault-domain/v1/Dev_env/data/"
 
     # Secret names under vault_address above - assumed identical across
     # environments (only vault_address itself changes per env).
