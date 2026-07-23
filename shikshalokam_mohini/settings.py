@@ -360,9 +360,9 @@ if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
             "staticfiles": {
                 "BACKEND": config['backend'],
                 "OPTIONS": config['options'],
+                "location": "static"
             },
         }
-        STORAGES["staticfiles"]["OPTIONS"]["location"] = "static"
 
 else:
     raise ValueError(
