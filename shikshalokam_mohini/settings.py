@@ -250,6 +250,15 @@ if REDIS_USE_SSL:
 else:
     REDIS_URL = f'{REDIS_PROTOCOL}://{REDIS_HOST}:{REDIS_PORT}'
 
+# Picked up by celery_config.py's app.config_from_object(..., namespace='CELERY') as
+# task_default_queue. Workers started without an explicit -Q flag (see
+# mitra-celery.service.j2) automatically listen on this queue, and every existing
+# .delay()/.apply_async() call site (none of which pass queue=) publishes here too -
+# so producer and consumer stay in sync with a single env var, no call-site changes.
+# Defaults to celery's own default queue name if unset - set REDIS_CELERY_QUEUE
+# per deployment to avoid collisions with other services sharing the same Redis.
+CELERY_TASK_DEFAULT_QUEUE = os.environ.get('REDIS_CELERY_QUEUE', 'celery')
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.pubsub.RedisPubSubChannelLayer",
