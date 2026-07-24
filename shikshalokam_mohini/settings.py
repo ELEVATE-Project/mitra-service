@@ -334,11 +334,11 @@ STORAGE_BACKENDS = {
 # Configure storage based on provider
 if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
     config = STORAGE_BACKENDS[STORAGE_CLOUD_PROVIDER]
-    
+
     if STORAGE_CLOUD_PROVIDER == 'LOCAL':
         MEDIA_ROOT = config['options']['location']
         MEDIA_URL = config['options']['base_url']
-        
+
         STORAGES = {
             "default": {
                 "BACKEND": config['backend'],
@@ -348,12 +348,13 @@ if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
                 "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
             },
         }
+
     else:
         # For cloud storage (AWS/GCP/Azure), still set MEDIA_ROOT and MEDIA_URL
         # These are needed for our storage handler to work correctly
         MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
         MEDIA_URL = '/media/'
-        
+
         STORAGES = {
             "default": {
                 "BACKEND": config['backend'],
@@ -363,6 +364,11 @@ if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
                 "BACKEND": config['backend'],
                 "OPTIONS": config['options'],
             },
+        }
+
+        STORAGES["staticfiles"]["OPTIONS"] = {
+            **STORAGES["staticfiles"]["OPTIONS"],
+            "location": "static",
         }
 else:
     raise ValueError(
@@ -527,5 +533,7 @@ CRONJOBS = [
     ('0 12 * * *', 'chatbot.cron_tasks.student_fgd.story_creation.create_story',
     '>> /tmp/student_fgd_story_creation.log 2>&1'),
     ('0 12 * * *', 'chatbot.cron_tasks.xylem.story_creation.create_story',
-    '>> /tmp/xylem_story_creation.log 2>&1')
+    '>> /tmp/xylem_story_creation.log 2>&1'),
+    ('0 */2 * * *', 'chatbot.cron_tasks.guest_discussion.state_categorisation.run_cron',
+    '>> /tmp/guest_discussion_state_categorisation.log 2>&1')
 ]

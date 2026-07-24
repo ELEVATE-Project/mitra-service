@@ -11,22 +11,8 @@ Usage:
     # Company / CompanyBot / Flow / ImageConfiguration / PDFTemplates / Profile
     python manage.py migrate_data --date-from 2024-01-01 --date-to 2024-12-31
 
-    # Exact time window — e.g. 30 June 2026, 2:00 PM to 5:00 PM
-    python manage.py migrate_data \
-        --date-from "2026-06-30 14:00" --date-to "2026-06-30 17:00"
-
-    # Restrict to one bot (CompanyBot route), optionally with date/time
-    python manage.py migrate_data --dry-run [--date-from ...] [--date-to ...] \
-        --session_name shiksha-samvad
-
     # Dry run (count rows, no writes)
     python manage.py migrate_data --dry-run [--date-from ...] [--date-to ...]
-
-Date/time filters:
-    --date-from / --date-to accept 'YYYY-MM-DD' (whole day) or
-    'YYYY-MM-DD HH:MM[:SS]' (exact time). Filters run against created_at, so
-    time-of-day is honoured. If settings.USE_TZ is True, naive inputs are made
-    timezone-aware in the current timezone before filtering.
 
 Timestamp handling:
     auto_now_add / auto_now fields are overwritten via QuerySet.update() after
@@ -48,17 +34,14 @@ only migrate for CompanyBots newly created in this run.
 
 import json
 import os
-from collections import namedtuple
 from dataclasses import dataclass, field
-from datetime import date, datetime, time
+from datetime import date, datetime
 from itertools import islice
 from typing import Optional, Set
 
 import requests
-from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 
 from chatbot.models.bot_vernacular_model import BotVernacular
 from chatbot.models.chat_models import ChatSession
@@ -78,43 +61,6 @@ from chatbot.models.story_vernacular_model import StoryVernacular
 from chatbot.models.theme_models import Theme
 
 SRC = "source_db"
-
-# A parsed --date-from / --date-to value.
-#   value    : datetime (date-only inputs land on that date at 00:00:00)
-#   has_time : True if the user supplied an explicit time-of-day component
-DateArg = namedtuple("DateArg", ["value", "has_time"])
-
-
-def parse_date_arg(raw: str) -> DateArg:
-    """Accept 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM[:SS]' and remember which."""
-    raw = raw.strip()
-    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M"):
-        try:
-            return DateArg(datetime.strptime(raw, fmt), True)
-        except ValueError:
-            continue
-    try:
-        return DateArg(datetime.strptime(raw, "%Y-%m-%d"), False)
-    except ValueError:
-        raise ValueError(f"Use 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM[:SS]', got '{raw}'")
-
-
-def _make_aware(dt: datetime) -> datetime:
-    if getattr(settings, "USE_TZ", False) and timezone.is_naive(dt):
-        return timezone.make_aware(dt, timezone.get_current_timezone())
-    return dt
-
-
-def _range_kwargs(date_from: Optional[DateArg], date_to: Optional[DateArg]) -> dict:
-    """created_at range filter honouring time-of-day; date-only bounds cover the full day."""
-    f = {}
-    if date_from is not None:
-        start = date_from.value if date_from.has_time else datetime.combine(date_from.value.date(), time.min)
-        f["created_at__gte"] = _make_aware(start)
-    if date_to is not None:
-        end = date_to.value if date_to.has_time else datetime.combine(date_to.value.date(), time.max)
-        f["created_at__lte"] = _make_aware(end)
-    return f
 
 
 def chunked(iterable, n):
@@ -198,55 +144,34 @@ class MigrationScope:
     transactional records (ChatSession, CompanyChat, Story) in that range.
     None means "migrate all".
     """
-    date_from: Optional[DateArg] = None
-    date_to: Optional[DateArg] = None
-    session_name: Optional[str] = None
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
     # Source IDs to restrict each entity (None = all)
     company_ids: Optional[Set[int]] = None
     bot_ids: Optional[Set[int]] = None
     image_config_ids: Optional[Set[int]] = None
     flow_ids: Optional[Set[int]] = None
     profile_ids: Optional[Set[int]] = None
-    # Session strings in scope (set only when session_name given)
-    session_strings: Optional[Set[str]] = None
 
 
-def build_scope(date_from: Optional[DateArg], date_to: Optional[DateArg],
-                session_name: Optional[str], stdout) -> MigrationScope:
-    if not date_from and not date_to and not session_name:
+def build_scope(date_from: Optional[date], date_to: Optional[date], stdout) -> MigrationScope:
+    if not date_from and not date_to:
         return MigrationScope()
 
-    stdout.write(
-        f"Building migration scope for date_from={date_from} date_to={date_to} "
-        f"session_name={session_name!r} ..."
-    )
+    stdout.write(f"Building migration scope for {date_from} → {date_to} ...")
 
-    date_filter = _range_kwargs(date_from, date_to)
-
-    # session_name is a CompanyBot route — resolve its source bot IDs
-    route_bot_ids = None
-    if session_name:
-        route_bot_ids = set(
-            CompanyBot.objects.using(SRC).filter(route=session_name).values_list("id", flat=True)
-        )
-        if not route_bot_ids:
-            stdout.write(f"  WARNING: no CompanyBot route='{session_name}' in source — scope empty")
+    date_filter = {}
+    if date_from:
+        date_filter["created_at__date__gte"] = date_from
+    if date_to:
+        date_filter["created_at__date__lte"] = date_to
 
     # Collect referenced source IDs from transactional models
     sessions_qs = ChatSession.objects.using(SRC).filter(**date_filter)
     chats_qs = CompanyChat.objects.using(SRC).filter(**date_filter)
     stories_qs = Story.objects.using(SRC).filter(**date_filter)
 
-    session_strings = None
-    if route_bot_ids is not None:
-        sessions_qs = sessions_qs.filter(company_bot_id__in=route_bot_ids)
-        session_strings = set(sessions_qs.values_list("session", flat=True).distinct())
-        chats_qs = chats_qs.filter(session__in=session_strings)
-        stories_qs = stories_qs.filter(session__in=session_strings)
-
     bot_ids = set(sessions_qs.values_list("company_bot_id", flat=True).distinct()) - {None}
-    if route_bot_ids is not None:
-        bot_ids |= route_bot_ids  # keep the named bot even if it has no sessions in range
     profile_ids = (
         set(sessions_qs.values_list("profile_id", flat=True).distinct())
         | set(chats_qs.values_list("sender_id", flat=True).distinct())
@@ -283,19 +208,16 @@ def build_scope(date_from: Optional[DateArg], date_to: Optional[DateArg],
         f"  Scope: {len(company_ids)} companies, {len(bot_ids)} bots, "
         f"{len(flow_ids)} flows, {len(image_config_ids)} image configs, "
         f"{len(profile_ids)} profiles"
-        + (f", {len(session_strings)} sessions" if session_strings is not None else "")
     )
 
     return MigrationScope(
         date_from=date_from,
         date_to=date_to,
-        session_name=session_name,
         company_ids=company_ids,
         bot_ids=bot_ids,
         image_config_ids=image_config_ids,
         flow_ids=flow_ids,
         profile_ids=profile_ids,
-        session_strings=session_strings,
     )
 
 
@@ -311,23 +233,15 @@ class Command(BaseCommand):
         parser.add_argument("--dry-run", action="store_true", help="Print counts only, no writes")
         parser.add_argument(
             "--date-from",
-            type=parse_date_arg,
+            type=lambda s: datetime.strptime(s, "%Y-%m-%d").date(),
             default=None,
-            help="Migrate transactional data on/after this date/datetime "
-                 "('YYYY-MM-DD' or 'YYYY-MM-DD HH:MM[:SS]')",
+            help="Migrate transactional data on/after this date (YYYY-MM-DD)",
         )
         parser.add_argument(
             "--date-to",
-            type=parse_date_arg,
+            type=lambda s: datetime.strptime(s, "%Y-%m-%d").date(),
             default=None,
-            help="Migrate transactional data on/before this date/datetime "
-                 "('YYYY-MM-DD' or 'YYYY-MM-DD HH:MM[:SS]')",
-        )
-        parser.add_argument(
-            "--session_name",
-            type=str,
-            default=None,
-            help="Restrict migration to a single CompanyBot route (e.g. shiksha-samvad)",
+            help="Migrate transactional data on/before this date (YYYY-MM-DD)",
         )
 
     def handle(self, *args, **options):
@@ -335,12 +249,11 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
         date_from = options["date_from"]
         date_to = options["date_to"]
-        session_name = options["session_name"]
 
         if dry_run:
             self.stdout.write(self.style.WARNING("DRY RUN — no writes will occur\n"))
 
-        scope = build_scope(date_from, date_to, session_name, self.stdout)
+        scope = build_scope(date_from, date_to, self.stdout)
         ctx = MigrationContext()
 
         steps = [
@@ -854,7 +767,6 @@ def migrate_chat_sessions(ctx, scope, batch_size, dry_run, stdout):
 
     date_filter = _date_filter(scope)
     qs = ChatSession.objects.using(SRC).filter(**date_filter)
-    qs = _apply_session_scope(qs, scope)
 
     for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
         for src in batch:
@@ -899,7 +811,6 @@ def migrate_company_chats(ctx, scope, batch_size, dry_run, stdout):
     valid_sessions = ctx.dry_run_migrated_sessions if dry_run else set(ChatSession.objects.values_list("session", flat=True))
     date_filter = _date_filter(scope)
     qs = CompanyChat.objects.using(SRC).filter(**date_filter)
-    qs = _apply_session_scope(qs, scope)
 
     for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
         for src in batch:
@@ -949,7 +860,6 @@ def migrate_stories(ctx, scope, batch_size, dry_run, stdout):
     existing = set(Story.objects.values_list("session", flat=True))
     date_filter = _date_filter(scope)
     qs = Story.objects.using(SRC).filter(**date_filter)
-    qs = _apply_session_scope(qs, scope)
 
     for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
         for src in batch:
@@ -1111,11 +1021,9 @@ def migrate_story_translations(ctx, batch_size, dry_run, stdout):
 # ---------------------------------------------------------------------------
 
 def _date_filter(scope: MigrationScope) -> dict:
-    return _range_kwargs(scope.date_from, scope.date_to)
-
-
-def _apply_session_scope(qs, scope: MigrationScope):
-    """Restrict a transactional queryset to sessions in scope (session_name run)."""
-    if scope.session_strings is not None:
-        qs = qs.filter(session__in=scope.session_strings)
-    return qs
+    f = {}
+    if scope.date_from:
+        f["created_at__date__gte"] = scope.date_from
+    if scope.date_to:
+        f["created_at__date__lte"] = scope.date_to
+    return f
