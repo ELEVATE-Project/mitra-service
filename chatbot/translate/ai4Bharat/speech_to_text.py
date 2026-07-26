@@ -5,7 +5,9 @@ import requests
 import json_repair
 import concurrent.futures
 import logging
+from functools import lru_cache
 from chatbot.translate.base.speech_to_text import split_audio
+from indic_itn import IndicITN, get_supported_languages
 
 
 logger = logging.getLogger('django')
@@ -13,6 +15,29 @@ ai4bharat_api_key = os.getenv("BHASHANI_API_KEY")
 ai4bharat_base_url = os.getenv("BHASHANI_BASE_URL")
 ai4bharat_user_id = os.getenv("BHASHANI_USER_ID")
 ai4bharat_authorization = os.getenv("BHASHANI_AUTHORIZATION")
+
+
+@lru_cache(maxsize=1)
+def _get_supported_languages_set():
+    """Cache the supported languages set to avoid disk I/O on every call."""
+    return set(get_supported_languages())
+
+
+@lru_cache(maxsize=16)
+def _get_itn_instance(lang_code: str):
+    """Cache IndicITN normalizer instances per language."""
+    return IndicITN(lang=lang_code)
+
+
+def apply_itn(text: str, source_language: str) -> str:
+    if not text:
+        return text
+    try:
+        if source_language in _get_supported_languages_set():
+            return _get_itn_instance(source_language).normalize(text)
+    except Exception as itn_err:
+        logger.error("Error during ITN normalization for language '%s': %s", source_language, itn_err, exc_info=True)
+    return text
 
 
 def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language, voice_provider):
@@ -49,8 +74,10 @@ def transcribe_ai4bharat_multiple_chunks(voice_provider, base64_audio_file, sour
             transcripts = [future.result() for future in concurrent.futures.as_completed(futures)]
             transcripts.sort()
 
-        transcript = " ".join(content for _, content in transcripts)
-        return {'status': 200, 'content': transcript}
+        raw_transcript = " ".join(content for _, content in transcripts)
+        print("final transcript: ", raw_transcript)
+        final_transcript = apply_itn(raw_transcript, source_language)
+        return {'status': 200, 'content': final_transcript}
 
     except Exception as e:
         logger.error('Error processing file: %s', e, exc_info=True)
