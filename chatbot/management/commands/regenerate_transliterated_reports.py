@@ -135,8 +135,8 @@ def parse_date_arg(raw):
             continue
     try:
         return DateArg(datetime.strptime(raw, "%Y-%m-%d"), False)
-    except ValueError:
-        raise CommandError(f"Use 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM[:SS]', got '{raw}'")
+    except ValueError as e:
+        raise CommandError(f"Use 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM[:SS]', got '{raw}'") from e
 
 
 def _make_aware(dt):
@@ -303,6 +303,10 @@ class Command(BaseCommand):
         if not session_language:
             self.stdout.write(self.style.WARNING("  No matching non-English sessions for this route."))
             return 0, 0, 0
+
+        if limit and limit > 0:
+            limited_ids = sorted(session_language.keys())[:limit]
+            session_language = {sid: session_language[sid] for sid in limited_ids}
 
         # --- select candidate chats -----------------------------------------
         chat_filter = {
