@@ -242,7 +242,6 @@ class CommonResponseHandler(BaseResponseHandler):
         else:
             is_function_call, expected_output_response, reason_text = self._analyze_response(response)
             print(f"DEBUG: Analysis result - is_function_call: {is_function_call}")
-            print(f"DEBUG: expected_output_response: '{expected_output_response}'")
             print(f"DEBUG: reason_text: '{reason_text}'")
 
             if not is_function_call and retry_attempt < self.max_retry_attempts:
@@ -258,7 +257,6 @@ class CommonResponseHandler(BaseResponseHandler):
 
                     try:
                         result = self.get_llm_response(**kwargs)
-
                         if isinstance(result, tuple):
                             new_response, extra_content, finish_reason = result
                         else:

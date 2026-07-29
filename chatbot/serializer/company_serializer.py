@@ -49,8 +49,8 @@ class ImageConfigurationSerializer(serializers.ModelSerializer):
         fields = ('id', 'name', 'max_images', 'image_size', 'image_size_mb')
         read_only_fields = ('id',)
 
+    # Purpose: Converts raw image_size (bytes) to MB for client display.
     def get_image_size_mb(self, obj):
-        """Convert image size from bytes to MB for easier reading."""
         return round(obj.image_size / 1048576, 2)
 
 
@@ -84,18 +84,19 @@ class FlowConnectionInfoSerializer(serializers.ModelSerializer):
         fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config', 'create_story')
         read_only_fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config')
     
+    # Purpose: Returns True if this flow has child flows — signals the client to show a flow-selection UI.
     def get_isParentFlow(self, obj):
-        """Check if this flow has children."""
         return obj.child_flows.exists()
-    
+
+    # Purpose: Returns serialized child flows; relies on prefetch_related('child_flows') in the view
+    #          query to avoid an extra DB hit here.
     def get_children_flows(self, obj):
-        """Get list of child flows if this is a parent flow."""
         if obj.child_flows.exists():
             return ChildFlowSerializer(obj.child_flows.all(), many=True).data
         return []
-    
+
+    # Purpose: Returns image upload constraints for this flow; None if no config is attached.
     def get_image_config(self, obj):
-        """Get image configuration for this flow."""
         if obj.image_config:
             return ImageConfigurationSerializer(obj.image_config).data
         return None
