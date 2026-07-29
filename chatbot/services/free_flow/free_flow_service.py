@@ -4,6 +4,7 @@ from chatbot.llm_models.llm_script import handle_openai_response_api
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.models import ChatStatus, Profile, CompanyBot, CompanyChat
 from chatbot.utils.chat_utils import get_guided_chat
+from chatbot.utils.usage_cost_context import set_usage_cost_context, reset_usage_cost_context
 import logging
 import json
 
@@ -20,6 +21,7 @@ class FreeFlowService:
         """
         Process user message and stream LLM response back via channel layer.
         """
+        cost_context_token = set_usage_cost_context(session_id=session_id, profile_id=profile_id)
         try:
             logger.info(f"Processing free-flow for session {session_id}, channel {channel_name}")
             
@@ -127,7 +129,9 @@ class FreeFlowService:
         except Exception as e:
             logger.error(f'Error in process_and_stream: {e}', exc_info=True)
             self._send_error(channel_name, "An error occurred processing your message")
-    
+        finally:
+            reset_usage_cost_context(cost_context_token)
+
     def _send_chunk(self, channel_name, content, finish_reason, extra_content=None):
         """
         Send a chunk via channel layer to the WebSocket.

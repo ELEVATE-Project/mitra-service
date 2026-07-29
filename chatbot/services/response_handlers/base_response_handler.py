@@ -323,6 +323,7 @@ class BaseResponseHandler(ABC):
                     company_bot=company_bot,
                     tools=tools
                 )
+                
             except Exception as e:
                 logger.error(f"Bedrock Error: %s", e)
                 response = None
