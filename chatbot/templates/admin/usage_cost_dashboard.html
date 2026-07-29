@@ -1,0 +1,537 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block title %}Cost Monitoring Dashboard{% endblock %}
+
+{% comment %}
+  Purpose:  Main cost monitoring dashboard. Extends jazzmin's base_site.html.
+  Sections: Daily Cost line chart (30 days) | Cost by Call Type pie | Cost by Provider pie |
+            Cost by Session paginated bar chart | Sessions and Cost AJAX table | Cost by Bot table.
+  Inputs:   daily_trend_labels/values, by_call_type, by_provider, by_company_bot,
+            session_cost_chart_labels/values/page/num_pages (from usage_cost_dashboard view).
+  Behaviour:
+    - Sessions table updates via AJAX on filter/search/pagination without reloading charts.
+    - Session cost chart pages via AJAX and re-renders in place.
+    - JS inline styles strip AdminLTE/Bootstrap container padding to maximise chart width
+      (CSS alone cannot reliably win against statically-loaded AdminLTE specificity).
+  Dependencies: Chart.js (CDN), jazzmin admin base template.
+{% endcomment %}
+{# extrastyle injects CSS into head before jazzmin stylesheets for correct cascade position. #}
+{% block extrastyle %}
+<style>
+/* Strip all AdminLTE/Bootstrap wrappers between the sidebar and our dashboard */
+.content-wrapper > .content:not(.border-bottom) {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+.content-wrapper > .content:not(.border-bottom) > .container-fluid {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+}
+.content-wrapper > .content:not(.border-bottom) > .container-fluid > section#content.content {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+.content-wrapper > .content:not(.border-bottom) > .container-fluid > section#content.content > .row {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    width: 100% !important;
+}
+/* Dashboard layout */
+#content-main.cost-dashboard {
+    width: 100%;
+    padding: 20px 24px;
+    box-sizing: border-box;
+}
+.page-title {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 24px;
+    color: #1a1a2e;
+}
+.daily-cost-box,
+.session-chart-box,
+.sessions-box {
+    width: 100%;
+    background: #fff;
+    border: 1px solid #d9e2ec;
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    box-sizing: border-box;
+}
+#dailyTrendChart {
+    width: 100% !important;
+    height: 340px !important;
+}
+#sessionCostChart {
+    width: 100% !important;
+    height: 340px !important;
+}
+.charts-row {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+.chart-box {
+    flex: 1 1 0;
+    background: #fff;
+    border: 1px solid #d9e2ec;
+    border-radius: 10px;
+    padding: 20px 24px;
+    min-width: 0;
+}
+.pie-chart-wrapper {
+    position: relative;
+    width: 340px;
+    height: 340px;
+    margin: 0 auto;
+}
+.pie-chart-wrapper canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+.chart-box h2,
+.daily-cost-box h2,
+.session-chart-box h2,
+.sessions-box h2,
+.table-box h2 {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    color: #1a1a2e;
+    letter-spacing: 0.01em;
+}
+.session-chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+.session-chart-header .pagination { margin-top: 0; }
+.session-chart-header button {
+    padding: 5px 12px;
+    border: 1px solid #d9e2ec;
+    border-radius: 6px;
+    background: #f6f9fc;
+    color: #0b57d0;
+    font-size: 13px;
+    cursor: pointer;
+}
+.session-chart-header button:disabled { color: #aaa; cursor: default; }
+.sessions-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+.view-toggle { display: flex; gap: 8px; }
+.view-toggle .toggle-btn {
+    display: inline-block;
+    padding: 6px 12px;
+    border: 1px solid #d9e2ec;
+    border-radius: 6px;
+    font-size: 13px;
+    text-decoration: none !important;
+    color: #0b57d0 !important;
+    background: #f6f9fc !important;
+}
+.view-toggle .toggle-btn.active {
+    background: #0b57d0 !important;
+    color: #fff !important;
+    border-color: #0b57d0 !important;
+    font-weight: 600;
+}
+.session-search { display: flex; gap: 6px; align-items: center; }
+.session-search input[type="text"] {
+    padding: 5px 8px;
+    border: 1px solid #d9e2ec;
+    border-radius: 6px;
+    font-size: 13px;
+}
+.session-search button {
+    padding: 5px 12px;
+    border: 1px solid #0b57d0;
+    border-radius: 6px;
+    background: #0b57d0;
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+}
+.session-search .clear-search { font-size: 13px; color: #555; }
+.pagination {
+    margin-top: 12px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    font-size: 13px;
+}
+.pagination a { color: #0b57d0; text-decoration: none; }
+.pagination .current-page { color: #555; }
+.tables-row { display: flex; gap: 24px; flex-wrap: wrap; }
+.table-box {
+    flex: 1 1 400px;
+    background: #fff;
+    border: 1px solid #d9e2ec;
+    border-radius: 10px;
+    padding: 20px 24px;
+}
+.table-box table { width: 100%; border-collapse: collapse; }
+.table-box th, .table-box td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid #eee;
+    font-size: 13px;
+}
+.table-box th { color: #555; font-weight: 600; }
+.bot-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.bot-filter-bar label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #555;
+    white-space: nowrap;
+}
+.bot-filter-bar select {
+    padding: 6px 10px;
+    border: 1px solid #d9e2ec;
+    border-radius: 6px;
+    font-size: 13px;
+    color: #1a1a2e;
+    background: #f6f9fc;
+    cursor: pointer;
+    min-width: 200px;
+}
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a>
+    &rsaquo; Cost Monitoring Dashboard
+</div>
+{% endblock %}
+
+{% block content %}
+<div id="content-main" class="cost-dashboard">
+    <h1 class="page-title">Cost Monitoring Dashboard</h1>
+
+    <div class="bot-filter-bar">
+        <label for="bot-select">Filter by Bot:</label>
+        <select id="bot-select" onchange="applyBotFilter(this.value)">
+            <option value="">All Bots</option>
+            {% for bot in bots %}
+            <option value="{{ bot.id }}" {% if selected_bot == bot.id %}selected{% endif %}>{{ bot.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="chart-box daily-cost-box">
+        <h2>Daily Cost (last 30 days)</h2>
+        <canvas id="dailyTrendChart"></canvas>
+    </div>
+
+    <div class="charts-row">
+        <div class="chart-box">
+            <h2>Cost by Call Type</h2>
+            <div class="pie-chart-wrapper">
+                <canvas id="callTypeChart"></canvas>
+            </div>
+        </div>
+        <div class="chart-box">
+            <h2>Cost by Provider</h2>
+            <div class="pie-chart-wrapper">
+                <canvas id="providerChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="chart-box session-chart-box">
+        <div class="session-chart-header">
+            <h2>Cost by Session (latest 100 per page)</h2>
+            <div class="pagination" id="session-cost-chart-pagination">
+                <button type="button" id="sessionCostChartPrev" disabled>&laquo; Previous</button>
+                <span class="current-page" id="sessionCostChartPageLabel">Page {{ session_cost_chart_page }} of {{ session_cost_chart_num_pages }}</span>
+                <button type="button" id="sessionCostChartNext" disabled>Next &raquo;</button>
+            </div>
+        </div>
+        <canvas id="sessionCostChart"></canvas>
+    </div>
+
+    <div class="table-box sessions-box">
+        <h2>Sessions and Cost</h2>
+        <div id="sessions-table-container">
+            {% include 'admin/usage_cost_sessions_table.html' %}
+        </div>
+    </div>
+
+    <div class="tables-row">
+        <div class="table-box">
+            <h2>Cost by Bot</h2>
+            <table>
+                <thead>
+                    <tr><th>Company Bot</th><th>Total Cost</th></tr>
+                </thead>
+                <tbody>
+                    {% for row in by_company_bot %}
+                    <tr>
+                        <td>{{ row.company_bot__name|default:"—" }}</td>
+                        <td>{{ row.total }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="2">No data yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{# json_script HTML-escapes <, >, & so a value containing </script> can't break out of the inline script block below. #}
+{{ daily_trend_labels|json_script:"daily-trend-labels" }}
+{{ daily_trend_values|json_script:"daily-trend-values" }}
+{{ session_cost_chart_labels|json_script:"session-cost-chart-labels" }}
+{{ session_cost_chart_values|json_script:"session-cost-chart-values" }}
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1"
+        integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ"
+        crossorigin="anonymous"></script>
+<script>
+    const dailyLabels = JSON.parse(document.getElementById('daily-trend-labels').textContent);
+    const dailyValues = JSON.parse(document.getElementById('daily-trend-values').textContent);
+    const callTypeLabels = [{% for row in by_call_type %}"{{ row.call_type }}",{% endfor %}];
+    const callTypeValues = [{% for row in by_call_type %}{{ row.total|default:0 }},{% endfor %}];
+    const providerLabels = [{% for row in by_provider %}"{{ row.provider|default:"unknown" }}",{% endfor %}];
+    const providerValues = [{% for row in by_provider %}{{ row.total|default:0 }},{% endfor %}];
+
+    new Chart(document.getElementById('dailyTrendChart'), {
+        type: 'line',
+        data: {
+            labels: dailyLabels,
+            datasets: [{
+                label: 'Total Cost ($)',
+                data: dailyValues,
+                borderColor: '#0b57d0',
+                backgroundColor: 'rgba(11, 87, 208, 0.1)',
+                fill: true,
+                tension: 0.2,
+            }]
+        },
+        options: {
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { font: { weight: 'bold' }, boxWidth: 12, boxHeight: 12, borderRadius: 3, useBorderRadius: true } },
+            },
+            scales: {
+                x: { ticks: { font: { weight: 'bold' } } },
+                y: { ticks: { font: { weight: 'bold' } } },
+            },
+        },
+    });
+
+    new Chart(document.getElementById('callTypeChart'), {
+        type: 'pie',
+        data: {
+            labels: callTypeLabels,
+            datasets: [{
+                data: callTypeValues,
+                backgroundColor: ['#0b57d0', '#e8710a', '#34a853', '#a142f4', '#ea4335'],
+            }]
+        },
+        options: {
+            plugins: {
+                legend: { labels: { font: { weight: 'bold' }, boxWidth: 12, boxHeight: 12, borderRadius: 3, useBorderRadius: true } },
+            },
+        },
+    });
+
+    new Chart(document.getElementById('providerChart'), {
+        type: 'pie',
+        data: {
+            labels: providerLabels,
+            datasets: [{
+                data: providerValues,
+                backgroundColor: ['#0b57d0', '#e8710a', '#34a853', '#a142f4', '#ea4335'],
+            }]
+        },
+        options: {
+            plugins: {
+                legend: { labels: { font: { weight: 'bold' }, boxWidth: 12, boxHeight: 12, borderRadius: 3, useBorderRadius: true } },
+            },
+        },
+    });
+
+    (function () {
+        let sessionCostChartPage = {{ session_cost_chart_page }};
+        const sessionCostChartNumPages = {{ session_cost_chart_num_pages }};
+        const sessionCostChartUrl = '{% url "admin:chatbot_usagecostlog_session_cost_chart" %}';
+        const prevBtn = document.getElementById('sessionCostChartPrev');
+        const nextBtn = document.getElementById('sessionCostChartNext');
+        const pageLabel = document.getElementById('sessionCostChartPageLabel');
+
+        const sessionCostChart = new Chart(document.getElementById('sessionCostChart'), {
+            type: 'bar',
+            data: {
+                labels: JSON.parse(document.getElementById('session-cost-chart-labels').textContent),
+                datasets: [{
+                    label: 'Total Cost ($)',
+                    data: JSON.parse(document.getElementById('session-cost-chart-values').textContent),
+                    backgroundColor: 'rgba(230, 115, 0, 0.75)',
+                    borderColor: 'rgba(200, 80, 0, 1)',
+                    borderWidth: 1,
+                    borderRadius: 6,
+                    borderSkipped: 'bottom',
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { font: { weight: 'bold' }, boxWidth: 12, boxHeight: 12, borderRadius: 3, useBorderRadius: true } },
+                },
+                scales: {
+                    x: {
+                        title: { display: false },
+                        ticks: {
+                            callback: function () { return '●'; },
+                            color: 'rgba(230, 115, 0, 1)',
+                            font: { size: 14, weight: 'bold' },
+                            maxRotation: 0,
+                            minRotation: 0,
+                        },
+                    },
+                    y: {
+                        title: { display: true, text: 'Cost ($)', font: { weight: 'bold' } },
+                        beginAtZero: true,
+                        ticks: { font: { weight: 'bold' } },
+                    },
+                },
+            },
+        });
+
+        function updatePaginationButtons() {
+            prevBtn.disabled = sessionCostChartPage <= 1;
+            nextBtn.disabled = sessionCostChartPage >= sessionCostChartNumPages;
+            pageLabel.textContent = 'Page ' + sessionCostChartPage + ' of ' + sessionCostChartNumPages;
+        }
+
+        function loadSessionCostChartPage(page) {
+            const botId = new URLSearchParams(window.location.search).get('bot') || '';
+            let url = sessionCostChartUrl + '?page=' + page;
+            if (botId) url += '&bot=' + botId;
+            fetch(url)
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    sessionCostChart.data.labels = data.labels;
+                    sessionCostChart.data.datasets[0].data = data.values;
+                    sessionCostChart.update();
+                    sessionCostChartPage = data.page;
+                    updatePaginationButtons();
+                });
+        }
+
+        prevBtn.addEventListener('click', function () {
+            if (sessionCostChartPage > 1) {
+                loadSessionCostChartPage(sessionCostChartPage - 1);
+            }
+        });
+        nextBtn.addEventListener('click', function () {
+            if (sessionCostChartPage < sessionCostChartNumPages) {
+                loadSessionCostChartPage(sessionCostChartPage + 1);
+            }
+        });
+        updatePaginationButtons();
+    })();
+
+    // Sessions table is loaded as an AJAX partial so filter/search/pagination
+    // updates don't trigger a full page reload (avoids re-rendering all charts).
+    (function () {
+        const container = document.getElementById('sessions-table-container');
+        const partialUrl = '{% url "admin:chatbot_usagecostlog_sessions_table" %}';
+
+        function getBotId() {
+            return new URLSearchParams(window.location.search).get('bot') || '';
+        }
+
+        function loadSessions(queryString, pushUrl) {
+            const botId = getBotId();
+            const fullQuery = botId ? queryString + (queryString ? '&' : '') + 'bot=' + botId : queryString;
+            fetch(partialUrl + '?' + fullQuery)
+                .then(function (response) { return response.text(); })
+                .then(function (html) {
+                    container.innerHTML = html;
+                    if (pushUrl) {
+                        const url = window.location.pathname + (fullQuery ? '?' + fullQuery : '');
+                        window.history.replaceState(null, '', url);
+                    }
+                });
+        }
+
+        container.addEventListener('click', function (event) {
+            const link = event.target.closest('a');
+            if (!link) {
+                return;
+            }
+            const href = link.getAttribute('href');
+            if (!href || !href.startsWith('?')) {
+                return;
+            }
+            event.preventDefault();
+            loadSessions(href.slice(1), true);
+        });
+
+        container.addEventListener('submit', function (event) {
+            const form = event.target.closest('form.session-search');
+            if (!form) {
+                return;
+            }
+            event.preventDefault();
+            const params = new URLSearchParams(new FormData(form));
+            loadSessions(params.toString(), true);
+        });
+    })();
+
+    function applyBotFilter(botId) {
+        const params = new URLSearchParams(window.location.search);
+        if (botId) {
+            params.set('bot', botId);
+        } else {
+            params.delete('bot');
+        }
+        // Strip session-level params so the view resets to defaults on bot switch.
+        params.delete('page');
+        params.delete('chart_page');
+        window.location.href = window.location.pathname + '?' + params.toString();
+    }
+
+    // CSS alone cannot reliably win against AdminLTE/Bootstrap specificity loaded via
+    // static files, so inline styles are applied via JS as the guaranteed override path.
+    (function () {
+        var sel = [
+            '.content-wrapper > .content:not(.border-bottom)',
+            '.content-wrapper > .content:not(.border-bottom) > .container-fluid',
+            '.content-wrapper > .content:not(.border-bottom) > .container-fluid > section#content',
+            '.content-wrapper > .content:not(.border-bottom) > .container-fluid > section#content > .row',
+        ];
+        sel.forEach(function (s) {
+            var el = document.querySelector(s);
+            if (!el) { return; }
+            el.style.paddingLeft = '0';
+            el.style.paddingRight = '0';
+            el.style.marginLeft = '0';
+            el.style.marginRight = '0';
+            el.style.maxWidth = 'none';
+            el.style.width = '100%';
+        });
+    })();
+</script>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% comment %}
+  Purpose:  Reusable partial for the "Sessions and Cost" table. Rendered on initial
+            page load (via the include tag in the dashboard) and on subsequent AJAX refreshes.
+  Inputs:   top_sessions  — Session queryset (slice or page object).
+            session_view  — Active filter: top1 | top10 | all.
+            search_query  — Current search string (empty if none).
+            sessions_page — Django Page object (only present in "all" view).
+  Behaviour: Filter buttons and pagination links emit relative ?-prefixed URLs that
+             the dashboard JS intercepts to trigger AJAX reloads instead of navigation.
+{% endcomment %}
+<div class="sessions-controls">
+    <div class="view-toggle">
+        <a class="toggle-btn{% if session_view == 'top1' %} active{% endif %}" href="?session_view=top1">Top costed session</a>
+        <a class="toggle-btn{% if session_view == 'top10' %} active{% endif %}" href="?session_view=top10">Top 10 costed sessions</a>
+        <a class="toggle-btn{% if session_view == 'all' %} active{% endif %}" href="?session_view=all">All</a>
+    </div>
+    <form method="get" class="session-search">
+        <input type="text" name="q" value="{{ search_query }}" placeholder="Search by session ID">
+        <button type="submit">Search</button>
+        {% if search_query %}
+        <a href="?session_view={{ session_view }}" class="clear-search">Clear</a>
+        {% endif %}
+    </form>
+</div>
+<table>
+    <thead>
+        <tr><th>Session</th><th>Total Cost</th><th>Created At</th></tr>
+    </thead>
+    <tbody>
+        {% for session in top_sessions %}
+        <tr>
+            <td><a href="{% url 'admin:chatbot_usagecostlog_session_detail' session.pk %}">{{ session.session }}</a></td>
+            <td>{{ session.total_cost }}</td>
+            <td>{{ session.created_at }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="3">No data found.</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% if sessions_page %}
+<div class="pagination">
+    {% if sessions_page.has_previous %}
+        <a href="?session_view=all&q={{ search_query }}&page=1">&laquo; First</a>
+        <a href="?session_view=all&q={{ search_query }}&page={{ sessions_page.previous_page_number }}">Previous</a>
+    {% endif %}
+    <span class="current-page">Page {{ sessions_page.number }} of {{ sessions_page.paginator.num_pages }}</span>
+    {% if sessions_page.has_next %}
+        <a href="?session_view=all&q={{ search_query }}&page={{ sessions_page.next_page_number }}">Next</a>
+        <a href="?session_view=all&q={{ search_query }}&page={{ sessions_page.paginator.num_pages }}">Last &raquo;</a>
+    {% endif %}
+</div>
+{% endif %}
