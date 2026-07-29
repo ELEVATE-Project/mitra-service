@@ -10,14 +10,14 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('chatbot', '0081_alter_chatsession_session_type'),
+        ('chatbot', '0082_alter_chatsession_language_and_more'),
     ]
 
     operations = [
         migrations.AddField(
             model_name='chatsession',
             name='total_cost',
-            field=models.DecimalField(decimal_places=6, default=0, max_digits=12),
+            field=models.DecimalField(decimal_places=6, default=0, db_default=0, max_digits=12),
         ),
         migrations.CreateModel(
             name='UsageCostLog',

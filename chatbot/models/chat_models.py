@@ -28,7 +28,10 @@ class ChatSession(models.Model):
     user_id = models.CharField(max_length=400, null=True, blank=True)
     session_type = models.CharField(max_length=255, null=True, blank=True)
     other_params = models.JSONField(null=True, blank=True)
-    total_cost = models.DecimalField(max_digits=12, decimal_places=6, default=0)
+    # db_default (not just default=) so the column carries a real Postgres-level DEFAULT 0.
+    # Without it, any INSERT from code that doesn't know this field exists (e.g. an older/
+    # reverted branch's model) hits a NOT NULL violation instead of silently getting 0.
+    total_cost = models.DecimalField(max_digits=12, decimal_places=6, default=0, db_default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
