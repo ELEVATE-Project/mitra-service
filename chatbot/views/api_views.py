@@ -18,38 +18,17 @@ from chatbot.models.company_models import Flow
 logger = logging.getLogger('django')
 
 
-# Purpose: Creates a new anonymous server-side session and returns its key to the caller.
-#          The key is used by the WebSocket client as an identity token in the
-#          ws/common/ authenticate message, linking the socket to a ChatSession.
-# Inputs:  request — Django HttpRequest (no body or query params required; method not enforced)
-# Output:  JsonResponse {"sessionid": "<40-char random key>"} on success (HTTP 200);
-#          no response body on DB failure (bare except swallows error → Django returns 500)
-# Side effects: Inserts one row into the django_session table (empty session, future expiry)
-# Failure conditions: DB unavailable — exception is swallowed; traceback printed to stdout
 def generate_session_id(request):
     try:
         session = SessionStore()
-        # create() persists the session to DB immediately; SessionStore() alone is just an in-memory object
         session.create()
         return JsonResponse({'sessionid': session.session_key})
     except Exception as e:
-        # no return here — DB failure silently results in a 500 with no response body
         print('Exception is here')
         print(e)
         traceback.print_exc()
 
 
-
-# Purpose: Create or update a Profile for a given company. Acts as an upsert:
-#          updates if email+company match exists, returns existing if phone matches,
-#          creates new otherwise. Optionally transliterates first_name into the target script.
-# Inputs:  request.data — { email, company (slug), first_name?, preferred_route?,
-#                            latest_flow (flow_route string)?, phone?, ...profile fields }
-# Output:  Serialized Profile (password excluded) on success;
-#          400 if email/company missing or data invalid;
-#          404 if company or flow_route not found; 500 on unexpected error
-# Side effects: May INSERT or UPDATE profile, profile_address, profile_media rows;
-#               may call AI4Bharat transliteration API
 @api_view(['POST'])
 def post_profile(request):
     try:
@@ -75,8 +54,9 @@ def post_profile(request):
             if first_names and isinstance(first_names, list) and len(first_names) > 0:
                 data['first_name'] = first_names[0]
 
+        # handling the latest flow
         flow_route = data.get('latest_flow', None)
-        # client sends latest_flow as a flow_route string; serializer expects a FK id
+
         if flow_route:
             flow = Flow.objects.values('id').get(flow_route=flow_route)
             data['latest_flow'] = flow.get('id')
@@ -89,7 +69,6 @@ def post_profile(request):
             if phone:
                 profile = Profile.objects.filter(phone=phone, company=company)
                 if len(profile) > 0:
-                    # phone match found — return existing profile without applying any updates
                     serializer = ProfileSerializer(profile[0])
                     return Response(serializer.data)
             serializer = ProfileSerializer(data=data)

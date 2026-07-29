@@ -539,14 +539,3 @@ class OperationTypeChoices(models.TextChoices):
     LLM = 'llm', _('LLM')
     NON_LLM = 'non_llm', _('Non-LLM')
 
-
-class UsageCallType(models.TextChoices):
-    """
-    Identifies the kind of billable provider call a UsageCostLog row records.
-    """
-    LLM = 'LLM', _('LLM')
-    TTS = 'TTS', _('Text To Speech')
-    STT = 'STT', _('Speech To Text')
-    TRANSLATE = 'TRANSLATE', _('Translation')
-    TRANSLITERATE = 'TRANSLITERATE', _('Transliteration')
-
