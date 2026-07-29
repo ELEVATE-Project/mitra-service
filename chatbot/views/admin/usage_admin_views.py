@@ -8,11 +8,12 @@ from django.db.models.functions import TruncDate
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 import datetime
 
 from chatbot.models import ChatSession, CompanyBot, UsageCostLog
 
-SESSION_COST_CHART_PAGE_SIZE = 100
+SESSION_COST_CHART_PAGE_SIZE = 50
 
 
 # Purpose: Safely parses the optional 'bot' query param into an int PK.
@@ -27,16 +28,39 @@ def _get_bot_id_param(request):
         return None
 
 
+# Purpose: Parses a <input type="datetime-local"> value ("YYYY-MM-DDTHH:MM") into an
+#          aware datetime. Returns None for empty/unparseable input instead of raising,
+#          so a malformed value just falls back to "no filter" rather than a 500.
+def _parse_local_datetime(value):
+    if not value:
+        return None
+    dt = parse_datetime(value)
+    if dt is None:
+        return None
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt)
+    return dt
+
+
 # Purpose: Builds context for the "Sessions and Cost" table.
-# Inputs:  request — GET params: session_view (top1|top10|all), q (search), page.
+# Inputs:  request — GET params: session_view (top1|top10|all), q (search),
+#                    date_from/date_to (datetime-local strings), page.
 #          bot_id  — Optional CompanyBot PK; when set, only sessions for that bot are shown.
-# Output:  Dict with top_sessions, sessions_page, session_view, search_query.
+# Output:  Dict with top_sessions, sessions_page, session_view, search_query,
+#          date_from/date_to (raw strings, for re-populating the form inputs).
 def _get_sessions_context(request, bot_id=None):
     search_query = request.GET.get('q', '').strip()
+    date_from_raw = request.GET.get('date_from', '').strip()
+    date_to_raw = request.GET.get('date_to', '').strip()
+    date_from = _parse_local_datetime(date_from_raw)
+    date_to = _parse_local_datetime(date_to_raw)
+
     session_view = request.GET.get('session_view', 'top10')
     if session_view not in ('top1', 'top10', 'all'):
         session_view = 'top10'
-    if search_query:
+    # A date filter, like search, only makes sense against the full paginated list -
+    # top1/top10 are fixed "highest cost" views, not a range a date filter could narrow.
+    if search_query or date_from or date_to:
         session_view = 'all'
 
     # Exclude zero-cost sessions (test/system calls) to keep the dashboard focused on real spend.
@@ -45,6 +69,10 @@ def _get_sessions_context(request, bot_id=None):
         sessions_qs = sessions_qs.filter(company_bot_id=bot_id)
     if search_query:
         sessions_qs = sessions_qs.filter(session__icontains=search_query)
+    if date_from:
+        sessions_qs = sessions_qs.filter(created_at__gte=date_from)
+    if date_to:
+        sessions_qs = sessions_qs.filter(created_at__lte=date_to)
 
     sessions_page = None
     if session_view == 'top1':
@@ -61,6 +89,8 @@ def _get_sessions_context(request, bot_id=None):
         'sessions_page': sessions_page,
         'session_view': session_view,
         'search_query': search_query,
+        'date_from': date_from_raw,
+        'date_to': date_to_raw,
     }
 
 

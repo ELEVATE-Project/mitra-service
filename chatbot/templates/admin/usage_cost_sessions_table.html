@@ -16,8 +16,10 @@
     </div>
     <form method="get" class="session-search">
         <input type="text" name="q" value="{{ search_query }}" placeholder="Search by session ID">
+        <label class="date-filter-label">From <input type="datetime-local" name="date_from" value="{{ date_from }}"></label>
+        <label class="date-filter-label">To <input type="datetime-local" name="date_to" value="{{ date_to }}"></label>
         <button type="submit">Search</button>
-        {% if search_query %}
+        {% if search_query or date_from or date_to %}
         <a href="?session_view={{ session_view }}" class="clear-search">Clear</a>
         {% endif %}
     </form>
@@ -41,13 +43,13 @@
 {% if sessions_page %}
 <div class="pagination">
     {% if sessions_page.has_previous %}
-        <a href="?session_view=all&q={{ search_query }}&page=1">&laquo; First</a>
-        <a href="?session_view=all&q={{ search_query }}&page={{ sessions_page.previous_page_number }}">Previous</a>
+        <a href="?session_view=all&q={{ search_query }}&date_from={{ date_from }}&date_to={{ date_to }}&page=1">&laquo; First</a>
+        <a href="?session_view=all&q={{ search_query }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ sessions_page.previous_page_number }}">Previous</a>
     {% endif %}
     <span class="current-page">Page {{ sessions_page.number }} of {{ sessions_page.paginator.num_pages }}</span>
     {% if sessions_page.has_next %}
-        <a href="?session_view=all&q={{ search_query }}&page={{ sessions_page.next_page_number }}">Next</a>
-        <a href="?session_view=all&q={{ search_query }}&page={{ sessions_page.paginator.num_pages }}">Last &raquo;</a>
+        <a href="?session_view=all&q={{ search_query }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ sessions_page.next_page_number }}">Next</a>
+        <a href="?session_view=all&q={{ search_query }}&date_from={{ date_from }}&date_to={{ date_to }}&page={{ sessions_page.paginator.num_pages }}">Last &raquo;</a>
     {% endif %}
 </div>
 {% endif %}

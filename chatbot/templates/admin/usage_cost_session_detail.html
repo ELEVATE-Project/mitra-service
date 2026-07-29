@@ -108,4 +108,22 @@
     font-size: 13px;
 }
 </style>
+
+<script>
+    // Same fix as the main dashboard - Jazzmin's sidebar-highlight logic never matches
+    // this page's URL, so force the "Usage Cost Dashboard" nav item active manually.
+    (function () {
+        document.querySelectorAll('.nav-sidebar a.nav-link.active').forEach(function (el) {
+            el.classList.remove('active');
+        });
+        var link = document.querySelector(
+            'a.nav-link[href="{% url "admin:chatbot_usagecostlog_changelist" %}"]'
+        );
+        if (link) {
+            link.classList.add('active');
+            var parentLi = link.closest('li.nav-item.has-treeview');
+            if (parentLi) { parentLi.classList.add('menu-is-opening', 'menu-open'); }
+        }
+    })();
+</script>
 {% endblock %}

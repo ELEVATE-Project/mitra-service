@@ -165,6 +165,19 @@
     cursor: pointer;
 }
 .session-search .clear-search { font-size: 13px; color: #555; }
+.session-search .date-filter-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: #555;
+}
+.session-search .date-filter-label input[type="datetime-local"] {
+    padding: 4px 6px;
+    border: 1px solid #d9e2ec;
+    border-radius: 6px;
+    font-size: 13px;
+}
 .pagination {
     margin-top: 12px;
     display: flex;
@@ -258,7 +271,7 @@
 
     <div class="chart-box session-chart-box">
         <div class="session-chart-header">
-            <h2>Cost by Session (latest 100 per page)</h2>
+            <h2>Cost by Session (latest 50 per page)</h2>
             <div class="pagination" id="session-cost-chart-pagination">
                 <button type="button" id="sessionCostChartPrev" disabled>&laquo; Previous</button>
                 <span class="current-page" id="sessionCostChartPageLabel">Page {{ session_cost_chart_page }} of {{ session_cost_chart_num_pages }}</span>
@@ -532,6 +545,25 @@
             el.style.maxWidth = 'none';
             el.style.width = '100%';
         });
+    })();
+
+    // Jazzmin's own sidebar-highlight logic (main.js setActiveLinks) does an exact
+    // string match between window.location.pathname and each sidebar link's href -
+    // it never matches here because changelist_view() always redirects the real
+    // changelist URL to this dashboard URL instead. Force the correct nav item active
+    // ourselves so the "Usage Cost Dashboard" tab isn't silently left unhighlighted.
+    (function () {
+        document.querySelectorAll('.nav-sidebar a.nav-link.active').forEach(function (el) {
+            el.classList.remove('active');
+        });
+        var link = document.querySelector(
+            'a.nav-link[href="{% url "admin:chatbot_usagecostlog_changelist" %}"]'
+        );
+        if (link) {
+            link.classList.add('active');
+            var parentLi = link.closest('li.nav-item.has-treeview');
+            if (parentLi) { parentLi.classList.add('menu-is-opening', 'menu-open'); }
+        }
     })();
 </script>
 {% endblock %}
