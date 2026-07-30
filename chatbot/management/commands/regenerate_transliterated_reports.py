@@ -80,6 +80,12 @@ Arguments
     --field-map
         Patch mode only. STAGE=field pairs, e.g.
         'INTRODUCTION=user_name,ORGANIZATION=organization'.
+<<<<<<< HEAD
+=======
+    --language
+        Override the language passed to report regeneration. If omitted, taken
+        from the existing Story.language, then the ChatSession.language.
+>>>>>>> upstream/release-2.2.0
     --bot-profile-id
         Profile id used as the bot sender (its messages are excluded from
         re-transliteration). Default 1.
@@ -87,6 +93,7 @@ Arguments
     --skip-report          Skip step 2 (only re-transliterate chats).
     --limit                Process at most N sessions (0 = no limit).
     --dry-run              Report counts only; no DB writes, no report calls.
+<<<<<<< HEAD
 
 Report language
 ---------------
@@ -98,6 +105,8 @@ missing, ``transliterate_to_english_if_needed()`` silently keeps the original sc
 ``other_params`` ends up in Devanagari, and dashboards reading
 ``other_params->>'location'`` stop matching the story. This command therefore refuses
 to regenerate such sessions instead of corrupting them.
+=======
+>>>>>>> upstream/release-2.2.0
 """
 
 from collections import namedtuple
@@ -116,11 +125,19 @@ from chatbot.models import (
     Voice,
     VoiceType,
 )
+<<<<<<< HEAD
+=======
+from chatbot.models.company_models import CompanyStateMachine
+>>>>>>> upstream/release-2.2.0
 from chatbot.utils.transliterate_utils import (
     transliterate_text,
     get_transliteration_output,
 )
+<<<<<<< HEAD
 from chatbot.utils.story_utils.story_utils import create_story_object, get_story_company_bot
+=======
+from chatbot.utils.story_utils.story_utils import create_story_object
+>>>>>>> upstream/release-2.2.0
 
 
 # Session-type -> report flow fallback. shikshaChaupal reports are generated
@@ -211,6 +228,10 @@ class Command(BaseCommand):
                  "ALL routes. Leave unset to auto-resolve each session's own flow "
                  "(required when processing multiple routes/flows at once).",
         )
+<<<<<<< HEAD
+=======
+        parser.add_argument("--language", type=str, default=None)
+>>>>>>> upstream/release-2.2.0
         parser.add_argument("--bot-profile-id", type=int, default=1)
         parser.add_argument(
             "--patch-fields",
@@ -249,9 +270,15 @@ class Command(BaseCommand):
         if not routes:
             raise CommandError("--route must list at least one bot route.")
         flow_override = opts["flow"]
+<<<<<<< HEAD
         bot_profile_id = opts["bot_profile_id"]
         self.bot_profile_id = bot_profile_id
         self._story_voice_cache = {}
+=======
+        language_override = opts["language"]
+        bot_profile_id = opts["bot_profile_id"]
+        self.bot_profile_id = bot_profile_id
+>>>>>>> upstream/release-2.2.0
         patch_fields = opts["patch_fields"]
         field_map = self._parse_field_map(opts["field_map"]) if patch_fields else {}
         skip_transliterate = opts["skip_transliterate"]
@@ -274,7 +301,11 @@ class Command(BaseCommand):
             affected, r_success, r_failed = self._process_route(
                 route=route, stages=stages, date_from=date_from, date_to=date_to,
                 session_types=session_types, session_ids=session_ids,
+<<<<<<< HEAD
                 flow_override=flow_override,
+=======
+                flow_override=flow_override, language_override=language_override,
+>>>>>>> upstream/release-2.2.0
                 patch_fields=patch_fields, field_map=field_map,
                 skip_transliterate=skip_transliterate, skip_report=skip_report,
                 limit=limit, dry_run=dry_run,
@@ -287,7 +318,11 @@ class Command(BaseCommand):
 
     # ------------------------------------------------------------------ #
     def _process_route(self, route, stages, date_from, date_to, session_types,
+<<<<<<< HEAD
                        session_ids, flow_override, patch_fields,
+=======
+                       session_ids, flow_override, language_override, patch_fields,
+>>>>>>> upstream/release-2.2.0
                        field_map, skip_transliterate, skip_report, limit, dry_run):
         """Scope + Step 1 + Step 2 for a single bot route. Returns
         (affected_sessions, reports_success, reports_failed)."""
@@ -417,7 +452,11 @@ class Command(BaseCommand):
 
             profile_id = chat_session.profile_id
             flow = flow_override or self._resolve_flow(session, chat_session)
+<<<<<<< HEAD
             language = self._resolve_language(chat_session)
+=======
+            language = language_override or self._resolve_language(session, chat_session)
+>>>>>>> upstream/release-2.2.0
 
             # ---- Patch mode: fix only personal fields, no LLM --------------
             if patch_fields:
@@ -433,6 +472,7 @@ class Command(BaseCommand):
                 continue
 
             # ---- Full regeneration (default) -------------------------------
+<<<<<<< HEAD
             if not self._story_bot_can_transliterate(flow, language):
                 self.stdout.write(self.style.ERROR(
                     f"  Skipping session={session}: no Transliterate Voice for "
@@ -443,6 +483,8 @@ class Command(BaseCommand):
                 r_failed += 1
                 continue
 
+=======
+>>>>>>> upstream/release-2.2.0
             if dry_run:
                 self.stdout.write(
                     f"  [dry-run] would regenerate session={session} "
@@ -586,6 +628,7 @@ class Command(BaseCommand):
         st = chat_session.session_type
         return SESSION_TYPE_TO_FLOW.get(st, st)
 
+<<<<<<< HEAD
     def _resolve_language(self, chat_session):
         """The report is regenerated in the conversation language -- the same value
         /api/end-story/ passes. Story.language is always 'en' (save_story hard-codes
@@ -617,6 +660,24 @@ class Command(BaseCommand):
                 ).exists()
         return self._story_voice_cache[key]
 
+=======
+    def _resolve_language(self, session, chat_session):
+        # The report/PDF is rendered in the conversation language (its
+        # StoryTranslation), while the main Story is often stored in English.
+        # So prefer the ChatSession language when it is non-English.
+        if chat_session and chat_session.language and chat_session.language != "en":
+            return chat_session.language
+        try:
+            from chatbot.models import Story
+
+            story = Story.objects.filter(session=session).first()
+            if story and story.language:
+                return story.language
+        except Exception:
+            pass
+        return (chat_session.language if chat_session else None) or "en"
+
+>>>>>>> upstream/release-2.2.0
     def _summary(self, affected, r_success, r_failed, dry_run):
         self.stdout.write("\n" + "=" * 50)
         prefix = "[dry-run] " if dry_run else ""
