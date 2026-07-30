@@ -1,8 +1,8 @@
-from chatbot.models import VoiceProvider, VoiceType, LanguageMapping, CompanyBot, UsageCallType
+from chatbot.models import VoiceProvider, VoiceType, LanguageMapping, CompanyBot
 from chatbot.translate.ai4Bharat.transliterate import call_ai4bharat_transliterate_api
 from chatbot.translate.custom.custom_llm import handle_custom_translation
 from chatbot.translate.sarvam.sarvam import SarvamLanguageService
-from chatbot.utils.audio_provider_utils import get_voice_provider, _record_voice_usage_cost
+from chatbot.utils.audio_provider_utils import get_voice_provider
 
 
 def transliterate_text(
@@ -39,12 +39,6 @@ def transliterate_text(
                 'status': 500,
                 'content': "No provider found!"
             }
-
-        _record_voice_usage_cost(
-            call_type=UsageCallType.TRANSLITERATE, voice_provider=voice_provider, company_bot=company_bot,
-            response=response, input_units=len(message_body or '')
-        )
-
         return response
     except Exception as e:
         return {

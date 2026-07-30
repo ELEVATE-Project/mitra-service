@@ -28,22 +28,9 @@ class ChatSession(models.Model):
     user_id = models.CharField(max_length=400, null=True, blank=True)
     session_type = models.CharField(max_length=255, null=True, blank=True)
     other_params = models.JSONField(null=True, blank=True)
-    total_cost = models.DecimalField(max_digits=12, decimal_places=6, default=0)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    def save(self, *args, **kwargs):
-        # total_cost is mutated exclusively via F() in record_usage_cost, out-of-band
-        # from any in-memory ChatSession instance. Exclude it from generic saves so an
-        # UPDATE never touches that column - nothing to clobber, no refresh needed.
-        update_fields = kwargs.get('update_fields')
-        if self.pk and update_fields is None:
-            kwargs['update_fields'] = [
-                f.name for f in self._meta.concrete_fields
-                if f.name not in (self._meta.pk.attname, 'total_cost')
-            ]
-        super().save(*args, **kwargs)
 
     def save_title(self, language='en'):
         company_chats = CompanyChat.objects.select_related('sender', 'receiver').filter(session=self.session).order_by('created_at').values("receiver", "receiver__id", "translated_message", "message", "status", "created_at")

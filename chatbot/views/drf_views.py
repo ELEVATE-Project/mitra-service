@@ -162,28 +162,21 @@ class FlowConnectionInfoView(generics.GenericAPIView):
     """
     serializer_class = FlowConnectionInfoSerializer
     
-    # Purpose: Bootstrap endpoint — returns the websocket_url and bot_route the client needs
-    #          to open a ws/common/ connection. Called before the WebSocket handshake.
-    # Inputs:  flow_route — query param identifying the Flow
-    # Output:  Serialized flow connection info (websocket_url, bot_route, isParentFlow, children, image_config);
-    #          400 if flow_route missing or flow inactive; 404 if flow not found
     def get(self, request, *args, **kwargs):
         flow_route = request.query_params.get('flow_route')
-
+        
         if not flow_route:
             return Response(
                 {'error': 'flow_route query parameter is required'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
+        
         try:
-            # select_related + prefetch_related fetches bot, image_config, and child_flows
-            # in one DB round trip — avoids N+1 across the serializer's computed fields
             flow = Flow.objects.select_related('bot', 'image_config').prefetch_related('child_flows').get(
                 flow_route=flow_route
             )
             
-            # 400 (not 404) intentionally — distinguishes "exists but disabled" from "not found"
+            # Check if flow is active
             if not flow.active:
                 return Response(
                     {'error': 'Flow is inactive'},
