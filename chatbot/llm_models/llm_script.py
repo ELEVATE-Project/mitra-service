@@ -33,6 +33,8 @@ def get_custom_model(company_bot):
     other_params = company_bot.get('other_params') if isinstance(company_bot, dict) else getattr(
         company_bot, 'other_params', None
     )
+    if isinstance(other_params, str):
+        other_params = json.loads(other_params)
     return other_params.get('custom_model') if other_params else None
 
 
