@@ -346,6 +346,7 @@ if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
                 "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
             },
         }
+
     else:
         # For cloud storage (AWS/GCP/Azure), still set MEDIA_ROOT and MEDIA_URL
         # These are needed for our storage handler to work correctly
