@@ -84,7 +84,6 @@ class LLMModel(models.TextChoices):
     CLAUDE_HAIKU_4_5 = 'us.anthropic.claude-haiku-4-5-20251001-v1:0', _('CLAUDE_HAIKU_4_5')
     CLAUDE_SONNET_4_5 = 'us.anthropic.claude-sonnet-4-5-20250929-v1:0', _('CLAUDE_SONNET_4_5')
 
-
 class EntityStatus(models.TextChoices):
     """
     Indicates whether an entity is active or inactive.
