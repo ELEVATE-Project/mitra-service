@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+from django.db import transaction
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.celery_tasks.handle_message import translate_and_send_message
 from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_response_api
@@ -89,34 +90,41 @@ class BaseResponseHandler(ABC):
         tool_input = response['input']
         stage_name = state_machine.name if state_machine else None
 
-        other_params = dict(chat_session.other_params or {})
-        prior = other_params.get('probe_guard') or {}
-        probe_count = prior.get('probe_count', 0) if prior.get('stage') == stage_name else 0
+        with transaction.atomic():
+            locked_session = ChatSession.objects.select_for_update().get(pk=chat_session.pk)
+            other_params = dict(locked_session.other_params or {})
+            prior = other_params.get('probe_guard') or {}
+            probe_count = prior.get('probe_count', 0) if prior.get('stage') == stage_name else 0
 
-        max_probes = tool_input.get('max_probes')
-        if not isinstance(max_probes, int) or isinstance(max_probes, bool) or max_probes < 0:
-            max_probes = self.DEFAULT_MAX_PROBES
+            max_probes = tool_input.get('max_probes')
+            if not isinstance(max_probes, int) or isinstance(max_probes, bool) or max_probes < 0:
+                max_probes = self.DEFAULT_MAX_PROBES
 
-        message_kind = tool_input.get('message_kind')
-        # Fail closed: only 'clarification'/'none' are exempt from the probe budget.
-        # Anything missing, misspelled, or outside the enum is treated as a follow_up.
-        if message_kind not in ('clarification', 'none'):
-            probe_count += 1
-            if probe_count > max_probes:
-                logger.info(
-                    f"Probe guard override: stage={stage_name} probe_count={probe_count} "
-                    f"max_probes={max_probes} - forcing state transition"
-                )
-                tool_input['response'] = ''
-                tool_input['should_function_call'] = True
+            message_kind = tool_input.get('message_kind')
+            # Fail closed: only 'clarification'/'none' are exempt from the probe budget.
+            # Anything missing, misspelled, or outside the enum is treated as a follow_up.
+            if message_kind not in ('clarification', 'none'):
+                probe_count += 1
+                if probe_count > max_probes:
+                    logger.info(
+                        f"Probe guard override: stage={stage_name} probe_count={probe_count} "
+                        f"max_probes={max_probes} - forcing state transition"
+                    )
+                    tool_input['response'] = ''
+                    tool_input['should_function_call'] = True
 
-        other_params['probe_guard'] = {
-            'stage': stage_name,
-            'probe_count': probe_count,
-            'max_probes': max_probes,
-        }
+            other_params['probe_guard'] = {
+                'stage': stage_name,
+                'probe_count': probe_count,
+                'max_probes': max_probes,
+            }
+            locked_session.other_params = other_params
+            locked_session.save(update_fields=['other_params'])
+
+        # Keep the in-memory chat_session (later code, e.g. _handle_function_call,
+        # does a full chat_session.save() on this same object) in sync so it
+        # doesn't overwrite this update with a stale other_params value.
         chat_session.other_params = other_params
-        chat_session.save(update_fields=['other_params'])
 
         return response
 
