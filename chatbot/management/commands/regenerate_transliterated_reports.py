@@ -15,10 +15,14 @@ This command fixes historic data in two steps:
   1. Re-transliterate the stored user chats for the given stage(s) so
      ``CompanyChat.translated_message`` holds the transliterated (not translated)
      text — exactly like chatbot/scripts/retransliterate_failed_chats.py does.
-  2. Regenerate the report for every affected session by calling the same
-     ``create_story_object`` that the ``/api/end-story/`` endpoint uses, so the
-     report is rebuilt from the corrected chats. Nothing about how the report is
-     generated changes.
+  2. Regenerate the report for every affected session by calling the *same*
+     entrypoint the session's own end-story endpoint uses, so the report is
+     rebuilt from the corrected chats. Nothing about how the report is generated
+     changes:
+       * legacy flows  -> ``create_story_object``  (``/api/end-story/``)
+       * ``Flow``-backed flows -> ``generate_story`` (``/api/end-story-v2/``)
+     The path is auto-detected per session from the ``Flow`` table and can be
+     forced with ``--entrypoint``.
 
 Usage
 -----
@@ -74,15 +78,19 @@ Arguments
         Optional SessionFlowName override applied to ALL routes. Leave unset to
         auto-resolve each session's own flow from Story.other_params['flow']
         (required when processing multiple routes/flows at once).
+    --entrypoint
+        Which report-generation path to use: 'auto' (default), 'v1' or 'v2'.
+        'auto' picks per session -- a flow that has an active ``Flow`` row with a
+        ``story_bot`` is a /end-story-v2 flow and is regenerated with
+        ``generate_story``; everything else keeps the historic
+        ``create_story_object`` (/end-story) path. Ignored in --patch-fields mode
+        (patch mode never calls either entrypoint).
     --patch-fields
         Fix only the personal fields in --field-map (name/org/...) in the stored
         story + translations and rebuild the PDF; no LLM, narrative untouched.
     --field-map
         Patch mode only. STAGE=field pairs, e.g.
         'INTRODUCTION=user_name,ORGANIZATION=organization'.
-    --language
-        Override the language passed to report regeneration. If omitted, taken
-        from the existing Story.language, then the ChatSession.language.
     --bot-profile-id
         Profile id used as the bot sender (its messages are excluded from
         re-transliteration). Default 1.
@@ -90,7 +98,19 @@ Arguments
     --skip-report          Skip step 2 (only re-transliterate chats).
     --limit                Process at most N sessions (0 = no limit).
     --dry-run              Report counts only; no DB writes, no report calls.
+
+Report language
+---------------
+The report is always regenerated in the session's own language -- the same value
+``/api/end-story/`` passes. ``Story.other_params`` is nevertheless stored in
+English: ``save_story()`` transliterates the LLM output back to English using a
+Transliterate ``Voice`` on the *story* bot. If that Voice is missing the app
+silently keeps the original script, ``other_params`` ends up in Devanagari, and
+dashboards reading ``other_params->>'location'`` stop matching the story. This
+command therefore refuses to regenerate such sessions instead of corrupting them.
 """
+
+import logging
 
 from collections import namedtuple
 from datetime import datetime, time
@@ -104,17 +124,23 @@ from chatbot.models import (
     CompanyChat,
     ChatSession,
     ChatType,
+    Flow,
     SessionFlowName,
     Voice,
     VoiceType,
 )
-from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.transliterate_utils import (
     transliterate_text,
     get_transliteration_output,
 )
-from chatbot.utils.story_utils.story_utils import create_story_object
+from chatbot.utils.story_utils.story_utils import (
+    create_story_object,
+    generate_story,
+    get_story_company_bot,
+)
 
+
+logger = logging.getLogger("django")
 
 # Session-type -> report flow fallback. shikshaChaupal reports are generated
 # with the GuestDiscussion flow (see chatbot/utils/story_utils/story_utils.py).
@@ -135,8 +161,8 @@ def parse_date_arg(raw):
             continue
     try:
         return DateArg(datetime.strptime(raw, "%Y-%m-%d"), False)
-    except ValueError as e:
-        raise CommandError(f"Use 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM[:SS]', got '{raw}'") from e
+    except ValueError:
+        raise CommandError(f"Use 'YYYY-MM-DD' or 'YYYY-MM-DD HH:MM[:SS]', got '{raw}'")
 
 
 def _make_aware(dt):
@@ -204,7 +230,17 @@ class Command(BaseCommand):
                  "ALL routes. Leave unset to auto-resolve each session's own flow "
                  "(required when processing multiple routes/flows at once).",
         )
-        parser.add_argument("--language", type=str, default=None)
+        parser.add_argument(
+            "--entrypoint",
+            type=str,
+            choices=["auto", "v1", "v2"],
+            default="auto",
+            help="Report-generation path. 'auto' (default) resolves per session from "
+                 "the Flow table: an active Flow row with a story_bot means the "
+                 "session is served by /end-story-v2 and is regenerated with "
+                 "generate_story; anything else uses the legacy create_story_object. "
+                 "'v1' / 'v2' force one path for testing or recovery.",
+        )
         parser.add_argument("--bot-profile-id", type=int, default=1)
         parser.add_argument(
             "--patch-fields",
@@ -243,9 +279,11 @@ class Command(BaseCommand):
         if not routes:
             raise CommandError("--route must list at least one bot route.")
         flow_override = opts["flow"]
-        language_override = opts["language"]
         bot_profile_id = opts["bot_profile_id"]
         self.bot_profile_id = bot_profile_id
+        self.entrypoint = opts["entrypoint"]
+        self._story_voice_cache = {}
+        self._entrypoint_cache = {}
         patch_fields = opts["patch_fields"]
         field_map = self._parse_field_map(opts["field_map"]) if patch_fields else {}
         skip_transliterate = opts["skip_transliterate"]
@@ -261,6 +299,16 @@ class Command(BaseCommand):
                     f"those chats won't be re-transliterated in Step 1."
                 ))
 
+        logger.info(
+            "[regen] START routes=%s stages=%s from=%s to=%s session_types=%s sessions=%s "
+            "patch_fields=%s field_map=%s skip_transliterate=%s skip_report=%s limit=%s "
+            "dry_run=%s bot_profile_id=%s entrypoint=%s",
+            routes, stages, opts["timestamp_from"], opts["timestamp_to"],
+            session_types or "ANY", session_ids or "ANY", patch_fields, field_map,
+            skip_transliterate, skip_report, limit, dry_run, bot_profile_id,
+            self.entrypoint,
+        )
+
         # --- process each route independently, then aggregate ---------------
         g_affected = g_r_success = g_r_failed = 0
         for route in routes:
@@ -268,7 +316,7 @@ class Command(BaseCommand):
             affected, r_success, r_failed = self._process_route(
                 route=route, stages=stages, date_from=date_from, date_to=date_to,
                 session_types=session_types, session_ids=session_ids,
-                flow_override=flow_override, language_override=language_override,
+                flow_override=flow_override,
                 patch_fields=patch_fields, field_map=field_map,
                 skip_transliterate=skip_transliterate, skip_report=skip_report,
                 limit=limit, dry_run=dry_run,
@@ -281,13 +329,15 @@ class Command(BaseCommand):
 
     # ------------------------------------------------------------------ #
     def _process_route(self, route, stages, date_from, date_to, session_types,
-                       session_ids, flow_override, language_override, patch_fields,
+                       session_ids, flow_override, patch_fields,
                        field_map, skip_transliterate, skip_report, limit, dry_run):
         """Scope + Step 1 + Step 2 for a single bot route. Returns
         (affected_sessions, reports_success, reports_failed)."""
+        logger.info("[regen] route=%s scoping sessions", route)
         company_bot = CompanyBot.objects.filter(route=route).first()
         if not company_bot:
             self.stdout.write(self.style.ERROR(f"CompanyBot route='{route}' not found, skipping."))
+            logger.error("[regen] route=%s CompanyBot not found, skipping route", route)
             return 0, 0, 0
 
         # --- scope sessions --------------------------------------------------
@@ -302,11 +352,11 @@ class Command(BaseCommand):
         session_language = {s.session: s.language for s in sessions_qs}
         if not session_language:
             self.stdout.write(self.style.WARNING("  No matching non-English sessions for this route."))
+            logger.warning(
+                "[regen] route=%s no non-English sessions (session_types=%s sessions=%s)",
+                route, session_types or "ANY", session_ids or "ANY",
+            )
             return 0, 0, 0
-
-        if limit and limit > 0:
-            limited_ids = sorted(session_language.keys())[:limit]
-            session_language = {sid: session_language[sid] for sid in limited_ids}
 
         # --- select candidate chats -----------------------------------------
         chat_filter = {
@@ -325,6 +375,10 @@ class Command(BaseCommand):
             f"  Scope: session_type={session_types or 'ANY'}, "
             f"session={session_ids or 'ANY'}, stages={stages}, "
             f"chats matched={chats.count()}"
+        )
+        logger.info(
+            "[regen] route=%s scoped sessions=%d chats_matched=%d stages=%s",
+            route, len(session_language), chats.count(), stages,
         )
 
         # --- cache transliterate voice providers per language ----------------
@@ -349,6 +403,10 @@ class Command(BaseCommand):
                 lang = session_language.get(chat.session)
                 if not lang:
                     t_skipped += 1
+                    logger.warning(
+                        "[regen] step1 chat_id=%s session=%s skipped: no language on ChatSession",
+                        chat.id, chat.session,
+                    )
                     continue
                 voice_provider = get_voice(lang)
                 if not voice_provider:
@@ -359,6 +417,11 @@ class Command(BaseCommand):
                         )
                     )
                     t_failed += 1
+                    logger.error(
+                        "[regen] step1 chat_id=%s session=%s lang=%s route=%s FAILED: "
+                        "no Transliterate Voice for this language on the route bot",
+                        chat.id, chat.session, lang, route,
+                    )
                     continue
 
                 if dry_run:
@@ -374,6 +437,12 @@ class Command(BaseCommand):
                     voice_provider=voice_provider,
                 )
                 output = get_transliteration_output(response)
+                logger.info(
+                    "[regen] step1 chat_id=%s session=%s lang=%s stage=%s "
+                    "source=%r old=%r new=%r",
+                    chat.id, chat.session, lang, chat.stage,
+                    chat.message, chat.translated_message, output,
+                )
                 if output:
                     chat.translated_message = output
                     chat.save(update_fields=["translated_message"])
@@ -386,10 +455,20 @@ class Command(BaseCommand):
                         )
                     )
                     t_failed += 1
+                    logger.error(
+                        "[regen] step1 chat_id=%s session=%s lang=%s FAILED: "
+                        "empty transliteration output, raw_response=%r",
+                        chat.id, chat.session, lang, response,
+                    )
 
             self.stdout.write(
                 f"  Step 1 (re-transliterate): success={t_success}, "
                 f"failed={t_failed}, skipped={t_skipped}"
+            )
+            logger.info(
+                "[regen] step1 route=%s done success=%d failed=%d skipped=%d "
+                "affected_sessions=%d",
+                route, t_success, t_failed, t_skipped, len(affected_sessions),
             )
 
         # =========================== STEP 2 ================================== #
@@ -406,12 +485,18 @@ class Command(BaseCommand):
             chat_session = ChatSession.objects.filter(session=session).first()
             if not chat_session:
                 self.stdout.write(self.style.WARNING(f"  ChatSession '{session}' missing, skip."))
+                logger.error("[regen] step2 session=%s FAILED: ChatSession row missing", session)
                 r_failed += 1
                 continue
 
             profile_id = chat_session.profile_id
             flow = flow_override or self._resolve_flow(session, chat_session)
-            language = language_override or self._resolve_language(session, chat_session)
+            language = self._resolve_language(chat_session)
+            logger.info(
+                "[regen] step2 session=%s profile_id=%s flow=%s language=%s "
+                "session_type=%s patch_fields=%s",
+                session, profile_id, flow, language, chat_session.session_type, patch_fields,
+            )
 
             # ---- Patch mode: fix only personal fields, no LLM --------------
             if patch_fields:
@@ -422,21 +507,70 @@ class Command(BaseCommand):
                  else self.stdout.write(self.style.WARNING(f"  {msg}")))
                 if ok:
                     r_success += 1
+                    logger.info("[regen] step2 session=%s patch OK: %s", session, msg)
                 else:
                     r_failed += 1
+                    logger.error("[regen] step2 session=%s patch FAILED: %s", session, msg)
                 continue
 
             # ---- Full regeneration (default) -------------------------------
+            entry_label, entry_fn, entry_flow_obj = self._resolve_entrypoint(flow)
+
+            if entry_label == "v2" and not entry_flow_obj:
+                self.stdout.write(self.style.ERROR(
+                    f"  Skipping session={session}: --entrypoint v2 requested but no "
+                    f"active Flow row with a story_bot exists for flow='{flow}'."
+                ))
+                logger.error(
+                    "[regen] step2 session=%s flow=%s SKIPPED: no active Flow row with "
+                    "a story_bot; generate_story would raise NotFound",
+                    session, flow,
+                )
+                r_failed += 1
+                continue
+
+            if entry_label == "v2" and not profile_id:
+                # generate_story does Profile.objects...get(id=profile_id); the v1
+                # path tolerated a missing profile, this one raises.
+                self.stdout.write(self.style.ERROR(
+                    f"  Skipping session={session}: v2 regeneration needs a profile, "
+                    f"but ChatSession.profile_id is empty."
+                ))
+                logger.error(
+                    "[regen] step2 session=%s flow=%s SKIPPED: v2 entrypoint requires "
+                    "a profile_id, ChatSession.profile_id is %r",
+                    session, flow, profile_id,
+                )
+                r_failed += 1
+                continue
+
+            if not self._story_bot_can_transliterate(flow, language):
+                self.stdout.write(self.style.ERROR(
+                    f"  Skipping session={session}: no Transliterate Voice for "
+                    f"language='{language}' on the story bot of flow='{flow}'. "
+                    f"Regenerating would store '{language}' text in the English "
+                    f"Story.other_params and drop the story from the dashboard."
+                ))
+                logger.error(
+                    "[regen] step2 session=%s flow=%s language=%s SKIPPED: no Transliterate "
+                    "Voice on the story bot; regenerating would corrupt Story.other_params",
+                    session, flow, language,
+                )
+                r_failed += 1
+                continue
+
             if dry_run:
                 self.stdout.write(
                     f"  [dry-run] would regenerate session={session} "
-                    f"flow={flow} language={language}"
+                    f"flow={flow} language={language} entrypoint={entry_label}"
                 )
                 r_success += 1
                 continue
 
             try:
-                story_id, _content, error_msg, error_type = create_story_object(
+                # Same signature and return contract for both entrypoints:
+                # (story_id, content, error_msg, error_type).
+                story_id, _content, error_msg, error_type = entry_fn(
                     profile_id=profile_id,
                     session=session,
                     access_token=None,
@@ -446,17 +580,37 @@ class Command(BaseCommand):
                 if error_msg:
                     self.stdout.write(
                         self.style.ERROR(
-                            f"  Report failed session={session}: {error_msg} ({error_type})"
+                            f"  Report failed session={session} ({entry_label}): "
+                            f"{error_msg} ({error_type})"
                         )
+                    )
+                    logger.error(
+                        "[regen] step2 session=%s profile_id=%s flow=%s language=%s "
+                        "entrypoint=%s %s FAILED: error_type=%s error_msg=%s",
+                        session, profile_id, flow, language, entry_label,
+                        entry_fn.__name__, error_type, error_msg,
                     )
                     r_failed += 1
                 else:
                     self.stdout.write(
-                        self.style.SUCCESS(f"  Report regenerated session={session} story_id={story_id}")
+                        self.style.SUCCESS(
+                            f"  Report regenerated session={session} story_id={story_id} "
+                            f"({entry_label})"
+                        )
+                    )
+                    logger.info(
+                        "[regen] step2 session=%s regenerated story_id=%s flow=%s "
+                        "language=%s entrypoint=%s",
+                        session, story_id, flow, language, entry_label,
                     )
                     r_success += 1
             except Exception as exc:  # noqa: BLE001
                 self.stdout.write(self.style.ERROR(f"  Exception session={session}: {exc}"))
+                logger.error(
+                    "[regen] step2 session=%s profile_id=%s flow=%s language=%s "
+                    "entrypoint=%s UNHANDLED EXCEPTION: %s",
+                    session, profile_id, flow, language, entry_label, exc, exc_info=True,
+                )
                 r_failed += 1
 
         return len(affected_sessions), r_success, r_failed
@@ -487,6 +641,7 @@ class Command(BaseCommand):
 
         story = Story.objects.filter(session=session).first()
         if not story:
+            logger.error("[regen] patch session=%s FAILED: no Story row for this session", session)
             return False, f"patch skipped session={session}: no Story"
 
         # Collect corrected values from the first user chat at each mapped stage.
@@ -506,6 +661,11 @@ class Command(BaseCommand):
                 }
 
         if not updates:
+            logger.error(
+                "[regen] patch session=%s FAILED: no source chats for stages=%s "
+                "(bot_profile_id=%s excluded) -- check --bot-profile-id and --statemachine",
+                session, list(field_map), self.bot_profile_id,
+            )
             return False, f"patch skipped session={session}: no source chats for {list(field_map)}"
 
         if dry_run:
@@ -513,6 +673,11 @@ class Command(BaseCommand):
             return True, f"[dry-run] would patch session={session} fields={preview} (no narrative change)"
 
         session_lang = chat_session.language
+        logger.info(
+            "[regen] patch session=%s story_id=%s session_lang=%s updates=%s",
+            session, story.id, session_lang,
+            {f: v["roman"] for f, v in updates.items()},
+        )
 
         # 1) English story other_params — store the romanized value (title-cased).
         op = dict(story.other_params or {})
@@ -520,6 +685,10 @@ class Command(BaseCommand):
             op[field] = v["roman"].title()
         story.other_params = op
         story.save(update_fields=["other_params"])
+        logger.info(
+            "[regen] patch session=%s story_id=%s english other_params updated fields=%s",
+            session, story.id, list(updates),
+        )
 
         # 2) Each non-English translation. For the session's own language use the
         #    original native message (exact); for others transliterate the English.
@@ -544,12 +713,24 @@ class Command(BaseCommand):
                     top[field] = v["roman"]
             t.other_params = top
             t.save(update_fields=["other_params"])
+            logger.info(
+                "[regen] patch session=%s translation lang=%s updated fields=%s",
+                session, lang, {f: top.get(f) for f in updates},
+            )
 
         # 3) Rebuild the PDF from the stored story — no LLM (reuses app helper).
         try:
             from chatbot.utils.shikshalokam_story_utils import update_story_pdf
+            logger.info(
+                "[regen] patch session=%s rebuilding PDF flow=%s story_id=%s",
+                session, flow, story.id,
+            )
             update_story_pdf(access_token=None, session=session, flow=flow)
         except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "[regen] patch session=%s story_id=%s flow=%s PDF REBUILD FAILED: %s",
+                session, story.id, flow, exc, exc_info=True,
+            )
             return False, f"patched fields but PDF rebuild failed session={session}: {exc}"
 
         return True, f"patched session={session} fields={list(updates)} (PDF rebuilt, narrative untouched)"
@@ -566,27 +747,109 @@ class Command(BaseCommand):
                 if flow:
                     return flow
         except Exception:
-            pass
+            logger.error(
+                "[regen] session=%s could not read flow from Story.other_params, "
+                "falling back to session_type",
+                session, exc_info=True,
+            )
         st = chat_session.session_type
         return SESSION_TYPE_TO_FLOW.get(st, st)
 
-    def _resolve_language(self, session, chat_session):
-        # The report/PDF is rendered in the conversation language (its
-        # StoryTranslation), while the main Story is often stored in English.
-        # So prefer the ChatSession language when it is non-English.
-        if chat_session and chat_session.language and chat_session.language != "en":
-            return chat_session.language
-        try:
-            from chatbot.models import Story
-
-            story = Story.objects.filter(session=session).first()
-            if story and story.language:
-                return story.language
-        except Exception:
-            pass
+    def _resolve_language(self, chat_session):
+        """The report is regenerated in the conversation language -- the same value
+        /api/end-story/ passes. Story.language is always 'en' (save_story hard-codes
+        it), so it is not a useful fallback and is not consulted."""
         return (chat_session.language if chat_session else None) or "en"
 
+    def _resolve_entrypoint(self, flow):
+        """Pick the report-generation path for `flow`, mirroring the live endpoints.
+
+        /end-story    -> create_story_object, story bot from get_story_company_bot()
+                         (hard-coded routes per SessionFlowName).
+        /end-story-v2 -> generate_story, story bot from Flow.story_bot.
+
+        A flow that has an active ``Flow`` row with a ``story_bot`` is a v2 flow;
+        anything else keeps the historic v1 path. Returns (label, callable, flow_obj)
+        where flow_obj is None for v1. Cached per flow.
+        """
+        key = str(flow)
+        if key not in self._entrypoint_cache:
+            flow_obj = None
+            if self.entrypoint in ("auto", "v2"):
+                flow_obj = Flow.objects.filter(
+                    flow_route=key, active=True, story_bot__isnull=False
+                ).select_related("story_bot").first()
+
+            if self.entrypoint == "v1":
+                resolved = ("v1", create_story_object, None)
+            elif self.entrypoint == "v2":
+                # Forced v2: still requires a usable Flow row, otherwise
+                # generate_story raises NotFound on every session.
+                resolved = ("v2", generate_story, flow_obj)
+            elif flow_obj:
+                resolved = ("v2", generate_story, flow_obj)
+            else:
+                resolved = ("v1", create_story_object, None)
+
+            self._entrypoint_cache[key] = resolved
+            logger.info(
+                "[regen] entrypoint for flow=%s resolved to %s (mode=%s, "
+                "flow_row=%s story_bot=%s)",
+                key, resolved[0], self.entrypoint,
+                bool(flow_obj), getattr(flow_obj.story_bot, "route", None) if flow_obj else None,
+            )
+        return self._entrypoint_cache[key]
+
+    def _story_bot_can_transliterate(self, flow, language):
+        """True when the story bot for `flow` has a Transliterate Voice for `language`.
+
+        save_generic_story()/save_story() build the *English* Story.other_params by
+        transliterating the LLM output using a Voice on the **story bot**; with no
+        Voice they silently return the original script. The story bot must therefore
+        be resolved exactly the way the chosen entrypoint resolves it -- v1 via
+        get_story_company_bot(), v2 via Flow.story_bot -- otherwise this guard checks
+        a bot that is never used and can pass while the real bot has no Voice row.
+        """
+        if language == "en":
+            return True
+        key = (str(flow), language)
+        if key not in self._story_voice_cache:
+            label, _entry, flow_obj = self._resolve_entrypoint(flow)
+            try:
+                if label == "v2":
+                    if not flow_obj:
+                        raise CommandError(
+                            f"no active Flow row with a story_bot for flow_route='{flow}'"
+                        )
+                    story_bot = flow_obj.story_bot
+                else:
+                    story_bot, _validate_bot = get_story_company_bot(profile=None, flow=flow)
+            except Exception as exc:  # noqa: BLE001
+                self.stdout.write(self.style.WARNING(
+                    f"  Could not resolve story bot for flow='{flow}' ({label}): {exc}"
+                ))
+                logger.error(
+                    "[regen] could not resolve story bot for flow=%s entrypoint=%s: %s",
+                    flow, label, exc, exc_info=True,
+                )
+                self._story_voice_cache[key] = False
+            else:
+                self._story_voice_cache[key] = Voice.objects.filter(
+                    company_bot=story_bot, type=VoiceType.Transliterate, language=language
+                ).exists()
+                logger.info(
+                    "[regen] story bot for flow=%s (%s) is route=%s; Transliterate Voice "
+                    "for language=%s present=%s",
+                    flow, label, getattr(story_bot, "route", None), language,
+                    self._story_voice_cache[key],
+                )
+        return self._story_voice_cache[key]
+
     def _summary(self, affected, r_success, r_failed, dry_run):
+        logger.info(
+            "[regen] DONE dry_run=%s affected_sessions=%d reports_ok=%d reports_failed=%d",
+            dry_run, affected, r_success, r_failed,
+        )
         self.stdout.write("\n" + "=" * 50)
         prefix = "[dry-run] " if dry_run else ""
         self.stdout.write(self.style.SUCCESS(f"{prefix}Affected sessions: {affected}"))
