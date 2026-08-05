@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+from django.db import transaction
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.celery_tasks.handle_message import translate_and_send_message
 from chatbot.llm_models.llm_script import handle_bedrock_model, handle_openai_response_api
@@ -17,6 +18,9 @@ channel_layer = get_channel_layer()
 
 class BaseResponseHandler(ABC):
     """Base class for handling LLM responses with common functionality"""
+
+    TURN_RESPONSE_TOOL_NAME = "turn_response"
+    DEFAULT_MAX_PROBES = 1
 
     def __init__(self):
         self.default_error_message = 'I am sorry, I could not understood completely. Could you rephrase this please?'
@@ -65,6 +69,64 @@ class BaseResponseHandler(ABC):
                 and hasattr(state_machine, 'operation_type')
                 and state_machine.operation_type == OperationTypeChoices.NON_LLM
         )
+
+    def apply_turn_response_guard(self, response, chat_session, state_machine):
+        """
+        Enforce the per-stage follow-up probe budget for 'turn_response' tool calls.
+
+        Mutates response['input'] in place, overriding should_function_call/response
+        once probe_count exceeds max_probes for the current stage, so the existing
+        should_function_call handling in common_handler treats it as a state
+        transition. No-ops for any other tool call or plain-text response.
+        """
+        if not (
+                isinstance(response, dict)
+                and 'toolUseId' in response
+                and response.get('name') == self.TURN_RESPONSE_TOOL_NAME
+                and isinstance(response.get('input'), dict)
+        ):
+            return response
+
+        tool_input = response['input']
+        stage_name = state_machine.name if state_machine else None
+
+        with transaction.atomic():
+            locked_session = ChatSession.objects.select_for_update().get(pk=chat_session.pk)
+            other_params = dict(locked_session.other_params or {})
+            prior = other_params.get('probe_guard') or {}
+            probe_count = prior.get('probe_count', 0) if prior.get('stage') == stage_name else 0
+
+            max_probes = tool_input.get('max_probes')
+            if not isinstance(max_probes, int) or isinstance(max_probes, bool) or max_probes < 0:
+                max_probes = self.DEFAULT_MAX_PROBES
+
+            message_kind = tool_input.get('message_kind')
+            # Fail closed: only 'clarification'/'none' are exempt from the probe budget.
+            # Anything missing, misspelled, or outside the enum is treated as a follow_up.
+            if message_kind not in ('clarification', 'none'):
+                probe_count += 1
+                if probe_count > max_probes:
+                    logger.info(
+                        f"Probe guard override: stage={stage_name} probe_count={probe_count} "
+                        f"max_probes={max_probes} - forcing state transition"
+                    )
+                    tool_input['response'] = ''
+                    tool_input['should_function_call'] = True
+
+            other_params['probe_guard'] = {
+                'stage': stage_name,
+                'probe_count': probe_count,
+                'max_probes': max_probes,
+            }
+            locked_session.other_params = other_params
+            locked_session.save(update_fields=['other_params'])
+
+        # Keep the in-memory chat_session (later code, e.g. _handle_function_call,
+        # does a full chat_session.save() on this same object) in sync so it
+        # doesn't overwrite this update with a stale other_params value.
+        chat_session.other_params = other_params
+
+        return response
 
     def build_non_llm_function_call(self, state_machine):
         return {
@@ -180,6 +242,9 @@ class BaseResponseHandler(ABC):
                     stage=state_machine.name if state_machine else None
                 )
                 return error_message
+
+        if response is not None and company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
+            response = self.apply_turn_response_guard(response, chat_session, state_machine)
 
         if is_function_call and response is None:
             response = early_return
