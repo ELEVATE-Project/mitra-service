@@ -1,0 +1,25 @@
+from django.contrib.auth.models import User
+from django.db import models
+from simple_history.models import HistoricalRecords
+
+
+class Program(models.Model):
+    program_uuid = models.CharField(max_length=500, unique=True)
+    name = models.CharField(max_length=1000, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    history = HistoricalRecords()
+
+    def __str__(self):
+        return self.name or self.program_uuid
+
+    class Meta:
+        db_table = 'shikshalokam"."program'
+        indexes = [
+            models.Index(fields=['program_uuid']),
+            models.Index(fields=['name']),
+            models.Index(fields=['created_at']),
+        ]

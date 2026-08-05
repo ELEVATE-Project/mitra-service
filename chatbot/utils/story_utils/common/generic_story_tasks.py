@@ -2,7 +2,7 @@ import logging
 import json
 import re
 from chatbot.exceptions.story_exceptions import StoryDomainError, StorySaveError, StoryError
-from chatbot.models import StoryStatusChoices, Story, Voice, VoiceType, StoryTranslation, Profile
+from chatbot.models import StoryStatusChoices, Story, Voice, VoiceType, StoryTranslation, Profile, Role
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.story_vernacular_model import StoryVernacular
 from chatbot.utils.story_llama_utils import translate_field
@@ -211,15 +211,20 @@ def save_generic_story(
             user_name = profile.get("first_name", "") if profile and profile.get("first_name") else ''
 
         fallback_location = ""
+        fallback_state, fallback_district, fallback_block = None, None, None
 
         if isinstance(profile, Profile):
             address = ProfileAddress.objects.filter(profile=profile).first()
             if address:
+                fallback_state, fallback_district, fallback_block = address.state, address.district, address.block
                 location_parts = filter(None, [address.block, address.district, address.state])
                 fallback_location = ", ".join(location_parts)
         elif isinstance(profile, dict):
             address = profile.get("profile_address", [])
             if len(address) > 0:
+                fallback_state = address[0].get("state")
+                fallback_district = address[0].get("district")
+                fallback_block = address[0].get("block")
                 location_parts = filter(None, [address[0].get("block"), address[0].get("district"), address[0].get("state")])
                 fallback_location = ", ".join(location_parts)
 
@@ -342,6 +347,33 @@ def save_generic_story(
                                                                                         language)
             else:
                 story_fields_to_update['location'] = ""
+
+        # Structured location columns. The bots already return these keys (see
+        # transliterate_fields); ProfileAddress supplies them when the bot does not.
+        # other_params keeps its existing copies - STORY_MODEL_FIELDS is unchanged.
+        location_field_fallbacks = {
+            'state': fallback_state,
+            'district': fallback_district,
+            'block': fallback_block,
+            'village': None,
+        }
+        for location_field, fallback_value in location_field_fallbacks.items():
+            if location_field in exclude_fields_set:
+                continue
+            raw_value = response_json_story.get(location_field, fallback_value)
+            if raw_value and str(raw_value).strip():
+                story_fields_to_update[location_field] = transliterate_to_english_if_needed(
+                    str(raw_value).strip(), transliteration_voice_provider, language
+                )
+
+        if 'role' not in exclude_fields_set:
+            raw_role = response_json_story.get('role', '')
+            if raw_role and str(raw_role).strip():
+                role = Role.objects.filter(name__iexact=str(raw_role).strip()).first()
+                if role:
+                    story_fields_to_update['role'] = role
+                else:
+                    logger.warning(f"No matching Role found for LLM output: '{raw_role}'")
 
         story_fields_to_update.update({
             'author': profile if isinstance(profile, Profile) else Profile.objects.filter(id=profile.get("id")).first(),

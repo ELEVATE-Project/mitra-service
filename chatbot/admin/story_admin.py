@@ -6,6 +6,7 @@ from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.filter.flow_filter import FlowFilter
 from chatbot.filter.story_filter import UserNameFilter
 from chatbot.models import StoryTag, StoryMedia, Story, Profile, ProfileType, MediaTypeChoices, StoryTranslation
+from chatbot.models.story_models import LeaderCategory, Role
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.resources.story_resource import (
     redirect_to_export_view, generate_csv_response, generate_xls_response, generate_docx_response,
@@ -157,6 +158,20 @@ class StoryAdmin(admin.ModelAdmin):
 
 
         return render(request, 'admin/export_story_format.html', {'ids': ids})
+
+
+@admin.register(LeaderCategory)
+class LeaderCategoryAdmin(admin.ModelAdmin):
+    list_display = ('name', 'code', 'created_at')
+    search_fields = ('name', 'code')
+    ordering = ('name',)
+
+
+@admin.register(Role)
+class RoleAdmin(admin.ModelAdmin):
+    list_display = ('name', 'code', 'created_at')
+    search_fields = ('name', 'code')
+    ordering = ('name',)
 
 
 @admin.register(StoryTranslation)

@@ -557,6 +557,14 @@ class Flow(models.Model):
         default=CreateStoryChoices.ALL,
         help_text="Whether to post process the story or not"
     )
+    default_flow = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='default_for_flows',
+        help_text="Default child flow shown when this is a parent flow."
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -578,7 +586,7 @@ class Flow(models.Model):
     def clean(self):
         """Validate flow configuration."""
         super().clean()
-        
+
         # Validate that languages is a list
         if not isinstance(self.languages, list):
             raise ValidationError({
@@ -589,6 +597,12 @@ class Flow(models.Model):
             raise ValidationError({
                 'languages': "Language codes must be unique."
             })
+
+        if self.default_flow_id and self.pk:
+            if self.default_flow.parent_flow_id != self.pk:
+                raise ValidationError({
+                    'default_flow': "default_flow must be a direct child of this flow."
+                })
 
     def save(self, *args, **kwargs):
         self.clean()
@@ -627,6 +641,12 @@ class PDFTemplates(models.Model):
         related_name='pdf_templates',
         help_text="Flow associated with this template."
     )
+    tag = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Report classification tag (e.g., mi-story, discussion-report)."
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -641,5 +661,37 @@ class PDFTemplates(models.Model):
         indexes = [
             models.Index(fields=['template_name']),
             models.Index(fields=['user_type']),
+        ]
+
+
+class CompanyBotProgramMapping(models.Model):
+    company_bot = models.ForeignKey(
+        CompanyBot, on_delete=models.CASCADE, related_name='program_mappings'
+    )
+    state = models.CharField(max_length=1000)
+    program = models.ForeignKey(
+        'shikshalokam.Program', on_delete=models.CASCADE, related_name='bot_mappings'
+    )
+    leader_category = models.ForeignKey(
+        'chatbot.LeaderCategory', on_delete=models.CASCADE, related_name='bot_mappings'
+    )
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    history = HistoricalRecords()
+
+    def __str__(self):
+        return f"{self.company_bot.name} + {self.state} → {self.program.name} / {self.leader_category.name}"
+
+    class Meta:
+        unique_together = ('company_bot', 'state')
+        indexes = [
+            models.Index(fields=['company_bot']),
+            models.Index(fields=['state']),
+            models.Index(fields=['program']),
+            models.Index(fields=['leader_category']),
+            models.Index(fields=['is_active']),
         ]
 

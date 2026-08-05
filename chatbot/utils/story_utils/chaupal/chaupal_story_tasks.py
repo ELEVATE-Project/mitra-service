@@ -3,7 +3,7 @@ import traceback
 import logging
 import re
 from chatbot.exceptions.story_exceptions import StoryDomainError, StoryValidationError, StoryError, StorySaveError
-from chatbot.models import StoryStatusChoices, Story, Voice, VoiceType, StoryTranslation
+from chatbot.models import StoryStatusChoices, Story, Voice, VoiceType, StoryTranslation, Role
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.story_llama_utils import translate_field
 from chatbot.utils.story_utils.challenges_utils import handle_challenges_solutions
@@ -132,6 +132,13 @@ def save_chaupal_report(
         if not is_within_domain:
             raise StoryDomainError()
 
+        raw_role = response_json_story.get('role', '')
+        role = None
+        if raw_role and str(raw_role).strip():
+            role = Role.objects.filter(name__iexact=str(raw_role).strip()).first()
+            if not role:
+                logger.warning(f"No matching Role found for LLM output: '{raw_role}'")
+
         # Extract and translate fields to English
         raw_title = response_json_story.get('title', '')
         english_title = clean_escaped_text(
@@ -236,15 +243,23 @@ def save_chaupal_report(
                 profile=profile, messages=messages
             )
 
+        state, district, block = None, None, None
         if profile:
             address = ProfileAddress.objects.filter(profile=profile).first()
             if address:
+                state, district, block = address.state, address.district, address.block
                 location_parts = filter(None, [address.block, address.district, address.state])
                 location = ", ".join(location_parts)
             else:
                 location = user_location
         else:
             location = user_location
+
+        # Blank values must never reach the columns: an empty assignment would wipe a
+        # state/district/block already set by another producer (e.g. state categorisation).
+        state = state if state and str(state).strip() else None
+        district = district if district and str(district).strip() else None
+        block = block if block and str(block).strip() else None
 
         if isinstance(english_challenges_faced, str):
             english_challenges_faced = [english_challenges_faced]
@@ -277,8 +292,15 @@ def save_chaupal_report(
             story.other_params = other_params
             story.stage = StoryStatusChoices.COMPLETED
             story.location = location
+            if state:
+                story.state = state
+            if district:
+                story.district = district
+            if block:
+                story.block = block
             story.validation_logs = combined_reason
             story.language = 'en'
+            story.role = role
         else:
             story = Story(
                 title=english_title,
@@ -286,9 +308,13 @@ def save_chaupal_report(
                 session=session,
                 stage=StoryStatusChoices.COMPLETED,
                 location=location,
+                state=state,
+                district=district,
+                block=block,
                 validation_logs=combined_reason,
                 language='en',
-                other_params=other_params
+                other_params=other_params,
+                role=role
             )
         story.save()
         story.refresh_from_db()

@@ -8,7 +8,7 @@ from chatbot.filter.admin_filter import (CompanyChatCompanyFilter, ChatSessionFi
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import Company, Profile, ProfileType, CompanyBot, CompanyChat, ChatSession, \
     CompanyBotTypeChoices, Voice, ImageConfiguration, Flow
-from chatbot.models.company_models import CompanyStateMachine
+from chatbot.models.company_models import CompanyStateMachine, CompanyBotProgramMapping
 from chatbot.resources.resource import CompanyChatResource
 from chatbot.resources.company_resource import ChatSessionResource
 from django.shortcuts import redirect
@@ -18,6 +18,12 @@ from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.forms import ModelForm, MultipleChoiceField, CheckboxSelectMultiple
 from ..utils.admin_config.export_mixin import ExportAllFieldsMixin
+
+
+class CompanyBotProgramMappingInline(admin.TabularInline):
+    model = CompanyBotProgramMapping
+    extra = 1
+    fields = ('state', 'program', 'leader_category', 'is_active')
 
 
 class CompanyStateMachineAdmin(admin.TabularInline):
@@ -90,7 +96,7 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
     search_fields = ('name', 'company__name')
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
-    inlines = [VoiceProviderAdmin]
+    inlines = [VoiceProviderAdmin, CompanyBotProgramMappingInline]
     actions = ['duplicate_bot', 'export_selected_bots']
 
     enable_batch_upload = True
@@ -174,16 +180,11 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
         if object_id:
             obj = self.model.objects.get(pk=object_id)
             if obj.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
-                # If the bot_type is 'state machine', include the inline.
-                self.inlines = [VoiceProviderAdmin, CompanyStateMachineAdmin]
-
+                self.inlines = [VoiceProviderAdmin, CompanyStateMachineAdmin, CompanyBotProgramMappingInline]
             else:
-                # Otherwise, no inlines.
-                self.inlines = [VoiceProviderAdmin]
+                self.inlines = [VoiceProviderAdmin, CompanyBotProgramMappingInline]
         else:
-            # For the add form, decide if you want the inline to be shown or not.
-            # This example assumes not.
-            self.inlines = [VoiceProviderAdmin]
+            self.inlines = [VoiceProviderAdmin, CompanyBotProgramMappingInline]
         return super().changeform_view(request, object_id, form_url, extra_context)
 
     # Sync Google glossary for TextToText voice providers after inline save
@@ -465,7 +466,7 @@ class FlowAdmin(SimpleHistoryAdmin):
     search_fields = ('flow_name', 'flow_route', 'bot__name')
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
-    raw_id_fields = ('bot', 'story_bot', 'parent_flow', 'image_config', 'story_validation_bot')
+    raw_id_fields = ('bot', 'story_bot', 'parent_flow', 'default_flow', 'image_config', 'story_validation_bot')
     
     fieldsets = (
         ('Basic Information', {
@@ -476,7 +477,7 @@ class FlowAdmin(SimpleHistoryAdmin):
             'description': 'Configure the bots associated with this flow.'
         }),
         ('Flow Settings', {
-            'fields': ('active', 'hidden', 'user_type', 'parent_flow', 'image_config', 'create_story'),
+            'fields': ('active', 'hidden', 'user_type', 'parent_flow', 'default_flow', 'image_config', 'create_story'),
         }),
         ('Advanced Settings', {
             'fields': ('websocket_url',),

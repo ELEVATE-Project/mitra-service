@@ -14,7 +14,7 @@ OUTPUT_FILE = "guest_discussion_fix_report.txt"
 
 # ---------- LANGUAGE DETECTION ----------
 ENGLISH_LETTER_REGEX = re.compile(r'[A-Za-z]')
-ANY_LETTER_REGEX = re.compile(r'[A-Za-z\u00C0-\u024F\u0900-\u097F\u0C80-\u0CFF]')
+ANY_LETTER_REGEX = re.compile(r'[A-Za-z\u00C0-\u024F\u0900-\u097F]')
 
 
 def is_non_english_text(text):
@@ -115,7 +115,7 @@ def fix_guest_discussion_stories():
                 source_language=source_language,
                 is_sentence=" " in story.location
             )
-            story.location = get_transliteration_output(result) or story.location
+            story.location = get_transliteration_output(result)
             updated = True
 
         # ---------- TRANSLATE STORY.TITLE ----------
@@ -169,7 +169,7 @@ def fix_guest_discussion_stories():
                     source_language=source_language,
                     is_sentence=" " in val
                 )
-                obj[key] = get_transliteration_output(result) or val
+                obj[key] = get_transliteration_output(result)
                 updated = True
 
         for key in ["user_name", "organization", "location"]:
@@ -321,7 +321,7 @@ def fix_guest_discussion_stories_by_id(story_ids=None, session_id=None):
                 source_language=source_language,
                 is_sentence=" " in story.location
             )
-            story.location = get_transliteration_output(result) or story.location
+            story.location = get_transliteration_output(result)
             updated = True
 
         # ---------- TRANSLATE STORY.TITLE ----------
@@ -375,7 +375,7 @@ def fix_guest_discussion_stories_by_id(story_ids=None, session_id=None):
                     source_language=source_language,
                     is_sentence=" " in val
                 )
-                obj[key] = get_transliteration_output(result) or val
+                obj[key] = get_transliteration_output(result)
                 updated = True
 
         for key in ["user_name", "organization", "location"]:

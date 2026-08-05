@@ -78,11 +78,13 @@ class FlowConnectionInfoSerializer(serializers.ModelSerializer):
     isParentFlow = serializers.SerializerMethodField()
     children_flows = serializers.SerializerMethodField()
     image_config = serializers.SerializerMethodField()
-    
+    editor_config = serializers.SerializerMethodField()
+    default_flow = serializers.CharField(source='default_flow.flow_route', read_only=True, allow_null=True, default=None)
+
     class Meta:
         model = Flow
-        fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config', 'create_story')
-        read_only_fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config')
+        fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config', 'create_story', 'editor_config', 'default_flow')
+        read_only_fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config', 'default_flow')
     
     def get_isParentFlow(self, obj):
         """Check if this flow has children."""
@@ -93,6 +95,13 @@ class FlowConnectionInfoSerializer(serializers.ModelSerializer):
         if obj.child_flows.exists():
             return ChildFlowSerializer(obj.child_flows.all(), many=True).data
         return []
+
+    def get_editor_config(self, obj):
+        template = obj.pdf_templates.first()
+        if not template or not template.constants_json:
+            return None
+        return template.constants_json.get("editor_config", None)
+
     
     def get_image_config(self, obj):
         """Get image configuration for this flow."""

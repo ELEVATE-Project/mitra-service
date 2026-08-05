@@ -1,6 +1,6 @@
 from jinja2 import Template
 import json_repair
-from chatbot.models import Profile, LLMProvider
+from chatbot.models import Profile, LLMProvider, Role
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.sql_utils import get_todays_date
 
@@ -27,6 +27,7 @@ def get_creation_promt(company_bot, profile):
     context_data = {
         "profile": profile,
         "address": address if address else [{}],
+        "available_roles": list(Role.objects.values_list('name', flat=True)),
     }
 
     if master_question:
@@ -104,7 +105,8 @@ def get_validation_prompt(
     validate_context_data = {
         "story_json_output": response_json_story,
         "profile": profile,
-        "address": address if address else [{}]
+        "address": address if address else [{}],
+        "available_roles": list(Role.objects.values_list('name', flat=True)),
     }
 
     if master_question:
@@ -126,7 +128,8 @@ def get_validation_prompt(
     validate_context_data = {
         "story_json_output": response_json_content,
         "profile": profile,
-        "address": address if address else [{}]
+        "address": address if address else [{}],
+        "available_roles": list(Role.objects.values_list('name', flat=True)),
     }
 
     if master_question:

@@ -5,7 +5,7 @@ from chatbot.models import Story, SessionFlowName, ChatSession
 ENGLISH_LETTER_REGEX = re.compile(r'[A-Za-z]')
 
 # Any alphabetic letter (Latin + Devanagari + other scripts)
-ANY_LETTER_REGEX = re.compile(r'[A-Za-z\u00C0-\u024F\u0900-\u097F\u0C80-\u0CFF]')
+ANY_LETTER_REGEX = re.compile(r'[A-Za-z\u00C0-\u024F\u0900-\u097F]')
 
 # Text fields in Story model for GuestMiStory
 TEXT_FIELDS = [

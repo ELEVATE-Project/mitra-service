@@ -30,6 +30,10 @@ def save_ptm_story(
             "flow": flow,
         }
 
+        # Column value only. other_params keeps the raw "" default untouched; a blank
+        # here means the bot returned nothing, so the column must be left alone.
+        story_district = district if district and str(district).strip() else None
+
         english_title = f"{name}'s PTM Reflection" if name and name != '' else "PTM Reflection"
 
         story = Story.objects.filter(session=session).first()
@@ -38,6 +42,8 @@ def save_ptm_story(
             story.language = 'en'  # Always English
             story.stage = StoryStatusChoices.COMPLETED
             story.other_params = other_params
+            if story_district:
+                story.district = story_district
             story.validation_logs = combined_reason
         else:
             story = Story(
@@ -47,6 +53,7 @@ def save_ptm_story(
                 language='en',  # Always English
                 stage=StoryStatusChoices.COMPLETED,
                 other_params=other_params,
+                district=story_district,
                 validation_logs=combined_reason
             )
         story.save()

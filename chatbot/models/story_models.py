@@ -1,8 +1,10 @@
 import io
 import os
 import base64
+import logging
 from django.db import models
 from django.core.validators import MinLengthValidator
+from simple_history.models import HistoricalRecords
 from chatbot.models import Profile, TagChoices, StoryLanguageChoices, StorySourceChoices, MediaTypeChoices, \
     StoryStatusChoices, Company, TagSourceChoices
 from pillow_heif import register_heif_opener
@@ -14,6 +16,48 @@ from chatbot.services.storage import StorageFactory
 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 register_heif_opener()
+
+logger = logging.getLogger('django')
+
+
+class LeaderCategory(models.Model):
+    code = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=1000)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    history = HistoricalRecords()
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = "Leader Category"
+        verbose_name_plural = "Leader Categories"
+        indexes = [
+            models.Index(fields=['code']),
+        ]
+
+
+class Role(models.Model):
+    code = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=1000)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    history = HistoricalRecords()
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = "Role"
+        verbose_name_plural = "Roles"
+        indexes = [
+            models.Index(fields=['code']),
+        ]
 
 
 class Story(models.Model):
@@ -36,6 +80,19 @@ class Story(models.Model):
     district = models.CharField(max_length=1000, null=True, blank=True)
     state = models.CharField(max_length=1000, null=True, blank=True)
     block = models.CharField(max_length=1000, null=True, blank=True)
+    village = models.CharField(max_length=1000, null=True, blank=True)
+    program = models.ForeignKey(
+        'shikshalokam.Program', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='stories'
+    )
+    leader_category = models.ForeignKey(
+        LeaderCategory, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='stories'
+    )
+    role = models.ForeignKey(
+        Role, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='stories'
+    )
     formatted_content = models.TextField(null=True, blank=True)
     language = models.CharField(max_length=1000, choices=StoryLanguageChoices.choices,
                                 default=StoryLanguageChoices.ENGLISH)
@@ -75,6 +132,82 @@ class Story(models.Model):
     def get_translation_languages(self):
         """Get only translation languages (excludes main story language)"""
         return list(self.translations.values_list('language', flat=True))
+
+    def get_report_type(self):
+        """Report classification tag, taken from the PDF template of the story's flow."""
+        # Local import avoids circular dependency: story_models is loaded before
+        # company_models by chatbot/models/__init__.py.
+        from chatbot.models.company_models import PDFTemplates
+
+        flow_route = (self.other_params or {}).get('flow')
+        if not flow_route:
+            return None
+
+        pdf_template = PDFTemplates.objects.filter(
+            flow__flow_route=flow_route
+        ).exclude(tag__isnull=True).exclude(tag='').first()
+
+        return pdf_template.tag if pdf_template else None
+
+    def save(self, *args, **kwargs):
+        location_changed = False
+        if self.pk:
+            old = Story.objects.filter(pk=self.pk).values('state', 'district').first()
+            if old:
+                location_changed = (old['state'] != self.state) or (old['district'] != self.district)
+        else:
+            location_changed = bool(self.state)
+
+        if location_changed:
+            self._derive_program_and_leader_category()
+            update_fields = kwargs.get('update_fields')
+            if update_fields is not None:
+                extended = list(update_fields)
+                for field in ('program', 'leader_category'):
+                    if field not in extended:
+                        extended.append(field)
+                kwargs['update_fields'] = extended
+
+        super().save(*args, **kwargs)
+
+    def _derive_program_and_leader_category(self):
+        # Local imports avoid circular dependency: story_models → chat_models/company_models
+        # are all loaded by chatbot/models/__init__.py in sequence.
+        from chatbot.models.chat_models import ChatSession
+        from chatbot.models.company_models import CompanyBotProgramMapping
+
+        if not self.state:
+            self.program = None
+            self.leader_category = None
+            return
+
+        chat_session = (
+            ChatSession.objects
+            .filter(session=self.session)
+            .select_related('company_bot')
+            .first()
+        )
+        if not chat_session or not chat_session.company_bot:
+            logger.warning(
+                'Story._derive: no ChatSession/company_bot for session=%s; skipping derivation',
+                self.session,
+            )
+            self.program = None
+            self.leader_category = None
+            return
+
+        mapping = CompanyBotProgramMapping.objects.filter(
+            company_bot=chat_session.company_bot,
+            state=self.state,
+            is_active=True,
+        ).select_related('program', 'leader_category').first()
+
+        if mapping:
+            self.program = mapping.program
+            self.leader_category = mapping.leader_category
+        else:
+            self.program = None
+            self.leader_category = None
 
     class Meta:
         indexes = [

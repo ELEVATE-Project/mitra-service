@@ -20,6 +20,7 @@ from jinja2 import Template
 from shikshalokam.models import Project, Task
 from shikshalokam.models.project_vernacular_model import ProjectVernacular
 from shikshalokam.serializer import ProjectSerializer
+import ast
 import json
 import os
 import re
@@ -401,6 +402,17 @@ def get_html_from_template(story, profile, flow, auth=False, language=None):
         "project": project_serialized.data,
         "profile": profile_serialized
     }
+
+    # Story.action_steps is a TextField, so a list assigned to it is stored as its
+    # repr. Restore the list for rendering only; the stored value is untouched.
+    action_steps = render_params["story"].get("action_steps")
+    if isinstance(action_steps, str) and action_steps.startswith("["):
+        try:
+            parsed_action_steps = ast.literal_eval(action_steps)
+            if isinstance(parsed_action_steps, list):
+                render_params["story"]["action_steps"] = parsed_action_steps
+        except (ValueError, SyntaxError):
+            pass
 
     if language_used != StoryLanguageChoices.ENGLISH:
         translated_story = StoryTranslation.objects.select_related("story").get(story__session=story.session, language=language)

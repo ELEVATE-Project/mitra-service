@@ -108,8 +108,20 @@ def _matches(pattern: str, text: str) -> bool:
     return bool(re.search(r'(?<![a-zA-Z])' + escaped + r'(?![a-zA-Z])', text, re.IGNORECASE))
 
 
-def _match_patterns(patterns: List[str], text: str) -> bool:
-    return any(_matches(p, text) for p in patterns)
+def _match_patterns(patterns: List[Any], text: str) -> bool:
+    """
+    Match a list of patterns against text (OR across entries).
+
+    A string entry matches on its own. A list entry is an AND condition:
+    every sub-pattern in it must be present in the text.
+    """
+    for pattern in patterns:
+        if isinstance(pattern, list):
+            if all(_matches(sub_pattern, text) for sub_pattern in pattern):
+                return True
+        elif _matches(pattern, text):
+            return True
+    return False
 
 
 # -------------- CORE CATEGORISATION ------------------
