@@ -75,7 +75,6 @@ def transcribe_ai4bharat_multiple_chunks(voice_provider, base64_audio_file, sour
             transcripts.sort()
 
         raw_transcript = " ".join(content for _, content in transcripts)
-        print("final transcript: ", raw_transcript)
         final_transcript = apply_itn(raw_transcript, source_language)
         return {'status': 200, 'content': final_transcript}
 
