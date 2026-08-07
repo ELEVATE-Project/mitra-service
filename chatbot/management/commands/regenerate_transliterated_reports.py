@@ -14,11 +14,23 @@ Usage
     python manage.py regenerate_transliterated_reports \
         --statemachine INTRODUCTION --dry-run
 
-    # Force v2 (/end-story/v2)
+    # Use the v2 generator (generate_story)
     python manage.py regenerate_transliterated_reports \
         --statemachine INTRODUCTION --report-version 2
 
 See --help for the full argument list.
+
+Delete + regenerate safety
+---------------------------
+Step 2 snapshots then deletes the session's Story/StoryTranslation rows in a
+short atomic block, commits, and only then calls the report generator
+(create_story_object / generate_story) OUTSIDE any transaction -- both do
+LLM round trips + their own DB writes and must not hold a connection/locks
+open for minutes. If generation fails (error_msg, or a raised exception --
+a raise aborts the retry loop immediately) after MAX_REPORT_ATTEMPTS, the
+snapshot is re-inserted via bulk_create (new PKs; created_at/updated_at
+become "now", not the original values). If the restore itself fails, it is
+logged at CRITICAL with the snapshot dict for manual recovery.
 """
 
 import logging
@@ -383,7 +395,7 @@ class Command(BaseCommand):
             logger.error("[regen] step2 session=%s flow=%s SKIPPED: no active Flow row with story_bot", session, flow)
             return False
 
-        if self.entry_label == "v2" and not profile_id:
+        if not profile_id:
             self.stdout.write(self.style.ERROR(
                 f"  Skipping session={session}: v2 regeneration needs a profile, but profile_id is empty."
             ))
@@ -408,62 +420,119 @@ class Command(BaseCommand):
             )
             return True
 
-        # ---- Delete + regenerate, atomically. A raised exception rolls back
-        # the delete too, no retry; a returned error_msg does NOT roll back the
-        # delete (Story is already gone), so on error_msg we retry entry_fn only,
-        # up to MAX_REPORT_ATTEMPTS times, without re-deleting.
-        try:
-            with transaction.atomic():
-                deleted_translations, _ = StoryTranslation.objects.filter(story__session=session).delete()
-                deleted_stories, _ = Story.objects.filter(session=session).delete()
-                logger.info(
-                    "[regen] step2 session=%s deleted stories=%s story_translations=%s",
-                    session, deleted_stories, deleted_translations,
+        # ---- Snapshot + delete in a short atomic block, commit, THEN call the
+        # generator outside any transaction (LLM round trips must not hold a
+        # DB connection/locks open). On failure, restore the snapshot. -------
+        story_snapshot, translation_snapshot = self._snapshot_story(session)
+        with transaction.atomic():
+            deleted_translations, _ = StoryTranslation.objects.filter(story__session=session).delete()
+            deleted_stories, _ = Story.objects.filter(session=session).delete()
+        logger.info(
+            "[regen] step2 session=%s deleted stories=%s story_translations=%s",
+            session, deleted_stories, deleted_translations,
+        )
+
+        fatal_exc = None
+        for attempt in range(1, self.MAX_REPORT_ATTEMPTS + 1):
+            try:
+                story_id, _content, error_msg, error_type = self.entry_fn(
+                    profile_id=profile_id,
+                    session=session,
+                    access_token=None,
+                    flow=flow,
+                    language=language,
                 )
+            except Exception as exc:  # noqa: BLE001
+                logger.error(
+                    "[regen] step2 session=%s profile_id=%s flow=%s language=%s entrypoint=%s "
+                    "attempt=%s/%s RAISED (fatal, no further retries): %s",
+                    session, profile_id, flow, language, self.entry_label,
+                    attempt, self.MAX_REPORT_ATTEMPTS, exc, exc_info=True,
+                )
+                fatal_exc = exc
+                break
 
-                for attempt in range(1, self.MAX_REPORT_ATTEMPTS + 1):
-                    story_id, _content, error_msg, error_type = self.entry_fn(
-                        profile_id=profile_id,
-                        session=session,
-                        access_token=None,
-                        flow=flow,
-                        language=language,
-                    )
-                    if not error_msg:
-                        self.stdout.write(self.style.SUCCESS(
-                            f"  Report regenerated session={session} story_id={story_id} "
-                            f"({self.entry_label}, attempt {attempt})"
-                        ))
-                        logger.info(
-                            "[regen] step2 session=%s regenerated story_id=%s flow=%s language=%s "
-                            "entrypoint=%s attempt=%s",
-                            session, story_id, flow, language, self.entry_label, attempt,
-                        )
-                        return True
-
-                    logger.error(
-                        "[regen] step2 session=%s profile_id=%s flow=%s language=%s entrypoint=%s "
-                        "attempt=%s/%s FAILED: error_type=%s error_msg=%s",
-                        session, profile_id, flow, language, self.entry_label,
-                        attempt, self.MAX_REPORT_ATTEMPTS, error_type, error_msg,
-                    )
-
-                self.stdout.write(self.style.ERROR(
-                    f"  Report failed session={session} ({self.entry_label}) after "
-                    f"{self.MAX_REPORT_ATTEMPTS} attempts: {error_msg} ({error_type}). "
-                    f"Story/StoryTranslation already deleted, not restored."
+            if not error_msg:
+                self.stdout.write(self.style.SUCCESS(
+                    f"  Report regenerated session={session} story_id={story_id} "
+                    f"({self.entry_label}, attempt {attempt})"
                 ))
-                return False
-        except Exception as exc:  # noqa: BLE001
-            self.stdout.write(self.style.ERROR(
-                f"  Exception session={session}: {exc}. Delete rolled back, original Story preserved."
-            ))
+                logger.info(
+                    "[regen] step2 session=%s regenerated story_id=%s flow=%s language=%s "
+                    "entrypoint=%s attempt=%s",
+                    session, story_id, flow, language, self.entry_label, attempt,
+                )
+                return True
+
             logger.error(
                 "[regen] step2 session=%s profile_id=%s flow=%s language=%s entrypoint=%s "
-                "UNHANDLED EXCEPTION (delete rolled back): %s",
-                session, profile_id, flow, language, self.entry_label, exc, exc_info=True,
+                "attempt=%s/%s FAILED: error_type=%s error_msg=%s",
+                session, profile_id, flow, language, self.entry_label,
+                attempt, self.MAX_REPORT_ATTEMPTS, error_type, error_msg,
             )
-            return False
+
+        if fatal_exc is not None:
+            self.stdout.write(self.style.ERROR(
+                f"  Exception session={session}: {fatal_exc}. Restoring original Story from snapshot."
+            ))
+        else:
+            self.stdout.write(self.style.ERROR(
+                f"  Report failed session={session} ({self.entry_label}) after "
+                f"{self.MAX_REPORT_ATTEMPTS} attempts. Restoring original Story from snapshot."
+            ))
+        self._restore_story_snapshot(session, story_snapshot, translation_snapshot)
+        return False
+
+    # ------------------------------------------------------------------ #
+    def _snapshot_story(self, session):
+        """DB column dicts (via .values()) for the session's Story + StoryTranslation
+        rows, captured before delete so they can be restored on generation failure."""
+        story_snapshot = list(Story.objects.filter(session=session).values())
+        translation_snapshot = list(
+            StoryTranslation.objects.filter(story__session=session).values()
+        )
+        return story_snapshot, translation_snapshot
+
+    def _restore_story_snapshot(self, session, story_snapshot, translation_snapshot):
+        """Re-insert a snapshot taken by _snapshot_story via bulk_create (fresh PKs;
+        created_at/updated_at become "now", auto_now(_add) fields aren't preserved).
+        Logs CRITICAL with the raw snapshot if the restore itself fails."""
+        if not story_snapshot:
+            return
+        try:
+            with transaction.atomic():
+                new_stories = []
+                for row in story_snapshot:
+                    row = dict(row)
+                    row.pop("id", None)
+                    new_stories.append(Story(**row))
+                Story.objects.bulk_create(new_stories)
+                restored_story = Story.objects.get(session=session)
+
+                new_translations = []
+                for row in translation_snapshot:
+                    row = dict(row)
+                    row.pop("id", None)
+                    row["story_id"] = restored_story.pk
+                    new_translations.append(StoryTranslation(**row))
+                if new_translations:
+                    StoryTranslation.objects.bulk_create(new_translations)
+
+            self.stdout.write(self.style.WARNING(f"  Restored original Story for session={session}."))
+            logger.info(
+                "[regen] step2 session=%s snapshot restored, new story_id=%s translations=%s",
+                session, restored_story.pk, len(translation_snapshot),
+            )
+        except Exception as exc:  # noqa: BLE001
+            self.stdout.write(self.style.ERROR(
+                f"  !!! MANUAL RECOVERY NEEDED !!! session={session}: restore failed: {exc}"
+            ))
+            logger.critical(
+                "[regen] step2 session=%s RESTORE FAILED, session has NO Story and snapshot is "
+                "about to be lost -- manual recovery needed. error=%s story_snapshot=%r "
+                "translation_snapshot=%r",
+                session, exc, story_snapshot, translation_snapshot, exc_info=True,
+            )
 
     # ------------------------------------------------------------------ #
     def _summary(self, affected, r_success, r_failed, dry_run):
