@@ -167,11 +167,7 @@ DATABASES = {
         "USER": os.getenv("PGBOUNCER_DATABASE_USER"),
         "PASSWORD": os.getenv("PGBOUNCER_DATABASE_PASSWORD"),
         "HOST": os.getenv("PGBOUNCER_DATABASE_HOST"),
-        "PORT": os.getenv("PGBOUNCER_DATABASE_PORT"),
-        # "OPTIONS": {
-        #     "sslmode": os.getenv("PG_SSL_MODE"),
-        #     "sslrootcert": os.getenv("PG_SSL_ROOT_CERT"),
-        # },
+        "PORT": os.getenv("PGBOUNCER_DATABASE_PORT")
     },
     "source_db": {
         "ENGINE": "django.db.backends.postgresql",
@@ -369,6 +365,9 @@ if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
                 "OPTIONS": config["options"],
             },
         }
+
+        STORAGES["default"]["OPTIONS"]["location"] = "media"
+        STORAGES["staticfiles"]["OPTIONS"]["location"] = "static"
 else:
     raise ValueError(
         f"Unsupported STORAGE_CLOUD_PROVIDER: {STORAGE_CLOUD_PROVIDER}. "
