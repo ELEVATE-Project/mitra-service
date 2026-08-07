@@ -26,7 +26,7 @@ dependencies = [
     "django-extensions>=4.1",
     "django-filter>=25.2",
     "django-import-export>=4.4.0",
-    "django-jazzmin>=3.0.1",
+    "django-jazzmin==3.0.1",
     "django-querycount>=0.8.3",
     "django-redis>=6.0.0",
     "django-s3-storage>=0.15.0",
