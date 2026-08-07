@@ -44,4 +44,8 @@ done
 export DATABASE_HOST=127.0.0.1
 export DATABASE_PORT="${PGBOUNCER_LISTEN_PORT}"
 
+# cron self-daemonizes; drives /etc/cron.daily/logrotate, which rotates
+# /etc/logrotate.d/pgbouncer
+cron
+
 exec "$@"

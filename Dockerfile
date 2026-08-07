@@ -9,6 +9,8 @@ ENV PYTHONUNBUFFERED=1 \
 RUN apt-get update && apt-get install -y \
     postgresql-client \
     pgbouncer \
+    cron \
+    logrotate \
     gcc \
     g++ \
     libpq-dev \
@@ -41,6 +43,10 @@ RUN chmod +x /app/backend/docker/entrypoint.sh
 
 # Create logs directory
 RUN mkdir -p /app/backend/logs
+
+# pgbouncer log rotation (daily, 3-day retention); picked up automatically
+# by Debian's default /etc/cron.daily/logrotate run
+COPY infra/pgbouncer.logrotate /etc/logrotate.d/pgbouncer
 
 # Create directory for static files
 RUN mkdir -p /var/www/shikshalokam/static

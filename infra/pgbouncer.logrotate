@@ -1,0 +1,13 @@
+/var/log/pgbouncer/pgbouncer.log {
+    daily
+    missingok
+    rotate 3
+    compress
+    delaycompress
+    notifempty
+    create 640 root root
+    sharedscripts
+    postrotate
+        [ -f /var/run/pgbouncer/pgbouncer.pid ] && kill -HUP $(cat /var/run/pgbouncer/pgbouncer.pid)
+    endscript
+}
