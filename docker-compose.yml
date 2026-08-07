@@ -40,7 +40,7 @@ services:
     container_name: shikshalokamqa/mitra-backend
     command: >
       sh -c "python manage.py create_schemas && python manage.py migrate chatbot 0066 --fake && python manage.py migrate &&
-      uvicorn shikshalokam_mohini.asgi:application --host 0.0.0.0 --port 9000 --workers 4 --ws-ping-interval 30 --ws-ping-timeout 600"
+      uvicorn shikshalokam_mohini.asgi:application --host 0.0.0.0 --port 9000 --workers 5 --ws-ping-interval 30 --ws-ping-timeout 600"
     env_file:
       - .env.backend
     ports:
@@ -48,6 +48,10 @@ services:
     volumes:
       - logs:/app/shikshalokam-mohini-service/logs
       - ./secrets.json:/app/backend/config/secrets.json:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
     depends_on:
       postgres:
         condition: service_healthy
@@ -64,12 +68,16 @@ services:
   celery-worker:
     image: shikshalokam-mohini-service
     container_name: mohini-celery-worker
-    command: celery -A shikshalokam_mohini worker
+    command: celery -A shikshalokam_mohini worker --concurrency=2
     env_file:
       - .env.backend
     volumes:
       - logs:/app/shikshalokam-mohini-service/logs
       - ./secrets.json:/app/backend/config/secrets.json:ro
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
     depends_on:
       postgres:
         condition: service_healthy
