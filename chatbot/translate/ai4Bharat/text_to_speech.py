@@ -13,6 +13,9 @@ def ai4bharat_text_speech(voice_provider, text, gender, source_language):
     try:
 
         api_url = ai4bharat_base_url
+        print("gender: ", gender)
+        print("source_language: ", source_language)
+        print("original text: ", text)
 
         other_params = voice_provider.other_params if voice_provider.other_params else {}
 
@@ -45,6 +48,7 @@ def ai4bharat_text_speech(voice_provider, text, gender, source_language):
             'Authorization': ai4bharat_authorization,
         }
         request_timeout = other_params.get("request_timeout", 10)
+        print("REQUEST TIMEOUT VALUE:", request_timeout)
 
         try:
             request_timeout = float(request_timeout)

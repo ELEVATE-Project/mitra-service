@@ -242,14 +242,14 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
         cs, cs_created = ChatSession.objects.get_or_create(
             session=session_id,
             defaults={
-                "profile": profile,
-                "current_step": step_number,
-                "language": self.route,
-                "company_bot": company_bot,
-                "session_status": ChatStatus.IN_PROGRESS,
-                "user_id": user_id,
-                "session_type": self.flow_name,
-            },
+                'profile': profile,
+                'current_step': step_number,
+                'language': self.route,
+                'company_bot': company_bot,
+                'session_status': ChatStatus.IN_PROGRESS,
+                'user_id': user_id,
+                'session_type': self.flow_name
+            }
         )
         logger.info(f"Chatsession: %s %s", cs, cs_created)
 
@@ -267,6 +267,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
             cs.other_params = {"ip_address": ip_address}
             cs.save(update_fields=["other_params"])
 
+
         return cs
 
     @database_sync_to_async
@@ -278,7 +279,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
             voice_provider = Voice.objects.filter(
                 company_bot=self.company_bot,
                 type=VoiceType.TextToText,
-                language=self.route,
+                language=self.route
             ).first()
 
             if not voice_provider:
@@ -318,17 +319,15 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                     return content
             else:
                 response = text_translate_provider(
-                    voice_provider=voice_provider,
-                    message_body=message,
-                    target_language="en",
-                    source_language=self.route,
+                    voice_provider=voice_provider, message_body=message,
+                    target_language='en', source_language=self.route
                 )
 
-                if response.get("status") == 200:
-                    return response.get("content")
+                if response.get('status') == 200:
+                    return response.get('content')
                 else:
                     return message
 
         except Exception as e:
-            logger.error("Translation Error: %s", e, exc_info=True)
+            logger.error('Translation Error: %s', e, exc_info=True)
             return message

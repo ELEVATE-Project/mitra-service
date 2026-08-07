@@ -52,23 +52,23 @@ SECRETS, SECRETS_JSON_PATH = load_secrets()
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-#7!xudzh7f@!yih9^l5d)my*$7=^j-@i#qla(k1mae5u(qs_c^"
+SECRET_KEY = 'django-insecure-#7!xudzh7f@!yih9^l5d)my*$7=^j-@i#qla(k1mae5u(qs_c^'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True if os.getenv("SETTINGS_DEBUG") == "True" else False
+DEBUG = True if os.getenv('SETTINGS_DEBUG') == 'True' else False
 
 CORS_ALLOW_HEADERS = [
-    "accept",
-    "accept-encoding",
-    "authorization",
-    "content-type",
-    "dnt",
-    "origin",
-    "user-agent",
-    "x-csrftoken",
-    "x-requested-with",
-    "access-control-allow-origin",
-    "x-auth-token",
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'access-control-allow-origin',
+    'x-auth-token'
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -349,25 +349,28 @@ if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
                 "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
             },
         }
+
     else:
         # For cloud storage (AWS/GCP/Azure), still set MEDIA_ROOT and MEDIA_URL
         # These are needed for our storage handler to work correctly
-        MEDIA_ROOT = os.path.join(BASE_DIR, "media")
-        MEDIA_URL = "/media/"
+        MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+        MEDIA_URL = '/media/'
 
         STORAGES = {
             "default": {
-                "BACKEND": config["backend"],
-                "OPTIONS": config["options"],
+                "BACKEND": config['backend'],
+                "OPTIONS": config['options'],
             },
             "staticfiles": {
-                "BACKEND": config["backend"],
-                "OPTIONS": config["options"],
+                "BACKEND": config['backend'],
+                "OPTIONS": config['options'],
             },
         }
 
-        STORAGES["default"]["OPTIONS"]["location"] = "media"
-        STORAGES["staticfiles"]["OPTIONS"]["location"] = "static"
+        STORAGES["staticfiles"]["OPTIONS"] = {
+            **STORAGES["staticfiles"]["OPTIONS"],
+            "location": "static",
+        }
 else:
     raise ValueError(
         f"Unsupported STORAGE_CLOUD_PROVIDER: {STORAGE_CLOUD_PROVIDER}. "
@@ -498,79 +501,37 @@ ASGI_APPLICATION_SHUTDOWN_TIMEOUT = 30
 CRONJOBS = [
     # ('30 2 * * *', 'chatbot.cron_tasks.chaupal.chaupal_cront_tasks.handle_story_cleanup_cron',
     #  '>> /tmp/handle_story_cleanup_cron.log 2>&1'),
-    (
-        "30 3 * * *",
-        "chatbot.cron_tasks.chaupal.chaupal_cront_tasks.handle_village_ingestion_cron",
-        ">> /tmp/handle_village_ingestion_cron.log 2>&1",
-    ),
-    (
-        "0 22 * * *",
-        "chatbot.cron_tasks.translation_cron.handle_non_english_fix_cron",
-        ">> /tmp/handle_non_english_fix_cron.log 2>&1",
-    ),
-    (
-        "0 12 * * *",
-        "chatbot.cron_tasks.delhi_shiksha_samvad.story_creation.create_story",
-        ">> /tmp/delhi_shiksha_samvad_story_creation.log 2>&1",
-    ),
-    (
-        "0 12 * * *",
-        "chatbot.cron_tasks.shiksha_samvad.story_creation.create_story",
-        ">> /tmp/shiksha_samvad_story_creation.log 2>&1",
-    ),
-    (
-        "0 */2 * * *",
-        "chatbot.cron_tasks.telangana_ptm_pilot.school_classification.main",
-        ">> /tmp/telangana_ptm_pilot_school_classification.log 2>&1",
-    ),
-    (
-        "15 */2 * * *",
-        "chatbot.cron_tasks.telangana_ptm_pilot.metrics_extraction.extract_metrics",
-        ">> /tmp/telangana_ptm_pilot_metrics_extraction.log 2>&1",
-    ),
-    (
-        "0 12 * * *",
-        "chatbot.cron_tasks.community_FGD.story_creation.create_story",
-        ">> /tmp/community_FGD_story_creation.log 2>&1",
-    ),
-    (
-        "0 12 * * *",
-        "chatbot.cron_tasks.odisha_youth.story_creation.create_story",
-        ">> /tmp/odisha_youth_story_creation.log 2>&1",
-    ),
-    (
-        "0 12 * * *",
-        "chatbot.cron_tasks.pppi_set_1.story_creation.create_story",
-        ">> /tmp/pppi_set_1_story_creation.log 2>&1",
-    ),
-    (
-        "0 12 * * *",
-        "chatbot.cron_tasks.pppi_set_2.story_creation.create_story",
-        ">> /tmp/pppi_set_2_story_creation.log 2>&1",
-    ),
-    (
-        "0 */2 * * *",
-        "chatbot.cron_tasks.stakeholder_fgd.district_classification.classify_districts",
-        ">> /tmp/stakeholder_fgd_district_classification.log 2>&1",
-    ),
-    (
-        "0 */2 * * *",
-        "chatbot.cron_tasks.student_fgd.district_classification.classify_districts",
-        ">> /tmp/student_fgd_district_classification.log 2>&1",
-    ),
-    (
-        "0 12 * * *",
-        "chatbot.cron_tasks.stakeholder_fgd.story_creation.create_story",
-        ">> /tmp/stakeholder_fgd_story_creation.log 2>&1",
-    ),
-    (
-        "0 12 * * *",
-        "chatbot.cron_tasks.student_fgd.story_creation.create_story",
-        ">> /tmp/student_fgd_story_creation.log 2>&1",
-    ),
-    (
-        "0 12 * * *",
-        "chatbot.cron_tasks.xylem.story_creation.create_story",
-        ">> /tmp/xylem_story_creation.log 2>&1",
-    ),
+    ('30 3 * * *', 'chatbot.cron_tasks.chaupal.chaupal_cront_tasks.handle_village_ingestion_cron',
+     '>> /tmp/handle_village_ingestion_cron.log 2>&1'),
+    ('0 22 * * *', 'chatbot.cron_tasks.translation_cron.handle_non_english_fix_cron',
+     '>> /tmp/handle_non_english_fix_cron.log 2>&1'),
+     ('0 12 * * *', 'chatbot.cron_tasks.delhi_shiksha_samvad.story_creation.create_story',
+    '>> /tmp/delhi_shiksha_samvad_story_creation.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.shiksha_samvad.story_creation.create_story',
+    '>> /tmp/shiksha_samvad_story_creation.log 2>&1'),
+    ('0 */2 * * *', 'chatbot.cron_tasks.telangana_ptm_pilot.school_classification.main',
+    '>> /tmp/telangana_ptm_pilot_school_classification.log 2>&1'),
+    ('15 */2 * * *', 'chatbot.cron_tasks.telangana_ptm_pilot.metrics_extraction.extract_metrics',
+    '>> /tmp/telangana_ptm_pilot_metrics_extraction.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.community_FGD.story_creation.create_story',
+    '>> /tmp/community_FGD_story_creation.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.odisha_youth.story_creation.create_story',
+    '>> /tmp/odisha_youth_story_creation.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.pppi_set_1.story_creation.create_story',
+    '>> /tmp/pppi_set_1_story_creation.log 2>&1'),
+
+    ('0 12 * * *', 'chatbot.cron_tasks.pppi_set_2.story_creation.create_story',
+    '>> /tmp/pppi_set_2_story_creation.log 2>&1'),
+    ('0 */2 * * *', 'chatbot.cron_tasks.stakeholder_fgd.district_classification.classify_districts',
+    '>> /tmp/stakeholder_fgd_district_classification.log 2>&1'),
+    ('0 */2 * * *', 'chatbot.cron_tasks.student_fgd.district_classification.classify_districts',
+    '>> /tmp/student_fgd_district_classification.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.stakeholder_fgd.story_creation.create_story',
+    '>> /tmp/stakeholder_fgd_story_creation.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.student_fgd.story_creation.create_story',
+    '>> /tmp/student_fgd_story_creation.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.xylem.story_creation.create_story',
+    '>> /tmp/xylem_story_creation.log 2>&1'),
+    ('0 */2 * * *', 'chatbot.cron_tasks.guest_discussion.state_categorisation.run_cron',
+    '>> /tmp/guest_discussion_state_categorisation.log 2>&1')
 ]

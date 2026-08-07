@@ -1,40 +1,23 @@
-from django.contrib import admin, messages
+from django.contrib import admin
 from django.db.models import Q
-from django.forms import CheckboxSelectMultiple, ModelForm, MultipleChoiceField
-from django.http import HttpResponseRedirect
-from django.shortcuts import redirect
-from django.urls import path, reverse
 from pydantic import ValidationError
 from simple_history.admin import SimpleHistoryAdmin
-
-from chatbot.filter.admin_filter import (
-    ChatSessionFilter,
-    CompanyChatCompanyFilter,
-    ProfileCityFilter,
-    ProfileCompanyChatFilter,
-    ProfileEmailFilter,
-    ProfileStateFilter,
-)
-from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
-from chatbot.models import (
-    ChatSession,
-    Company,
-    CompanyBot,
-    CompanyBotTypeChoices,
-    CompanyChat,
-    Flow,
-    ImageConfiguration,
-    Profile,
-    ProfileType,
-    Voice,
-    VoiceType,
-)
-from chatbot.models.company_models import CompanyStateMachine
-from chatbot.resources.company_resource import ChatSessionResource
-from chatbot.resources.resource import CompanyChatResource
-
-from ..utils.admin_config.export_mixin import ExportAllFieldsMixin
 from .generic_upload_admin import BatchUploadMixin
+from chatbot.filter.admin_filter import (CompanyChatCompanyFilter, ChatSessionFilter, ProfileCityFilter,
+                                         ProfileStateFilter, ProfileCompanyChatFilter, ProfileEmailFilter)
+from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
+from chatbot.models import Company, Profile, ProfileType, CompanyBot, CompanyChat, ChatSession, \
+    CompanyBotTypeChoices, Voice, ImageConfiguration, Flow
+from chatbot.models.company_models import CompanyStateMachine
+from chatbot.resources.resource import CompanyChatResource
+from chatbot.resources.company_resource import ChatSessionResource
+from django.shortcuts import redirect
+from django.contrib import messages
+from django.urls import path
+from django.http import HttpResponseRedirect
+from django.urls import reverse
+from django.forms import ModelForm, MultipleChoiceField, CheckboxSelectMultiple
+from ..utils.admin_config.export_mixin import ExportAllFieldsMixin
 
 
 class CompanyStateMachineAdmin(admin.TabularInline):
@@ -77,7 +60,7 @@ class VoiceProviderAdmin(admin.TabularInline):
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        return qs.order_by("type", "language")
+        return qs.order_by('type', 'language')
 
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         if db_field.name == "other_params":
@@ -87,11 +70,13 @@ class VoiceProviderAdmin(admin.TabularInline):
 
 
 class CompanyAdmin(admin.ModelAdmin):
-    list_display = ("name", "created_at", "status")
-    list_filter = (CustomAdvanceDateFilter,)
-    search_fields = ("name",)
-    date_hierarchy = "created_at"
-    ordering = ("-created_at",)
+    list_display = ('name', 'created_at', 'status')
+    list_filter = (
+        CustomAdvanceDateFilter,
+    )
+    search_fields = ('name',)
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -107,34 +92,27 @@ class CompanyAdmin(admin.ModelAdmin):
 
 @admin.register(CompanyBot)
 class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
-    list_display = ("name", "company", "created_at")
+
+    list_display = ('name', 'company', 'created_at')
     list_filter = (
-        "company",
-        "name",
-        "provider",
-        "llm_model",
+        'company',
+        'name',
+        'provider',
+        'llm_model',
         CustomAdvanceDateFilter,
     )
-    search_fields = ("name", "company__name")
-    date_hierarchy = "created_at"
-    ordering = ("-created_at",)
+    search_fields = ('name', 'company__name')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
     inlines = [VoiceProviderAdmin]
-    actions = ["duplicate_bot", "export_selected_bots"]
+    actions = ['duplicate_bot', 'export_selected_bots']
 
     enable_batch_upload = True
     batch_load_foreign_keys = True
-    batch_upload_fields = [
-        "name",
-        "company",
-        "provider",
-        "llm_model",
-        "context",
-        "max_token",
-        "route",
-    ]
+    batch_upload_fields = ['name', 'company', 'provider', 'llm_model', 'context', 'max_token', 'route']
 
-    import_template_name = "admin/import_export/import.html"
-    export_template_name = "admin/import_export/export.html"
+    import_template_name = 'admin/import_export/import.html'
+    export_template_name = 'admin/import_export/export.html'
 
     def get_urls(self):
         urls = super().get_urls()
@@ -198,8 +176,7 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
     def get_export_filename(self, request, queryset, file_format):
         """Generate filename for exports"""
         import datetime
-
-        date_str = datetime.datetime.now().strftime("%Y-%m-%d")
+        date_str = datetime.datetime.now().strftime('%Y-%m-%d')
         filename = f"company_bots_{date_str}"
         return f"{filename}.{file_format.get_extension()}"
 
@@ -300,11 +277,7 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
     # Sync Google glossary for TextToText voice providers after inline save
     def duplicate_bot(self, request, queryset):
         if queryset.count() != 1:
-            self.message_user(
-                request,
-                "Please select exactly one bot to duplicate.",
-                level=messages.ERROR,
-            )
+            self.message_user(request, "Please select exactly one bot to duplicate.", level=messages.ERROR)
             return
 
         original = queryset.first()
@@ -324,27 +297,23 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
 
         # Duplicate StateMachine if present
         if original.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
-            original_state_machines = CompanyStateMachine.objects.filter(
-                company_bot=original
-            )
+            original_state_machines = CompanyStateMachine.objects.filter(company_bot=original)
             for sm in original_state_machines:
                 sm.pk = None
                 sm.company_bot = new_bot
                 sm.save()
 
-        self.message_user(
-            request, "Bot duplicated successfully!", level=messages.SUCCESS
-        )
+        self.message_user(request, "Bot duplicated successfully!", level=messages.SUCCESS)
         return redirect(f"/admin/chatbot/companybot/{new_bot.id}/change/")
 
     def export_selected_bots(self, request, queryset):
         """Custom export action"""
-        selected_ids = queryset.values_list("id", flat=True)
-        ids_str = ",".join(str(id) for id in selected_ids)
+        selected_ids = queryset.values_list('id', flat=True)
+        ids_str = ','.join(str(id) for id in selected_ids)
 
         # Use admin URL reverse with the app label and model name
         info = self.model._meta.app_label, self.model._meta.model_name
-        url = reverse("admin:%s_%s_export" % info) + f"?ids={ids_str}"
+        url = reverse('admin:%s_%s_export' % info) + f'?ids={ids_str}'
         return HttpResponseRedirect(url)
 
     export_selected_bots.short_description = "Export selected bots"
@@ -352,7 +321,7 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
     def changelist_view(self, request, extra_context=None):
         """Add custom buttons to the changelist view"""
         extra_context = extra_context or {}
-        extra_context["custom_buttons"] = True
+        extra_context['custom_buttons'] = True
         return super().changelist_view(request, extra_context=extra_context)
 
     duplicate_bot.short_description = "Duplicate selected bot"
@@ -360,28 +329,20 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
 
 @admin.register(CompanyChat)
 class CompanyChatAdmin(ExportAllFieldsMixin, admin.ModelAdmin):
-    list_display = (
-        "session",
-        "sender",
-        "receiver",
-        "message",
-        "translated_message",
-        "created_at",
-        "stage",
-    )
+    list_display = ('session', 'sender', 'receiver', 'message', 'translated_message', 'created_at', 'stage')
     list_filter = (
         CustomAdvanceDateFilter,
         ProfileCompanyChatFilter,
         ProfileEmailFilter,
-        "session",
+        'session',
         CompanyChatCompanyFilter,
-        "stage",
+        'stage'
     )
-    search_fields = ("session", "message__icontains", "translated_message__icontains")
+    search_fields = ('session', 'message__icontains', 'translated_message__icontains')
     list_per_page = 20
-    raw_id_fields = ("sender", "receiver")
-    date_hierarchy = "created_at"
-    ordering = ("-created_at",)
+    raw_id_fields = ('sender', 'receiver')
+    date_hierarchy = 'created_at'
+    ordering = ('-created_at',)
 
     export_filename = "company_chats.xlsx"
     resource_class = CompanyChatResource

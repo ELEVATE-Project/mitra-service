@@ -19,34 +19,23 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv and verify the binary actually works
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.local/bin:${PATH}"
-RUN uv --version
+# Set working directory
+WORKDIR /app
 
-WORKDIR /app/backend
+RUN mkdir -p /app/backend
 
-# Copy project files (pyproject.toml has no [tool.uv] package=false, so `uv sync`
-# self-installs the project and needs README.md + source present, not just the manifests)
+# Copy requirements file
+COPY requirement.txt /app/backend
+
+# Install Python dependencies with increased timeout and retries
+RUN cd /app/backend && pip install --no-cache-dir --upgrade pip --default-timeout=100 && \
+    pip install --no-cache-dir --default-timeout=100 --retries 5 -r requirement.txt
+
+# Copy project files
 COPY . /app/backend
-
-# Create the venv and put it on PATH — equivalent of `source .venv/bin/activate`
-# for every later RUN/CMD, since each RUN is its own shell and a literal `source`
-# would not persist across layers.
-RUN uv venv .venv
-ENV VIRTUAL_ENV="/app/backend/.venv" \
-    PATH="/app/backend/.venv/bin:${PATH}"
-
-RUN uv sync --frozen
-
-RUN chmod +x /app/backend/docker/entrypoint.sh
 
 # Create logs directory
 RUN mkdir -p /app/backend/logs
-
-# pgbouncer log rotation (daily, 3-day retention); picked up automatically
-# by Debian's default /etc/cron.daily/logrotate run
-COPY infra/pgbouncer.logrotate /etc/logrotate.d/pgbouncer
 
 # Create directory for static files
 RUN mkdir -p /var/www/shikshalokam/static
