@@ -1,6 +1,5 @@
 import io
 import os
-import base64
 from django.db import models
 from django.core.validators import MinLengthValidator
 from chatbot.models import Profile, TagChoices, StoryLanguageChoices, StorySourceChoices, MediaTypeChoices, \
@@ -8,9 +7,6 @@ from chatbot.models import Profile, TagChoices, StoryLanguageChoices, StorySourc
 from pillow_heif import register_heif_opener
 from django.core.files.base import ContentFile
 from PIL import Image, UnidentifiedImageError
-import requests
-
-from chatbot.services.storage import StorageFactory
 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 register_heif_opener()
@@ -116,30 +112,17 @@ class StoryMedia(models.Model):
 
     def save(self, *args, **kwargs):
         try:
-            if self.file_url:
-                if self.file_url.startswith("s3://"):
-                    storage_handler = StorageFactory.get_storage_handler()
-                    response_content = storage_handler.get_file_from_store(self.file_url)
-                    self.base64_str = base64.b64encode(response_content).decode('utf-8')
-                    print("Encoded base64 from file_url")
-                else:
-                    response = requests.get(self.file_url)
-                    response.raise_for_status()
-                    self.base64_str = base64.b64encode(response.content).decode('utf-8')
-                    print("Encoded base64 from file_url")
-
             if not self.file:
                 super().save(*args, **kwargs)
                 return
-            self.file.seek(0)
             file_ext = os.path.splitext(self.file.name)[1].lower()
             print("file_ext:", file_ext)
             print("File name:", self.file.name)
-            print("File size:", self.file.size)
 
             # Convert HEIC/HEIF to JPEG
             if file_ext in ['.heic', '.heif']:
                 try:
+                    self.file.seek(0)
                     image = Image.open(self.file)
                     converted_io = io.BytesIO()
                     image.save(converted_io, format='JPEG')
@@ -155,10 +138,6 @@ class StoryMedia(models.Model):
                     print("Could not identify image file. Make sure it's valid.")
                 except Exception as e:
                     print("Unexpected error during HEIF conversion:", str(e))
-
-            # Reset pointer before base64 encoding
-            self.file.seek(0)
-            self.base64_str = base64.b64encode(self.file.read()).decode('utf-8')
 
         except Exception as e:
             print("Error during save():", str(e))

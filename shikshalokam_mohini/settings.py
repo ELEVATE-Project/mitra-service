@@ -15,8 +15,6 @@ import re
 from datetime import timedelta
 import sentry_sdk
 from dotenv import load_dotenv
-from socket import gethostbyname
-from socket import gethostname
 
 load_dotenv()
 
@@ -370,6 +368,7 @@ if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
             **STORAGES["staticfiles"]["OPTIONS"],
             "location": "static",
         }
+
 else:
     raise ValueError(
         f"Unsupported STORAGE_CLOUD_PROVIDER: {STORAGE_CLOUD_PROVIDER}. "
