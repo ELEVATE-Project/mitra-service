@@ -19,7 +19,7 @@ from chatbot.views.profile_views import create_profile_views
 from django.urls import path, include
 from chatbot.views import api_views
 from chatbot.views.bhashini_views import text_speech_view, speech_text, text_translation_view, text_transliterate_view
-from chatbot.views.chat_view import save_chats_view, create_chatsession, save_ptm_chats
+from chatbot.views.chat_view import save_chats_view, create_chatsession, save_ptm_chats, non_llm_chat_view
 from chatbot.views.drf_views import CompanyChatListCreateView, CompanyChatRetrieveUpdateDestroyView, \
     CompanyBotListCreateView, CompanyBotRetrieveUpdateDestroyView, ProfileListCreateView, \
     ProfileRetrieveUpdateDestroyView, ChatSessionListCreateView, ChatSessionRetrieveUpdateDestroyView, \
@@ -94,6 +94,7 @@ urlpatterns = [
 
     path('api/save-company-chat/', save_chats_view, name="save-company-chat"),
     path('api/create-chatsession/', create_chatsession, name="create-chatsession"),
+    path('api/non-llm-chat/', non_llm_chat_view, name='non-llm-chat'),
     path('api/create-profile/', create_profile_views, name="create-profile"),
     path('api/create-project/', create_project_view, name="create-project"),
     path('api/generate-pdf/', generate_pdf_view, name='generate_pdf'),

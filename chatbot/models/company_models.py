@@ -379,6 +379,14 @@ class CompanyStateMachine(models.Model):
         help_text="If True, this state will be skipped for authenticated users."
     )
 
+    translations = models.JSONField(
+        null=True, blank=True,
+        help_text=(
+            "Cached translations keyed by language code. "
+            'e.g. {"hi": {"text": "...", "audio_s3": "https://..."}}'
+        )
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     history = HistoricalRecords()
@@ -434,6 +442,10 @@ class CompanyStateMachine(models.Model):
             self.postprocess_output_mode = PostProcessOutputMode.NONE
 
     def save(self, *args, **kwargs):
+        if self.pk:
+            old = CompanyStateMachine.objects.filter(pk=self.pk).values('bot_question').first()
+            if old and old['bot_question'] != self.bot_question:
+                self.translations = None
         self.full_clean()
         super().save(*args, **kwargs)
 
