@@ -15,8 +15,6 @@ import re
 from datetime import timedelta
 import sentry_sdk
 from dotenv import load_dotenv
-from socket import gethostbyname
-from socket import gethostname
 
 load_dotenv()
 
@@ -370,6 +368,7 @@ if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
             **STORAGES["staticfiles"]["OPTIONS"],
             "location": "static",
         }
+
 else:
     raise ValueError(
         f"Unsupported STORAGE_CLOUD_PROVIDER: {STORAGE_CLOUD_PROVIDER}. "
@@ -535,5 +534,7 @@ CRONJOBS = [
     ('0 12 * * *', 'chatbot.cron_tasks.xylem.story_creation.create_story',
     '>> /tmp/xylem_story_creation.log 2>&1'),
     ('0 */2 * * *', 'chatbot.cron_tasks.guest_discussion.state_categorisation.run_cron',
-    '>> /tmp/guest_discussion_state_categorisation.log 2>&1')
+    '>> /tmp/guest_discussion_state_categorisation.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.bihar_teacher_tool.story_creation.create_story',
+    '>> /tmp/bihar_teacher_tool_story_creation.log 2>&1')
 ]

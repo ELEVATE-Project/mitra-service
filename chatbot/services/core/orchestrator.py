@@ -4,7 +4,6 @@ from .base_service import BaseChatService
 from .prompt_builder import PromptBuilder
 from .message_handler import MessageHandler
 from chatbot.celery_tasks.handle_message import translate_and_send_message
-from chatbot.utils.usage_cost_context import set_usage_cost_context, reset_usage_cost_context
 
 logger = logging.getLogger('django')
 
@@ -20,7 +19,6 @@ class ChatOrchestrator:
 
     def process_chat_request(self, channel_name, session_id, profile_id, language):
         """Main processing method"""
-        cost_context_token = set_usage_cost_context(session_id=session_id, profile_id=profile_id)
         try:
             # Get session data
             session_data = self.base_service.get_session_data(
@@ -96,8 +94,6 @@ class ChatOrchestrator:
             logger.error('Error in chat processing: %s', e, exc_info=True)
             traceback.print_exc()
             return None
-        finally:
-            reset_usage_cost_context(cost_context_token)
 
     def _handle_error_response(self, error_msg, channel_name, language, chat_session, company_bot):
         """Handle error responses"""

@@ -59,12 +59,7 @@ class Profile(models.Model):
                         'phone': 'A profile with this phone number already exists for the specified company.'
                     })
 
-    # Purpose: Auto-hashes the password before persisting if it hasn't been hashed yet.
-    # Inputs:  standard Django save args/kwargs
-    # Output:  None
-    # Side effects: Writes profile row; mutates self.password in-place before DB write
     def save(self, *args, **kwargs):
-        # guard prevents double-hashing if save() is called on an already-hashed password
         if self.password and 'pbkdf2_sha256' not in self.password:
             self.password = make_password(self.password)
         super().save(*args, **kwargs)
