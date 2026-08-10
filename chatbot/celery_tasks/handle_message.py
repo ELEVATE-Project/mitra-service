@@ -1,6 +1,7 @@
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from chatbot.models import RouteLanguageChoices, Voice, VoiceType
+from chatbot.models.enums import OperationTypeChoices
 from chatbot.utils.audio_provider_utils import text_translate_provider
 import logging
 
@@ -18,8 +19,12 @@ def translate_and_send_message(
         translated_messages = None
         audio_s3_url = None
 
-        # Check SM translation cache when state_machine is provided
-        if state_machine and state_machine.translations:
+        # Check SM translation cache when state_machine is provided and it's a NON_LLM state
+        if (
+                state_machine
+                and state_machine.operation_type == OperationTypeChoices.NON_LLM
+                and state_machine.translations
+        ):
             cached = state_machine.translations.get(route, {})
             if cached.get('text'):
                 translated_messages = cached['text']

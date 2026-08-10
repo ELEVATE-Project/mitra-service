@@ -642,7 +642,7 @@ class CommonResponseHandler(BaseResponseHandler):
         print("sending bot_question: ", bot_question)
         translated_message = self.translate_message(
             message=bot_question, channel_name=channel_name, step_number=chat_session.current_step,
-            language=language, company_bot=company_bot
+            language=language, company_bot=company_bot, state_machine=state_machine
         )
 
         other_params = {'function_call_response': response}

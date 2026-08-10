@@ -7,7 +7,7 @@ from chatbot.filter.admin_filter import (CompanyChatCompanyFilter, ChatSessionFi
                                          ProfileStateFilter, ProfileCompanyChatFilter, ProfileEmailFilter)
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import Company, Profile, ProfileType, CompanyBot, CompanyChat, ChatSession, \
-    CompanyBotTypeChoices, Voice, ImageConfiguration, Flow
+    CompanyBotTypeChoices, Voice, ImageConfiguration, Flow, VoiceType
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.resources.resource import CompanyChatResource
 from chatbot.resources.company_resource import ChatSessionResource
@@ -30,7 +30,7 @@ class CompanyStateMachineAdmin(admin.TabularInline):
         'bot_question', 'completion_criteria', 'context', 'tool_context',
         'operation_type', 'skip_if_authenticated',
         'preprocess_type', 'preprocess_prompt', 'preprocess_bot', 'preprocess_output_mode',
-        'postprocess_type', 'postprocess_prompt', 'postprocess_bot', 'postprocess_output_mode',
+        'postprocess_type', 'postprocess_prompt', 'postprocess_output_mode',
         'skip_to_step', 'translations'
     )
     exclude = ('type',)  # ✅ hide type
