@@ -15,7 +15,9 @@ from chatbot.utils.audio_provider_utils import text_translate_provider
 from chatbot.utils.chat_utils import get_ai_profile
 from chatbot.utils.ptm_utils.chat_utils import save_question_answer_utils
 
-JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY", "")
+JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")
+if not JWT_PUBLIC_KEY:
+    raise RuntimeError("JWT_PUBLIC_KEY env var required for token verification")
 
 logger = logging.getLogger("django")
 
@@ -320,7 +322,7 @@ def non_llm_chat_view(request):
 
     company_bot_id = chat_session.company_bot_id
 
-    if not company_bot:
+    if not company_bot_id:
         return Response({"error": "No bot configured for this session."}, status=400)
 
     current_step = (
@@ -346,16 +348,18 @@ def non_llm_chat_view(request):
     if state_machine["operation_type"] != OperationTypeChoices.NON_LLM:
         return Response({"error": "Current step is not a NON_LLM step."}, status=400)
 
-    try:
-        sender_id: None | int = None
-        if profile_id:
-            sender = Profile.objects.values("id").get(id=profile_id)
-            sender_id = sender["id"]
-        else:
-            sender_id = chat_session.profile.id
-    except Profile.DoesNotExist:
-        sender = chat_session.profile
+    sender_id: int | None = None
+    if profile_id:
+        try:
+            sender_id = Profile.objects.values_list("id", flat=True).get(id=profile_id)
+        except Profile.DoesNotExist:
+            sender_id = chat_session.profile_id
+    else:
+        sender_id = chat_session.profile_id
 
+    if sender_id is None:
+        return Response({"error": "No profile resolved for this session."}, status=400)
+        
     try:
         ai_profile = get_ai_profile()
     except Profile.DoesNotExist:

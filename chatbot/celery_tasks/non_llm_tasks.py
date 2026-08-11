@@ -21,10 +21,10 @@ AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
 AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
 
 
-def _upload_audio_to_s3(audio_bytes, company_bot_id, state_machine_id, audio_format):
+def _upload_audio_to_s3(audio_bytes, company_bot_id, state_machine_id, lang, audio_format):
     """Upload audio bytes to S3, return full URL or None."""
     try:
-        key = f"state_machine_audio/{company_bot_id}/{state_machine_id}.{audio_format}"
+        key = f"state_machine_audio/{company_bot_id}/{state_machine_id}/{lang}.{audio_format}"
         s3 = boto3.client(
             "s3",
             region_name=AWS_REGION,
@@ -120,7 +120,7 @@ def generate_state_machine_translations(company_bot_id, language=None):
                             "output_audio_codec", "wav"
                         )
                     url = _upload_audio_to_s3(
-                        audio_bytes, company_bot_id, sm.id, audio_format
+                        audio_bytes, company_bot_id, sm.id, lang, audio_format
                     )
                     if url:
                         lang_data["audio_s3"] = url
