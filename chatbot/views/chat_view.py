@@ -16,8 +16,6 @@ from chatbot.utils.chat_utils import get_ai_profile
 from chatbot.utils.ptm_utils.chat_utils import save_question_answer_utils
 
 JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")
-if not JWT_PUBLIC_KEY:
-    raise RuntimeError("JWT_PUBLIC_KEY env var required for token verification")
 
 logger = logging.getLogger("django")
 
@@ -359,7 +357,7 @@ def non_llm_chat_view(request):
 
     if sender_id is None:
         return Response({"error": "No profile resolved for this session."}, status=400)
-        
+
     try:
         ai_profile = get_ai_profile()
     except Profile.DoesNotExist:
