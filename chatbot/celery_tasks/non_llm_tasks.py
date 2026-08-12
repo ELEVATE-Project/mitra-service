@@ -5,11 +5,9 @@ import os
 import boto3
 
 from chatbot.models import ChatSession, CompanyBot, CompanyChat, Voice, VoiceType
+from chatbot.models.bot_vernacular_model import BotVernacular
 from chatbot.models.company_models import CompanyStateMachine
-from chatbot.utils.audio_provider_utils import (
-    text_speech_provider,
-    text_translate_provider,
-)
+from chatbot.utils.audio_provider_utils import text_speech_provider, text_translate_provider
 from shikshalokam_mohini.celery_config import app
 
 logger = logging.getLogger("django")
@@ -73,8 +71,22 @@ def generate_state_machine_translations(company_bot_id, language=None):
 
     state_machines = CompanyStateMachine.objects.filter(company_bot=company_bot)
 
+    bot_vernaculars = list(BotVernacular.objects.values("language", "alt_introductory_message").filter(company_bot=company_bot))
+
+    vernacular_map = {}
+    vernacular_lang_counts = {}
+    for v in bot_vernaculars:
+        vernacular_lang_counts[v["language"]] = vernacular_lang_counts.get(v["language"], 0) + 1
+        if v["language"] not in vernacular_map and v["alt_introductory_message"]:
+            vernacular_map[v["language"]] = v["alt_introductory_message"]
+    for lang, count in vernacular_lang_counts.items():
+        if count > 1:
+            logger.info(
+                f"generate_translations: multiple BotVernacular rows for company_bot={company_bot_id} lang={lang}, using first"
+            )
+
     for sm in state_machines:
-        if not sm.bot_question:
+        if not sm.bot_question and sm.step != 1:
             continue
 
         cached = dict(sm.translations or {})
@@ -83,6 +95,47 @@ def generate_state_machine_translations(company_bot_id, language=None):
             if lang == "en":
                 continue
             lang_data = dict(cached.get(lang, {}))
+
+            if sm.step == 1:
+                lang_data.pop("text", None)
+                lang_data.pop("audio_s3", None)
+                vernacular_text = vernacular_map.get(lang)
+                if not vernacular_text:
+                    if lang_data:
+                        cached[lang] = lang_data
+                    else:
+                        cached.pop(lang, None)
+                    continue
+                tts_voice = tts_voice_map.get(lang)
+                try:
+                    tts_result = text_speech_provider(
+                        company_bot=company_bot,
+                        text=vernacular_text,
+                        source_language=lang,
+                    )
+                    if tts_result and tts_result.get("status") == 200:
+                        audio_b64 = tts_result["content"]
+                        if ";base64," in audio_b64:
+                            audio_b64 = audio_b64.split(";base64,", 1)[1]
+                        audio_bytes = base64.b64decode(audio_b64)
+                        audio_format = "wav"
+                        if tts_voice and tts_voice.other_params:
+                            audio_format = tts_voice.other_params.get(
+                                "output_audio_codec", "wav"
+                            )
+                        url = _upload_audio_to_s3(
+                            audio_bytes, company_bot_id, sm.id, lang, audio_format
+                        )
+                        if url:
+                            lang_data["audio_s3"] = url
+                except Exception as e:
+                    logger.info(f"generate_translations: TTS failed sm={sm.id} lang={lang}: {e}")
+
+                if lang_data:
+                    cached[lang] = lang_data
+                else:
+                    cached.pop(lang, None)
+                continue
 
             # Text translation
             try:
@@ -125,9 +178,7 @@ def generate_state_machine_translations(company_bot_id, language=None):
                     if url:
                         lang_data["audio_s3"] = url
             except Exception as e:
-                logger.info(
-                    f"generate_translations: TTS failed sm={sm.id} lang={lang}: {e}"
-                )
+                logger.info(f"generate_translations: TTS failed sm={sm.id} lang={lang}: {e}")
 
             if lang_data:
                 cached[lang] = lang_data

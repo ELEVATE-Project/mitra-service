@@ -123,9 +123,7 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
         return custom_urls + urls
 
     def generate_translations_view(self, request, bot_id):
-        from chatbot.celery_tasks.non_llm_tasks import (
-            generate_state_machine_translations,
-        )
+        from chatbot.celery_tasks.non_llm_tasks import generate_state_machine_translations
 
         generate_state_machine_translations.delay(bot_id)
         self.message_user(
