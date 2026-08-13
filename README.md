@@ -143,7 +143,7 @@ brew install postgresql@14
 
 **Linux:**
 ```bash
-sudo apt install -y postgresql postgresql-contrib
+sudo apt install -y postgresql postgresql-contrib ffmpeg
 ```
 
 ### 6.2 Start PostgreSQL
@@ -467,3 +467,23 @@ Once the service is up and running, set the password for the default admin accou
 4. Set the password to: `grit@123`
 
 > ⚠️ This step is required before using the service — the default account won't be accessible otherwise.
+
+## 11. Post-Setup: Create Company Bots
+ 
+Once the admin password is configured, import company data and create a company bot.
+ 
+1. Download the sample CSV from Google Drive:
+```
+   https://drive.google.com/file/d/1I799a5xpcgmQMPPfE7EdFI_Ot3ufiasE/view?usp=sharing
+```
+   Locate the sample company/bot import template and download it locally.
+ 
+2. In the  admin panel, navigate to the **Company Bots**  section:
+```
+   http://localhost:9000/admin/chatbot/companybot/
+```
+ 
+3. Use the **Import Bot** action and upload the downloaded JSON to create an company Bot.
+
+4. Verify the bot appears in the CompanyBot list and is linked to the correct flow route before testing.
+ 
