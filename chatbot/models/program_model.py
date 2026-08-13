@@ -17,7 +17,6 @@ class Program(models.Model):
         return self.name or self.program_uuid
 
     class Meta:
-        db_table = 'shikshalokam"."program'
         indexes = [
             models.Index(fields=['program_uuid']),
             models.Index(fields=['name']),

@@ -4,4 +4,3 @@ from .wishlist_model import *
 from .enums import *
 from .project_models import *
 from .template_models import *
-from .program_model import *

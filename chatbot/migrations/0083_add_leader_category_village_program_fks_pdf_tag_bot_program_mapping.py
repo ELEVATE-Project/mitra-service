@@ -10,11 +10,47 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('chatbot', '0082_flow_default_flow_historicalflow_default_flow_and_more'),
-        ('shikshalokam', '0006_add_program_model'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
+        migrations.CreateModel(
+            name='HistoricalProgram',
+            fields=[
+                ('id', models.BigIntegerField(auto_created=True, blank=True, db_index=True, verbose_name='ID')),
+                ('program_uuid', models.CharField(db_index=True, max_length=500)),
+                ('name', models.CharField(blank=True, max_length=1000, null=True)),
+                ('created_at', models.DateTimeField(blank=True, editable=False)),
+                ('updated_at', models.DateTimeField(blank=True, editable=False)),
+                ('history_id', models.AutoField(primary_key=True, serialize=False)),
+                ('history_date', models.DateTimeField(db_index=True)),
+                ('history_change_reason', models.CharField(max_length=100, null=True)),
+                ('history_type', models.CharField(choices=[('+', 'Created'), ('~', 'Changed'), ('-', 'Deleted')], max_length=1)),
+                ('created_by', models.ForeignKey(blank=True, db_constraint=False, null=True, on_delete=django.db.models.deletion.DO_NOTHING, related_name='+', to=settings.AUTH_USER_MODEL)),
+                ('history_user', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to=settings.AUTH_USER_MODEL)),
+            ],
+            options={
+                'verbose_name': 'historical program',
+                'verbose_name_plural': 'historical programs',
+                'ordering': ('-history_date', '-history_id'),
+                'get_latest_by': ('history_date', 'history_id'),
+            },
+            bases=(simple_history.models.HistoricalChanges, models.Model),
+        ),
+        migrations.CreateModel(
+            name='Program',
+            fields=[
+                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
+                ('program_uuid', models.CharField(max_length=500, unique=True)),
+                ('name', models.CharField(blank=True, max_length=1000, null=True)),
+                ('created_at', models.DateTimeField(auto_now_add=True)),
+                ('updated_at', models.DateTimeField(auto_now=True)),
+                ('created_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL)),
+            ],
+            options={
+                'indexes': [models.Index(fields=['program_uuid'], name='chatbot_pro_program_idx'), models.Index(fields=['name'], name='chatbot_pro_name_idx'), models.Index(fields=['created_at'], name='chatbot_pro_created_idx')],
+            },
+        ),
         migrations.AddField(
             model_name='historicalpdftemplates',
             name='tag',
@@ -28,7 +64,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='story',
             name='program',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='stories', to='shikshalokam.program'),
+            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='stories', to='chatbot.program'),
         ),
         migrations.AddField(
             model_name='story',
@@ -86,7 +122,7 @@ class Migration(migrations.Migration):
                 ('history_type', models.CharField(choices=[('+', 'Created'), ('~', 'Changed'), ('-', 'Deleted')], max_length=1)),
                 ('company_bot', models.ForeignKey(blank=True, db_constraint=False, null=True, on_delete=django.db.models.deletion.DO_NOTHING, related_name='+', to='chatbot.companybot')),
                 ('history_user', models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to=settings.AUTH_USER_MODEL)),
-                ('program', models.ForeignKey(blank=True, db_constraint=False, null=True, on_delete=django.db.models.deletion.DO_NOTHING, related_name='+', to='shikshalokam.program')),
+                ('program', models.ForeignKey(blank=True, db_constraint=False, null=True, on_delete=django.db.models.deletion.DO_NOTHING, related_name='+', to='chatbot.program')),
                 ('leader_category', models.ForeignKey(blank=True, db_constraint=False, null=True, on_delete=django.db.models.deletion.DO_NOTHING, related_name='+', to='chatbot.leadercategory')),
             ],
             options={
@@ -111,7 +147,7 @@ class Migration(migrations.Migration):
                 ('created_at', models.DateTimeField(auto_now_add=True)),
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('company_bot', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='program_mappings', to='chatbot.companybot')),
-                ('program', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='bot_mappings', to='shikshalokam.program')),
+                ('program', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='bot_mappings', to='chatbot.program')),
                 ('leader_category', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='bot_mappings', to='chatbot.leadercategory')),
             ],
             options={

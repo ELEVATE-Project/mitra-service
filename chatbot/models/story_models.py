@@ -82,7 +82,7 @@ class Story(models.Model):
     block = models.CharField(max_length=1000, null=True, blank=True)
     village = models.CharField(max_length=1000, null=True, blank=True)
     program = models.ForeignKey(
-        'shikshalokam.Program', on_delete=models.SET_NULL, null=True, blank=True,
+        'chatbot.Program', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='stories'
     )
     leader_category = models.ForeignKey(

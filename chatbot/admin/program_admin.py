@@ -2,7 +2,7 @@ from django.contrib import admin
 from simple_history.admin import SimpleHistoryAdmin
 
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
-from shikshalokam.models.program_model import Program
+from chatbot.models.program_model import Program
 
 
 @admin.register(Program)

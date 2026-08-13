@@ -670,7 +670,7 @@ class CompanyBotProgramMapping(models.Model):
     )
     state = models.CharField(max_length=1000)
     program = models.ForeignKey(
-        'shikshalokam.Program', on_delete=models.CASCADE, related_name='bot_mappings'
+        'chatbot.Program', on_delete=models.CASCADE, related_name='bot_mappings'
     )
     leader_category = models.ForeignKey(
         'chatbot.LeaderCategory', on_delete=models.CASCADE, related_name='bot_mappings'
