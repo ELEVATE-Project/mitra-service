@@ -1,6 +1,5 @@
 from pygments.lexer import combined
-
-from chatbot.models import (Profile, CompanyChat, ChatSession, ChatStatus, Voice, VoiceType, SessionFlowName, BotVernacular, StoryTranslation, CompanyBot)
+from chatbot.models import (Profile, CompanyChat, ChatSession, ChatStatus, Voice, VoiceType, SessionFlowName, BotVernacular, StoryTranslation, CompanyBot, LLMProvider)
 from chatbot.models.company_models import Flow
 from chatbot.serializer.profile_serializer import ProfileSerializer
 from chatbot.utils.chat_utils import get_guided_chat
@@ -311,6 +310,17 @@ def generate_story(profile_id, session, access_token, flow, language='en'):
                     flow=flow
                 )
             )
+
+        else:
+            if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
+                for response in [response_json_content, response_json_story]:
+                    if response and isinstance(response, dict):
+                        extracted_data = response.pop("parameters", response.pop("input", None))
+                        if extracted_data and isinstance(extracted_data, dict):
+                            response.clear()
+                            response.update(extracted_data)
+
+            response_json_story = {**(response_json_content or {}), **(response_json_story or {})}
 
         logger.info("VALIDATION STORY response_json_story: {story}".format(story=response_json_story))
 
