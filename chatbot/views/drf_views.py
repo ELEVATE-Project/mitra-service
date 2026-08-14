@@ -1,10 +1,11 @@
 import django_filters
 from rest_framework import generics
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework import status
 from chatbot.filter.drf_filter import ChatSessionProfileFilter
 from chatbot.models import ChatSession, BotVernacular, SessionFlowName, ChatType
-from chatbot.models.company_models import CompanyChat, CompanyBot, Flow
+from chatbot.models.company_models import CompanyChat, CompanyBot, CompanyStateMachine, Flow
 from chatbot.models.profile_models import Profile
 from chatbot.serializer.base_serializer import ChatSessionSerializer
 from chatbot.serializer.company_serializer import (
@@ -38,11 +39,44 @@ class CompanyBotRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):
     serializer_class = CompanyBotSerializer
 
 
-class BotVernacularListCreateView(generics.ListCreateAPIView):
-    queryset = BotVernacular.objects.all()
-    serializer_class = BotVernacularSerializer
-    filter_backends = [django_filters.rest_framework.DjangoFilterBackend]
-    filterset_fields = ['company_bot', 'language', 'company_bot__route']
+class BotVernacularListCreateView(APIView):
+    """
+    Read-only GET endpoint. No serializer, no create/update/delete -
+    this data must not be writable through this route.
+    """
+
+    FIELDS = ('alt_introductory_message', 'introductory_message', 'name', 'error_message')
+
+    def get(self, request, *args, **kwargs):
+        language = request.query_params.get('language')
+        route = request.query_params.get('company_bot__route')
+
+        if not language or not route:
+            return Response(
+                {'error': 'language and company_bot__route query parameters are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        bot = CompanyBot.objects.filter(route=route).order_by('id').first()
+        if not bot:
+            return Response({'error': 'company bot not found for given route'}, status=status.HTTP_404_NOT_FOUND)
+
+        vernacular = BotVernacular.objects.filter(company_bot=bot, language=language).first()
+        if not vernacular:
+            return Response({'error': 'bot vernacular not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        data = {field: getattr(vernacular, field) for field in self.FIELDS}
+
+        english_bot = BotVernacular.objects.filter(company_bot=bot, language='en').first()
+        data['default_name'] = english_bot.name if english_bot else ""
+
+        step_one = CompanyStateMachine.objects.filter(company_bot=bot, step=1).first()
+        if step_one and step_one.translations:
+            audio_url = step_one.translations.get(language, {}).get('audio_s3')
+            if audio_url:
+                data['audio_url'] = audio_url
+
+        return Response(data)
 
 
 class BotVernacularRetrieveUpdateDestroyView(generics.RetrieveUpdateAPIView):
