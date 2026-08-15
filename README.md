@@ -455,7 +455,7 @@ ss -tulpn | grep 6379
 
 Once the service is up and running, set the password for the default admin account via the Django admin panel.
 
-1. Open the admin panel in your browser:
+1. Open the admin panel in your browser: assuming the uvicorn service is running on port 9000
    ```
    http://localhost:9000/admin
    ```
@@ -486,4 +486,10 @@ Once the admin password is configured, import company data and create a company 
 3. Use the **Import Bot** action and upload the downloaded JSON to create an company Bot.
 
 4. Verify the bot appears in the CompanyBot list and is linked to the correct flow route before testing.
+
+5. Once the bot is successfully imported, access it using the following URL format:
+```
+   {domain}/mohini/home?flow=<flow_name>
+```
+   Replace `{domain}` with your service domain and `<flow_name>` with the flow associated with the imported bot.
  
