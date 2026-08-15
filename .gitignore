@@ -20,6 +20,8 @@ config/qa-dev-prod-mitra-bucket.json
 .vscode/
 .claude/
 .venv/
-.refact/
-.env.backend
-.env.postgress
+CLAUDE.md
+.DS_Store
+memory.sh
+primer.md
+project-memory.md

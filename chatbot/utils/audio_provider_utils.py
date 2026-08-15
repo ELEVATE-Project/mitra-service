@@ -11,6 +11,9 @@ from chatbot.translate.openai.openai_stt import transcribe_audio
 from chatbot.translate.sarvam.sarvam import SarvamLanguageService
 from chatbot.translate.sarvam.speech_to_text import transcribe_sarvam_multiple_chunks
 from chatbot.translate.sarvam.text_to_speech import sarvam_text_to_speech
+from chatbot.translate.shikshalokam.speech_to_text import sl_speech_to_text
+from chatbot.translate.shikshalokam.text_to_speech import sl_text_to_speech
+from chatbot.translate.shikshalokam.text_to_text import sl_translate
 from django.conf import settings
 import logging
 
@@ -67,6 +70,10 @@ def text_speech_provider(company_bot, text, source_language):
         response = sarvam_text_to_speech(
             message=text, source_language=source_language, voice_provider=voice_provider
         )
+    elif voice_provider.provider == VoiceProvider.SHIKSHALOKAM:
+        response = sl_text_to_speech(
+            text=text, source_language=source_language, voice_provider=voice_provider
+        )
     else:
         return {
             'status': 500,
@@ -114,7 +121,11 @@ def speech_text_provider(company_bot, base64, audio_format, source_language):
             source_language=LanguageMapping.get_sarvam_language(source_language),
             voice_provider=voice_provider
         )
-
+    elif voice_provider.provider == VoiceProvider.SHIKSHALOKAM:
+        response = sl_speech_to_text(
+            base64_audio_file=base64, source_language=source_language,
+            audio_format=audio_format, voice_provider=voice_provider
+        )
     else:
         return {
             'status': 500,
@@ -158,6 +169,11 @@ def text_translate_provider(message_body, target_language, source_language, voic
             response = handle_custom_translation(
                 message_body=message_body, source_language=LanguageMapping.get_mapped_language(source_language),
                 target_language=LanguageMapping.get_mapped_language(target_language), company_bot=company_bot
+            )
+        elif voice_provider.provider == VoiceProvider.SHIKSHALOKAM:
+            response = sl_translate(
+                message_body=message_body, source_language=source_language,
+                target_language=target_language, voice_provider=voice_provider
             )
         else:
             return {
