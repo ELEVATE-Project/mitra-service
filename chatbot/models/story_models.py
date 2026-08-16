@@ -234,9 +234,13 @@ class Story(models.Model):
             self.leader_category = None
             return
 
+        # Matched case-insensitively: CompanyBotProgramMapping.clean() only guards values
+        # typed in the admin, while state is also written by the state categorisation cron
+        # and the CSV correction tool. An exact match let a value such as 'bihar' from
+        # those producers silently resolve to no program and no leader category.
         mapping = CompanyBotProgramMapping.objects.filter(
             company_bot=chat_session.company_bot,
-            state=self.state,
+            state__iexact=self.state,
             is_active=True,
         ).select_related('program', 'leader_category').first()
 

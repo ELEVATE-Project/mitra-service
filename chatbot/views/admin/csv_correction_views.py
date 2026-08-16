@@ -16,19 +16,18 @@ ERROR_REASON_COL = "error_reason"
 MAPPING_REQUIRED_FIELDS = {"state", "district", "leader_category"}
 
 def _get_valid_roles():
-    from chatbot.models.enums import ProfileType
-    return {c[0].lower() for c in ProfileType.choices}
+    # Roles come from the Role master table. ProfileType (USER/MODERATOR) describes admin
+    # access levels, not reporter roles, so validating against it rejected every real
+    # value a correction CSV could carry.
+    from chatbot.models.story_models import Role
+    return {n.strip().lower() for n in Role.objects.values_list("name", flat=True) if n}
 
 
 def _get_valid_leader_categories():
-    from chatbot.models.story_models import Story
-    cats = set()
-    for params in Story.objects.exclude(other_params__isnull=True).values_list("other_params", flat=True):
-        if isinstance(params, dict):
-            lc = params.get("leader_category")
-            if lc and isinstance(lc, str):
-                cats.add(lc.strip().lower())
-    return cats
+    # Read from the LeaderCategory master table rather than scraping distinct strings out
+    # of Story.other_params, which only ever knew about values already in use.
+    from chatbot.models.story_models import LeaderCategory
+    return {n.strip().lower() for n in LeaderCategory.objects.values_list("name", flat=True) if n}
 
 
 
@@ -100,6 +99,23 @@ def _apply_to_story(story, fields: dict) -> bool:
     if fields["leader_category"] and op.get("leader_category") != fields["leader_category"]:
         op["leader_category"] = fields["leader_category"]
         changed = True
+
+    # Also resolve onto the model's foreign keys, which is what the dashboard reads.
+    # The other_params copies above are kept as-is: _update_mapping_stage() derives the
+    # story stage from op['leader_category'], so dropping them would change that result.
+    from chatbot.models.story_models import LeaderCategory, Role
+
+    if fields["role"]:
+        role_obj = Role.objects.filter(name__iexact=fields["role"]).first()
+        if role_obj and story.role_id != role_obj.id:
+            story.role = role_obj
+            changed = True
+    if fields["leader_category"]:
+        lc_obj = LeaderCategory.objects.filter(name__iexact=fields["leader_category"]).first()
+        if lc_obj and story.leader_category_id != lc_obj.id:
+            story.leader_category = lc_obj
+            changed = True
+
     if fields["theme_name"] and op.get("theme_name") != fields["theme_name"]:
         op["theme_name"] = fields["theme_name"]
         changed = True
@@ -124,15 +140,31 @@ def _update_mapping_stage(story):
     story.stage = StoryStatusChoices.COMPLETED if fully_mapped else StoryStatusChoices.PENDING
 
 
+def _neutralise_formula(value):
+    """
+    Stop a spreadsheet from evaluating uploaded text as a formula.
+
+    The rejection file echoes back cells the uploader supplied, so a value such as
+    =cmd|'/c calc'!A1 would execute when the file is opened in Excel or Sheets. Prefixing
+    with an apostrophe makes the cell literal text; the apostrophe is not displayed.
+    """
+    text = "" if value is None else str(value)
+    if text[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + text
+    return text
+
+
 def _build_rejection_csv(rejected_rows: list, original_headers: list) -> str:
     headers = [h for h in original_headers if h != ERROR_REASON_COL]
     headers.append(ERROR_REASON_COL)
     output = io.StringIO()
     writer = csv.DictWriter(output, fieldnames=headers, extrasaction="ignore")
-    writer.writeheader()
+    # Headers come from the uploaded file too, so they need the same treatment. The
+    # fieldnames stay unchanged so DictWriter can still map each row's keys.
+    writer.writerow({h: _neutralise_formula(h) for h in headers})
     for item in rejected_rows:
-        row = dict(item["row"])
-        row[ERROR_REASON_COL] = item["error"]
+        row = {k: _neutralise_formula(v) for k, v in dict(item["row"]).items()}
+        row[ERROR_REASON_COL] = _neutralise_formula(item["error"])
         writer.writerow(row)
     return output.getvalue()
 
@@ -147,6 +179,15 @@ class CsvCorrectionView(TemplateView):
         return context
 
     def post(self, request, *args, **kwargs):
+        # staff_member_required only proves the user can reach the admin. Bulk-rewriting
+        # every Story needs the change permission for the model itself, checked before
+        # anything is parsed or saved.
+        if not request.user.has_perm("chatbot.change_story"):
+            return JsonResponse(
+                {"success": False, "error": "You do not have permission to change stories."},
+                status=403,
+            )
+
         uploaded_file = request.FILES.get("csv_file")
 
         if not uploaded_file:
