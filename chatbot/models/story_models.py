@@ -6,7 +6,7 @@ from django.db import models
 from django.core.validators import MinLengthValidator
 from simple_history.models import HistoricalRecords
 from chatbot.models import Profile, TagChoices, StoryLanguageChoices, StorySourceChoices, MediaTypeChoices, \
-    StoryStatusChoices, Company, TagSourceChoices
+    StoryStatusChoices, Company, TagSourceChoices, ReportTypeChoices
 from pillow_heif import register_heif_opener
 from django.core.files.base import ContentFile
 from PIL import Image, UnidentifiedImageError
@@ -93,6 +93,11 @@ class Story(models.Model):
         Role, on_delete=models.SET_NULL, null=True, blank=True,
         related_name='stories'
     )
+    report_type = models.CharField(
+        max_length=50, choices=ReportTypeChoices.choices,
+        null=True, blank=True, db_index=True,
+        help_text="Report classification, derived from the PDF template of the story's flow."
+    )
     formatted_content = models.TextField(null=True, blank=True)
     language = models.CharField(max_length=1000, choices=StoryLanguageChoices.choices,
                                 default=StoryLanguageChoices.ENGLISH)
@@ -167,6 +172,24 @@ class Story(models.Model):
                     if field not in extended:
                         extended.append(field)
                 kwargs['update_fields'] = extended
+
+        # Report type is a stored column so the dashboard can filter and aggregate on it
+        # in SQL. Derived once, on the first save that can resolve it, and never
+        # overwritten afterwards.
+        if not self.report_type:
+            derived = self.get_report_type()
+            if derived in ReportTypeChoices.values:
+                self.report_type = derived
+                # A partial save (e.g. the state cron's update_fields=['state','district'])
+                # would otherwise drop the value silently.
+                update_fields = kwargs.get('update_fields')
+                if update_fields is not None and 'report_type' not in update_fields:
+                    kwargs['update_fields'] = list(update_fields) + ['report_type']
+            elif derived:
+                logger.warning(
+                    "Unrecognised report type tag %r for session %s; leaving report_type unset",
+                    derived, self.session,
+                )
 
         super().save(*args, **kwargs)
 

@@ -139,6 +139,25 @@ def save_chaupal_report(
             if not role:
                 logger.warning(f"No matching Role found for LLM output: '{raw_role}'")
 
+        # Discussion reports carry an implicit role. The default is configured on the bot
+        # rather than matched against the flow name: `flow` is free text supplied by the
+        # frontend and has already drifted ('Guest-Discussion' vs the 'guest-discussion'
+        # enum value), so any string comparison would silently stop tagging after a rename.
+        #
+        # Only fills a role that is still empty, so an LLM-supplied role always wins.
+        # Bots whose reports must not be tagged - e.g. the megaPTM path, which shares this
+        # function via the else branch in scripts/meghaPTM/create_story_script.py - simply
+        # leave default_role empty.
+        if not role and company_bot and company_bot.default_role:
+            role = company_bot.default_role
+
+        if not role:
+            logger.warning(
+                "Story role unresolved - flow=%r session=%s bot=%r. Set CompanyBot."
+                "default_role on that bot if its reports should carry a role.",
+                flow, session, getattr(company_bot, 'route', None),
+            )
+
         # Extract and translate fields to English
         raw_title = response_json_story.get('title', '')
         english_title = clean_escaped_text(

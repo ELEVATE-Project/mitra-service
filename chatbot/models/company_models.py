@@ -157,6 +157,15 @@ class CompanyBot(models.Model):
             "Enable streaming mode for LLM responses."
         )
     )
+    default_role = models.ForeignKey(
+        'chatbot.Role',
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='default_for_bots',
+        help_text=(
+            "Role applied to reports from this bot when the conversation does not yield "
+            "one. Leave empty for bots whose reports should not be tagged with a role."
+        )
+    )
 
     history = HistoricalRecords()
 
@@ -681,6 +690,52 @@ class CompanyBotProgramMapping(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     history = HistoricalRecords()
+
+    # Bot holding the canonical state/district reference data, shared with the state
+    # categorisation cron so both sides agree on spelling.
+    STATE_MASTER_DATA_BOT_ROUTE = '/state-classification-guest-discussion'
+
+    def clean(self):
+        """
+        Keep `state` to the canonical names in the master data.
+
+        The derivation in Story._derive_program_and_leader_category matches this column
+        with an exact, case-sensitive lookup, so a typed variant such as 'bihar' silently
+        produces unmapped reports with no error anywhere. Validation is admin-side only:
+        clean() runs from full_clean(), not from save(), so scripts, migrations and the
+        shell are unaffected.
+
+        Every failure path returns instead of raising - if the master data cannot be read
+        the field is left alone rather than blocking the save.
+        """
+        super().clean()
+
+        if not self.state:
+            return
+
+        import json
+        import logging
+
+        logger = logging.getLogger('django')
+
+        try:
+            bot = CompanyBot.objects.filter(route=self.STATE_MASTER_DATA_BOT_ROUTE).first()
+            if not bot or not bot.dynamic_context:
+                return
+            raw = bot.dynamic_context
+            data = raw if isinstance(raw, dict) else json.loads(raw)
+            names = [s['name'] for s in data.get('states', []) if s.get('name')]
+        except Exception as exc:
+            logger.warning("Could not load state master data for validation: %s", exc)
+            return
+
+        if names and self.state not in names:
+            raise ValidationError({
+                'state': (
+                    f"'{self.state}' is not a known state. Choose one of: "
+                    f"{', '.join(sorted(names))}."
+                )
+            })
 
     def __str__(self):
         return f"{self.company_bot.name} + {self.state} → {self.program.name} / {self.leader_category.name}"

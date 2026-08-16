@@ -305,6 +305,17 @@ class StoryStatusChoices(models.TextChoices):
     COMPLETED = 'COMPLETED', _('COMPLETED')
 
 
+class ReportTypeChoices(models.TextChoices):
+    """
+    Classification of a report, used to filter and aggregate on the dashboard.
+
+    Values mirror the tags configured on PDFTemplates.tag, which is where a story's
+    report type is derived from.
+    """
+    MI_STORY = 'mi-story', _('MI Report')
+    DISCUSSION_REPORT = 'discussion-report', _('Discussion Report')
+
+
 class EntityTypeChoices(models.TextChoices):
     """
     Marks whether an entity is mandatory or optional.

@@ -375,6 +375,22 @@ def save_generic_story(
                 else:
                     logger.warning(f"No matching Role found for LLM output: '{raw_role}'")
 
+            # Fall back to the role configured on the bot when the conversation yields
+            # none. Keyed on the bot rather than the flow name because `flow` is free
+            # text from the frontend and has already drifted ('Guest-Discussion' vs the
+            # 'guest-discussion' enum value), so a string match would silently stop
+            # tagging after a rename. Bots whose reports must not carry a role simply
+            # leave default_role empty.
+            if 'role' not in story_fields_to_update and company_bot and company_bot.default_role:
+                story_fields_to_update['role'] = company_bot.default_role
+
+            if 'role' not in story_fields_to_update:
+                logger.warning(
+                    "Story role unresolved - flow=%r session=%s bot=%r. Set CompanyBot."
+                    "default_role on that bot if its reports should carry a role.",
+                    flow, session, getattr(company_bot, 'route', None),
+                )
+
         story_fields_to_update.update({
             'author': profile if isinstance(profile, Profile) else Profile.objects.filter(id=profile.get("id")).first(),
             'session': session,
