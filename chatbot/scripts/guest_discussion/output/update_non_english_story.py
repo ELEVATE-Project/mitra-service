@@ -115,8 +115,12 @@ def fix_guest_discussion_stories():
                 source_language=source_language,
                 is_sentence=" " in story.location
             )
-            story.location = get_transliteration_output(result)
-            updated = True
+            # Keep the stored value when the provider returns nothing usable; assigning
+            # the raw result would replace a real location with null.
+            transliterated = get_transliteration_output(result)
+            if transliterated:
+                story.location = transliterated
+                updated = True
 
         # ---------- TRANSLATE STORY.TITLE ----------
         if is_non_english_text(story.title):
@@ -169,8 +173,11 @@ def fix_guest_discussion_stories():
                     source_language=source_language,
                     is_sentence=" " in val
                 )
-                obj[key] = get_transliteration_output(result)
-                updated = True
+                # Keep the stored value when the provider returns nothing usable.
+                transliterated = get_transliteration_output(result)
+                if transliterated:
+                    obj[key] = transliterated
+                    updated = True
 
         for key in ["user_name", "organization", "location"]:
             transliterate(other_params, key)
@@ -321,8 +328,12 @@ def fix_guest_discussion_stories_by_id(story_ids=None, session_id=None):
                 source_language=source_language,
                 is_sentence=" " in story.location
             )
-            story.location = get_transliteration_output(result)
-            updated = True
+            # Keep the stored value when the provider returns nothing usable; assigning
+            # the raw result would replace a real location with null.
+            transliterated = get_transliteration_output(result)
+            if transliterated:
+                story.location = transliterated
+                updated = True
 
         # ---------- TRANSLATE STORY.TITLE ----------
         if is_non_english_text(story.title):
@@ -375,8 +386,11 @@ def fix_guest_discussion_stories_by_id(story_ids=None, session_id=None):
                     source_language=source_language,
                     is_sentence=" " in val
                 )
-                obj[key] = get_transliteration_output(result)
-                updated = True
+                # Keep the stored value when the provider returns nothing usable.
+                transliterated = get_transliteration_output(result)
+                if transliterated:
+                    obj[key] = transliterated
+                    updated = True
 
         for key in ["user_name", "organization", "location"]:
             transliterate(other_params, key)

@@ -175,17 +175,14 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
         form.base_fields = {field_name: form.base_fields[field_name] for field_name in form.base_fields}
         return form
 
-    def changeform_view(self, request, object_id=None, form_url='', extra_context=None):
-        # This method is called when the admin change form is rendered.
-        if object_id:
-            obj = self.model.objects.get(pk=object_id)
-            if obj.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
-                self.inlines = [VoiceProviderAdmin, CompanyStateMachineAdmin, CompanyBotProgramMappingInline]
-            else:
-                self.inlines = [VoiceProviderAdmin, CompanyBotProgramMappingInline]
-        else:
-            self.inlines = [VoiceProviderAdmin, CompanyBotProgramMappingInline]
-        return super().changeform_view(request, object_id, form_url, extra_context)
+    def get_inlines(self, request, obj=None):
+        # Returns a fresh list per request. ModelAdmin instances are created once at
+        # startup and shared across every request, so assigning self.inlines here would
+        # leak one bot's inline set into a concurrent request for a different bot.
+        # obj is None on the add form.
+        if obj and obj.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
+            return [VoiceProviderAdmin, CompanyStateMachineAdmin, CompanyBotProgramMappingInline]
+        return [VoiceProviderAdmin, CompanyBotProgramMappingInline]
 
     # Sync Google glossary for TextToText voice providers after inline save
     def duplicate_bot(self, request, queryset):

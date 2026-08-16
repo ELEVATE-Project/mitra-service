@@ -260,7 +260,10 @@ def save_story(
                 story.block = block
             story.blurb = english_blurb
             story.validation_logs = combined_reason
-            story.role = role
+            # Guarded like state/district/block above: a re-run where the conversation
+            # yields no role must not erase a role captured on an earlier run.
+            if role:
+                story.role = role
         else:
             story = Story(
                 title=english_title,

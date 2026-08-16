@@ -97,10 +97,16 @@ class FlowConnectionInfoSerializer(serializers.ModelSerializer):
         return []
 
     def get_editor_config(self, obj):
-        template = obj.pdf_templates.first()
-        if not template or not template.constants_json:
-            return None
-        return template.constants_json.get("editor_config", None)
+        # A flow may have several templates and nothing orders pdf_templates, so an
+        # unordered .first() can hand a different editor_config to the frontend between
+        # requests. Ordered for a stable result; the first template that actually carries
+        # an editor_config wins, so a template without one no longer masks the others.
+        for template in obj.pdf_templates.order_by('id'):
+            if template.constants_json:
+                editor_config = template.constants_json.get("editor_config")
+                if editor_config is not None:
+                    return editor_config
+        return None
 
     
     def get_image_config(self, obj):

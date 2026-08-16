@@ -3,6 +3,7 @@ import os
 import base64
 import logging
 from django.db import models
+from django.db.models.functions import Lower
 from django.core.validators import MinLengthValidator
 from simple_history.models import HistoricalRecords
 from chatbot.models import Profile, TagChoices, StoryLanguageChoices, StorySourceChoices, MediaTypeChoices, \
@@ -57,6 +58,13 @@ class Role(models.Model):
         verbose_name_plural = "Roles"
         indexes = [
             models.Index(fields=['code']),
+        ]
+        constraints = [
+            # Roles are resolved with Role.objects.filter(name__iexact=...).first(), and
+            # the capture prompts expose names rather than codes. A plain unique=True
+            # would still allow 'Parent' and 'parent' to coexist and leave that lookup
+            # ambiguous, so uniqueness is enforced case-insensitively.
+            models.UniqueConstraint(Lower('name'), name='unique_role_name_ci'),
         ]
 
 
@@ -148,9 +156,16 @@ class Story(models.Model):
         if not flow_route:
             return None
 
+        # A flow may have several templates (e.g. a guest and an auth variant), so the
+        # query is ordered to make the result stable - an unordered .first() could return
+        # a different row, and therefore a different stored report_type, between runs.
+        # user_type is deliberately not filtered on here: the tag classifies the report,
+        # not the rendering variant, so every template on a flow carries the same tag.
+        # Filtering by user_type would return None whenever a story's audience has no
+        # matching template, dropping the classification entirely.
         pdf_template = PDFTemplates.objects.filter(
             flow__flow_route=flow_route
-        ).exclude(tag__isnull=True).exclude(tag='').first()
+        ).exclude(tag__isnull=True).exclude(tag='').order_by('id').first()
 
         return pdf_template.tag if pdf_template else None
 
