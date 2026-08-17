@@ -92,14 +92,15 @@ def generate_state_machine_translations(company_bot_id, language=None):
         cached = dict(sm.translations or {})
 
         for lang in languages:
-            if lang == "en":
-                continue
             lang_data = dict(cached.get(lang, {}))
 
             if sm.step == 1:
                 lang_data.pop("text", None)
                 lang_data.pop("audio_s3", None)
-                vernacular_text = vernacular_map.get(lang)
+                if lang == "en":
+                    vernacular_text = company_bot.introductory_message
+                else:
+                    vernacular_text = vernacular_map.get(lang)
                 if not vernacular_text:
                     if lang_data:
                         cached[lang] = lang_data
@@ -138,19 +139,18 @@ def generate_state_machine_translations(company_bot_id, language=None):
                 continue
 
             # Text translation
-            try:
-                result = text_translate_provider(
-                    message_body=sm.bot_question,
-                    target_language=lang,
-                    source_language="en",
-                    company_bot=company_bot,
-                )
-                if result and result.get("status") == 200:
-                    lang_data["text"] = result["content"]
-            except Exception as e:
-                logger.info(
-                    f"generate_translations: text translation failed sm={sm.id} lang={lang}: {e}"
-                )
+            if lang != "en":
+                try:
+                    result = text_translate_provider(
+                        message_body=sm.bot_question,
+                        target_language=lang,
+                        source_language="en",
+                        company_bot=company_bot,
+                    )
+                    if result and result.get("status") == 200:
+                        lang_data["text"] = result["content"]
+                except Exception as e:
+                    logger.info(f"generate_translations: text translation failed sm={sm.id} lang={lang}: {e}")
 
             # TTS
             tts_voice = tts_voice_map.get(lang)
