@@ -42,7 +42,10 @@ def _extract_fields(row: dict) -> dict:
         "role":            (row.get("role") or "").strip(),
         "leader_category": (row.get("leader_category") or "").strip(),
         "theme_name":      (row.get("theme_name") or "").strip(),
-        "action":          (row.get("action") or "update").strip().lower(),
+        # Absent, empty and whitespace-only all mean "no action given", which defaults to
+        # update. Without the trailing fallback a cell of "   " would strip to "" and be
+        # rejected as an unsupported action.
+        "action":          ((row.get("action") or "").strip().lower() or "update"),
     }
 
 
@@ -244,6 +247,13 @@ class CsvCorrectionView(TemplateView):
                 processed += 1
                 continue
             if fields["action"] != "update":
+                # A typo such as 'updtae' used to be skipped silently - not counted, not
+                # rejected - so the upload reported success while the correction was
+                # never applied.
+                processed += 1
+                rejected_rows.append(
+                    {"row": row, "error": "action must be 'update' or 'ignore'"}
+                )
                 continue
 
             processed += 1

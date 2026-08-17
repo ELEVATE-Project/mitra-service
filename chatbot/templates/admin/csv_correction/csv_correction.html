@@ -202,7 +202,7 @@
         </svg>
         <div>
             <p>Bulk Metadata Correction</p>
-            <p>Upload a CSV file to fix missing or inaccurate metadata (State, District, Program, Role, Leader Category, Theme) for unmapped stories.
+            <p>Upload a CSV file to fix missing or inaccurate metadata (State, District, Block, Location, Role, Leader Category, Theme) for unmapped stories.
                Corrections permanently override previous AI-generated values and instantly cascade across all live dashboard metrics.</p>
         </div>
     </div>
@@ -215,7 +215,7 @@
             <span class="schema-summary-hint">id required · others optional ▾</span>
         </summary>
         <p style="font-size:12px;color:#666;margin:12px 0 12px 0;">
-            Columns appear in export order. Only <code>id</code> and <code>action</code> are mandatory.
+            Columns appear in export order. Only <code>id</code> is mandatory.
             All other columns are read from the CSV if present and ignored if absent.
         </p>
         <table class="schema-table">
@@ -233,8 +233,11 @@
                 <tr><td><code>district</code></td><td><span class="badge-editable">Editable</span></td><td>Edit this column to update district — accepted as-is, no validation</td></tr>
                 <tr><td><code>block</code></td><td><span class="badge-editable">Editable</span></td><td>Edit this column to update block</td></tr>
                 <tr><td><code>location</code></td><td><span class="badge-editable">Editable</span></td><td>Free-text location string (separate from state/district fields)</td></tr>
-                <tr><td><code>action</code></td><td><span class="badge-editable">Optional</span></td><td><code>update</code> or <code>ignore</code> — if column absent, all rows treated as <code>update</code></td></tr>
-                <tr><td>all other columns</td><td><span class="badge-readonly">Ignored</span></td><td>title, content, other_params, etc. are read but never written back</td></tr>
+                <tr><td><code>role</code></td><td><span class="badge-editable">Editable</span></td><td>Edit this column to update the reporter's role — must match a Role in master data</td></tr>
+                <tr><td><code>leader_category</code></td><td><span class="badge-editable">Editable</span></td><td>Edit this column to update leader category — must match a Leader Category in master data</td></tr>
+                <tr><td><code>theme_name</code></td><td><span class="badge-editable">Editable</span></td><td>Edit this column to update the theme name</td></tr>
+                <tr><td><code>action</code></td><td><span class="badge-editable">Optional</span></td><td><code>update</code> or <code>ignore</code> — if column absent or blank, the row is treated as <code>update</code></td></tr>
+                <tr><td>all other columns</td><td><span class="badge-readonly">Ignored</span></td><td>title, content, and any column not listed above are read but never written back</td></tr>
             </tbody>
         </table>
       </details>
