@@ -535,6 +535,8 @@ CRONJOBS = [
     '>> /tmp/xylem_story_creation.log 2>&1'),
     ('0 */2 * * *', 'chatbot.cron_tasks.guest_discussion.state_categorisation.run_cron',
     '>> /tmp/guest_discussion_state_categorisation.log 2>&1'),
+    ('0 */2 * * *', 'chatbot.cron_tasks.listening_activity.district_categorisation.run_cron',
+    '>> /tmp/listening_activity_district_categorisation.log 2>&1'),
     ('0 12 * * *', 'chatbot.cron_tasks.bihar_teacher_tool.story_creation.create_story',
     '>> /tmp/bihar_teacher_tool_story_creation.log 2>&1')
 ]
