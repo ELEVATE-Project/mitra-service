@@ -109,6 +109,10 @@ def _matches(patterns: str | List[str], text: str) -> bool:
     if isinstance(patterns, str):
         escaped = re.escape(patterns)
         return bool(re.search(r'(?<![a-zA-Z])' + escaped + r'(?![a-zA-Z])', text, re.IGNORECASE))
+
+    if len(patterns) == 0:
+        return False
+        
     return all(_matches(p, text) for p in patterns)
     
 def _match_patterns(patterns: List[str], text: str) -> bool:
