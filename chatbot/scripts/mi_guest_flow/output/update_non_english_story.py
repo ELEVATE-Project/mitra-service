@@ -14,7 +14,7 @@ OUTPUT_FILE = "guest_mi_story_fix_report.txt"
 
 # ---------- LANGUAGE DETECTION ----------
 ENGLISH_LETTER_REGEX = re.compile(r'[A-Za-z]')
-ANY_LETTER_REGEX = re.compile(r'[A-Za-z\u00C0-\u024F\u0900-\u097F]')
+ANY_LETTER_REGEX = re.compile(r'[A-Za-z\u00C0-\u024F\u0900-\u097F\u0C80-\u0CFF]')
 
 
 def is_non_english_text(text):
