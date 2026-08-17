@@ -39,6 +39,13 @@ class LeaderCategory(models.Model):
         indexes = [
             models.Index(fields=['code']),
         ]
+        # Matched with name__iexact when resolving CSV corrections, so uniqueness has to
+        # be case-insensitive: a plain unique flag would still allow two rows differing
+        # only in case and leave that lookup returning an arbitrary one. Mirrors the
+        # constraint on Role.name.
+        constraints = [
+            models.UniqueConstraint(Lower('name'), name='unique_leader_category_name_ci'),
+        ]
 
 
 class Role(models.Model):
