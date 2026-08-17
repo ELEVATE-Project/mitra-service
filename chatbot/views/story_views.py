@@ -1,6 +1,5 @@
 from chatbot.models import Story, StoryMedia, SessionFlowName
 from chatbot.models.base_models import Flow
-from chatbot.models.enums import CreateStoryChoices
 from chatbot.models.media_models import ProfileMedia
 from chatbot.serializer.profile_serializer import ProfileMediaSerializer
 from chatbot.serializer.story_serializer import StoryCreateSerializer, StoryRetrieveSerializer, StoryMediaRetrieveSerializer, StoryFullSerializer
@@ -9,7 +8,6 @@ from chatbot.utils.shikshalokam_story_utils import update_story_pdf
 from chatbot.utils.story_utils.base.story_update_utils import extract_update_data, get_or_create_translation, update_translation_fields, sync_to_main_story
 from chatbot.utils.story_utils.base.translation_mixins import LanguageDetectionMixin
 from chatbot.utils.story_utils.story_utils import create_story_object, generate_story
-from django.contrib.auth import PermissionDenied
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
@@ -239,7 +237,6 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
         """
         Handle POST requests (create).
         """
-        print("Creating")
         session_value = request.data.get('session')
         access_token = request.data.get('access_token')
         flow = request.data.get('flow')
@@ -249,18 +246,14 @@ class StoryMediaListCreateView(generics.ListCreateAPIView):
             file_url = "https://" + file_url[len("s3://"):]
             request.data["file_url"] = file_url
 
-        print("session_value: ", session_value)
-        print("flow: ", flow)
-        print("access_token: ", access_token)
         try:
             response = super().create(request, *args, **kwargs)
-            print("response: ", response)
-            print("response status_code: ", response.status_code)
 
             if response.status_code == status.HTTP_201_CREATED and flow != SessionFlowName.Reflection:
                 update_story_pdf(
                     access_token=access_token, session=session_value, flow=flow
                 )
+
             return response
 
         except Exception as e:
