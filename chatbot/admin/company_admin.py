@@ -213,6 +213,15 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
                 sm.company_bot = new_bot
                 sm.save()
 
+        # Duplicate the program mappings too. Without them the copy has no active state
+        # mapping, so Story._derive_program_and_leader_category finds nothing and every
+        # story the new bot produces is left with no program and no leader category.
+        original_program_mappings = CompanyBotProgramMapping.objects.filter(company_bot=original)
+        for mapping in original_program_mappings:
+            mapping.pk = None
+            mapping.company_bot = new_bot
+            mapping.save()
+
         self.message_user(request, "Bot duplicated successfully!", level=messages.SUCCESS)
         return redirect(f"/admin/chatbot/companybot/{new_bot.id}/change/")
 
