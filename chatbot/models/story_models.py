@@ -1,6 +1,5 @@
 import io
 import os
-import base64
 import logging
 from django.db import models
 from django.db.models.functions import Lower
@@ -19,6 +18,12 @@ logger = logging.getLogger('django')
 
 
 class LeaderCategory(models.Model):
+    """
+    Master list of leader categories a programme can belong to, such as Woman Leader or
+    School Leader. Reports inherit their category from the programme they are mapped to,
+    rather than from the person who filed them.
+    """
+
     code = models.CharField(max_length=100, unique=True)
     name = models.CharField(max_length=1000)
 
@@ -46,6 +51,12 @@ class LeaderCategory(models.Model):
 
 
 class Role(models.Model):
+    """
+    Master list of roles a report can be attributed to, such as Woman Leader or Parent.
+    Capture flows resolve whatever the user says about themselves onto one of these rows,
+    so the set here is the only vocabulary a report's role can use.
+    """
+
     code = models.CharField(max_length=100, unique=True)
     name = models.CharField(max_length=1000)
 

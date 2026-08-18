@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator
 from simple_history.models import HistoricalRecords
 
+from chatbot.constants import api_responses
 from chatbot.constants.voice_provider_defaults import get_provider_defaults, VOICE_PROVIDER_DEFAULTS
 from chatbot.models.enums import (
     CreateStoryChoices, EntityStatus, LLMModel, GenderChoices, ChatStatus,
@@ -610,7 +611,7 @@ class Flow(models.Model):
         if self.default_flow_id and self.pk:
             if self.default_flow.parent_flow_id != self.pk:
                 raise ValidationError({
-                    'default_flow': "default_flow must be a direct child of this flow."
+                    'default_flow': api_responses.FLOW_DEFAULT_FLOW_NOT_CHILD
                 })
 
     def save(self, *args, **kwargs):
@@ -674,6 +675,13 @@ class PDFTemplates(models.Model):
 
 
 class CompanyBotProgramMapping(models.Model):
+    """
+    Maps a company bot and a state to the programme running there.
+    Story._derive_program_and_leader_category reads these rows to tag a report with its
+    programme and leader category, so a bot with no active mapping for a state produces
+    untagged reports.
+    """
+
     company_bot = models.ForeignKey(
         CompanyBot, on_delete=models.CASCADE, related_name='program_mappings'
     )
@@ -731,9 +739,8 @@ class CompanyBotProgramMapping(models.Model):
 
         if names and self.state not in names:
             raise ValidationError({
-                'state': (
-                    f"'{self.state}' is not a known state. Choose one of: "
-                    f"{', '.join(sorted(names))}."
+                'state': api_responses.PROGRAM_MAPPING_UNKNOWN_STATE_TEMPLATE.format(
+                    state=self.state, valid_states=', '.join(sorted(names))
                 )
             })
 

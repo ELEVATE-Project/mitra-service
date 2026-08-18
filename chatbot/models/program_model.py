@@ -4,6 +4,12 @@ from simple_history.models import HistoricalRecords
 
 
 class Program(models.Model):
+    """
+    Master list of programmes a report can belong to, such as Shiksha Chaupal.
+    Programmes are supplied by the product team before a programme goes live on Mitra, and
+    a report is tagged with one through the bot and state it came from.
+    """
+
     program_uuid = models.CharField(max_length=500, unique=True)
     name = models.CharField(max_length=1000, null=True, blank=True)
 

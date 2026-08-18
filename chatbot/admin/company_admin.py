@@ -21,6 +21,12 @@ from ..utils.admin_config.export_mixin import ExportAllFieldsMixin
 
 
 class CompanyBotProgramMappingInline(admin.TabularInline):
+    """
+    Edits the state-to-programme mappings of a company bot from the bot's own page.
+    Each row decides which programme and leader category a report is tagged with when the
+    bot produces one for that state.
+    """
+
     model = CompanyBotProgramMapping
     extra = 1
     fields = ('state', 'program', 'leader_category', 'is_active')

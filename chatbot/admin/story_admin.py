@@ -163,18 +163,35 @@ class StoryAdmin(admin.ModelAdmin):
         return render(request, 'admin/export_story_format.html', {'ids': ids})
 
 
-@admin.register(LeaderCategory)
-class LeaderCategoryAdmin(admin.ModelAdmin):
+class CodeNameMasterAdmin(admin.ModelAdmin):
+    """
+    Shared admin configuration for the code-and-name master lists.
+    Roles and leader categories are both small reference tables with the same shape, so
+    their list, search and ordering behaviour lives here and stays consistent as further
+    master lists are added.
+    """
+
     list_display = ('name', 'code', 'created_at')
     search_fields = ('name', 'code')
     ordering = ('name',)
+
+
+@admin.register(LeaderCategory)
+class LeaderCategoryAdmin(CodeNameMasterAdmin):
+    """
+    Admin interface for the leader category master list.
+    These are the categories programmes are mapped to, so entries here are referenced by
+    company bot programme mappings and must not be renamed casually.
+    """
 
 
 @admin.register(Role)
-class RoleAdmin(admin.ModelAdmin):
-    list_display = ('name', 'code', 'created_at')
-    search_fields = ('name', 'code')
-    ordering = ('name',)
+class RoleAdmin(CodeNameMasterAdmin):
+    """
+    Admin interface for the role master list.
+    Capture flows and the CSV correction tool both resolve incoming values against these
+    names, so a role that is missing here cannot be assigned to a report.
+    """
 
 
 @admin.register(StoryTranslation)

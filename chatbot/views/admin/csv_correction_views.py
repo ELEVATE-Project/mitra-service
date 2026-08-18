@@ -7,6 +7,7 @@ from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views.generic import TemplateView
 
+from chatbot.constants import api_responses
 from chatbot.constants.india_states import get_canonical_state
 
 CSV_REQUIRED_COLS = {"id"}   # only "id" column is mandatory
@@ -60,16 +61,17 @@ def _validate_row(fields: dict, roles: set, leader_categories: set) -> list:
     if state_val:
         if get_canonical_state(state_val) is None:
             errors.append(
-                f"Invalid State '{state_val}' — not in the 29 recognised states of India"
+                api_responses.CSV_ROW_INVALID_STATE_TEMPLATE.format(state=state_val)
             )
 
-
     if role_val and roles and role_val.lower() not in roles:
-        errors.append(f"Role '{role_val}' does not exist in master system access configurations")
+        errors.append(api_responses.CSV_ROW_UNKNOWN_ROLE_TEMPLATE.format(role=role_val))
 
     if lc_val and leader_categories and lc_val.lower() not in leader_categories:
         errors.append(
-            f"Leader Category '{lc_val}' does not exist in master system access configurations"
+            api_responses.CSV_ROW_UNKNOWN_LEADER_CATEGORY_TEMPLATE.format(
+                leader_category=lc_val
+            )
         )
 
     return errors
@@ -174,6 +176,14 @@ def _build_rejection_csv(rejected_rows: list, original_headers: list) -> str:
 
 @method_decorator(staff_member_required, name="dispatch")
 class CsvCorrectionView(TemplateView):
+    """
+    Admin screen for correcting report metadata in bulk from an uploaded CSV.
+    GET renders the upload page; POST validates every row against the master data before
+    committing anything, then returns a summary and, where rows failed, a rejection file
+    carrying the reason for each. Requires the Story change permission, not merely staff
+    access, because a single upload can rewrite every report in the database.
+    """
+
     template_name = "admin/csv_correction/csv_correction.html"
 
     def get_context_data(self, **kwargs):
@@ -187,17 +197,17 @@ class CsvCorrectionView(TemplateView):
         # anything is parsed or saved.
         if not request.user.has_perm("chatbot.change_story"):
             return JsonResponse(
-                {"success": False, "error": "You do not have permission to change stories."},
+                {"success": False, "error": api_responses.CSV_NO_PERMISSION},
                 status=403,
             )
 
         uploaded_file = request.FILES.get("csv_file")
 
         if not uploaded_file:
-            return JsonResponse({"success": False, "error": "No file uploaded."}, status=400)
+            return JsonResponse({"success": False, "error": api_responses.CSV_NO_FILE_UPLOADED}, status=400)
         if not uploaded_file.name.lower().endswith(".csv"):
             return JsonResponse(
-                {"success": False, "error": "Invalid file format. Please upload a .csv file."},
+                {"success": False, "error": api_responses.CSV_INVALID_FILE_FORMAT},
                 status=400,
             )
 
@@ -207,7 +217,7 @@ class CsvCorrectionView(TemplateView):
             headers = list(reader.fieldnames or [])
             rows = list(reader)
         except Exception as exc:
-            return JsonResponse({"success": False, "error": f"Could not parse CSV: {exc}"}, status=400)
+            return JsonResponse({"success": False, "error": api_responses.CSV_PARSE_FAILED_TEMPLATE.format(error=exc)}, status=400)
 
         original_headers = [h for h in headers if h != ERROR_REASON_COL]
 
@@ -215,20 +225,25 @@ class CsvCorrectionView(TemplateView):
         if missing:
             return JsonResponse(
                 {"success": False,
-                 "error": "Missing required column: 'id'. The CSV must have an 'id' column."},
+                 "error": api_responses.CSV_MISSING_ID_COLUMN},
                 status=400,
             )
 
         if not rows:
-            return JsonResponse({"success": False, "error": "CSV file is empty."}, status=400)
+            return JsonResponse({"success": False, "error": api_responses.CSV_EMPTY_FILE}, status=400)
 
-        ids = [r.get("id", "").strip() for r in rows]
+        # `or ""` rather than a get() default: csv.DictReader maps every column a short
+        # row does not reach to None, so the key exists with a None value and the default
+        # never applies. Calling .strip() on that raised an unhandled AttributeError.
+        # Matches how _extract_fields reads the same column.
+        ids = [(r.get("id") or "").strip() for r in rows]
         dupes = [rid for rid, cnt in Counter(ids).items() if cnt > 1 and rid]
         if dupes:
             return JsonResponse(
                 {"success": False,
-                 "error": f"Duplicate id values detected — upload rejected. "
-                          f"Duplicates: {', '.join(dupes[:10])}"},
+                 "error": api_responses.CSV_DUPLICATE_IDS_TEMPLATE.format(
+                     ids=', '.join(dupes[:10])
+                 )},
                 status=400,
             )
 
@@ -252,7 +267,7 @@ class CsvCorrectionView(TemplateView):
                 # never applied.
                 processed += 1
                 rejected_rows.append(
-                    {"row": row, "error": "action must be 'update' or 'ignore'"}
+                    {"row": row, "error": api_responses.CSV_ROW_INVALID_ACTION}
                 )
                 continue
 
@@ -260,7 +275,7 @@ class CsvCorrectionView(TemplateView):
 
             raw_id = fields["id"]
             if not raw_id:
-                rejected_rows.append({"row": row, "error": "id is empty"})
+                rejected_rows.append({"row": row, "error": api_responses.CSV_ROW_ID_EMPTY})
                 continue
 
             errors = _validate_row(fields, roles, leader_categories)
@@ -280,11 +295,11 @@ class CsvCorrectionView(TemplateView):
                     story = Story.objects.get(session=session_val)
                 except Story.DoesNotExist:
                     rejected_rows.append(
-                        {"row": row, "error": f"No Story found with id='{raw_id}'"}
+                        {"row": row, "error": api_responses.CSV_ROW_STORY_NOT_FOUND_TEMPLATE.format(story_id=raw_id)}
                     )
                     continue
                 except Exception as exc:
-                    rejected_rows.append({"row": row, "error": f"DB error: {exc}"})
+                    rejected_rows.append({"row": row, "error": api_responses.CSV_ROW_DB_ERROR_TEMPLATE.format(error=exc)})
                     continue
 
             if not _apply_to_story(story, fields):
@@ -295,7 +310,7 @@ class CsvCorrectionView(TemplateView):
                 story.save()
                 successful += 1
             except Exception as exc:
-                rejected_rows.append({"row": row, "error": f"Save failed: {exc}"})
+                rejected_rows.append({"row": row, "error": api_responses.CSV_ROW_SAVE_FAILED_TEMPLATE.format(error=exc)})
 
         rejection_csv_b64 = None
         if rejected_rows:
