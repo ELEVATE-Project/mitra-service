@@ -21,7 +21,7 @@ class PDFTemplatesAdmin(SimpleHistoryAdmin):
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('template_name', 'user_type', 'flow')
+            'fields': ('template_name', 'user_type', 'flow', 'tag')
         }),
         ('Template Content', {
             'fields': ('template', 'constants_json'),
