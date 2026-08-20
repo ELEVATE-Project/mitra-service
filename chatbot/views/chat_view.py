@@ -303,11 +303,17 @@ def non_llm_chat_view(request):
             .get(session=session)
         )
     except ChatSession.DoesNotExist:
+        resolved_company_bot = None
+        if company_bot:
+            resolved_company_bot = CompanyBot.objects.filter(id=company_bot).first()
+            if not resolved_company_bot:
+                return Response({"error": "Invalid company_bot."}, status=400)
+
         chat_session = ChatSession(
             profile_id=profile_id,
             current_step=1,
             language=language,
-            company_bot_id=company_bot,
+            company_bot=resolved_company_bot,
             session_status=ChatStatus.IN_PROGRESS,
             session_type=flow_name,
             session=session,
