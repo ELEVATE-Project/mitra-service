@@ -2,7 +2,6 @@ from chatbot.models import CompanyBot, Voice, VoiceProvider, VoiceType, Language
 from chatbot.models import Story
 from chatbot.translate.ai4Bharat.text_lang_detect import call_ai4bharat_text_lang_detect_api
 from chatbot.translate.google.google_translate import translate_text
-from datetime import date
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
@@ -102,28 +101,22 @@ def _normalize_text(text: str) -> str:
     return re.sub(r'\s+', ' ', text).strip()
 
 
-def _matches(pattern: str, text: str) -> bool:
-    """Match a pattern against text, ensuring it is not part of a larger word."""
-    escaped = re.escape(pattern)
-    return bool(re.search(r'(?<![a-zA-Z])' + escaped + r'(?![a-zA-Z])', text, re.IGNORECASE))
+def _matches(patterns: str | List[str], text: str) -> bool:
+    """Match pattern(s) against text, ensuring it is not part of a larger word.
 
-
-def _match_patterns(patterns: List[Any], text: str) -> bool:
+    List of patterns: ALL must match text.
     """
-    Match a list of patterns against text (OR across entries).
+    if isinstance(patterns, str):
+        escaped = re.escape(patterns)
+        return bool(re.search(r'(?<![a-zA-Z])' + escaped + r'(?![a-zA-Z])', text, re.IGNORECASE))
 
-    A string entry matches on its own. A list entry is an AND condition:
-    every sub-pattern in it must be present in the text.
-    """
-    for pattern in patterns:
-        if isinstance(pattern, list):
-            # `all([])` is True, so an empty AND group would match every text and let
-            # _match_location assign a state or district with no real pattern behind it.
-            if pattern and all(_matches(sub_pattern, text) for sub_pattern in pattern):
-                return True
-        elif _matches(pattern, text):
-            return True
-    return False
+    if len(patterns) == 0:
+        return False
+        
+    return all(_matches(p, text) for p in patterns)
+    
+def _match_patterns(patterns: List[str], text: str) -> bool:
+    return any(_matches(p, text) for p in patterns)
 
 
 # -------------- CORE CATEGORISATION ------------------
