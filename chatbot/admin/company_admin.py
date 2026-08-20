@@ -7,7 +7,7 @@ from chatbot.filter.admin_filter import (CompanyChatCompanyFilter, ChatSessionFi
                                          ProfileStateFilter, ProfileCompanyChatFilter, ProfileEmailFilter)
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import Company, Profile, ProfileType, CompanyBot, CompanyChat, ChatSession, \
-    CompanyBotTypeChoices, Voice, ImageConfiguration, Flow
+    CompanyBotTypeChoices, Voice, ImageConfiguration, Flow, VoiceType
 from chatbot.models.company_models import CompanyStateMachine, CompanyBotProgramMapping
 from chatbot.resources.resource import CompanyChatResource
 from chatbot.resources.company_resource import ChatSessionResource
@@ -42,8 +42,8 @@ class CompanyStateMachineAdmin(admin.TabularInline):
         'bot_question', 'completion_criteria', 'context', 'tool_context',
         'operation_type', 'skip_if_authenticated',
         'preprocess_type', 'preprocess_prompt', 'preprocess_bot', 'preprocess_output_mode',
-        'postprocess_type', 'postprocess_prompt', 'postprocess_bot', 'postprocess_output_mode',
-        'skip_to_step',
+        'postprocess_type', 'postprocess_prompt', 'postprocess_output_mode',
+        'skip_to_step', 'translations'
     )
     exclude = ('type',)  # ✅ hide type
 
@@ -125,9 +125,26 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
                 self.admin_site.admin_view(self.import_view),
                 name='chatbot_companybot_import',
             ),
+            path(
+                "<int:bot_id>/generate-translations/",
+                self.admin_site.admin_view(self.generate_translations_view),
+                name="chatbot_companybot_generate_translations",
+            ),
         ]
         # Important: custom URLs must come before the default admin URLs
         return custom_urls + urls
+
+    def generate_translations_view(self, request, bot_id):
+        """Admin action: async-triggers translation gen for bot, redirects back to change page."""
+        from chatbot.celery_tasks.non_llm_tasks import generate_state_machine_translations
+
+        generate_state_machine_translations.delay(bot_id)
+        self.message_user(
+            request, "Translation generation started in background.", messages.SUCCESS
+        )
+        return HttpResponseRedirect(
+            reverse("admin:chatbot_companybot_change", args=[bot_id])
+        )
 
     def export_view(self, request):
         """Handle export requests"""
@@ -181,6 +198,66 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
         form.base_fields = {field_name: form.base_fields[field_name] for field_name in form.base_fields}
         return form
 
+    def save_related(self, request, form, formsets, change):
+        """Post-save hook: warns on TTT/TTS voice count mismatch, auto-triggers translation gen for new langs."""
+        company_bot = form.instance
+        pre_languages = set(
+            Voice.objects.filter(
+                company_bot=company_bot, type=VoiceType.TextToText
+            ).values_list("language", flat=True)
+        )
+        super().save_related(request, form, formsets, change)
+
+        ttt_count = Voice.objects.filter(
+            company_bot=company_bot, type=VoiceType.TextToText
+        ).count()
+        tts_count = Voice.objects.filter(
+            company_bot=company_bot, type=VoiceType.TextToSpeech
+        ).count()
+
+        if ttt_count != tts_count:
+            self.message_user(
+                request,
+                f"Voice config mismatch: {ttt_count} TextToText vs {tts_count} TextToSpeech voices. "
+                "Fix counts before generating translations.",
+                messages.WARNING,
+            )
+            return
+
+        post_languages = set(
+            Voice.objects.filter(
+                company_bot=company_bot, type=VoiceType.TextToText
+            ).values_list("language", flat=True)
+        )
+        new_languages = post_languages - pre_languages
+        if new_languages:
+            from chatbot.celery_tasks.non_llm_tasks import (
+                generate_state_machine_translations,
+            )
+
+            for lang in new_languages:
+                generate_state_machine_translations.delay(company_bot.id, language=lang)
+            self.message_user(
+                request,
+                f"Translation generation started for new language(s): {', '.join(new_languages)}.",
+                messages.SUCCESS,
+            )
+
+    def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        """Shows state-machine inline + generate-translations button URL only for STATE_MACHINE bots."""
+        extra_context = extra_context or {}
+        if object_id:
+            obj = self.model.objects.get(pk=object_id)
+            if obj.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
+                self.inlines = [VoiceProviderAdmin, CompanyStateMachineAdmin]
+                extra_context["generate_translations_url"] = reverse(
+                    "admin:chatbot_companybot_generate_translations", args=[object_id]
+                )
+            else:
+                self.inlines = [VoiceProviderAdmin]
+        else:
+            self.inlines = [VoiceProviderAdmin]
+        return super().changeform_view(request, object_id, form_url, extra_context)
     def get_inlines(self, request, obj=None):
         # Returns a fresh list per request. ModelAdmin instances are created once at
         # startup and shared across every request, so assigning self.inlines here would
@@ -395,7 +472,7 @@ class ImageConfigurationAdmin(admin.ModelAdmin):
     search_fields = ('name',)
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
-    
+
     fieldsets = (
         ('Basic Information', {
             'fields': ('name',)
@@ -409,7 +486,7 @@ class ImageConfigurationAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
-    
+
     readonly_fields = ('created_at', 'updated_at')
 
     def get_image_size_mb(self, obj):
@@ -468,7 +545,7 @@ class FlowAdmin(SimpleHistoryAdmin):
     form = FlowAdminForm
 
     list_display = (
-        'flow_name', 'flow_route', 'bot', 'active', 'hidden', 
+        'flow_name', 'flow_route', 'bot', 'active', 'hidden',
         'user_type', 'created_at'
     )
     list_filter = (
@@ -500,9 +577,9 @@ class FlowAdmin(SimpleHistoryAdmin):
             'classes': ('collapse',)
         }),
     )
-    
+
     readonly_fields = ('created_at', 'updated_at')
-    
+
     def formfield_for_dbfield(self, db_field, request, **kwargs):
         """Customize form field for languages JSONField."""
         if db_field.name == 'languages':

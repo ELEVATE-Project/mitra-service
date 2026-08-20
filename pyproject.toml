@@ -88,5 +88,8 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "celery-types>=0.26.0",
+    "django-stubs>=6.0.9",
+    "django-types>=0.24.0",
     "ruff>=0.15.0",
 ]

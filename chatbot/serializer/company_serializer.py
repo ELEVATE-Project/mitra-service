@@ -12,6 +12,7 @@ class CompanySerializer(serializers.ModelSerializer):
 class CompanyBotSerializer(serializers.ModelSerializer):
     company = CompanySerializer(read_only=True)
     statemachine_length = serializers.SerializerMethodField()
+    state_machine_steps = serializers.SerializerMethodField()
 
     class Meta:
         model = CompanyBot
@@ -19,6 +20,14 @@ class CompanyBotSerializer(serializers.ModelSerializer):
 
     def get_statemachine_length(self, obj):
         return obj.companystatemachine_set.count()
+
+    def get_state_machine_steps(self, obj):
+        """Return ordered list of {step, operation_type, bot_question} for bot's state machine."""
+        steps = CompanyStateMachine.objects.filter(company_bot=obj).order_by('step')
+        return [
+            {"step": s.step, "operation_type": s.operation_type, "bot_question": s.bot_question}
+            for s in steps
+        ]
 
 
 class CompanyStateMachineSerializer(serializers.ModelSerializer):

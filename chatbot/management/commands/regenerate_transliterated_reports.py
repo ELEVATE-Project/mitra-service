@@ -233,6 +233,10 @@ class Command(BaseCommand):
             "[regen] route=%s scoped sessions=%d chats_matched=%d stages=%s",
             route, len(session_language), chats.count(), stages,
         )
+        logger.info(
+            "[regen] route=%s scoped sessions=%d chats_matched=%d stages=%s",
+            route, len(session_language), chats.count(), stages,
+        )
 
         voice_cache = {}
 
@@ -309,6 +313,11 @@ class Command(BaseCommand):
             )
             logger.info(
                 "[regen] step1 route=%s done success=%d failed=%d skipped=%d affected_sessions=%d",
+                route, t_success, t_failed, t_skipped, len(affected_sessions),
+            )
+            logger.info(
+                "[regen] step1 route=%s done success=%d failed=%d skipped=%d "
+                "affected_sessions=%d",
                 route, t_success, t_failed, t_skipped, len(affected_sessions),
             )
 
