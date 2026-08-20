@@ -20,6 +20,7 @@ from jinja2 import Template
 from shikshalokam.models import Project, Task
 from shikshalokam.models.project_vernacular_model import ProjectVernacular
 from shikshalokam.serializer import ProjectSerializer
+import ast
 import json
 import os
 import re
@@ -402,6 +403,17 @@ def get_html_from_template(story, profile, flow, auth=False, language=None):
         "profile": profile_serialized
     }
 
+    # Story.action_steps is a TextField, so a list assigned to it is stored as its
+    # repr. Restore the list for rendering only; the stored value is untouched.
+    action_steps = render_params["story"].get("action_steps")
+    if isinstance(action_steps, str) and action_steps.startswith("["):
+        try:
+            parsed_action_steps = ast.literal_eval(action_steps)
+            if isinstance(parsed_action_steps, list):
+                render_params["story"]["action_steps"] = parsed_action_steps
+        except (ValueError, SyntaxError):
+            pass
+
     if language_used != StoryLanguageChoices.ENGLISH:
         translated_story = StoryTranslation.objects.select_related("story").get(story__session=story.session, language=language)
         render_params.get("story", {})["title"] = translated_story.title
@@ -414,7 +426,6 @@ def get_html_from_template(story, profile, flow, auth=False, language=None):
     return html_content
 
 def update_story_pdf(access_token, session, flow, is_edit_story=False):
-
     try:
         chatsession = ChatSession.objects.values("language").get(session=session)
 
@@ -431,6 +442,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
 
         if story and story.content and story.formatted_content:
             update_story_content(story)
+
         profile = story.author
         print("profile: ", profile)
         print("story: ", story.title)
@@ -438,6 +450,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
         language = chatsession.get("language", StoryLanguageChoices.ENGLISH)
         flow_obj = Flow.objects.filter(flow_route=flow).first()
         has_pdf_template = flow_obj and PDFTemplates.objects.filter(flow=flow_obj).exists()
+
         if has_pdf_template:
             html_content = get_html_from_template(
                 story=story, profile=profile, flow=flow,
@@ -447,7 +460,7 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
             html_content = get_story_html(story=story, profile=profile, flow=flow)
 
         pdf_generated = generate_pdf_with_gotenberg(html_content)
-        # print("pdf_generated: ", pdf_generated)
+
         pdf_file_name = story.title
         if not pdf_file_name or pdf_file_name == '':
             pdf_file_name = 'Improvement_story'
@@ -513,7 +526,6 @@ def update_story_pdf(access_token, session, flow, is_edit_story=False):
             company_chats.pop(0)
         conversation = get_stored_conversation(company_chats=company_chats)
         chat_history = get_stored_chathistory(company_chats=company_chats)
-
 
         tasks_payload = []
 

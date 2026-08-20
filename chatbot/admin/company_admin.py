@@ -8,7 +8,7 @@ from chatbot.filter.admin_filter import (CompanyChatCompanyFilter, ChatSessionFi
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import Company, Profile, ProfileType, CompanyBot, CompanyChat, ChatSession, \
     CompanyBotTypeChoices, Voice, ImageConfiguration, Flow, VoiceType
-from chatbot.models.company_models import CompanyStateMachine
+from chatbot.models.company_models import CompanyStateMachine, CompanyBotProgramMapping
 from chatbot.resources.resource import CompanyChatResource
 from chatbot.resources.company_resource import ChatSessionResource
 from django.shortcuts import redirect
@@ -18,6 +18,18 @@ from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.forms import ModelForm, MultipleChoiceField, CheckboxSelectMultiple
 from ..utils.admin_config.export_mixin import ExportAllFieldsMixin
+
+
+class CompanyBotProgramMappingInline(admin.TabularInline):
+    """
+    Edits the state-to-programme mappings of a company bot from the bot's own page.
+    Each row decides which programme and leader category a report is tagged with when the
+    bot produces one for that state.
+    """
+
+    model = CompanyBotProgramMapping
+    extra = 1
+    fields = ('state', 'program', 'leader_category', 'is_active')
 
 
 class CompanyStateMachineAdmin(admin.TabularInline):
@@ -90,7 +102,7 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
     search_fields = ('name', 'company__name')
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
-    inlines = [VoiceProviderAdmin]
+    inlines = [VoiceProviderAdmin, CompanyBotProgramMappingInline]
     actions = ['duplicate_bot', 'export_selected_bots']
 
     enable_batch_upload = True
@@ -243,6 +255,14 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
         else:
             self.inlines = [VoiceProviderAdmin]
         return super().changeform_view(request, object_id, form_url, extra_context)
+    def get_inlines(self, request, obj=None):
+        # Returns a fresh list per request. ModelAdmin instances are created once at
+        # startup and shared across every request, so assigning self.inlines here would
+        # leak one bot's inline set into a concurrent request for a different bot.
+        # obj is None on the add form.
+        if obj and obj.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
+            return [VoiceProviderAdmin, CompanyStateMachineAdmin, CompanyBotProgramMappingInline]
+        return [VoiceProviderAdmin, CompanyBotProgramMappingInline]
 
     # Sync Google glossary for TextToText voice providers after inline save
     def duplicate_bot(self, request, queryset):
@@ -272,6 +292,15 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
                 sm.pk = None
                 sm.company_bot = new_bot
                 sm.save()
+
+        # Duplicate the program mappings too. Without them the copy has no active state
+        # mapping, so Story._derive_program_and_leader_category finds nothing and every
+        # story the new bot produces is left with no program and no leader category.
+        original_program_mappings = CompanyBotProgramMapping.objects.filter(company_bot=original)
+        for mapping in original_program_mappings:
+            mapping.pk = None
+            mapping.company_bot = new_bot
+            mapping.save()
 
         self.message_user(request, "Bot duplicated successfully!", level=messages.SUCCESS)
         return redirect(f"/admin/chatbot/companybot/{new_bot.id}/change/")
@@ -523,8 +552,8 @@ class FlowAdmin(SimpleHistoryAdmin):
     search_fields = ('flow_name', 'flow_route', 'bot__name')
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
-    raw_id_fields = ('bot', 'story_bot', 'parent_flow', 'image_config', 'story_validation_bot')
-
+    raw_id_fields = ('bot', 'story_bot', 'parent_flow', 'default_flow', 'image_config', 'story_validation_bot')
+    
     fieldsets = (
         ('Basic Information', {
             'fields': ('flow_name', 'flow_route', 'languages')
@@ -534,7 +563,7 @@ class FlowAdmin(SimpleHistoryAdmin):
             'description': 'Configure the bots associated with this flow.'
         }),
         ('Flow Settings', {
-            'fields': ('active', 'hidden', 'user_type', 'parent_flow', 'image_config', 'create_story'),
+            'fields': ('active', 'hidden', 'user_type', 'parent_flow', 'default_flow', 'image_config', 'create_story'),
         }),
         ('Advanced Settings', {
             'fields': ('websocket_url',),

@@ -2,7 +2,7 @@ import logging
 import json
 import re
 from chatbot.exceptions.story_exceptions import StoryDomainError, StorySaveError, StoryError
-from chatbot.models import StoryStatusChoices, Story, Voice, VoiceType, StoryTranslation, Profile
+from chatbot.models import StoryStatusChoices, Story, Voice, VoiceType, StoryTranslation, Profile, Role
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.story_vernacular_model import StoryVernacular
 from chatbot.utils.story_llama_utils import translate_field
@@ -211,15 +211,20 @@ def save_generic_story(
             user_name = profile.get("first_name", "") if profile and profile.get("first_name") else ''
 
         fallback_location = ""
+        fallback_state, fallback_district, fallback_block = None, None, None
 
         if isinstance(profile, Profile):
             address = ProfileAddress.objects.filter(profile=profile).first()
             if address:
+                fallback_state, fallback_district, fallback_block = address.state, address.district, address.block
                 location_parts = filter(None, [address.block, address.district, address.state])
                 fallback_location = ", ".join(location_parts)
         elif isinstance(profile, dict):
             address = profile.get("profile_address", [])
             if len(address) > 0:
+                fallback_state = address[0].get("state")
+                fallback_district = address[0].get("district")
+                fallback_block = address[0].get("block")
                 location_parts = filter(None, [address[0].get("block"), address[0].get("district"), address[0].get("state")])
                 fallback_location = ", ".join(location_parts)
 
@@ -342,6 +347,49 @@ def save_generic_story(
                                                                                         language)
             else:
                 story_fields_to_update['location'] = ""
+
+        # Structured location columns. The bots already return these keys (see
+        # transliterate_fields); ProfileAddress supplies them when the bot does not.
+        # other_params keeps its existing copies - STORY_MODEL_FIELDS is unchanged.
+        location_field_fallbacks = {
+            'state': fallback_state,
+            'district': fallback_district,
+            'block': fallback_block,
+            'village': None,
+        }
+        for location_field, fallback_value in location_field_fallbacks.items():
+            if location_field in exclude_fields_set:
+                continue
+            raw_value = response_json_story.get(location_field, fallback_value)
+            if raw_value and str(raw_value).strip():
+                story_fields_to_update[location_field] = transliterate_to_english_if_needed(
+                    str(raw_value).strip(), transliteration_voice_provider, language
+                )
+
+        if 'role' not in exclude_fields_set:
+            raw_role = response_json_story.get('role', '')
+            if raw_role and str(raw_role).strip():
+                role = Role.objects.filter(name__iexact=str(raw_role).strip()).first()
+                if role:
+                    story_fields_to_update['role'] = role
+                else:
+                    logger.warning(f"No matching Role found for LLM output: '{raw_role}'")
+
+            # Fall back to the role configured on the bot when the conversation yields
+            # none. Keyed on the bot rather than the flow name because `flow` is free
+            # text from the frontend and has already drifted ('Guest-Discussion' vs the
+            # 'guest-discussion' enum value), so a string match would silently stop
+            # tagging after a rename. Bots whose reports must not carry a role simply
+            # leave default_role empty.
+            if 'role' not in story_fields_to_update and company_bot and company_bot.default_role:
+                story_fields_to_update['role'] = company_bot.default_role
+
+            if 'role' not in story_fields_to_update:
+                logger.warning(
+                    "Story role unresolved - flow=%r session=%s bot=%r. Set CompanyBot."
+                    "default_role on that bot if its reports should carry a role.",
+                    flow, session, getattr(company_bot, 'route', None),
+                )
 
         story_fields_to_update.update({
             'author': profile if isinstance(profile, Profile) else Profile.objects.filter(id=profile.get("id")).first(),

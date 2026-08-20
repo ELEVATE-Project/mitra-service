@@ -237,8 +237,12 @@ def fix_guest_mi_story_stories():
                 source_language=source_language,
                 is_sentence=" " in story.location
             )
-            story.location = get_transliteration_output(result) or story.location
-            updated = True
+            # Keep the stored value when the provider returns nothing usable; assigning
+            # the raw result would replace a real location with null.
+            transliterated = get_transliteration_output(result)
+            if transliterated:
+                story.location = transliterated
+                updated = True
 
         # ---------- TRANSLITERATE PERSONAL INFO IN OTHER_PARAMS ----------
         transliteration_fields = ["user_name", "location", "organization", "designation"]
@@ -252,8 +256,11 @@ def fix_guest_mi_story_stories():
                     source_language=source_language,
                     is_sentence=" " in val
                 )
-                other_params[field] = get_transliteration_output(result) or val
-                updated = True
+                # Keep the stored value when the provider returns nothing usable.
+                transliterated = get_transliteration_output(result)
+                if transliterated:
+                    other_params[field] = transliterated
+                    updated = True
 
         # ---------- TRANSLATE DURATION ----------
         duration = other_params.get("duration")
