@@ -48,6 +48,7 @@ class BotVernacularListCreateView(APIView):
     FIELDS = ('alt_introductory_message', 'introductory_message', 'name', 'error_message')
 
     def get(self, request, *args, **kwargs):
+        """Return vernacular fields + English default name + step-1 audio URL for given lang+bot route."""
         language = request.query_params.get('language')
         route = request.query_params.get('company_bot__route')
 

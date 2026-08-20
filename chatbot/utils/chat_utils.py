@@ -160,6 +160,7 @@ def convert_llama_to_openai_tool(llama_tool_call):
 
 
 def get_ai_profile():
+    """Return AI Profile (id=1), from cache if present, else DB."""
     cached_profile = cache.get(CacheKeyEnum.AI_PROFILE)
     if cached_profile:
         print("Cache hit")

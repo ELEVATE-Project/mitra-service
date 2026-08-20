@@ -135,6 +135,7 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
         return custom_urls + urls
 
     def generate_translations_view(self, request, bot_id):
+        """Admin action: async-triggers translation gen for bot, redirects back to change page."""
         from chatbot.celery_tasks.non_llm_tasks import generate_state_machine_translations
 
         generate_state_machine_translations.delay(bot_id)
@@ -198,6 +199,7 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
         return form
 
     def save_related(self, request, form, formsets, change):
+        """Post-save hook: warns on TTT/TTS voice count mismatch, auto-triggers translation gen for new langs."""
         company_bot = form.instance
         pre_languages = set(
             Voice.objects.filter(
@@ -242,6 +244,7 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
             )
 
     def changeform_view(self, request, object_id=None, form_url="", extra_context=None):
+        """Shows state-machine inline + generate-translations button URL only for STATE_MACHINE bots."""
         extra_context = extra_context or {}
         if object_id:
             obj = self.model.objects.get(pk=object_id)

@@ -116,6 +116,7 @@ def _matches(patterns: str | List[str], text: str) -> bool:
     return all(_matches(p, text) for p in patterns)
     
 def _match_patterns(patterns: List[str], text: str) -> bool:
+    """OR-match: True if ANY pattern in list matches text."""
     return any(_matches(p, text) for p in patterns)
 
 

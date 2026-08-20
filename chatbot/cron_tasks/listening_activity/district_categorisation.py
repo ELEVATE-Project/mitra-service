@@ -124,6 +124,7 @@ def run_district_categorisation(story_queryset=None, mapping_data: Dict[str, Any
 # -------------- CRON ENTRY POINT ------------------
 
 def run_cron() -> None:
+    """Cron entry: find fixed guest-discussion bot, run district categorisation."""
     try:
         bot = CompanyBot.objects.get(route='/state-classification-guest-discussion')
     except CompanyBot.DoesNotExist:
@@ -138,11 +139,13 @@ def run_cron() -> None:
 # -------------- CONVENIENCE ENTRY POINTS ------------------
 
 def run_for_story_ids(story_ids: List[int], mapping_data: Dict[str, Any] | None = None, company_bot=None) -> Dict[str, Any]:
+    """Run district categorisation for explicit list of story IDs."""
     stories = Story.objects.filter(id__in=story_ids)
     return run_district_categorisation(story_queryset=stories, mapping_data=mapping_data, company_bot=company_bot)
 
 
 def run_for_date_range(start_date, end_date, mapping_data: Dict[str, Any] | None = None, company_bot=None) -> Dict[str, Any]:
+    """Run district categorisation for stories created in date range, missing state."""
     stories = Story.objects.filter(
         other_params__flow='listening-activity',
         created_at__gte=start_date,
