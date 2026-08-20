@@ -96,16 +96,9 @@ def generate_state_machine_translations(company_bot_id, language=None):
 
             if sm.step == 1:
                 lang_data.pop("text", None)
-                lang_data.pop("audio_s3", None)
-                if lang == "en":
-                    vernacular_text = company_bot.introductory_message
-                else:
-                    vernacular_text = vernacular_map.get(lang)
+                vernacular_text = vernacular_map.get(lang)
+
                 if not vernacular_text:
-                    if lang_data:
-                        cached[lang] = lang_data
-                    else:
-                        cached.pop(lang, None)
                     continue
                 tts_voice = tts_voice_map.get(lang)
                 try:
