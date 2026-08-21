@@ -408,10 +408,10 @@ def non_llm_chat_view(request):
     translated_bot_message = None
     audio_s3_url = None
 
+    cached = (next_state["translations"] or {}).get(language, {})
+    audio_s3_url = cached.get("audio_s3")
     if language and language != "en" and bot_message:
-        cached = (next_state["translations"] or {}).get(language, {})
         translated_bot_message = cached.get("text")
-        audio_s3_url = cached.get("audio_s3")
         if not translated_bot_message:
             try:
                 translation_result = text_translate_provider(
