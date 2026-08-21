@@ -272,6 +272,7 @@ def non_llm_chat_view(request):
     session = body.get("session")
     profile_id = body.get("profile_id")
     message = body.get("message")
+    asr_audio = body.get("asr_audio")
     language = body.get("language", "en")
     flow_name = body.get("flow_name", None)
     company_bot = body.get("company_bot", None)
@@ -385,6 +386,7 @@ def non_llm_chat_view(request):
         sender_id=sender_id,
         receiver=ai_profile,
         stage=state_machine["name"],
+        file_url=asr_audio,
     )
 
     logger.info(
