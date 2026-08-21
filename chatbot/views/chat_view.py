@@ -272,6 +272,7 @@ def non_llm_chat_view(request):
     session = body.get("session")
     profile_id = body.get("profile_id")
     message = body.get("message")
+    asr_audio = body.get("asr_audio")
     language = body.get("language", "en")
     flow_name = body.get("flow_name", None)
     company_bot = body.get("company_bot", None)
@@ -385,6 +386,7 @@ def non_llm_chat_view(request):
         sender_id=sender_id,
         receiver=ai_profile,
         stage=state_machine["name"],
+        file_url=asr_audio,
     )
 
     logger.info(
@@ -408,10 +410,10 @@ def non_llm_chat_view(request):
     translated_bot_message = None
     audio_s3_url = None
 
+    cached = (next_state["translations"] or {}).get(language, {})
+    audio_s3_url = cached.get("audio_s3")
     if language and language != "en" and bot_message:
-        cached = (next_state["translations"] or {}).get(language, {})
         translated_bot_message = cached.get("text")
-        audio_s3_url = cached.get("audio_s3")
         if not translated_bot_message:
             try:
                 translation_result = text_translate_provider(
