@@ -157,16 +157,27 @@ QUERYCOUNT = {
 WSGI_APPLICATION = 'shikshalokam_mohini.wsgi.application'
 
 
+DATABASE_NAME = os.environ.get("DATABASE_NAME", os.environ.get("PGBOUNCER_DATABASE_NAME", None))
+DATABASE_USER = os.environ.get("DATABASE_USER", os.environ.get("PGBOUNCER_DATABASE_USER", None))
+DATABASE_PASSWORD = os.environ.get("DATABASE_PASSWORD", os.environ.get("PGBOUNCER_DATABASE_PASSWORD", None))
+DATABASE_HOST = os.environ.get("DATABASE_HOST", os.environ.get("PGBOUNCER_DATABASE_HOST", None))
+DATABASE_PORT = os.environ.get("DATABASE_PORT", os.environ.get("PGBOUNCER_DATABASE_PORT", None))
+
+
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('PGBOUNCER_DATABASE_NAME'),
-        'USER': os.getenv('PGBOUNCER_DATABASE_USER'),
-        'PASSWORD': os.getenv('PGBOUNCER_DATABASE_PASSWORD'),
-        'HOST': os.getenv('PGBOUNCER_DATABASE_HOST'),
-        'PORT': os.getenv('PGBOUNCER_DATABASE_PORT')
+        'NAME': DATABASE_NAME,
+        'USER': DATABASE_USER,
+        'PASSWORD': DATABASE_PASSWORD,
+        'HOST': DATABASE_HOST,
+        'PORT': DATABASE_PORT,
+        'OPTIONS': {
+            'sslmode': os.environ.get('PG_SSL_MODE', None),
+            'sslrootcert': os.environ.get('PG_SSL_ROOT_CERT', None),
+        },
     },
     'source_db': {
         'ENGINE': 'django.db.backends.postgresql',
