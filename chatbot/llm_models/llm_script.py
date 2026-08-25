@@ -4,6 +4,7 @@ from chatbot.models import LLMModel
 from chatbot.models.enums import LLMProvider
 from chatbot.utils.env_parser import load_env_to_dict
 from chatbot.utils.llm import LLM
+from chatbot.utils.langfuse_client import get_langfuse_client
 from typing import Optional, List, Dict
 from django.core.validators import URLValidator
 from openai import OpenAI
@@ -20,6 +21,7 @@ import traceback
 
 
 logger = logging.getLogger('django')
+langfuse = get_langfuse_client()
 validate = URLValidator()
 AWS_KEY = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
@@ -153,24 +155,47 @@ def handle_openai_model(
         if top_p is not None and model_to_use not in token_limit_models:
             request_data['top_p'] = top_p
         print("request_data: ", request_data)
-        response = client.chat.completions.create(**request_data)
-        price = calculate_and_log_llm_cost(
-            response=response, model_id=model_to_use, company_bot=company_bot
-        )
-        print("raw res: ", response)
-        if is_json_response:
-            response_content = response.choices[0].message.content
-            response_json = None
-            if response_content:
-                response_json = json.loads(response_content)
-            return response_json
-        elif tools:
-            tool_calls = response.choices[0].message.tool_calls
-            if tool_calls and len(tool_calls) > 0:
-                return {}
-            return response.choices[0].message.content if response.choices else response
-        else:
-            return response.choices[0].message.content if response.choices else response
+
+        with langfuse.start_as_current_observation(
+            as_type="generation",
+            name="openai_chat_completion",
+            model=model_to_use,
+            input={"messages": messages, "tools": tools},
+            model_parameters={"temperature": temperature, "max_tokens": max_token, "top_p": top_p},
+        ) as gen:
+            response = client.chat.completions.create(**request_data)
+            price = calculate_and_log_llm_cost(
+                response=response, model_id=model_to_use, company_bot=company_bot
+            )
+            print("raw res: ", response)
+
+            usage_details = None
+            usage = getattr(response, "usage", None)
+            if usage:
+                input_tokens = getattr(usage, "prompt_tokens", 0) or 0
+                output_tokens = getattr(usage, "completion_tokens", 0) or 0
+                total_tokens = getattr(usage, "total_tokens", 0) or (input_tokens + output_tokens)
+                usage_details = {"input": input_tokens, "output": output_tokens, "total": total_tokens}
+
+            if is_json_response:
+                response_content = response.choices[0].message.content
+                response_json = None
+                if response_content:
+                    response_json = json.loads(response_content)
+                gen.update(output=response_json, usage_details=usage_details)
+                return response_json
+            elif tools:
+                tool_calls = response.choices[0].message.tool_calls
+                if tool_calls and len(tool_calls) > 0:
+                    gen.update(output={"tool_calls_detected": True}, usage_details=usage_details)
+                    return {}
+                result = response.choices[0].message.content if response.choices else response
+                gen.update(output=str(result)[:500] if result else None, usage_details=usage_details)
+                return result
+            else:
+                result = response.choices[0].message.content if response.choices else response
+                gen.update(output=str(result)[:500] if result else None, usage_details=usage_details)
+                return result
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -303,104 +328,130 @@ def handle_bedrock_model(
 
             messages = messages[start_idx:last_user_idx + 1]
 
-    try:
-        request_payload = {
-            'modelId': model_id,
-            'messages': messages,
-            'system': system_prompt,
-        }
-        if inference_config:
-            request_payload['inferenceConfig'] = inference_config
-        if tools:
-            print("tools: ", tools)
-            request_payload['toolConfig'] = tools.get('toolConfig')
+    with langfuse.start_as_current_observation(
+        as_type="generation",
+        name="bedrock_converse",
+        model=model_id,
+        input={"system_prompt": system_prompt, "messages": messages, "tools": tools},
+        model_parameters={"temperature": temperature, "max_tokens": max_token, "top_p": top_p},
+    ) as gen:
+        try:
+            request_payload = {
+                'modelId': model_id,
+                'messages': messages,
+                'system': system_prompt,
+            }
+            if inference_config:
+                request_payload['inferenceConfig'] = inference_config
+            if tools:
+                print("tools: ", tools)
+                request_payload['toolConfig'] = tools.get('toolConfig')
 
-        logger.info('Bedrock request payload: %s', request_payload)
-        response = bedrock_runtime.converse(**request_payload)
+            logger.info('Bedrock request payload: %s', request_payload)
+            response = bedrock_runtime.converse(**request_payload)
 
-        logger.info('Conversation Bedrock response: %s', json.dumps(response))
-        print('Conversation Bedrock response: ', response)
+            logger.info('Conversation Bedrock response: %s', json.dumps(response))
+            print('Conversation Bedrock response: ', response)
 
-        usage_metrics = response.get('usage', {})
-        if usage_metrics:
-            logger.info("--------------USAGE METRICS-------------")
-            input_tokens = usage_metrics.get('inputTokens', 0)
-            output_tokens = usage_metrics.get('outputTokens', 0)
-            total_tokens = usage_metrics.get('totalTokens', 0)
-            logger.info(f'💰 Token Usage - Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}')
-            print(f'💰 Token Usage - Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}')
+            usage_metrics = response.get('usage', {})
+            usage_details = None
+            if usage_metrics:
+                logger.info("--------------USAGE METRICS-------------")
+                input_tokens = usage_metrics.get('inputTokens', 0)
+                output_tokens = usage_metrics.get('outputTokens', 0)
+                total_tokens = usage_metrics.get('totalTokens', 0)
+                logger.info(f'💰 Token Usage - Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}')
+                print(f'💰 Token Usage - Input: {input_tokens}, Output: {output_tokens}, Total: {total_tokens}')
 
-            pricing = get_pricing_from_company_bot(
-                company_bot=company_bot, model_id=model_id
-            )
-            if pricing:
-                input_cost = (input_tokens / 1000) * pricing['input']
-                output_cost = (output_tokens / 1000) * pricing['output']
-                total_cost = input_cost + output_cost
+                usage_details = {"input": input_tokens, "output": output_tokens, "total": total_tokens}
 
-                logger.info(
-                    f'💵 Model Cost - Input: ${input_cost:.6f} (${pricing["input"]}/1K), Output: ${output_cost:.6f} '
-                    f'(${pricing["output"]}/1K), Total: ${total_cost:.6f}')
-                print(
-                    f'💵 Model Cost - Input: ${input_cost:.6f} (${pricing["input"]}/1K), Output: ${output_cost:.6f} '
-                    f'(${pricing["output"]}/1K), Total: ${total_cost:.6f}')
+                pricing = get_pricing_from_company_bot(
+                    company_bot=company_bot, model_id=model_id
+                )
+                if pricing:
+                    input_cost = (input_tokens / 1000) * pricing['input']
+                    output_cost = (output_tokens / 1000) * pricing['output']
+                    total_cost = input_cost + output_cost
+
+                    logger.info(
+                        f'💵 Model Cost - Input: ${input_cost:.6f} (${pricing["input"]}/1K), Output: ${output_cost:.6f} '
+                        f'(${pricing["output"]}/1K), Total: ${total_cost:.6f}')
+                    print(
+                        f'💵 Model Cost - Input: ${input_cost:.6f} (${pricing["input"]}/1K), Output: ${output_cost:.6f} '
+                        f'(${pricing["output"]}/1K), Total: ${total_cost:.6f}')
+                else:
+                    logger.info('💵 No pricing data configured in company_bot.other_params')
+                    print('💵 No pricing data configured in company_bot.other_params')
+
+                # Log additional metrics if available
+                if 'stopReason' in response.get('stopReason', ''):
+                    stop_reason = response.get('stopReason')
+                    logger.info(f'🛑 Stop Reason: {stop_reason}')
+                    print(f'🛑 Stop Reason: {stop_reason}')
             else:
-                logger.info('💵 No pricing data configured in company_bot.other_params')
-                print('💵 No pricing data configured in company_bot.other_params')
+                logger.info('⚠️ No usage metrics found in response')
+                print('⚠️ No usage metrics found in response')
 
-            # Log additional metrics if available
-            if 'stopReason' in response.get('stopReason', ''):
-                stop_reason = response.get('stopReason')
-                logger.info(f'🛑 Stop Reason: {stop_reason}')
-                print(f'🛑 Stop Reason: {stop_reason}')
-        else:
-            logger.info('⚠️ No usage metrics found in response')
-            print('⚠️ No usage metrics found in response')
-
-        content_arr = response['output']['message']['content']
-        content = content_arr[0]
-        content_tool = content.get('toolUse')
-        if content_tool:
-            if isinstance(content_tool, str):
-                final_output = json_repair.repair_json(content_tool, return_objects=True)
-            else:
-                final_output = content_tool
-            if isinstance(final_output, dict) and not final_output.get('toolUseId'):
-                logger.error(f"Tool call missing toolUseId, retrying: {final_output}")
-                return None
-        else:
-            content_text = content.get('text')
-            json_start = content_text.find('{')
-            if json_start != -1:
-                json_str = content_text[json_start:]
-                json_str = json_str.replace('\n', '').replace('\r', '').strip()
-                while json_str and (json_str.endswith("'") or json_str.endswith('"') or json_str.endswith(',')):
-                    json_str = json_str[:-1].strip()
-                try:
-                    final_output = json_repair.repair_json(json_str, return_objects=True)
-                    logger.info('Loads final_output: %s', final_output)
-                except json.JSONDecodeError as e:
+            content_arr = response['output']['message']['content']
+            content = content_arr[0]
+            content_tool = content.get('toolUse')
+            if content_tool:
+                if isinstance(content_tool, str):
+                    final_output = json_repair.repair_json(content_tool, return_objects=True)
+                else:
+                    final_output = content_tool
+                if isinstance(final_output, dict) and not final_output.get('toolUseId'):
+                    logger.error(f"Tool call missing toolUseId, retrying: {final_output}")
+                    gen.update(
+                        output=None, usage_details=usage_details,
+                        metadata={"stop_reason": response.get('stopReason'), "retry_reason": "missing_tool_use_id"},
+                    )
                     return None
-            elif is_json_response:
-                return None
             else:
-                return content_text
+                content_text = content.get('text')
+                json_start = content_text.find('{')
+                if json_start != -1:
+                    json_str = content_text[json_start:]
+                    json_str = json_str.replace('\n', '').replace('\r', '').strip()
+                    while json_str and (json_str.endswith("'") or json_str.endswith('"') or json_str.endswith(',')):
+                        json_str = json_str[:-1].strip()
+                    try:
+                        final_output = json_repair.repair_json(json_str, return_objects=True)
+                        logger.info('Loads final_output: %s', final_output)
+                    except json.JSONDecodeError as e:
+                        gen.update(output=None, usage_details=usage_details, level="ERROR")
+                        return None
+                elif is_json_response:
+                    gen.update(output=None, usage_details=usage_details)
+                    return None
+                else:
+                    gen.update(
+                        output=content_text, usage_details=usage_details,
+                        metadata={"stop_reason": response.get('stopReason')},
+                    )
+                    return content_text
 
-        return final_output
-    except ClientError as e:
-        error_response = e.response
-        logger.error("❌ Bedrock ClientError:")
-        logger.error(f"Error Code: {error_response['Error']['Code']}")
-        logger.error(f"Error Message: {error_response['Error']['Message']}")
-        logger.error(f"Request ID: {error_response.get('ResponseMetadata', {}).get('RequestId')}")
-        print("❌ ClientError:")
-        print("Error Code:", error_response["Error"]["Code"])
-        print("Error Message:", error_response["Error"]["Message"])
-        print("Request ID:", error_response.get("ResponseMetadata", {}).get("RequestId"))
-    except Exception as e:
-        logger.error('Error processing request: %s', e, exc_info=True)
-        print(f'❌ Error processing Bedrock request: {e}')
-        return None
+            gen.update(
+                output=final_output, usage_details=usage_details,
+                metadata={"stop_reason": response.get('stopReason')},
+            )
+            return final_output
+        except ClientError as e:
+            error_response = e.response
+            logger.error("❌ Bedrock ClientError:")
+            logger.error(f"Error Code: {error_response['Error']['Code']}")
+            logger.error(f"Error Message: {error_response['Error']['Message']}")
+            logger.error(f"Request ID: {error_response.get('ResponseMetadata', {}).get('RequestId')}")
+            print("❌ ClientError:")
+            print("Error Code:", error_response["Error"]["Code"])
+            print("Error Message:", error_response["Error"]["Message"])
+            print("Request ID:", error_response.get("ResponseMetadata", {}).get("RequestId"))
+            gen.update(output=None, level="ERROR", status_message=error_response['Error']['Message'])
+        except Exception as e:
+            logger.error('Error processing request: %s', e, exc_info=True)
+            print(f'❌ Error processing Bedrock request: {e}')
+            gen.update(output=None, level="ERROR", status_message=str(e))
+            return None
 
 
 def get_file_metadata_from_vector_store(client, vector_store_ids, file_id):
@@ -732,176 +783,209 @@ def handle_openai_response_api(
             if tool.get('type') == 'file_search' and tool.get('vector_store_ids'):
                 vector_store_ids.extend(tool.get('vector_store_ids'))
 
-    try:
-        if stream:
-            # Use Responses API with streaming context manager
-            sources = []
-            seen_file_ids = set()
-            function_call_name = None
-            function_call_args = ""
-            function_call_id = None
-            function_call_complete = False
-            
-            with client.responses.stream(**request_data) as response_stream:
-                for event in response_stream:
-                    logger.info(f"OpenAI Event: {event.type} | Data: {event}")
+    with langfuse.start_as_current_observation(
+        as_type="generation",
+        name="openai_responses_api",
+        model=model_to_use,
+        input={"input_messages": input_messages, "tools": tools, "stream": stream},
+        model_parameters={"temperature": temperature, "max_output_tokens": max_token, "top_p": top_p},
+    ) as gen:
+        accumulated_output_text = ""
+        try:
+            if stream:
+                # Use Responses API with streaming context manager
+                sources = []
+                seen_file_ids = set()
+                function_call_name = None
+                function_call_args = ""
+                function_call_id = None
+                function_call_complete = False
 
-                    # Handle function call delta events (streaming function arguments character-by-character)
-                    if event.type == 'response.function_call_arguments.delta':
-                        # Accumulate function arguments using snapshot (complete JSON so far)
-                        function_call_args = event.snapshot
-                        if not function_call_id:
-                            function_call_id = event.item_id
-                        logger.info(f"Function call delta: snapshot length = {len(function_call_args)} chars")
-                        print(f"📝 Function args snapshot: {function_call_args[:100]}...")
-                    
-                    # Handle function call done event
-                    elif event.type == 'response.function_call_arguments.done':
-                        function_call_complete = True
-                        logger.info(f"Function call arguments complete: {len(function_call_args)} chars")
-                        print(f"✅ Function call arguments COMPLETE")
-                        
-                        # Yield function call response with sources
-                        # This will be processed by common_handler to extract content and send to user
-                        yield {
-                            'function_call': {
-                                'name': function_call_name,
-                                'arguments': function_call_args  # JSON string with filename and content
-                            },
-                            'finish_reason': 'function_call',  # Internal marker for common_handler
-                            'extra_content': {
-                                'sources': sources  # Include sources collected from annotations
+                with client.responses.stream(**request_data) as response_stream:
+                    for event in response_stream:
+                        logger.info(f"OpenAI Event: {event.type} | Data: {event}")
+
+                        # Handle function call delta events (streaming function arguments character-by-character)
+                        if event.type == 'response.function_call_arguments.delta':
+                            # Accumulate function arguments using snapshot (complete JSON so far)
+                            function_call_args = event.snapshot
+                            if not function_call_id:
+                                function_call_id = event.item_id
+                            logger.info(f"Function call delta: snapshot length = {len(function_call_args)} chars")
+                            print(f"📝 Function args snapshot: {function_call_args[:100]}...")
+
+                        # Handle function call done event
+                        elif event.type == 'response.function_call_arguments.done':
+                            function_call_complete = True
+                            logger.info(f"Function call arguments complete: {len(function_call_args)} chars")
+                            print(f"✅ Function call arguments COMPLETE")
+
+                            # Yield function call response with sources
+                            # This will be processed by common_handler to extract content and send to user
+                            yield {
+                                'function_call': {
+                                    'name': function_call_name,
+                                    'arguments': function_call_args  # JSON string with filename and content
+                                },
+                                'finish_reason': 'function_call',  # Internal marker for common_handler
+                                'extra_content': {
+                                    'sources': sources  # Include sources collected from annotations
+                                }
                             }
-                        }
-                    
-                    # Handle function call output item to get function name
-                    elif event.type == 'response.output_item.added' and hasattr(event, 'item'):
-                        if hasattr(event.item, 'type') and event.item.type == 'function_call':
-                            function_call_name = event.item.name
-                            function_call_id = event.item.id
-                            logger.info(f"Function call detected: {function_call_name}")
-                            print(f"🎯 Function name: {function_call_name}")
-                    
-                    # Handle file citation annotations
-                    if event.type == 'response.output_text.annotation.added' and event.annotation[
-                        "type"] == 'file_citation':
-                        file_id = event.annotation["file_id"]
-                        if file_id not in seen_file_ids:
-                            source_entry = {
-                                "source_id": file_id,
-                                "title": event.annotation["filename"]
+                            gen.update(output={"function_call": function_call_name, "arguments": function_call_args})
+
+                        # Handle function call output item to get function name
+                        elif event.type == 'response.output_item.added' and hasattr(event, 'item'):
+                            if hasattr(event.item, 'type') and event.item.type == 'function_call':
+                                function_call_name = event.item.name
+                                function_call_id = event.item.id
+                                logger.info(f"Function call detected: {function_call_name}")
+                                print(f"🎯 Function name: {function_call_name}")
+
+                        # Handle file citation annotations
+                        if event.type == 'response.output_text.annotation.added' and event.annotation[
+                            "type"] == 'file_citation':
+                            file_id = event.annotation["file_id"]
+                            if file_id not in seen_file_ids:
+                                source_entry = {
+                                    "source_id": file_id,
+                                    "title": event.annotation["filename"]
+                                }
+
+                                # Fetch metadata from vector store
+                                metadata = get_file_metadata_from_vector_store(client, vector_store_ids, file_id)
+
+                                # Enrich source with organization info
+                                source_entry = add_source_with_organization(source_entry, metadata)
+
+                                sources.append(source_entry)
+                                seen_file_ids.add(file_id)
+
+                        # Handle ResponseTextDeltaEvent - extract incremental delta
+                        elif event.type == 'response.output_text.delta':
+                            content_chunk = event.delta or ""
+                            accumulated_output_text += content_chunk
+                            yield {
+                                'content': content_chunk,
+                                'finish_reason': None
                             }
 
-                            # Fetch metadata from vector store
-                            metadata = get_file_metadata_from_vector_store(client, vector_store_ids, file_id)
-
-                            # Enrich source with organization info
-                            source_entry = add_source_with_organization(source_entry, metadata)
-
-                            sources.append(source_entry)
-                            seen_file_ids.add(file_id)
-
-                    # Handle ResponseTextDeltaEvent - extract incremental delta
-                    elif event.type == 'response.output_text.delta':
-                        content_chunk = event.delta or ""
-                        yield {
-                            'content': content_chunk,
-                            'finish_reason': None
-                        }
-
-                    # Handle ResponseTextDoneEvent - text output completed
-                    elif event.type == 'response.output_text.done':
-                        yield {
-                            'content': '',
-                            'finish_reason': 'stop',
-                            'extra_content': {
-                                "sources": sources
+                        # Handle ResponseTextDoneEvent - text output completed
+                        elif event.type == 'response.output_text.done':
+                            yield {
+                                'content': '',
+                                'finish_reason': 'stop',
+                                'extra_content': {
+                                    "sources": sources
+                                }
                             }
-                        }
 
-                    # Handle ResponseCompletedEvent - full response finished
-                    elif event.type == 'response.completed':
-                        logger.info(f"Response completed")
-                        price = calculate_and_log_openai_cost(
-                            response=event.response, model_id=model_to_use, company_bot=company_bot
-                        )
-                        break
+                        # Handle ResponseCompletedEvent - full response finished
+                        elif event.type == 'response.completed':
+                            logger.info(f"Response completed")
+                            price = calculate_and_log_openai_cost(
+                                response=event.response, model_id=model_to_use, company_bot=company_bot
+                            )
+                            usage = getattr(event.response, "usage", None)
+                            usage_details = None
+                            if usage:
+                                input_tokens = getattr(usage, "input_tokens", 0) or 0
+                                output_tokens = getattr(usage, "output_tokens", 0) or 0
+                                total_tokens = getattr(usage, "total_tokens", 0) or (input_tokens + output_tokens)
+                                usage_details = {"input": input_tokens, "output": output_tokens, "total": total_tokens}
+                            gen.update(
+                                output=accumulated_output_text[:2000] if accumulated_output_text else None,
+                                usage_details=usage_details,
+                            )
+                            break
 
-                    # Handle error events
-                    elif event.type == 'error':
-                        error_msg = getattr(event, 'error', {}).get('message', 'Unknown error')
-                        logger.error(f"Stream error: {error_msg}")
-                        yield {
-                            'content': '',
-                            'error': error_msg,
-                            'finish_reason': 'error'
-                        }
-                        break
-        else:
-            # Non-streaming mode - get complete response at once
-            response = client.responses.create(**request_data)
-            print("Openai response: ", response)
-            logger.info(f"Openai response: {response}")
+                        # Handle error events
+                        elif event.type == 'error':
+                            error_msg = getattr(event, 'error', {}).get('message', 'Unknown error')
+                            logger.error(f"Stream error: {error_msg}")
+                            gen.update(output=None, level="ERROR", status_message=error_msg)
+                            yield {
+                                'content': '',
+                                'error': error_msg,
+                                'finish_reason': 'error'
+                            }
+                            break
+            else:
+                # Non-streaming mode - get complete response at once
+                response = client.responses.create(**request_data)
+                print("Openai response: ", response)
+                logger.info(f"Openai response: {response}")
 
-            price = calculate_and_log_openai_cost(
-                response=response, model_id=model_to_use, company_bot=company_bot
-            )
+                price = calculate_and_log_openai_cost(
+                    response=response, model_id=model_to_use, company_bot=company_bot
+                )
 
-            logger.info(f"free-flows response: {response}")
-            logger.info("Non-streaming response received")
-            # Extract full text from response
-            # The response.output is a list that may contain:
-            # - ResponseFileSearchToolCall (tool calls)
-            # - ResponseOutputMessage (actual text messages)
-            full_text = ""
-            sources = []
-            seen_file_ids = set()
-            
-            if hasattr(response, 'output') and response.output:
-                for output_item in response.output:
-                    # Check if this is a ResponseOutputMessage (has 'content' attribute)
-                    if hasattr(output_item, 'content') and output_item.content:
-                        # The content is a list of ResponseOutputText objects
-                        for content_item in output_item.content:
-                            if hasattr(content_item, 'text'):
-                                full_text += content_item.text
+                logger.info(f"free-flows response: {response}")
+                logger.info("Non-streaming response received")
+                # Extract full text from response
+                # The response.output is a list that may contain:
+                # - ResponseFileSearchToolCall (tool calls)
+                # - ResponseOutputMessage (actual text messages)
+                full_text = ""
+                sources = []
+                seen_file_ids = set()
 
-                            # Extract sources from annotations (deduplicate by file_id)
-                            if hasattr(content_item, 'annotations') and content_item.annotations:
-                                for annotation in content_item.annotations:
-                                    if annotation.type == 'file_citation' and annotation.file_id not in seen_file_ids:
-                                        source_entry = {
-                                            "source_id": annotation.file_id,
-                                            "title": annotation.filename
-                                        }
-                                        # Fetch metadata from vector store
-                                        metadata = get_file_metadata_from_vector_store(client, vector_store_ids,
-                                                                                       annotation.file_id)
+                if hasattr(response, 'output') and response.output:
+                    for output_item in response.output:
+                        # Check if this is a ResponseOutputMessage (has 'content' attribute)
+                        if hasattr(output_item, 'content') and output_item.content:
+                            # The content is a list of ResponseOutputText objects
+                            for content_item in output_item.content:
+                                if hasattr(content_item, 'text'):
+                                    full_text += content_item.text
 
-                                        # Enrich source with organization info
-                                        source_entry = add_source_with_organization(source_entry, metadata)
-                                        sources.append(source_entry)
-                                        seen_file_ids.add(annotation.file_id)
-            
-            logger.info(f"Extracted text length: {len(full_text)} chars, unique sources: {len(sources)}")
-            
-            # Yield single complete response
-            yield {
-                'content': full_text,
-                'finish_reason': 'stop',
-                'extra_content': {
-                    "sources": sources
+                                # Extract sources from annotations (deduplicate by file_id)
+                                if hasattr(content_item, 'annotations') and content_item.annotations:
+                                    for annotation in content_item.annotations:
+                                        if annotation.type == 'file_citation' and annotation.file_id not in seen_file_ids:
+                                            source_entry = {
+                                                "source_id": annotation.file_id,
+                                                "title": annotation.filename
+                                            }
+                                            # Fetch metadata from vector store
+                                            metadata = get_file_metadata_from_vector_store(client, vector_store_ids,
+                                                                                           annotation.file_id)
+
+                                            # Enrich source with organization info
+                                            source_entry = add_source_with_organization(source_entry, metadata)
+                                            sources.append(source_entry)
+                                            seen_file_ids.add(annotation.file_id)
+
+                logger.info(f"Extracted text length: {len(full_text)} chars, unique sources: {len(sources)}")
+
+                usage = getattr(response, "usage", None)
+                usage_details = None
+                if usage:
+                    input_tokens = getattr(usage, "input_tokens", 0) or 0
+                    output_tokens = getattr(usage, "output_tokens", 0) or 0
+                    total_tokens = getattr(usage, "total_tokens", 0) or (input_tokens + output_tokens)
+                    usage_details = {"input": input_tokens, "output": output_tokens, "total": total_tokens}
+
+                gen.update(output=full_text[:2000] if full_text else None, usage_details=usage_details)
+
+                # Yield single complete response
+                yield {
+                    'content': full_text,
+                    'finish_reason': 'stop',
+                    'extra_content': {
+                        "sources": sources
+                    }
                 }
+        except Exception as e:
+            error_msg = f"Error during Responses API {'streaming' if stream else 'call'}: {str(e)}"
+            logger.error('Error: %s', e, exc_info=True)
+            print(error_msg)
+            gen.update(output=None, level="ERROR", status_message=str(e))
+            yield {
+                'content': '',
+                'error': error_msg,
+                'finish_reason': 'error'
             }
-    except Exception as e:
-        error_msg = f"Error during Responses API {'streaming' if stream else 'call'}: {str(e)}"
-        logger.error('Error: %s', e, exc_info=True)
-        print(error_msg)
-        yield {
-            'content': '',
-            'error': error_msg,
-            'finish_reason': 'error'
-        }
 
 
 def handle_bedrock_invoke_model(

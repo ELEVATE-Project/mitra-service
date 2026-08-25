@@ -4,8 +4,11 @@ import os
 from openai import OpenAI
 import logging
 from chatbot.translate.base.speech_to_text import split_audio
+from chatbot.utils.langfuse_client import get_langfuse_client
+from chatbot.utils.stt_pricing import compute_stt_usage_and_cost
 
 logger = logging.getLogger('django')
+langfuse = get_langfuse_client()
 
 
 def transcribe_audio(
@@ -15,69 +18,96 @@ def transcribe_audio(
         voice_provider: any
 ) -> dict:
 
-    try:
+    other_params = voice_provider.other_params or {}
+    model = other_params.get("model", "whisper-1")
 
-        client_api_key = os.getenv("OPENAI_API_KEY")
-        print("client_api_key: ", client_api_key)
-        client = OpenAI(api_key=client_api_key)
+    with langfuse.start_as_current_observation(
+        as_type="span",
+        name="openai_whisper_batch",
+        input={
+            "audio_format": audio_format,
+            "source_language": source_language,
+            "model": model,
+            "voice_provider_id": getattr(voice_provider, 'id', None),
+        },
+    ) as batch_span:
+        try:
+            client_api_key = os.getenv("OPENAI_API_KEY")
+            print("client_api_key: ", client_api_key)
+            client = OpenAI(api_key=client_api_key)
 
-        other_params = voice_provider.other_params or {}
+            response_format = other_params.get("response_format", "text")
+            temperature = other_params.get("temperature", 0)
+            chunk_duration = int(other_params.get("chunk_duration", 300))
+            dictionary = other_params.get("dictionary", [])
 
-        model = other_params.get("model", "whisper-1")
-        response_format = other_params.get("response_format", "text")
-        temperature = other_params.get("temperature", 0)
-        chunk_duration = int(other_params.get("chunk_duration", 300))
-        dictionary = other_params.get("dictionary", [])
+            dictionary_prompt = None
+            if dictionary and len(dictionary) > 0:
+                dictionary_prompt = "Vocabulary: " + ", ".join(dictionary)
 
-        dictionary_prompt = None
-        if dictionary and len(dictionary)> 0:
-            dictionary_prompt = "Vocabulary: " + ", ".join(dictionary)
+            audio_bytes = base64.b64decode(base64_audio)
+            print("Audio size:", len(audio_bytes))
 
-        audio_bytes = base64.b64decode(base64_audio)
-        print("Audio size:", len(audio_bytes))
-        # -------- CHUNK AUDIO --------
-        chunks = split_audio(audio_bytes, chunk_duration=chunk_duration)
-        print("Number of chunks:", len(chunks))
-        transcripts = []
+            chunks = split_audio(audio_bytes, chunk_duration=chunk_duration)
+            print("Number of chunks:", len(chunks))
+            transcripts = []
 
-        for chunk_number, chunk in chunks:
-            print("Sending chunk:", chunk_number, "size:", len(chunk))
+            for chunk_number, chunk in chunks:
+                print("Sending chunk:", chunk_number, "size:", len(chunk))
 
-            audio_file = io.BytesIO(chunk)
-            audio_file.name = f"audio.{audio_format}"
+                with langfuse.start_as_current_observation(
+                    as_type="generation",
+                    name="openai_whisper_chunk",
+                    model="whisper-1",
+                    input={"chunk_number": chunk_number, "chunk_bytes": len(chunk)},
+                ) as gen:
+                    try:
+                        audio_file = io.BytesIO(chunk)
+                        audio_file.name = f"audio.{audio_format}"
 
-            params = {
-                "model": model,
-                "file": audio_file,
-                "response_format": response_format,
-                "temperature": temperature,
+                        params = {
+                            "model": model,
+                            "file": audio_file,
+                            "response_format": response_format,
+                            "temperature": temperature,
+                        }
+
+                        if source_language:
+                            params["language"] = source_language
+
+                        if dictionary_prompt:
+                            params["prompt"] = dictionary_prompt
+
+                        transcription = client.audio.transcriptions.create(**params)
+                        print("transcription: ", transcription)
+
+                        usage_details, cost_details = compute_stt_usage_and_cost("whisper-1", chunk_duration)
+
+                        if isinstance(transcription, str):
+                            transcripts.append(transcription)
+                            gen.update(output={"transcript": transcription}, usage_details=usage_details, cost_details=cost_details)
+                        else:
+                            transcripts.append(str(transcription))
+                            gen.update(output={"transcript": str(transcription)}, usage_details=usage_details, cost_details=cost_details)
+                    except Exception as chunk_err:
+                        gen.update(output=None, level="ERROR", status_message=str(chunk_err))
+                        raise
+
+            full_transcript = " ".join(transcripts)
+
+            batch_span.update(
+                output={"transcript_preview": full_transcript[:300], "chunk_count": len(chunks)},
+            )
+
+            return {
+                "status": 200,
+                "content": full_transcript
             }
 
-            if source_language:
-                params["language"] = source_language
-
-            if dictionary_prompt:
-                params["prompt"] = dictionary_prompt
-
-            transcription = client.audio.transcriptions.create(**params)
-            print("transcription: ", transcription)
-
-            if isinstance(transcription, str):
-                transcripts.append(transcription)
-            else:
-                transcripts.append(str(transcription))
-
-        full_transcript = " ".join(transcripts)
-
-        return {
-            "status": 200,
-            "content": full_transcript
-        }
-
-    except Exception as e:
-        logger.error("Error processing file: %s", e, exc_info=True)
-
-        return {
-            "status": 500,
-            "content": f"Error during API request: {e}"
-        }
+        except Exception as e:
+            logger.error("Error processing file: %s", e, exc_info=True)
+            batch_span.update(output=None, level="ERROR", status_message=str(e))
+            return {
+                "status": 500,
+                "content": f"Error during API request: {e}"
+            }

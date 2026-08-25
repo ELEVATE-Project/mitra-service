@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CODE_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 LOGGING_DIR = CODE_BASE_DIR + '/logs'
