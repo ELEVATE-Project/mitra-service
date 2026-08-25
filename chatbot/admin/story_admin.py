@@ -6,6 +6,7 @@ from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.filter.flow_filter import FlowFilter
 from chatbot.filter.story_filter import UserNameFilter
 from chatbot.models import StoryTag, StoryMedia, Story, Profile, ProfileType, MediaTypeChoices, StoryTranslation
+from chatbot.models.story_models import LeaderCategory, Role
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.resources.story_resource import (
     redirect_to_export_view, generate_csv_response, generate_xls_response, generate_docx_response,
@@ -13,6 +14,7 @@ from chatbot.resources.story_resource import (
 )
 from chatbot.utils.shikshalokam_story_utils import update_story_pdf, save_shikshalokam_story
 from chatbot.views.admin.post_processing_views import PostProcessingView
+from chatbot.views.admin.csv_correction_views import CsvCorrectionView
 from django.urls import path
 from django.shortcuts import render
 import tablib
@@ -120,12 +122,14 @@ class StoryAdmin(admin.ModelAdmin):
         custom_urls = [
             path('export_stories/', self.admin_site.admin_view(self.export_stories_view), name='export_stories'),
             path('post_processing/', self.admin_site.admin_view(PostProcessingView.as_view()), name='chatbot_story_post_processing'),
+            path('csv_correction/', self.admin_site.admin_view(CsvCorrectionView.as_view()), name='chatbot_story_csv_correction'),
         ]
         return custom_urls + urls
 
     def changelist_view(self, request, extra_context=None):
         extra_context = extra_context or {}
         extra_context['show_post_processing_button'] = True
+        extra_context['show_csv_correction_button'] = True
         return super().changelist_view(request, extra_context=extra_context)
 
     def export_stories_view(self, request):
@@ -157,6 +161,37 @@ class StoryAdmin(admin.ModelAdmin):
 
 
         return render(request, 'admin/export_story_format.html', {'ids': ids})
+
+
+class CodeNameMasterAdmin(admin.ModelAdmin):
+    """
+    Shared admin configuration for the code-and-name master lists.
+    Roles and leader categories are both small reference tables with the same shape, so
+    their list, search and ordering behaviour lives here and stays consistent as further
+    master lists are added.
+    """
+
+    list_display = ('name', 'code', 'created_at')
+    search_fields = ('name', 'code')
+    ordering = ('name',)
+
+
+@admin.register(LeaderCategory)
+class LeaderCategoryAdmin(CodeNameMasterAdmin):
+    """
+    Admin interface for the leader category master list.
+    These are the categories programmes are mapped to, so entries here are referenced by
+    company bot programme mappings and must not be renamed casually.
+    """
+
+
+@admin.register(Role)
+class RoleAdmin(CodeNameMasterAdmin):
+    """
+    Admin interface for the role master list.
+    Capture flows and the CSV correction tool both resolve incoming values against these
+    names, so a role that is missing here cannot be assigned to a report.
+    """
 
 
 @admin.register(StoryTranslation)

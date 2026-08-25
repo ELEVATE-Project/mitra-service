@@ -1,18 +1,27 @@
 import json
-import traceback
+import logging
 import os
-from django.conf import settings
+import traceback
+
+import jwt
+from channels.db import database_sync_to_async
+
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
-from chatbot.consumers.async_base_consumer import AsyncBaseConsumer
-from chatbot.models import ChatStatus, ChatSession, Profile, CompanyBot, Voice, VoiceType, ChatType, CompanyChat, \
-    TextConversionType, CompanyBotTypeChoices
 from chatbot.celery_tasks.flow_tasks import get_flow_response
+from chatbot.consumers.async_base_consumer import AsyncBaseConsumer
+from chatbot.models import (
+    ChatSession,
+    ChatStatus,
+    CompanyBot,
+    CompanyBotTypeChoices,
+    Profile,
+    TextConversionType,
+    Voice,
+    VoiceType,
+)
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.audio_provider_utils import text_translate_provider
-import logging
-from channels.db import database_sync_to_async
 from chatbot.utils.transliterate_utils import transliterate_text
-import jwt
 
 logger = logging.getLogger('django')
 PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")

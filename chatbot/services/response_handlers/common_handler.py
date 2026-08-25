@@ -109,13 +109,14 @@ class CommonResponseHandler(BaseResponseHandler):
             state_machine=state_machine, company_bot=company_bot
         )
         
-        # Translate and send to WebSocket
+        # Translate and send to WebSocket (pass state_machine for cache lookup)
         translated_message = self.translate_message(
             message=bot_question,
             channel_name=channel_name,
             step_number=chat_session.current_step,
             language=language,
-            company_bot=company_bot
+            company_bot=company_bot,
+            state_machine=state_machine,
         )
         
         # Save to database with metadata indicating this is a NON_LLM question from DB
@@ -641,7 +642,7 @@ class CommonResponseHandler(BaseResponseHandler):
         print("sending bot_question: ", bot_question)
         translated_message = self.translate_message(
             message=bot_question, channel_name=channel_name, step_number=chat_session.current_step,
-            language=language, company_bot=company_bot
+            language=language, company_bot=company_bot, state_machine=state_machine
         )
 
         other_params = {'function_call_response': response}
