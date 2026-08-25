@@ -411,6 +411,8 @@ LANGUAGE_CHOICES = [
     ("te", "Telugu"),
     ("or", "Odia"),
     ("ta", "Tamil"),
+    ("pa", "Punjabi"),
+    ("bn", "Bengali"),
 ]
 
 

@@ -284,6 +284,8 @@ class StoryLanguageChoices(models.TextChoices):
     TELUGU = 'te', _('Telugu')
     ODIA = 'or', _('Odia')
     TAMIL = 'ta', _('Tamil')
+    PUNJABI = 'pa', _('Punjabi')
+    BENGALI = 'bn', _('Bengali')
 
 
 class StorySourceChoices(models.TextChoices):
@@ -361,6 +363,8 @@ class RouteLanguageChoices(models.TextChoices):
     TELUGU = 'te', _('/telugu')
     ODIA = 'or', _('/odia')
     TAMIL = 'ta', _('/tamil')
+    PUNJABI = 'pa', _('/punjabi')
+    BENGALI = 'bn', _('/bengali')
 
 
 class VoiceProvider(models.TextChoices):
@@ -399,6 +403,8 @@ class LanguageMapping:
         "te": {"IN": "te-IN"},
         "or": {"IN": "or-IN"},
         "ta": {"IN": "ta-IN"},
+        "pa": {"IN": "pa-IN"},
+        "bn": {"IN": "bn-IN"},
     }
 
     @classmethod
