@@ -10,7 +10,6 @@ from openai import OpenAI
 from pprint import pprint
 from retrying import retry
 from chatbot.models import LLMModel, Company
-from chatbot.utils.usage_cost_context import get_usage_cost_context
 import boto3
 import json
 import json_repair
@@ -25,6 +24,18 @@ validate = URLValidator()
 AWS_KEY = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
 llm_retry_number = int(os.getenv('LLM_RETRY_NUMBER'))
+
+
+def get_custom_model(company_bot):
+    """Return company_bot.other_params['custom_model'] if set, else None."""
+    if not company_bot:
+        return None
+    other_params = company_bot.get('other_params') if isinstance(company_bot, dict) else getattr(
+        company_bot, 'other_params', None
+    )
+    if isinstance(other_params, str):
+        other_params = json.loads(other_params)
+    return other_params.get('custom_model') if other_params else None
 
 
 def handle_llama_model(
@@ -102,7 +113,10 @@ def handle_openai_model(
         else:
             client = OpenAI(api_key=client_api_key)
 
-        if model_name:
+        custom_model = get_custom_model(company_bot)
+        if custom_model:
+            model_to_use = custom_model
+        elif model_name:
             model_to_use = model_name
         elif company_bot:
             model_to_use = company_bot.llm_model
@@ -122,7 +136,7 @@ def handle_openai_model(
             LLMModel.GPT5_2,
         }
         if max_token:
-            if company_bot.llm_model in token_limit_models:
+            if model_to_use in token_limit_models:
                 request_data["max_completion_tokens"] = max_token
             else:
                 request_data["max_tokens"]= max_token
@@ -136,7 +150,7 @@ def handle_openai_model(
             request_data["tools"]= tools
             if tool_choice:
                 request_data["tool_choice"]= tool_choice
-        if top_p is not None and company_bot.llm_model not in token_limit_models:
+        if top_p is not None and model_to_use not in token_limit_models:
             request_data['top_p'] = top_p
         print("request_data: ", request_data)
         response = client.chat.completions.create(**request_data)
@@ -210,33 +224,6 @@ def get_pricing_from_company_bot(company_bot, model_id):
 def retry_if_result_none(result):
     return result is None
 
-
-def _record_llm_usage_cost(
-        *, provider, model_id, company_bot, input_tokens, output_tokens, input_cost, output_cost, total_cost
-):
-    # Deferred imports avoid a circular import: chat_models.py imports handle_bedrock_model
-    # from this module at load time, and usage_cost_utils.py imports ChatSession from
-    # chatbot.models, so a module-level import here would cycle back into chatbot.models
-    # before it finishes initializing.
-    from chatbot.models import UsageCallType
-    from chatbot.utils.usage_cost_utils import record_usage_cost
-
-    cost_context = get_usage_cost_context()
-    if cost_context and cost_context.get('session_id'):
-        record_usage_cost(
-            session=cost_context['session_id'],
-            call_type=UsageCallType.LLM,
-            provider=provider,
-            model_name=model_id,
-            profile=cost_context.get('profile_id'),
-            company_bot=company_bot,
-            input_units=input_tokens,
-            output_units=output_tokens,
-            input_cost=input_cost,
-            output_cost=output_cost,
-            total_cost=total_cost,
-        )
-
 @retry(stop_max_attempt_number=llm_retry_number, retry_on_result=retry_if_result_none, wrap_exception=True)
 def handle_bedrock_model(
         company_bot, system_prompt=None, messages=None, max_token=None, temperature=None, top_p=None,
@@ -271,7 +258,10 @@ def handle_bedrock_model(
         config=boto_config
     )
     print("aws_key used: ", aws_key if aws_key else AWS_KEY)
-    if model_name:
+    custom_model = get_custom_model(company_bot)
+    if custom_model:
+        model_id = custom_model
+    elif model_name:
         model_id = model_name
     else:
         model_id = 'meta.llama3-1-8b-instruct-v1:0'
@@ -354,17 +344,6 @@ def handle_bedrock_model(
                 print(
                     f'💵 Model Cost - Input: ${input_cost:.6f} (${pricing["input"]}/1K), Output: ${output_cost:.6f} '
                     f'(${pricing["output"]}/1K), Total: ${total_cost:.6f}')
-
-                _record_llm_usage_cost(
-                    provider='bedrock/converse',
-                    model_id=model_id,
-                    company_bot=company_bot,
-                    input_tokens=input_tokens,
-                    output_tokens=output_tokens,
-                    input_cost=input_cost,
-                    output_cost=output_cost,
-                    total_cost=total_cost,
-                )
             else:
                 logger.info('💵 No pricing data configured in company_bot.other_params')
                 print('💵 No pricing data configured in company_bot.other_params')
@@ -386,6 +365,9 @@ def handle_bedrock_model(
                 final_output = json_repair.repair_json(content_tool, return_objects=True)
             else:
                 final_output = content_tool
+            if isinstance(final_output, dict) and not final_output.get('toolUseId'):
+                logger.error(f"Tool call missing toolUseId, retrying: {final_output}")
+                return None
         else:
             content_text = content.get('text')
             json_start = content_text.find('{')
@@ -556,17 +538,6 @@ def calculate_and_log_llm_cost(*, response, model_id, company_bot=None, provider
         f"Total: ${total_cost:.6f}"
     )
 
-    _record_llm_usage_cost(
-        provider=provider,
-        model_id=model_id,
-        company_bot=company_bot,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        input_cost=input_cost,
-        output_cost=output_cost,
-        total_cost=total_cost,
-    )
-
     return {
         "provider": provider,
         "model_id": model_id,
@@ -628,17 +599,6 @@ def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
         f"💵 OpenAI Cost — Input: ${input_cost:.6f}, Output: ${output_cost:.6f}, Total: ${total_cost:.6f}"
     )
 
-    _record_llm_usage_cost(
-        provider="openai",
-        model_id=model_id,
-        company_bot=company_bot,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        input_cost=input_cost,
-        output_cost=output_cost,
-        total_cost=total_cost,
-    )
-
     return {
         "model_id": model_id,
         "input_tokens": input_tokens,
@@ -679,7 +639,10 @@ def handle_openai_response_api(
 
     client = OpenAI(api_key=client_api_key)
 
-    if model_name:
+    custom_model = get_custom_model(company_bot)
+    if custom_model:
+        model_to_use = custom_model
+    elif model_name:
         model_to_use = model_name
     elif company_bot:
         model_to_use = company_bot.llm_model

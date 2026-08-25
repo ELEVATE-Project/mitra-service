@@ -15,8 +15,6 @@ import re
 from datetime import timedelta
 import sentry_sdk
 from dotenv import load_dotenv
-from socket import gethostbyname
-from socket import gethostname
 
 load_dotenv()
 
@@ -161,19 +159,14 @@ WSGI_APPLICATION = 'shikshalokam_mohini.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DATABASE_NAME'),
-        'USER': os.getenv('DATABASE_USER'),
-        'PASSWORD': os.getenv('DATABASE_PASSWORD'),
-        'HOST': os.getenv('DATABASE_HOST'),
-        'PORT': os.getenv('DATABASE_PORT'),
-        'OPTIONS': {
-            'sslmode': os.getenv('PG_SSL_MODE'),
-            'sslrootcert': os.getenv('PG_SSL_ROOT_CERT')
-        },
+        'NAME': os.getenv('PGBOUNCER_DATABASE_NAME'),
+        'USER': os.getenv('PGBOUNCER_DATABASE_USER'),
+        'PASSWORD': os.getenv('PGBOUNCER_DATABASE_PASSWORD'),
+        'HOST': os.getenv('PGBOUNCER_DATABASE_HOST'),
+        'PORT': os.getenv('PGBOUNCER_DATABASE_PORT')
     },
     'source_db': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -184,10 +177,12 @@ DATABASES = {
         'PORT': os.getenv('SOURCE_DATABASE_PORT'),
         'OPTIONS': {
             'sslmode': os.getenv('PG_SSL_MODE'),
-            'sslrootcert': os.getenv('PG_SSL_ROOT_CERT')
+            'sslrootcert': os.getenv('PG_SSL_ROOT_CERT'),
         },
     },
 }
+
+DISABLE_SERVER_SIDE_CURSORS = True
 
 
 # Password validation
@@ -249,6 +244,14 @@ if REDIS_USE_SSL:
     REDIS_URL = f'{REDIS_PROTOCOL}://{REDIS_HOST}:{REDIS_PORT}?ssl_cert_reqs={REDIS_SSL_CERT_REQS}'
 else:
     REDIS_URL = f'{REDIS_PROTOCOL}://{REDIS_HOST}:{REDIS_PORT}'
+
+# Celery uses its own Redis database and a service-specific queue so a shared
+# Redis instance never mixes this service's tasks with another service's
+# (databases: 0 = channels, 1 = cache, 2 = celery broker/results)
+REDIS_CELERY_DB = int(os.environ.get('REDIS_CELERY_DB', 2))
+CELERY_BROKER_URL = f'{REDIS_URL}/{REDIS_CELERY_DB}'
+CELERY_RESULT_BACKEND = f'{REDIS_URL}/{REDIS_CELERY_DB}'
+CELERY_TASK_DEFAULT_QUEUE = os.environ.get('CELERY_TASK_DEFAULT_QUEUE', 'mitra_service_queue')
 
 CHANNEL_LAYERS = {
     "default": {
@@ -370,6 +373,7 @@ if STORAGE_CLOUD_PROVIDER in STORAGE_BACKENDS:
             **STORAGES["staticfiles"]["OPTIONS"],
             "location": "static",
         }
+
 else:
     raise ValueError(
         f"Unsupported STORAGE_CLOUD_PROVIDER: {STORAGE_CLOUD_PROVIDER}. "
@@ -535,5 +539,9 @@ CRONJOBS = [
     ('0 12 * * *', 'chatbot.cron_tasks.xylem.story_creation.create_story',
     '>> /tmp/xylem_story_creation.log 2>&1'),
     ('0 */2 * * *', 'chatbot.cron_tasks.guest_discussion.state_categorisation.run_cron',
-    '>> /tmp/guest_discussion_state_categorisation.log 2>&1')
+    '>> /tmp/guest_discussion_state_categorisation.log 2>&1'),
+    ('0 */2 * * *', 'chatbot.cron_tasks.listening_activity.district_categorisation.run_cron',
+    '>> /tmp/listening_activity_district_categorisation.log 2>&1'),
+    ('0 12 * * *', 'chatbot.cron_tasks.bihar_teacher_tool.story_creation.create_story',
+    '>> /tmp/bihar_teacher_tool_story_creation.log 2>&1')
 ]

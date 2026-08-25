@@ -12,6 +12,7 @@ class CompanySerializer(serializers.ModelSerializer):
 class CompanyBotSerializer(serializers.ModelSerializer):
     company = CompanySerializer(read_only=True)
     statemachine_length = serializers.SerializerMethodField()
+    state_machine_steps = serializers.SerializerMethodField()
 
     class Meta:
         model = CompanyBot
@@ -19,6 +20,14 @@ class CompanyBotSerializer(serializers.ModelSerializer):
 
     def get_statemachine_length(self, obj):
         return obj.companystatemachine_set.count()
+
+    def get_state_machine_steps(self, obj):
+        """Return ordered list of {step, operation_type, bot_question} for bot's state machine."""
+        steps = CompanyStateMachine.objects.filter(company_bot=obj).order_by('step')
+        return [
+            {"step": s.step, "operation_type": s.operation_type, "bot_question": s.bot_question}
+            for s in steps
+        ]
 
 
 class CompanyStateMachineSerializer(serializers.ModelSerializer):
@@ -49,8 +58,8 @@ class ImageConfigurationSerializer(serializers.ModelSerializer):
         fields = ('id', 'name', 'max_images', 'image_size', 'image_size_mb')
         read_only_fields = ('id',)
 
-    # Purpose: Converts raw image_size (bytes) to MB for client display.
     def get_image_size_mb(self, obj):
+        """Convert image size from bytes to MB for easier reading."""
         return round(obj.image_size / 1048576, 2)
 
 
@@ -78,25 +87,39 @@ class FlowConnectionInfoSerializer(serializers.ModelSerializer):
     isParentFlow = serializers.SerializerMethodField()
     children_flows = serializers.SerializerMethodField()
     image_config = serializers.SerializerMethodField()
-    
+    editor_config = serializers.SerializerMethodField()
+    default_flow = serializers.CharField(source='default_flow.flow_route', read_only=True, allow_null=True, default=None)
+
     class Meta:
         model = Flow
-        fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config', 'create_story')
-        read_only_fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config')
+        fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config', 'create_story', 'editor_config', 'default_flow')
+        read_only_fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config', 'default_flow')
     
-    # Purpose: Returns True if this flow has child flows — signals the client to show a flow-selection UI.
     def get_isParentFlow(self, obj):
+        """Check if this flow has children."""
         return obj.child_flows.exists()
-
-    # Purpose: Returns serialized child flows; relies on prefetch_related('child_flows') in the view
-    #          query to avoid an extra DB hit here.
+    
     def get_children_flows(self, obj):
+        """Get list of child flows if this is a parent flow."""
         if obj.child_flows.exists():
             return ChildFlowSerializer(obj.child_flows.all(), many=True).data
         return []
 
-    # Purpose: Returns image upload constraints for this flow; None if no config is attached.
+    def get_editor_config(self, obj):
+        # A flow may have several templates and nothing orders pdf_templates, so an
+        # unordered .first() can hand a different editor_config to the frontend between
+        # requests. Ordered for a stable result; the first template that actually carries
+        # an editor_config wins, so a template without one no longer masks the others.
+        for template in obj.pdf_templates.order_by('id'):
+            if template.constants_json:
+                editor_config = template.constants_json.get("editor_config")
+                if editor_config is not None:
+                    return editor_config
+        return None
+
+    
     def get_image_config(self, obj):
+        """Get image configuration for this flow."""
         if obj.image_config:
             return ImageConfigurationSerializer(obj.image_config).data
         return None

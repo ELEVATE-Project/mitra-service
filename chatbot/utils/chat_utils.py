@@ -1,5 +1,10 @@
-from chatbot.models import Profile, LLMProvider, CompanyChat
 import json
+
+from django.core.cache import cache
+
+from chatbot.constants.cache import CacheKeyEnum
+from chatbot.models import CompanyChat, LLMProvider, Profile
+
 
 def format_message_as_per_openai_format(chats, intro=None):
     ai_user = Profile.objects.values("id").get(id=1)
@@ -152,3 +157,12 @@ def convert_llama_to_openai_tool(llama_tool_call):
     except Exception as e:
         print("Error converting tool:", str(e))
         return None
+
+
+def get_ai_profile():
+    """Return AI Profile (id=1), from cache if present, else DB."""
+    cached_profile = cache.get(CacheKeyEnum.AI_PROFILE)
+    if cached_profile:
+        print("Cache hit")
+        return cached_profile
+    return Profile.objects.get(id=1)

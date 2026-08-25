@@ -7,6 +7,7 @@ from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator
 from simple_history.models import HistoricalRecords
 
+from chatbot.constants import api_responses
 from chatbot.constants.voice_provider_defaults import get_provider_defaults, VOICE_PROVIDER_DEFAULTS
 from chatbot.models.enums import (
     CreateStoryChoices, EntityStatus, LLMModel, GenderChoices, ChatStatus,
@@ -155,6 +156,15 @@ class CompanyBot(models.Model):
         default=False,
         help_text=(
             "Enable streaming mode for LLM responses."
+        )
+    )
+    default_role = models.ForeignKey(
+        'chatbot.Role',
+        on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='default_for_bots',
+        help_text=(
+            "Role applied to reports from this bot when the conversation does not yield "
+            "one. Leave empty for bots whose reports should not be tagged with a role."
         )
     )
 
@@ -379,6 +389,14 @@ class CompanyStateMachine(models.Model):
         help_text="If True, this state will be skipped for authenticated users."
     )
 
+    translations = models.JSONField(
+        null=True, blank=True,
+        help_text=(
+            "Cached translations keyed by language code. "
+            'e.g. {"hi": {"text": "...", "audio_s3": "https://..."}}'
+        )
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     history = HistoricalRecords()
@@ -434,6 +452,10 @@ class CompanyStateMachine(models.Model):
             self.postprocess_output_mode = PostProcessOutputMode.NONE
 
     def save(self, *args, **kwargs):
+        if self.pk:
+            old = CompanyStateMachine.objects.filter(pk=self.pk).values('bot_question').first()
+            if old and old['bot_question'] != self.bot_question:
+                self.translations = None
         self.full_clean()
         super().save(*args, **kwargs)
 
@@ -557,6 +579,14 @@ class Flow(models.Model):
         default=CreateStoryChoices.ALL,
         help_text="Whether to post process the story or not"
     )
+    default_flow = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='default_for_flows',
+        help_text="Default child flow shown when this is a parent flow."
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -578,7 +608,7 @@ class Flow(models.Model):
     def clean(self):
         """Validate flow configuration."""
         super().clean()
-        
+
         # Validate that languages is a list
         if not isinstance(self.languages, list):
             raise ValidationError({
@@ -589,6 +619,12 @@ class Flow(models.Model):
             raise ValidationError({
                 'languages': "Language codes must be unique."
             })
+
+        if self.default_flow_id and self.pk:
+            if self.default_flow.parent_flow_id != self.pk:
+                raise ValidationError({
+                    'default_flow': api_responses.FLOW_DEFAULT_FLOW_NOT_CHILD
+                })
 
     def save(self, *args, **kwargs):
         self.clean()
@@ -627,6 +663,12 @@ class PDFTemplates(models.Model):
         related_name='pdf_templates',
         help_text="Flow associated with this template."
     )
+    tag = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Report classification tag (e.g., mi-story, discussion-report)."
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -641,5 +683,89 @@ class PDFTemplates(models.Model):
         indexes = [
             models.Index(fields=['template_name']),
             models.Index(fields=['user_type']),
+        ]
+
+
+class CompanyBotProgramMapping(models.Model):
+    """
+    Maps a company bot and a state to the programme running there.
+    Story._derive_program_and_leader_category reads these rows to tag a report with its
+    programme and leader category, so a bot with no active mapping for a state produces
+    untagged reports.
+    """
+
+    company_bot = models.ForeignKey(
+        CompanyBot, on_delete=models.CASCADE, related_name='program_mappings'
+    )
+    state = models.CharField(max_length=1000)
+    program = models.ForeignKey(
+        'chatbot.Program', on_delete=models.CASCADE, related_name='bot_mappings'
+    )
+    leader_category = models.ForeignKey(
+        'chatbot.LeaderCategory', on_delete=models.CASCADE, related_name='bot_mappings'
+    )
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    history = HistoricalRecords()
+
+    # Bot holding the canonical state/district reference data, shared with the state
+    # categorisation cron so both sides agree on spelling.
+    STATE_MASTER_DATA_BOT_ROUTE = '/state-classification-guest-discussion'
+
+    def clean(self):
+        """
+        Keep `state` to the canonical names in the master data.
+
+        The derivation in Story._derive_program_and_leader_category matches this column
+        with an exact, case-sensitive lookup, so a typed variant such as 'bihar' silently
+        produces unmapped reports with no error anywhere. Validation is admin-side only:
+        clean() runs from full_clean(), not from save(), so scripts, migrations and the
+        shell are unaffected.
+
+        Every failure path returns instead of raising - if the master data cannot be read
+        the field is left alone rather than blocking the save.
+        """
+        super().clean()
+
+        if not self.state:
+            return
+
+        import json
+        import logging
+
+        logger = logging.getLogger('django')
+
+        try:
+            bot = CompanyBot.objects.filter(route=self.STATE_MASTER_DATA_BOT_ROUTE).first()
+            if not bot or not bot.dynamic_context:
+                return
+            raw = bot.dynamic_context
+            data = raw if isinstance(raw, dict) else json.loads(raw)
+            names = [s['name'] for s in data.get('states', []) if s.get('name')]
+        except Exception as exc:
+            logger.warning("Could not load state master data for validation: %s", exc)
+            return
+
+        if names and self.state not in names:
+            raise ValidationError({
+                'state': api_responses.PROGRAM_MAPPING_UNKNOWN_STATE_TEMPLATE.format(
+                    state=self.state, valid_states=', '.join(sorted(names))
+                )
+            })
+
+    def __str__(self):
+        return f"{self.company_bot.name} + {self.state} → {self.program.name} / {self.leader_category.name}"
+
+    class Meta:
+        unique_together = ('company_bot', 'state')
+        indexes = [
+            models.Index(fields=['company_bot']),
+            models.Index(fields=['state']),
+            models.Index(fields=['program']),
+            models.Index(fields=['leader_category']),
+            models.Index(fields=['is_active']),
         ]
 

@@ -1,8 +1,8 @@
-from chatbot.models import VoiceProvider, VoiceType, LanguageMapping, CompanyBot, UsageCallType
+from chatbot.models import VoiceProvider, VoiceType, LanguageMapping, CompanyBot
 from chatbot.translate.ai4Bharat.transliterate import call_ai4bharat_transliterate_api
 from chatbot.translate.custom.custom_llm import handle_custom_translation
 from chatbot.translate.sarvam.sarvam import SarvamLanguageService
-from chatbot.utils.audio_provider_utils import get_voice_provider, _record_voice_usage_cost
+from chatbot.utils.audio_provider_utils import get_voice_provider
 
 
 def transliterate_text(
@@ -39,12 +39,6 @@ def transliterate_text(
                 'status': 500,
                 'content': "No provider found!"
             }
-
-        _record_voice_usage_cost(
-            call_type=UsageCallType.TRANSLITERATE, voice_provider=voice_provider, company_bot=company_bot,
-            response=response, input_units=len(message_body or '')
-        )
-
         return response
     except Exception as e:
         return {
@@ -58,5 +52,10 @@ def get_transliteration_output(data):
         data = data.get('content', [])
     if data and isinstance(data, list) and len(data) > 0:
         return data[0]
+    # AI4Bharat returns {'status': 200, 'content': '<transliterated text>'} - a plain
+    # string, not a list - so without this branch a successful call fell through to None
+    # and callers overwrote stored values with null.
+    if data and isinstance(data, str):
+        return data
 
     return None

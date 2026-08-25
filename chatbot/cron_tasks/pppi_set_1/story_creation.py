@@ -75,7 +75,9 @@ def _build_chat_transcript(company_chats):
 def _build_messages(company_bot, company_chats):
     transcript = _build_chat_transcript(company_chats=company_chats)
     if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
-        return [{"role": "user", "content": [{"text": transcript}]}]
+        return [
+            {"role": "user", "content": [{"text": transcript}]},
+        ]
     return [{"role": "user", "content": transcript}]
 
 

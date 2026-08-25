@@ -13,13 +13,8 @@ class AsyncBaseConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         await self.accept()
 
-    # Purpose: Persists session state on WebSocket close — saves conversation title and
-    #          updates the last CompanyChat status. Handles the case where disconnect
-    #          fires before an authenticate message was ever received.
-    # Side effects: UPDATE on chat_session (title) and company_chat (status) tables
     async def disconnect(self, code):
         try:
-            # fall back to cookie session if authenticate was never received
             if hasattr(self, 'session_id') and self.session_id:
                 session_id = self.session_id
             else:
@@ -62,15 +57,6 @@ class AsyncBaseConsumer(AsyncWebsocketConsumer):
         else:
             c.save_title()
 
-    # Purpose: Derives the current chat status from DB state — used both during a session
-    #          and on disconnect. Status drives UI indicators and resume logic on the client.
-    # Status rules:
-    #   0 chats            → STARTED
-    #   disconnect + not APPRECIATION step → PAUSED
-    #   last chat was PAUSED  → RESUME  (reconnecting to an interrupted session)
-    #   session completed   → COMPLETED
-    #   otherwise           → IN_PROGRESS
-    # Output:  ChatStatus enum value; defaults to PAUSED on error (safe fallback)
     @database_sync_to_async
     def determine_company_chat_status(self, session_id, profile_id, route, is_disconnected=False):
         if not session_id:

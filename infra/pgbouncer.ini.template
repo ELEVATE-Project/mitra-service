@@ -1,0 +1,22 @@
+[databases]
+; Replace <DATABASE_NAME>, <DATABASE_HOST>, <DATABASE_PORT> with actual values
+<DATABASE_NAME> = host=<DATABASE_HOST> port=<DATABASE_PORT> dbname=<DATABASE_NAME>
+
+[pgbouncer]
+listen_addr = 127.0.0.1
+listen_port = 6432
+
+auth_type = md5
+auth_file = /etc/pgbouncer/userlist.txt
+
+pool_mode = transaction
+max_client_conn = 100
+default_pool_size = 30
+max_prepared_statements = 0
+
+; PgBouncer -> PostgreSQL SSL
+server_tls_sslmode = require
+server_tls_ca_file = /etc/ssl/certs/rds_certificate.pem
+
+logfile = /var/log/pgbouncer/pgbouncer.log
+pidfile = /var/run/pgbouncer/pgbouncer.pid

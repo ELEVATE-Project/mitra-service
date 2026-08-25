@@ -3,7 +3,7 @@ import logging
 import re
 
 from chatbot.exceptions.story_exceptions import StoryDomainError, StoryValidationError, StorySaveError, StoryError
-from chatbot.models import StoryStatusChoices, Story, SessionFlowName, Voice, VoiceType, StoryTranslation
+from chatbot.models import StoryStatusChoices, Story, SessionFlowName, Voice, VoiceType, StoryTranslation, Role
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.utils.story_llama_utils import translate_field, create_project
 from chatbot.utils.story_utils.format_utils import clean_escaped_text, get_formatted_story
@@ -121,6 +121,7 @@ def save_story(
         raw_impact = response_json_story.get('impact', '')
         raw_problem_statement = response_json_story.get('problem_statement', '')
         raw_blurb = response_json_story.get('blurb', '')
+        raw_role = response_json_story.get('role', '')
 
         is_within_domain = response_json_story.get('is_within_domain', True)
 
@@ -183,18 +184,27 @@ def save_story(
             organization = transliterate_to_english_if_needed(raw_organization, transliteration_voice_provider,
                                                               language)
             designation = transliterate_to_english_if_needed(raw_designation, transliteration_voice_provider, language)
+            state, district, block = None, None, None
         else:
             user_name = profile.first_name if profile and profile.first_name else ''
             organization = response_json_story.get('organization', '')
             designation = response_json_story.get('designation', '')
             location = None
+            state, district, block = None, None, None
             if profile:
                 address = ProfileAddress.objects.filter(profile=profile).first()
                 if address:
+                    state, district, block = address.state, address.district, address.block
                     location_parts = filter(None, [address.block, address.district, address.state])
                     location = ", ".join(location_parts)
                 else:
                     location = ""
+
+        # Blank values must never reach the columns: an empty assignment would wipe a
+        # state/district/block already set by another producer.
+        state = state if state and str(state).strip() else None
+        district = district if district and str(district).strip() else None
+        block = block if block and str(block).strip() else None
 
         if (not english_title or not english_objective or not english_action_steps or not
             english_problem_statement or not english_content or not english_blurb
@@ -216,6 +226,12 @@ def save_story(
             'user_name': user_name,
         }
 
+        role = None
+        if raw_role and str(raw_role).strip():
+            role = Role.objects.filter(name__iexact=str(raw_role).strip()).first()
+            if not role:
+                logger.warning(f"No matching Role found for LLM output: '{raw_role}'")
+
         if flow and flow in [SessionFlowName.GuestMiStory]:
             other_params['user_name'] = user_name
             other_params['location'] = location
@@ -236,8 +252,18 @@ def save_story(
             story.stage = StoryStatusChoices.COMPLETED
             story.other_params = other_params
             story.location = location if location else ""
+            if state:
+                story.state = state
+            if district:
+                story.district = district
+            if block:
+                story.block = block
             story.blurb = english_blurb
             story.validation_logs = combined_reason
+            # Guarded like state/district/block above: a re-run where the conversation
+            # yields no role must not erase a role captured on an earlier run.
+            if role:
+                story.role = role
         else:
             story = Story(
                 title=english_title,
@@ -253,8 +279,12 @@ def save_story(
                 stage=StoryStatusChoices.COMPLETED,
                 other_params=other_params,
                 location=location if location else "",
+                state=state,
+                district=district,
+                block=block,
                 blurb=english_blurb,
-                validation_logs=combined_reason
+                validation_logs=combined_reason,
+                role=role
             )
         story.save()
 
