@@ -607,10 +607,17 @@ class BaseResponseHandler(ABC):
             stage=stage, other_params=other_params
         )
 
-    def translate_message(self, message, channel_name, step_number, language, company_bot, extra_content=None):
+    def translate_message(self, message, channel_name, step_number, language, company_bot, extra_content=None, state_machine=None):
+        """Translate and send message"""
         return translate_and_send_message(
-            accumulated_message=message, current_channel_name=channel_name, current_step_number=step_number,
-            finish_reason="stop", route=language, company_bot=company_bot, extra_content=extra_content
+            accumulated_message=message,
+            current_channel_name=channel_name,
+            current_step_number=step_number,
+            finish_reason="stop",
+            route=language,
+            company_bot=company_bot,
+            extra_content=extra_content,
+            state_machine=state_machine
         )
 
     def get_chat_status(self, state_machine, company_bot):

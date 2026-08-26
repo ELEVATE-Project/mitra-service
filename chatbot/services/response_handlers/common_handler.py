@@ -91,11 +91,19 @@ class CommonResponseHandler(BaseResponseHandler):
         except CompanyStateMachine.DoesNotExist:
             logger.error(f"State machine not found for step {chat_session.current_step}")
             return self.default_error_message
-
-        chat_status = self.get_chat_status(state_machine=state_machine, company_bot=company_bot)
+        
+        chat_status = self.get_chat_status(
+            state_machine=state_machine, company_bot=company_bot
+        )
+        
+        # Translate and send to WebSocket (pass state_machine for cache lookup)
         translated_message = self.translate_message(
-            message=bot_question, channel_name=channel_name, step_number=chat_session.current_step,
-            language=language, company_bot=company_bot
+            message=bot_question,
+            channel_name=channel_name,
+            step_number=chat_session.current_step,
+            language=language,
+            company_bot=company_bot,
+            state_machine=state_machine,
         )
         self.save_message(
             session_id=session_id, profile_id=profile_id, message=bot_question, chunks=chunks,
@@ -507,7 +515,7 @@ class CommonResponseHandler(BaseResponseHandler):
             as_type="span",
             name="handle_function_call",
             input={"current_step": chat_session.current_step, "response_preview": str(response)[:300]},
-        ) as span:
+         ) as span:
             company_bot = kwargs['company_bot']
             session_id = kwargs['session_id']
             channel_name = kwargs['channel_name']
@@ -562,8 +570,8 @@ class CommonResponseHandler(BaseResponseHandler):
 
             print("sending bot_question: ", bot_question)
             translated_message = self.translate_message(
-                message=bot_question, channel_name=channel_name, step_number=chat_session.current_step,
-                language=language, company_bot=company_bot
+              message=bot_question, channel_name=channel_name, step_number=chat_session.current_step,
+              language=language, company_bot=company_bot, state_machine=state_machine
             )
 
             other_params = {'function_call_response': response}

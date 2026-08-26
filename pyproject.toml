@@ -83,10 +83,13 @@ dependencies = [
     "tqdm>=4.67.1",
     "uuid>=1.30",
     "uvicorn>=0.40.0",
-    "indic-itn==0.2.4",
+    "indic-itn==0.2.10",
 ]
 
 [dependency-groups]
 dev = [
+    "celery-types>=0.26.0",
+    "django-stubs>=6.0.9",
+    "django-types>=0.24.0",
     "ruff>=0.15.0",
 ]

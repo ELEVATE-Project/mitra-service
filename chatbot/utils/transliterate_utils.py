@@ -75,5 +75,10 @@ def get_transliteration_output(data):
         data = data.get('content', [])
     if data and isinstance(data, list) and len(data) > 0:
         return data[0]
+    # AI4Bharat returns {'status': 200, 'content': '<transliterated text>'} - a plain
+    # string, not a list - so without this branch a successful call fell through to None
+    # and callers overwrote stored values with null.
+    if data and isinstance(data, str):
+        return data
 
     return None

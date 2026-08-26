@@ -14,7 +14,7 @@ logger = logging.getLogger('django')
 langfuse = get_langfuse_client()
 
 
-def call_ai4bharat_transliterate_api(source_language, target_language, message_body, is_sentence=False, timeout=30):
+def call_ai4bharat_transliterate_api(source_language, target_language, message_body, is_sentence=False):
     logger.info(f"Trying to transliterate {message_body}.")
     api_url = ai4bharat_base_url
     service_id = None
@@ -69,12 +69,11 @@ def call_ai4bharat_transliterate_api(source_language, target_language, message_b
         }
 
         char_count = len(message_body) if message_body else 0
-        # Provider-name keyed pricing, same convention as AI4Bharat TTS/ASR/translate —
-        # service_id varies by language pair, billing entity doesn't.
+        # Provider-name keyed pricing (service_id varies by language pair, billing entity doesn't)
         usage_details, cost_details = compute_translate_usage_and_cost("ai4bharat", char_count)
 
         try:
-            response = requests.post(api_url, json=payload, headers=headers, timeout=timeout)
+            response = requests.post(api_url, json=payload, headers=headers, timeout=10)
             print("Response: ", response)
             print("Res text: ", response.json())
             logger.info(f"Response from AI4Bharat Transliteration: {response}")
@@ -84,7 +83,6 @@ def call_ai4bharat_transliterate_api(source_language, target_language, message_b
                 transliteration_message_data = response.json()
                 if isinstance(transliteration_message_data, dict) and 'pipelineResponse' in transliteration_message_data:
                     transliteration_message = transliteration_message_data['pipelineResponse'][0].get('output', [{}])[0].get('target', '')
-
                     print("transliteration: ", transliteration_message)
                     gen.update(
                         output={"transliterated_preview": transliteration_message[:200]},

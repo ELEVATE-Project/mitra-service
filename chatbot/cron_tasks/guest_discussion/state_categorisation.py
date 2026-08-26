@@ -2,7 +2,6 @@ from chatbot.models import CompanyBot, Voice, VoiceProvider, VoiceType, Language
 from chatbot.models import Story
 from chatbot.translate.ai4Bharat.text_lang_detect import call_ai4bharat_text_lang_detect_api
 from chatbot.translate.google.google_translate import translate_text
-from datetime import date
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
@@ -102,13 +101,22 @@ def _normalize_text(text: str) -> str:
     return re.sub(r'\s+', ' ', text).strip()
 
 
-def _matches(pattern: str, text: str) -> bool:
-    """Match a pattern against text, ensuring it is not part of a larger word."""
-    escaped = re.escape(pattern)
-    return bool(re.search(r'(?<![a-zA-Z])' + escaped + r'(?![a-zA-Z])', text, re.IGNORECASE))
+def _matches(patterns: str | List[str], text: str) -> bool:
+    """Match pattern(s) against text, ensuring it is not part of a larger word.
 
+    List of patterns: ALL must match text.
+    """
+    if isinstance(patterns, str):
+        escaped = re.escape(patterns)
+        return bool(re.search(r'(?<![a-zA-Z])' + escaped + r'(?![a-zA-Z])', text, re.IGNORECASE))
 
+    if len(patterns) == 0:
+        return False
+        
+    return all(_matches(p, text) for p in patterns)
+    
 def _match_patterns(patterns: List[str], text: str) -> bool:
+    """OR-match: True if ANY pattern in list matches text."""
     return any(_matches(p, text) for p in patterns)
 
 

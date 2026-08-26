@@ -1,15 +1,86 @@
 import io
 import os
+import logging
 from django.db import models
+from django.db.models.functions import Lower
 from django.core.validators import MinLengthValidator
+from simple_history.models import HistoricalRecords
 from chatbot.models import Profile, TagChoices, StoryLanguageChoices, StorySourceChoices, MediaTypeChoices, \
-    StoryStatusChoices, Company, TagSourceChoices
+    StoryStatusChoices, Company, TagSourceChoices, ReportTypeChoices
 from pillow_heif import register_heif_opener
 from django.core.files.base import ContentFile
 from PIL import Image, UnidentifiedImageError
 
 S3_BASE_URL = os.getenv('S3_MEDIA_URL')
 register_heif_opener()
+
+logger = logging.getLogger('django')
+
+
+class LeaderCategory(models.Model):
+    """
+    Master list of leader categories a programme can belong to, such as Woman Leader or
+    School Leader. Reports inherit their category from the programme they are mapped to,
+    rather than from the person who filed them.
+    """
+
+    code = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=1000)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    history = HistoricalRecords()
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = "Leader Category"
+        verbose_name_plural = "Leader Categories"
+        indexes = [
+            models.Index(fields=['code']),
+        ]
+        # Matched with name__iexact when resolving CSV corrections, so uniqueness has to
+        # be case-insensitive: a plain unique flag would still allow two rows differing
+        # only in case and leave that lookup returning an arbitrary one. Mirrors the
+        # constraint on Role.name.
+        constraints = [
+            models.UniqueConstraint(Lower('name'), name='unique_leader_category_name_ci'),
+        ]
+
+
+class Role(models.Model):
+    """
+    Master list of roles a report can be attributed to, such as Woman Leader or Parent.
+    Capture flows resolve whatever the user says about themselves onto one of these rows,
+    so the set here is the only vocabulary a report's role can use.
+    """
+
+    code = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=1000)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    history = HistoricalRecords()
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = "Role"
+        verbose_name_plural = "Roles"
+        indexes = [
+            models.Index(fields=['code']),
+        ]
+        constraints = [
+            # Roles are resolved with Role.objects.filter(name__iexact=...).first(), and
+            # the capture prompts expose names rather than codes. A plain unique=True
+            # would still allow 'Parent' and 'parent' to coexist and leave that lookup
+            # ambiguous, so uniqueness is enforced case-insensitively.
+            models.UniqueConstraint(Lower('name'), name='unique_role_name_ci'),
+        ]
 
 
 class Story(models.Model):
@@ -32,6 +103,24 @@ class Story(models.Model):
     district = models.CharField(max_length=1000, null=True, blank=True)
     state = models.CharField(max_length=1000, null=True, blank=True)
     block = models.CharField(max_length=1000, null=True, blank=True)
+    village = models.CharField(max_length=1000, null=True, blank=True)
+    program = models.ForeignKey(
+        'chatbot.Program', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='stories'
+    )
+    leader_category = models.ForeignKey(
+        LeaderCategory, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='stories'
+    )
+    role = models.ForeignKey(
+        Role, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='stories'
+    )
+    report_type = models.CharField(
+        max_length=50, choices=ReportTypeChoices.choices,
+        null=True, blank=True, db_index=True,
+        help_text="Report classification, derived from the PDF template of the story's flow."
+    )
     formatted_content = models.TextField(null=True, blank=True)
     language = models.CharField(max_length=1000, choices=StoryLanguageChoices.choices,
                                 default=StoryLanguageChoices.ENGLISH)
@@ -71,6 +160,111 @@ class Story(models.Model):
     def get_translation_languages(self):
         """Get only translation languages (excludes main story language)"""
         return list(self.translations.values_list('language', flat=True))
+
+    def get_report_type(self):
+        """Report classification tag, taken from the PDF template of the story's flow."""
+        # Local import avoids circular dependency: story_models is loaded before
+        # company_models by chatbot/models/__init__.py.
+        from chatbot.models.company_models import PDFTemplates
+
+        flow_route = (self.other_params or {}).get('flow')
+        if not flow_route:
+            return None
+
+        # A flow may have several templates (e.g. a guest and an auth variant), so the
+        # query is ordered to make the result stable - an unordered .first() could return
+        # a different row, and therefore a different stored report_type, between runs.
+        # user_type is deliberately not filtered on here: the tag classifies the report,
+        # not the rendering variant, so every template on a flow carries the same tag.
+        # Filtering by user_type would return None whenever a story's audience has no
+        # matching template, dropping the classification entirely.
+        pdf_template = PDFTemplates.objects.filter(
+            flow__flow_route=flow_route
+        ).exclude(tag__isnull=True).exclude(tag='').order_by('id').first()
+
+        return pdf_template.tag if pdf_template else None
+
+    def save(self, *args, **kwargs):
+        location_changed = False
+        if self.pk:
+            old = Story.objects.filter(pk=self.pk).values('state', 'district').first()
+            if old:
+                location_changed = (old['state'] != self.state) or (old['district'] != self.district)
+        else:
+            location_changed = bool(self.state)
+
+        if location_changed:
+            self._derive_program_and_leader_category()
+            update_fields = kwargs.get('update_fields')
+            if update_fields is not None:
+                extended = list(update_fields)
+                for field in ('program', 'leader_category'):
+                    if field not in extended:
+                        extended.append(field)
+                kwargs['update_fields'] = extended
+
+        # Report type is a stored column so the dashboard can filter and aggregate on it
+        # in SQL. Derived once, on the first save that can resolve it, and never
+        # overwritten afterwards.
+        if not self.report_type:
+            derived = self.get_report_type()
+            if derived in ReportTypeChoices.values:
+                self.report_type = derived
+                # A partial save (e.g. the state cron's update_fields=['state','district'])
+                # would otherwise drop the value silently.
+                update_fields = kwargs.get('update_fields')
+                if update_fields is not None and 'report_type' not in update_fields:
+                    kwargs['update_fields'] = list(update_fields) + ['report_type']
+            elif derived:
+                logger.warning(
+                    "Unrecognised report type tag %r for session %s; leaving report_type unset",
+                    derived, self.session,
+                )
+
+        super().save(*args, **kwargs)
+
+    def _derive_program_and_leader_category(self):
+        # Local imports avoid circular dependency: story_models → chat_models/company_models
+        # are all loaded by chatbot/models/__init__.py in sequence.
+        from chatbot.models.chat_models import ChatSession
+        from chatbot.models.company_models import CompanyBotProgramMapping
+
+        if not self.state:
+            self.program = None
+            self.leader_category = None
+            return
+
+        chat_session = (
+            ChatSession.objects
+            .filter(session=self.session)
+            .select_related('company_bot')
+            .first()
+        )
+        if not chat_session or not chat_session.company_bot:
+            logger.warning(
+                'Story._derive: no ChatSession/company_bot for session=%s; skipping derivation',
+                self.session,
+            )
+            self.program = None
+            self.leader_category = None
+            return
+
+        # Matched case-insensitively: CompanyBotProgramMapping.clean() only guards values
+        # typed in the admin, while state is also written by the state categorisation cron
+        # and the CSV correction tool. An exact match let a value such as 'bihar' from
+        # those producers silently resolve to no program and no leader category.
+        mapping = CompanyBotProgramMapping.objects.filter(
+            company_bot=chat_session.company_bot,
+            state__iexact=self.state,
+            is_active=True,
+        ).select_related('program', 'leader_category').first()
+
+        if mapping:
+            self.program = mapping.program
+            self.leader_category = mapping.leader_category
+        else:
+            self.program = None
+            self.leader_category = None
 
     class Meta:
         indexes = [

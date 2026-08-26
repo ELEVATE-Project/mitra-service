@@ -1,0 +1,527 @@
+{% extends "admin/base_site.html" %}
+{% load static i18n admin_urls %}
+
+{% block title %}Upload Correction CSV - {{ model_name|title }}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .csv-correction-container {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .csv-correction-container h1 {
+        margin-bottom: 24px;
+        color: #333;
+        border-bottom: 2px solid #417690;
+        padding-bottom: 10px;
+    }
+
+    /* ── Info banner ── */
+    .info-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        background: #e3f2fd;
+        border: 1px solid #90caf9;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 24px;
+    }
+    .info-banner p { margin: 0; line-height: 1.5; }
+    .info-banner p:first-of-type { font-weight: 600; color: #1976d2; margin-bottom: 6px; }
+    .info-banner p:last-of-type { color: #333; font-size: 13px; }
+
+    /* ── Schema reference card ── */
+    .schema-card {
+        background: #f8f9fa;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 18px 20px;
+        margin-bottom: 24px;
+    }
+    .schema-card h3 { margin: 0 0 12px 0; font-size: 14px; color: #333; }
+    .schema-details { }
+    .schema-summary {
+        list-style: none; cursor: pointer;
+        display: flex; align-items: center; justify-content: space-between;
+        font-size: 14px; font-weight: 600; color: #1565c0;
+        padding: 8px 12px; border: 1px solid #cfe2f3;
+        border-radius: 6px; background: #f0f7ff;
+        transition: background 0.15s, border-color 0.15s;
+    }
+    .schema-summary:hover { background: #e3f0ff; border-color: #90caf9; }
+    .schema-summary::-webkit-details-marker { display: none; }
+    .schema-summary-left { display: flex; align-items: center; gap: 8px; }
+    .schema-summary-hint { font-size: 12px; font-weight: 400; color: #888; }
+    .schema-caret {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 18px; height: 18px; font-size: 13px; line-height: 1;
+        color: #1565c0; transition: transform 0.18s;
+    }
+    .schema-details[open] .schema-caret { transform: rotate(90deg); }
+    .schema-details[open] .schema-summary {
+        border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+    }
+    .schema-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .schema-table th {
+        text-align: left; padding: 6px 10px;
+        background: #e9ecef; border: 1px solid #dee2e6; color: #555;
+    }
+    .schema-table td { padding: 6px 10px; border: 1px solid #dee2e6; }
+    .badge-readonly {
+        display: inline-block; padding: 2px 6px; border-radius: 3px;
+        font-size: 11px; background: #6c757d; color: #fff; font-weight: 600;
+    }
+    .badge-editable {
+        display: inline-block; padding: 2px 6px; border-radius: 3px;
+        font-size: 11px; background: #28a745; color: #fff; font-weight: 600;
+    }
+    .badge-required {
+        display: inline-block; padding: 2px 6px; border-radius: 3px;
+        font-size: 11px; background: #dc3545; color: #fff; font-weight: 600;
+    }
+
+    /* ── Drop zone ── */
+    .drop-zone {
+        border: 2px dashed #adb5bd;
+        border-radius: 10px;
+        padding: 40px 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.2s, background 0.2s;
+        background: #fff;
+        margin-bottom: 20px;
+        position: relative;
+    }
+    .drop-zone.drag-over {
+        border-color: #417690;
+        background: #f0f7fb;
+    }
+    .drop-zone.file-selected {
+        border-color: #28a745;
+        background: #f0faf4;
+    }
+    .drop-zone svg { display: block; margin: 0 auto 12px; }
+    .drop-zone p { margin: 0; color: #666; font-size: 14px; }
+    .drop-zone .file-name { font-weight: 600; color: #333; margin-top: 6px; font-size: 13px; }
+    .drop-zone .browse-link { color: #417690; text-decoration: underline; cursor: pointer; }
+    .drop-zone input[type="file"] {
+        position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+
+    /* ── Alerts ── */
+    .alert {
+        border-radius: 6px; padding: 12px 16px;
+        font-size: 13px; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 10px;
+    }
+    .alert-error   { background: #fff5f5; border: 1px solid #f5c6cb; color: #721c24; }
+    .alert-success { background: #f0faf4; border: 1px solid #c3e6cb; color: #155724; }
+    .alert-warning { background: #fff8e1; border: 1px solid #ffc107; color: #856404; }
+    .hidden { display: none !important; }
+
+    /* ── Upload button ── */
+    .upload-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        padding: 11px 28px; font-size: 14px; font-weight: 600;
+        background: #417690; color: #fff; border: none;
+        border-radius: 6px; cursor: pointer; transition: background 0.2s;
+        min-width: 160px;
+    }
+    .upload-btn:hover:not(:disabled) { background: #205067; }
+    .upload-btn:disabled { background: #999; cursor: not-allowed; }
+
+    /* ── Stats panel ── */
+    .stats-panel {
+        display: flex; gap: 16px; flex-wrap: wrap;
+        margin: 20px 0;
+    }
+    .stat-card {
+        flex: 1; min-width: 140px;
+        border-radius: 8px; padding: 16px;
+        text-align: center;
+    }
+    .stat-card .stat-number { font-size: 32px; font-weight: 700; line-height: 1; }
+    .stat-card .stat-label  { font-size: 12px; margin-top: 4px; }
+    .stat-processed { background: #e3f2fd; color: #1565c0; }
+    .stat-success   { background: #e8f5e9; color: #2e7d32; }
+    .stat-unchanged { background: #f5f5f5; color: #616161; }
+    .stat-rejected  { background: #fce4ec; color: #b71c1c; }
+
+    /* ── Rejection download bar ── */
+    .rejection-bar {
+        display: flex; align-items: center; gap: 12px;
+        padding: 14px 18px; background: #fff3e0;
+        border: 1px solid #ffb74d; border-radius: 8px; margin-top: 16px;
+    }
+    .rejection-bar p { margin: 0; font-size: 13px; color: #5d4037; flex: 1; }
+    .download-btn {
+        display: inline-flex; align-items: center; gap: 6px;
+        padding: 8px 16px; background: #e65100; color: #fff;
+        border: none; border-radius: 5px; font-size: 13px;
+        font-weight: 600; cursor: pointer; text-decoration: none;
+        white-space: nowrap;
+    }
+    .download-btn:hover { background: #bf360c; }
+    .download-btn:disabled { background: #bbb; cursor: not-allowed; }
+
+    /* spinner */
+    .spinner {
+        display: inline-block; width: 16px; height: 16px;
+        border: 2px solid #fff; border-top-color: transparent;
+        border-radius: 50%; animation: spin 0.7s linear infinite;
+        vertical-align: middle; margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 600px) {
+        .stats-panel { flex-direction: column; }
+    }
+</style>
+{% endblock %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+    &rsaquo; <a href="{% url 'admin:app_list' app_label='chatbot' %}">Chatbot</a>
+    &rsaquo; <a href="{% url 'admin:chatbot_story_changelist' %}">Stories</a>
+    &rsaquo; Upload Correction CSV
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="csv-correction-container">
+    <h1>Upload Correction CSV</h1>
+
+    <!-- Info banner -->
+    <div class="info-banner">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1976d2" stroke-width="2" style="flex-shrink:0;margin-top:2px">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+        </svg>
+        <div>
+            <p>Bulk Metadata Correction</p>
+            <p>Upload a CSV file to fix missing or inaccurate metadata (State, District, Block, Location, Role, Leader Category, Theme) for unmapped stories.
+               Corrections permanently override previous AI-generated values and instantly cascade across all live dashboard metrics.</p>
+        </div>
+    </div>
+
+    <!-- Schema reference -->
+    <div class="schema-card">
+      <details class="schema-details">
+        <summary class="schema-summary">
+            <span class="schema-summary-left"><span class="schema-caret">▶</span> View CSV column reference</span>
+            <span class="schema-summary-hint">id required · others optional ▾</span>
+        </summary>
+        <p style="font-size:12px;color:#666;margin:12px 0 12px 0;">
+            Columns appear in export order. Only <code>id</code> is mandatory.
+            All other columns are read from the CSV if present and ignored if absent.
+        </p>
+        <table class="schema-table">
+            <thead>
+                <tr>
+                    <th>CSV Column (exact name)</th>
+                    <th>Type</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td><code>id</code></td><td><span class="badge-required">Required</span></td><td>Story integer ID — anchor key used to find the record</td></tr>
+                <tr><td><code>session</code></td><td><span class="badge-readonly">Read-only</span></td><td>Session string — used as fallback lookup if id fails; do not change</td></tr>
+                <tr><td><code>state</code></td><td><span class="badge-editable">Editable</span></td><td>Edit this column to update state — must be one of the 29 recognised states of India</td></tr>
+                <tr><td><code>district</code></td><td><span class="badge-editable">Editable</span></td><td>Edit this column to update district — accepted as-is, no validation</td></tr>
+                <tr><td><code>block</code></td><td><span class="badge-editable">Editable</span></td><td>Edit this column to update block</td></tr>
+                <tr><td><code>location</code></td><td><span class="badge-editable">Editable</span></td><td>Free-text location string (separate from state/district fields)</td></tr>
+                <tr><td><code>role</code></td><td><span class="badge-editable">Editable</span></td><td>Edit this column to update the reporter's role — must match a Role in master data</td></tr>
+                <tr><td><code>leader_category</code></td><td><span class="badge-editable">Editable</span></td><td>Edit this column to update leader category — must match a Leader Category in master data</td></tr>
+                <tr><td><code>theme_name</code></td><td><span class="badge-editable">Editable</span></td><td>Edit this column to update the theme name</td></tr>
+                <tr><td><code>action</code></td><td><span class="badge-editable">Optional</span></td><td><code>update</code> or <code>ignore</code> — if column absent or blank, the row is treated as <code>update</code></td></tr>
+                <tr><td>all other columns</td><td><span class="badge-readonly">Ignored</span></td><td>title, content, and any column not listed above are read but never written back</td></tr>
+            </tbody>
+        </table>
+      </details>
+        <p style="font-size:12px;color:#e65100;margin:12px 0 0 0;font-weight:600;">
+            ⚠️ To update state/district, edit the <code>state</code> and <code>district</code> columns (last two columns in the export CSV) — not the <code>location</code> column.
+        </p>
+    </div>
+
+    <!-- Inline error -->
+    <div id="format-error" class="alert alert-error hidden">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span id="format-error-text"></span>
+    </div>
+
+    <!-- Drop zone -->
+    <form id="upload-form" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="drop-zone" id="drop-zone">
+            <input type="file" name="csv_file" id="csv-file-input" accept=".csv">
+            <svg width="44" height="44" fill="none" stroke="#adb5bd" stroke-width="1.5" viewBox="0 0 24 24">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <p>Drag &amp; drop your <strong>.csv</strong> file here, or <span class="browse-link">browse</span></p>
+            <p class="file-name hidden" id="selected-file-name"></p>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:16px;margin-top:4px;">
+            <button type="submit" class="upload-btn" id="upload-btn" disabled>
+                <span class="btn-text">Upload &amp; Process</span>
+                <span class="btn-loading hidden"><span class="spinner"></span>Processing…</span>
+            </button>
+            <span id="file-hint" style="font-size:12px;color:#888;">Select a .csv file to enable upload</span>
+        </div>
+    </form>
+
+    <!-- Results section (hidden until upload completes) -->
+    <div id="results-section" class="hidden" style="margin-top:28px;">
+
+        <!-- Success / fail banner -->
+        <div id="upload-success-banner" class="alert alert-success hidden">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:1px"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            <span id="upload-success-text"></span>
+        </div>
+        <div id="upload-error-banner" class="alert alert-error hidden">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;margin-top:1px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            <span id="upload-error-text"></span>
+        </div>
+
+        <!-- Stats cards -->
+        <div class="stats-panel" id="stats-panel" style="display:none;">
+            <div class="stat-card stat-processed">
+                <div class="stat-number" id="stat-processed">—</div>
+                <div class="stat-label">Rows Processed</div>
+            </div>
+            <div class="stat-card stat-success">
+                <div class="stat-number" id="stat-success">—</div>
+                <div class="stat-label">Successful Updates</div>
+            </div>
+            <div class="stat-card stat-unchanged">
+                <div class="stat-number" id="stat-unchanged">—</div>
+                <div class="stat-label">Unchanged (skipped)</div>
+            </div>
+            <div class="stat-card stat-rejected">
+                <div class="stat-number" id="stat-rejected">—</div>
+                <div class="stat-label">Rejected Rows</div>
+            </div>
+        </div>
+
+        <!-- Rejection CSV download bar -->
+        <div id="rejection-bar" class="rejection-bar hidden">
+            <svg width="20" height="20" fill="none" stroke="#e65100" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <p>Some rows failed validation. Download the rejection file, correct the errors in the <code>error_reason</code> column, then re-upload.</p>
+            <button id="download-rejection-btn" class="download-btn">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 13 7 8"/><line x1="12" y1="3" x2="12" y2="13"/>
+                </svg>
+                <span id="download-btn-label">Download Rejected Rows</span>
+            </button>
+        </div>
+
+    </div><!-- /results-section -->
+</div><!-- /container -->
+
+<script>
+(function () {
+    'use strict';
+
+    const dropZone      = document.getElementById('drop-zone');
+    const fileInput     = document.getElementById('csv-file-input');
+    const uploadBtn     = document.getElementById('upload-btn');
+    const uploadForm    = document.getElementById('upload-form');
+    const btnText       = uploadBtn.querySelector('.btn-text');
+    const btnLoading    = uploadBtn.querySelector('.btn-loading');
+    const fileHint      = document.getElementById('file-hint');
+    const selectedName  = document.getElementById('selected-file-name');
+    const formatError   = document.getElementById('format-error');
+    const formatErrorTx = document.getElementById('format-error-text');
+
+    // Result elements
+    const resultsSection    = document.getElementById('results-section');
+    const successBanner     = document.getElementById('upload-success-banner');
+    const successText       = document.getElementById('upload-success-text');
+    const errorBanner       = document.getElementById('upload-error-banner');
+    const errorText         = document.getElementById('upload-error-text');
+    const statsPanel        = document.getElementById('stats-panel');
+    const statProcessed     = document.getElementById('stat-processed');
+    const statSuccess       = document.getElementById('stat-success');
+    const statUnchanged     = document.getElementById('stat-unchanged');
+    const statRejected      = document.getElementById('stat-rejected');
+    const rejectionBar      = document.getElementById('rejection-bar');
+    const downloadBtn       = document.getElementById('download-rejection-btn');
+    const downloadBtnLabel  = document.getElementById('download-btn-label');
+
+    let rejectionCsvB64 = null;
+
+    // ── Drag & drop ──────────────────────────────────────────────────────────
+    dropZone.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', function () {
+        dropZone.classList.remove('drag-over');
+    });
+    dropZone.addEventListener('drop', function (e) {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        const files = e.dataTransfer.files;
+        if (files.length > 0) {
+            setFile(files[0]);
+        }
+    });
+
+    fileInput.addEventListener('change', function () {
+        if (this.files.length > 0) setFile(this.files[0]);
+    });
+
+    function setFile(file) {
+        // Client-side format check
+        if (!file.name.toLowerCase().endsWith('.csv')) {
+            showInlineError('Invalid file format. Please upload a .csv file.');
+            uploadBtn.disabled = true;
+            dropZone.classList.remove('file-selected');
+            selectedName.classList.add('hidden');
+            return;
+        }
+        hideInlineError();
+        selectedName.textContent = '📄 ' + file.name + ' (' + formatBytes(file.size) + ')';
+        selectedName.classList.remove('hidden');
+        dropZone.classList.add('file-selected');
+        uploadBtn.disabled = false;
+        fileHint.textContent = 'Ready to upload';
+
+        // Sync to input if dropped
+        if (fileInput.files[0] !== file) {
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            fileInput.files = dt.files;
+        }
+    }
+
+    function showInlineError(msg) {
+        formatErrorTx.textContent = msg;
+        formatError.classList.remove('hidden');
+    }
+    function hideInlineError() {
+        formatError.classList.add('hidden');
+    }
+
+    function formatBytes(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / 1048576).toFixed(2) + ' MB';
+    }
+
+    // ── Form submission ──────────────────────────────────────────────────────
+    uploadForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        if (!fileInput.files || fileInput.files.length === 0) {
+            showInlineError('Please select a .csv file before uploading.');
+            return;
+        }
+
+        // Reset results
+        resultsSection.classList.add('hidden');
+        successBanner.classList.add('hidden');
+        errorBanner.classList.add('hidden');
+        statsPanel.style.display = 'none';
+        rejectionBar.classList.add('hidden');
+        rejectionCsvB64 = null;
+        hideInlineError();
+
+        // Loading state
+        uploadBtn.disabled = true;
+        btnText.classList.add('hidden');
+        btnLoading.classList.remove('hidden');
+
+        const formData = new FormData(uploadForm);
+
+        fetch(window.location.href, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (resp) { return resp.json(); })
+        .then(function (data) {
+            resultsSection.classList.remove('hidden');
+
+            if (!data.success) {
+                // Hard failure (schema error, duplicate IDs, non-CSV, etc.)
+                errorText.textContent = data.error || 'Upload failed.';
+                errorBanner.classList.remove('hidden');
+                return;
+            }
+
+            // Success — show stats
+            const s = data.stats;
+            const unchanged = s.unchanged_rows || 0;
+            statProcessed.textContent = s.total_processed;
+            statSuccess.textContent   = s.successful_updates;
+            statUnchanged.textContent = unchanged;
+            statRejected.textContent  = s.rejected_rows;
+            statsPanel.style.display  = 'flex';
+
+            const unchangedNote = unchanged > 0
+                ? ' ' + unchanged + ' row(s) had no changes and were skipped.'
+                : '';
+
+            if (s.rejected_rows === 0) {
+                successText.textContent =
+                    '✅ ' + s.successful_updates + ' row(s) updated.' + unchangedNote;
+                successBanner.classList.remove('hidden');
+            } else if (s.successful_updates > 0) {
+                successText.textContent =
+                    '⚠️ ' + s.successful_updates + ' row(s) updated.' + unchangedNote + ' ' +
+                    s.rejected_rows + ' row(s) failed — see the rejection file below.';
+                successBanner.classList.remove('hidden');
+            } else {
+                errorText.textContent =
+                    'All ' + s.rejected_rows + ' rows failed validation. ' +
+                    'No changes were saved. Download the rejection file to see errors.';
+                errorBanner.classList.remove('hidden');
+            }
+
+            // Rejection CSV download
+            if (data.rejection_csv && data.rejection_count > 0) {
+                rejectionCsvB64 = data.rejection_csv;
+                downloadBtnLabel.textContent =
+                    'Download Rejected Rows (' + data.rejection_count + ')';
+                rejectionBar.classList.remove('hidden');
+            }
+        })
+        .catch(function (err) {
+            resultsSection.classList.remove('hidden');
+            errorText.textContent = 'Network error: ' + err.message;
+            errorBanner.classList.remove('hidden');
+        })
+        .finally(function () {
+            uploadBtn.disabled = false;
+            btnText.classList.remove('hidden');
+            btnLoading.classList.add('hidden');
+        });
+    });
+
+    // ── Rejection CSV download ───────────────────────────────────────────────
+    downloadBtn.addEventListener('click', function () {
+        if (!rejectionCsvB64) return;
+        const bytes = atob(rejectionCsvB64);
+        const arr = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+        const blob = new Blob([arr], { type: 'text/csv' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = 'correction_rejected_rows.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+})();
+</script>
+{% endblock %}

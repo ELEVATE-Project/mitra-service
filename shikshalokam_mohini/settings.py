@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CODE_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 LOGGING_DIR = CODE_BASE_DIR + '/logs'
@@ -159,19 +159,14 @@ WSGI_APPLICATION = 'shikshalokam_mohini.wsgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/4.2/ref/settings/#databases
-
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DATABASE_NAME'),
-        'USER': os.getenv('DATABASE_USER'),
-        'PASSWORD': os.getenv('DATABASE_PASSWORD'),
-        'HOST': os.getenv('DATABASE_HOST'),
-        'PORT': os.getenv('DATABASE_PORT'),
-        'OPTIONS': {
-            'sslmode': os.getenv('PG_SSL_MODE'),
-            'sslrootcert': os.getenv('PG_SSL_ROOT_CERT')
-        },
+        'NAME': os.getenv('PGBOUNCER_DATABASE_NAME'),
+        'USER': os.getenv('PGBOUNCER_DATABASE_USER'),
+        'PASSWORD': os.getenv('PGBOUNCER_DATABASE_PASSWORD'),
+        'HOST': os.getenv('PGBOUNCER_DATABASE_HOST'),
+        'PORT': os.getenv('PGBOUNCER_DATABASE_PORT')
     },
     'source_db': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -182,10 +177,12 @@ DATABASES = {
         'PORT': os.getenv('SOURCE_DATABASE_PORT'),
         'OPTIONS': {
             'sslmode': os.getenv('PG_SSL_MODE'),
-            'sslrootcert': os.getenv('PG_SSL_ROOT_CERT')
+            'sslrootcert': os.getenv('PG_SSL_ROOT_CERT'),
         },
     },
 }
+
+DISABLE_SERVER_SIDE_CURSORS = True
 
 
 # Password validation
@@ -543,6 +540,8 @@ CRONJOBS = [
     '>> /tmp/xylem_story_creation.log 2>&1'),
     ('0 */2 * * *', 'chatbot.cron_tasks.guest_discussion.state_categorisation.run_cron',
     '>> /tmp/guest_discussion_state_categorisation.log 2>&1'),
+    ('0 */2 * * *', 'chatbot.cron_tasks.listening_activity.district_categorisation.run_cron',
+    '>> /tmp/listening_activity_district_categorisation.log 2>&1'),
     ('0 12 * * *', 'chatbot.cron_tasks.bihar_teacher_tool.story_creation.create_story',
     '>> /tmp/bihar_teacher_tool_story_creation.log 2>&1')
 ]

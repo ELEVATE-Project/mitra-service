@@ -12,6 +12,7 @@ class CompanySerializer(serializers.ModelSerializer):
 class CompanyBotSerializer(serializers.ModelSerializer):
     company = CompanySerializer(read_only=True)
     statemachine_length = serializers.SerializerMethodField()
+    state_machine_steps = serializers.SerializerMethodField()
 
     class Meta:
         model = CompanyBot
@@ -19,6 +20,14 @@ class CompanyBotSerializer(serializers.ModelSerializer):
 
     def get_statemachine_length(self, obj):
         return obj.companystatemachine_set.count()
+
+    def get_state_machine_steps(self, obj):
+        """Return ordered list of {step, operation_type, bot_question} for bot's state machine."""
+        steps = CompanyStateMachine.objects.filter(company_bot=obj).order_by('step')
+        return [
+            {"step": s.step, "operation_type": s.operation_type, "bot_question": s.bot_question}
+            for s in steps
+        ]
 
 
 class CompanyStateMachineSerializer(serializers.ModelSerializer):
@@ -78,11 +87,13 @@ class FlowConnectionInfoSerializer(serializers.ModelSerializer):
     isParentFlow = serializers.SerializerMethodField()
     children_flows = serializers.SerializerMethodField()
     image_config = serializers.SerializerMethodField()
-    
+    editor_config = serializers.SerializerMethodField()
+    default_flow = serializers.CharField(source='default_flow.flow_route', read_only=True, allow_null=True, default=None)
+
     class Meta:
         model = Flow
-        fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config', 'create_story')
-        read_only_fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config')
+        fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config', 'create_story', 'editor_config', 'default_flow')
+        read_only_fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config', 'default_flow')
     
     def get_isParentFlow(self, obj):
         """Check if this flow has children."""
@@ -93,6 +104,19 @@ class FlowConnectionInfoSerializer(serializers.ModelSerializer):
         if obj.child_flows.exists():
             return ChildFlowSerializer(obj.child_flows.all(), many=True).data
         return []
+
+    def get_editor_config(self, obj):
+        # A flow may have several templates and nothing orders pdf_templates, so an
+        # unordered .first() can hand a different editor_config to the frontend between
+        # requests. Ordered for a stable result; the first template that actually carries
+        # an editor_config wins, so a template without one no longer masks the others.
+        for template in obj.pdf_templates.order_by('id'):
+            if template.constants_json:
+                editor_config = template.constants_json.get("editor_config")
+                if editor_config is not None:
+                    return editor_config
+        return None
+
     
     def get_image_config(self, obj):
         """Get image configuration for this flow."""
