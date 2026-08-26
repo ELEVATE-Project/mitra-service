@@ -375,8 +375,6 @@ class RouteLanguageChoices(models.TextChoices):
     TELUGU = 'te', _('/telugu')
     ODIA = 'or', _('/odia')
     TAMIL = 'ta', _('/tamil')
-    PUNJABI = 'pa', _('/punjabi')
-    BENGALI = 'bn', _('/bengali')
 
 
 class VoiceProvider(models.TextChoices):
