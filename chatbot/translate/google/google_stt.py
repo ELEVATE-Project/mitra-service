@@ -126,12 +126,18 @@ def transcribe_multiple_languages_v2(
             duration = int(other_params.get('chunk_duration', 10))
             chunks = split_audio(audio_bytes, chunk_duration=duration)
 
-            current_ctx = contextvars.copy_context()
-
             with concurrent.futures.ThreadPoolExecutor() as executor:
+                # NOTE: each submitted task gets its OWN copy_context() here.
+                # contextvars.Context objects can only be entered by one thread
+                # at a time -- reusing a single copy across concurrent submissions
+                # raises "cannot enter context: ... already entered" as soon as
+                # more than one chunk runs in parallel. A fresh copy per task
+                # still inherits the langfuse span contextvar captured at this
+                # point (we're still inside the `with ... as s:` block), so
+                # tracing/nesting behavior is unchanged.
                 future_to_chunk = {
                     executor.submit(
-                        current_ctx.run,
+                        contextvars.copy_context().run,
                         transcribe_chunk, client, project_id, location, config, chunk_number, chunk, duration
                     ): chunk_number
                     for chunk_number, chunk in chunks
