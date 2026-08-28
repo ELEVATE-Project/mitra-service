@@ -58,11 +58,11 @@ def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language, 
 def transcribe_ai4bharat_multiple_chunks(voice_provider, base64_audio_file, source_language, audio_format):
     try:
         audio_bytes = base64.b64decode(base64_audio_file)
+        other_params = voice_provider.other_params if voice_provider and getattr(voice_provider, 'other_params', None) else {}
         duration = 10
-        if voice_provider.other_params:
-            duration = int(voice_provider.other_params.get('chunk_duration', 10))
+        if other_params:
+            duration = int(other_params.get('chunk_duration', 10))
         chunks = split_audio(audio_bytes, chunk_duration=duration)
-
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(
@@ -75,7 +75,16 @@ def transcribe_ai4bharat_multiple_chunks(voice_provider, base64_audio_file, sour
             transcripts.sort()
 
         raw_transcript = " ".join(content for _, content in transcripts)
-        final_transcript = apply_itn(raw_transcript, source_language)
+
+        normalisation = other_params.get('normalisation', False)
+        if isinstance(normalisation, str):
+            normalisation = normalisation.strip().lower() in ('true', '1', 'yes')
+        elif normalisation is None:
+            normalisation = False
+        else:
+            normalisation = bool(normalisation)
+
+        final_transcript = apply_itn(raw_transcript, source_language) if normalisation else raw_transcript
         return {'status': 200, 'content': final_transcript}
 
     except Exception as e:
