@@ -75,12 +75,13 @@ def transcribe_ai4bharat_multiple_chunks(voice_provider, base64_audio_file, sour
                 duration = int(voice_provider.other_params.get('chunk_duration', 10))
             chunks = split_audio(audio_bytes, chunk_duration=duration)
 
-            current_ctx = contextvars.copy_context()
-
+            # Each task gets its OWN copy_context() call, so each submitted task runs
+            # in a distinct Context object — a single Context cannot be entered via
+            # .run() from more than one thread concurrently (raises RuntimeError).
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 futures = [
                     executor.submit(
-                        current_ctx.run,
+                        contextvars.copy_context().run,
                         transcribe_single_chunk,
                         chunk_number, chunk, audio_format, source_language, voice_provider, duration
                     )

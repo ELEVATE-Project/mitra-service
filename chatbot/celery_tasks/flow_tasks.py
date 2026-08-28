@@ -33,7 +33,7 @@ def extract_reply_text(response):
 
 
 @shared_task
-@observe(as_type="span", name="get_flow_response")
+@observe(as_type="span", name="get_flow_response",capture_output=False,)
 def get_flow_response(channel_name, session_id, profile_id, route, bot_type, bot_route, text_data=None):
     print(f"last_user_message is {text_data}")
     

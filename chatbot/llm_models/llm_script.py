@@ -384,7 +384,7 @@ def handle_bedrock_model(
                     print('💵 No pricing data configured in company_bot.other_params')
 
                 # Log additional metrics if available
-                if 'stopReason' in response.get('stopReason', ''):
+                if response.get('stopReason'):
                     stop_reason = response.get('stopReason')
                     logger.info(f'🛑 Stop Reason: {stop_reason}')
                     print(f'🛑 Stop Reason: {stop_reason}')
@@ -660,7 +660,6 @@ def calculate_and_log_openai_cost(*, response, model_id, company_bot=None):
         "total_cost": total_cost,
     }
 
-
 def handle_openai_response_api(
         messages, system_prompt=None, max_token=None, temperature=None, company_bot=None,
         model_name=None, key_name='OPENAI_API_KEY', is_actual_key=False,
@@ -765,7 +764,6 @@ def handle_openai_response_api(
     if is_json_response:
         request_data["response_format"] = {"type": "json_object"}
 
-
     # Add tools to request if provided (already parsed by caller)
     if tools:
         request_data["tools"] = tools
@@ -783,210 +781,220 @@ def handle_openai_response_api(
             if tool.get('type') == 'file_search' and tool.get('vector_store_ids'):
                 vector_store_ids.extend(tool.get('vector_store_ids'))
 
-    with langfuse.start_as_current_observation(
+    # NOTE: using end_on_exit=False + explicit try/finally instead of a `with` block,
+    # since this function is a generator. A `with ... as gen:` block only closes when
+    # the generator is fully exhausted — if a caller stops consuming early (e.g. breaks
+    # after a terminal chunk), the generator stays suspended inside the block and the
+    # Langfuse observation never closes until GC eventually collects it. Wrapping with
+    # try/finally guarantees the observation ends deterministically on completion,
+    # exception, OR early caller abandonment (GeneratorExit).
+    gen_cm = langfuse.start_as_current_observation(
         as_type="generation",
         name="openai_responses_api",
         model=model_to_use,
         input={"input_messages": input_messages, "tools": tools, "stream": stream},
         model_parameters={"temperature": temperature, "max_output_tokens": max_token, "top_p": top_p},
-    ) as gen:
-        accumulated_output_text = ""
-        try:
-            if stream:
-                # Use Responses API with streaming context manager
-                sources = []
-                seen_file_ids = set()
-                function_call_name = None
-                function_call_args = ""
-                function_call_id = None
-                function_call_complete = False
+        end_on_exit=False,
+    )
+    gen = gen_cm.__enter__()
+    accumulated_output_text = ""
+    try:
+        if stream:
+            # Use Responses API with streaming context manager
+            sources = []
+            seen_file_ids = set()
+            function_call_name = None
+            function_call_args = ""
+            function_call_id = None
+            function_call_complete = False
 
-                with client.responses.stream(**request_data) as response_stream:
-                    for event in response_stream:
-                        logger.info(f"OpenAI Event: {event.type} | Data: {event}")
+            with client.responses.stream(**request_data) as response_stream:
+                for event in response_stream:
+                    logger.info(f"OpenAI Event: {event.type} | Data: {event}")
 
-                        # Handle function call delta events (streaming function arguments character-by-character)
-                        if event.type == 'response.function_call_arguments.delta':
-                            # Accumulate function arguments using snapshot (complete JSON so far)
-                            function_call_args = event.snapshot
-                            if not function_call_id:
-                                function_call_id = event.item_id
-                            logger.info(f"Function call delta: snapshot length = {len(function_call_args)} chars")
-                            print(f"📝 Function args snapshot: {function_call_args[:100]}...")
+                    # Handle function call delta events (streaming function arguments character-by-character)
+                    if event.type == 'response.function_call_arguments.delta':
+                        # Accumulate function arguments using snapshot (complete JSON so far)
+                        function_call_args = event.snapshot
+                        if not function_call_id:
+                            function_call_id = event.item_id
+                        logger.info(f"Function call delta: snapshot length = {len(function_call_args)} chars")
+                        print(f"📝 Function args snapshot: {function_call_args[:100]}...")
 
-                        # Handle function call done event
-                        elif event.type == 'response.function_call_arguments.done':
-                            function_call_complete = True
-                            logger.info(f"Function call arguments complete: {len(function_call_args)} chars")
-                            print(f"✅ Function call arguments COMPLETE")
+                    # Handle function call done event
+                    elif event.type == 'response.function_call_arguments.done':
+                        function_call_complete = True
+                        logger.info(f"Function call arguments complete: {len(function_call_args)} chars")
+                        print("✅ Function call arguments COMPLETE")
 
-                            # Yield function call response with sources
-                            # This will be processed by common_handler to extract content and send to user
-                            yield {
-                                'function_call': {
-                                    'name': function_call_name,
-                                    'arguments': function_call_args  # JSON string with filename and content
-                                },
-                                'finish_reason': 'function_call',  # Internal marker for common_handler
-                                'extra_content': {
-                                    'sources': sources  # Include sources collected from annotations
-                                }
+                        # Yield function call response with sources
+                        # This will be processed by common_handler to extract content and send to user
+                        yield {
+                            'function_call': {
+                                'name': function_call_name,
+                                'arguments': function_call_args  # JSON string with filename and content
+                            },
+                            'finish_reason': 'function_call',  # Internal marker for common_handler
+                            'extra_content': {
+                                'sources': sources  # Include sources collected from annotations
                             }
-                            gen.update(output={"function_call": function_call_name, "arguments": function_call_args})
+                        }
+                        gen.update(output={"function_call": function_call_name, "arguments": function_call_args})
 
-                        # Handle function call output item to get function name
-                        elif event.type == 'response.output_item.added' and hasattr(event, 'item'):
-                            if hasattr(event.item, 'type') and event.item.type == 'function_call':
-                                function_call_name = event.item.name
-                                function_call_id = event.item.id
-                                logger.info(f"Function call detected: {function_call_name}")
-                                print(f"🎯 Function name: {function_call_name}")
+                    # Handle function call output item to get function name
+                    elif event.type == 'response.output_item.added' and hasattr(event, 'item'):
+                        if hasattr(event.item, 'type') and event.item.type == 'function_call':
+                            function_call_name = event.item.name
+                            function_call_id = event.item.id
+                            logger.info(f"Function call detected: {function_call_name}")
+                            print(f"🎯 Function name: {function_call_name}")
 
-                        # Handle file citation annotations
-                        if event.type == 'response.output_text.annotation.added' and event.annotation[
-                            "type"] == 'file_citation':
-                            file_id = event.annotation["file_id"]
-                            if file_id not in seen_file_ids:
-                                source_entry = {
-                                    "source_id": file_id,
-                                    "title": event.annotation["filename"]
-                                }
-
-                                # Fetch metadata from vector store
-                                metadata = get_file_metadata_from_vector_store(client, vector_store_ids, file_id)
-
-                                # Enrich source with organization info
-                                source_entry = add_source_with_organization(source_entry, metadata)
-
-                                sources.append(source_entry)
-                                seen_file_ids.add(file_id)
-
-                        # Handle ResponseTextDeltaEvent - extract incremental delta
-                        elif event.type == 'response.output_text.delta':
-                            content_chunk = event.delta or ""
-                            accumulated_output_text += content_chunk
-                            yield {
-                                'content': content_chunk,
-                                'finish_reason': None
+                    # Handle file citation annotations
+                    if event.type == 'response.output_text.annotation.added' and event.annotation[
+                        "type"] == 'file_citation':
+                        file_id = event.annotation["file_id"]
+                        if file_id not in seen_file_ids:
+                            source_entry = {
+                                "source_id": file_id,
+                                "title": event.annotation["filename"]
                             }
 
-                        # Handle ResponseTextDoneEvent - text output completed
-                        elif event.type == 'response.output_text.done':
-                            yield {
-                                'content': '',
-                                'finish_reason': 'stop',
-                                'extra_content': {
-                                    "sources": sources
-                                }
+                            # Fetch metadata from vector store
+                            metadata = get_file_metadata_from_vector_store(client, vector_store_ids, file_id)
+
+                            # Enrich source with organization info
+                            source_entry = add_source_with_organization(source_entry, metadata)
+
+                            sources.append(source_entry)
+                            seen_file_ids.add(file_id)
+
+                    # Handle ResponseTextDeltaEvent - extract incremental delta
+                    elif event.type == 'response.output_text.delta':
+                        content_chunk = event.delta or ""
+                        accumulated_output_text += content_chunk
+                        yield {
+                            'content': content_chunk,
+                            'finish_reason': None
+                        }
+
+                    # Handle ResponseTextDoneEvent - text output completed
+                    elif event.type == 'response.output_text.done':
+                        yield {
+                            'content': '',
+                            'finish_reason': 'stop',
+                            'extra_content': {
+                                "sources": sources
                             }
+                        }
 
-                        # Handle ResponseCompletedEvent - full response finished
-                        elif event.type == 'response.completed':
-                            logger.info(f"Response completed")
-                            price = calculate_and_log_openai_cost(
-                                response=event.response, model_id=model_to_use, company_bot=company_bot
-                            )
-                            usage = getattr(event.response, "usage", None)
-                            usage_details = None
-                            if usage:
-                                input_tokens = getattr(usage, "input_tokens", 0) or 0
-                                output_tokens = getattr(usage, "output_tokens", 0) or 0
-                                total_tokens = getattr(usage, "total_tokens", 0) or (input_tokens + output_tokens)
-                                usage_details = {"input": input_tokens, "output": output_tokens, "total": total_tokens}
-                            gen.update(
-                                output=accumulated_output_text[:2000] if accumulated_output_text else None,
-                                usage_details=usage_details,
-                            )
-                            break
+                    # Handle ResponseCompletedEvent - full response finished
+                    elif event.type == 'response.completed':
+                        logger.info(f"Response completed")
+                        price = calculate_and_log_openai_cost(
+                            response=event.response, model_id=model_to_use, company_bot=company_bot
+                        )
+                        usage = getattr(event.response, "usage", None)
+                        usage_details = None
+                        if usage:
+                            input_tokens = getattr(usage, "input_tokens", 0) or 0
+                            output_tokens = getattr(usage, "output_tokens", 0) or 0
+                            total_tokens = getattr(usage, "total_tokens", 0) or (input_tokens + output_tokens)
+                            usage_details = {"input": input_tokens, "output": output_tokens, "total": total_tokens}
+                        gen.update(
+                            output=accumulated_output_text[:2000] if accumulated_output_text else None,
+                            usage_details=usage_details,
+                        )
+                        break
 
-                        # Handle error events
-                        elif event.type == 'error':
-                            error_msg = getattr(event, 'error', {}).get('message', 'Unknown error')
-                            logger.error(f"Stream error: {error_msg}")
-                            gen.update(output=None, level="ERROR", status_message=error_msg)
-                            yield {
-                                'content': '',
-                                'error': error_msg,
-                                'finish_reason': 'error'
-                            }
-                            break
-            else:
-                # Non-streaming mode - get complete response at once
-                response = client.responses.create(**request_data)
-                print("Openai response: ", response)
-                logger.info(f"Openai response: {response}")
+                    # Handle error events
+                    elif event.type == 'error':
+                        error_msg = getattr(event, 'error', {}).get('message', 'Unknown error')
+                        logger.error(f"Stream error: {error_msg}")
+                        gen.update(output=None, level="ERROR", status_message=error_msg)
+                        yield {
+                            'content': '',
+                            'error': error_msg,
+                            'finish_reason': 'error'
+                        }
+                        break
+        else:
+            # Non-streaming mode - get complete response at once
+            response = client.responses.create(**request_data)
+            print("Openai response: ", response)
+            logger.info(f"Openai response: {response}")
 
-                price = calculate_and_log_openai_cost(
-                    response=response, model_id=model_to_use, company_bot=company_bot
-                )
+            price = calculate_and_log_openai_cost(
+                response=response, model_id=model_to_use, company_bot=company_bot
+            )
 
-                logger.info(f"free-flows response: {response}")
-                logger.info("Non-streaming response received")
-                # Extract full text from response
-                # The response.output is a list that may contain:
-                # - ResponseFileSearchToolCall (tool calls)
-                # - ResponseOutputMessage (actual text messages)
-                full_text = ""
-                sources = []
-                seen_file_ids = set()
+            logger.info(f"free-flows response: {response}")
+            logger.info("Non-streaming response received")
+            # Extract full text from response
+            # The response.output is a list that may contain:
+            # - ResponseFileSearchToolCall (tool calls)
+            # - ResponseOutputMessage (actual text messages)
+            full_text = ""
+            sources = []
+            seen_file_ids = set()
 
-                if hasattr(response, 'output') and response.output:
-                    for output_item in response.output:
-                        # Check if this is a ResponseOutputMessage (has 'content' attribute)
-                        if hasattr(output_item, 'content') and output_item.content:
-                            # The content is a list of ResponseOutputText objects
-                            for content_item in output_item.content:
-                                if hasattr(content_item, 'text'):
-                                    full_text += content_item.text
+            if hasattr(response, 'output') and response.output:
+                for output_item in response.output:
+                    # Check if this is a ResponseOutputMessage (has 'content' attribute)
+                    if hasattr(output_item, 'content') and output_item.content:
+                        # The content is a list of ResponseOutputText objects
+                        for content_item in output_item.content:
+                            if hasattr(content_item, 'text'):
+                                full_text += content_item.text
 
-                                # Extract sources from annotations (deduplicate by file_id)
-                                if hasattr(content_item, 'annotations') and content_item.annotations:
-                                    for annotation in content_item.annotations:
-                                        if annotation.type == 'file_citation' and annotation.file_id not in seen_file_ids:
-                                            source_entry = {
-                                                "source_id": annotation.file_id,
-                                                "title": annotation.filename
-                                            }
-                                            # Fetch metadata from vector store
-                                            metadata = get_file_metadata_from_vector_store(client, vector_store_ids,
-                                                                                           annotation.file_id)
+                            # Extract sources from annotations (deduplicate by file_id)
+                            if hasattr(content_item, 'annotations') and content_item.annotations:
+                                for annotation in content_item.annotations:
+                                    if annotation.type == 'file_citation' and annotation.file_id not in seen_file_ids:
+                                        source_entry = {
+                                            "source_id": annotation.file_id,
+                                            "title": annotation.filename
+                                        }
+                                        # Fetch metadata from vector store
+                                        metadata = get_file_metadata_from_vector_store(client, vector_store_ids,
+                                                                                       annotation.file_id)
 
-                                            # Enrich source with organization info
-                                            source_entry = add_source_with_organization(source_entry, metadata)
-                                            sources.append(source_entry)
-                                            seen_file_ids.add(annotation.file_id)
+                                        # Enrich source with organization info
+                                        source_entry = add_source_with_organization(source_entry, metadata)
+                                        sources.append(source_entry)
+                                        seen_file_ids.add(annotation.file_id)
 
-                logger.info(f"Extracted text length: {len(full_text)} chars, unique sources: {len(sources)}")
+            logger.info(f"Extracted text length: {len(full_text)} chars, unique sources: {len(sources)}")
 
-                usage = getattr(response, "usage", None)
-                usage_details = None
-                if usage:
-                    input_tokens = getattr(usage, "input_tokens", 0) or 0
-                    output_tokens = getattr(usage, "output_tokens", 0) or 0
-                    total_tokens = getattr(usage, "total_tokens", 0) or (input_tokens + output_tokens)
-                    usage_details = {"input": input_tokens, "output": output_tokens, "total": total_tokens}
+            usage = getattr(response, "usage", None)
+            usage_details = None
+            if usage:
+                input_tokens = getattr(usage, "input_tokens", 0) or 0
+                output_tokens = getattr(usage, "output_tokens", 0) or 0
+                total_tokens = getattr(usage, "total_tokens", 0) or (input_tokens + output_tokens)
+                usage_details = {"input": input_tokens, "output": output_tokens, "total": total_tokens}
 
-                gen.update(output=full_text[:2000] if full_text else None, usage_details=usage_details)
+            gen.update(output=full_text[:2000] if full_text else None, usage_details=usage_details)
 
-                # Yield single complete response
-                yield {
-                    'content': full_text,
-                    'finish_reason': 'stop',
-                    'extra_content': {
-                        "sources": sources
-                    }
-                }
-        except Exception as e:
-            error_msg = f"Error during Responses API {'streaming' if stream else 'call'}: {str(e)}"
-            logger.error('Error: %s', e, exc_info=True)
-            print(error_msg)
-            gen.update(output=None, level="ERROR", status_message=str(e))
+            # Yield single complete response
             yield {
-                'content': '',
-                'error': error_msg,
-                'finish_reason': 'error'
+                'content': full_text,
+                'finish_reason': 'stop',
+                'extra_content': {
+                    "sources": sources
+                }
             }
-
+    except Exception as e:
+        error_msg = f"Error during Responses API {'streaming' if stream else 'call'}: {str(e)}"
+        logger.error('Error: %s', e, exc_info=True)
+        print(error_msg)
+        gen.update(output=None, level="ERROR", status_message=str(e))
+        yield {
+            'content': '',
+            'error': error_msg,
+            'finish_reason': 'error'
+        }
+    finally:
+        gen_cm.__exit__(None, None, None)
 
 def handle_bedrock_invoke_model(
         messages=None, max_token=None, temperature=None, top_p=None,

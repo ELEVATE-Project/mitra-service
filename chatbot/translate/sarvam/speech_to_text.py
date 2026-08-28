@@ -22,7 +22,7 @@ def transcribe_single_chunk(
     with langfuse.start_as_current_observation(
         as_type="generation",
         name="sarvam_stt_chunk",
-        model="sarvam-stt",
+        model=model,
         input={"chunk_number": chunk_number, "source_language": source_language, "mode": mode},
     ) as gen:
         try:
@@ -84,12 +84,13 @@ def transcribe_sarvam_multiple_chunks(
             chunks = split_audio(audio_bytes, chunk_duration=duration)
             client = SarvamAI(api_subscription_key=sarvam_api_key)
 
-            current_ctx = contextvars.copy_context()
-
+            # Each task gets its OWN copy_context() call, so each submitted task runs
+            # in a distinct Context object — a single Context cannot be entered via
+            # .run() from more than one thread concurrently (raises RuntimeError).
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 futures = [
                     executor.submit(
-                        current_ctx.run,
+                        contextvars.copy_context().run,
                         transcribe_single_chunk, client, chunk_number, chunk, audio_format,
                         source_language, model, mode, duration
                     )
