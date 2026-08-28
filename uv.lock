@@ -1794,11 +1794,11 @@ wheels = [
 
 [[package]]
 name = "indic-itn"
-version = "0.2.1"
+version = "0.2.10"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/44/4f/4793b3174f4cfb70d31ca0c7b2bce1e57a857c36302e8e69231e4f9d26b1/indic_itn-0.2.1.tar.gz", hash = "sha256:c9fd8d306c0567ee443ffd7d28454e90e2f9c2c20db3ac655a735024406c0c27", size = 39935, upload-time = "2026-07-22T10:41:45.263Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/17/1f/700af893bfd979c48bb807e7b944f2dc93bdfe18cd4aa9b836b6fc6cbfec/indic_itn-0.2.10.tar.gz", hash = "sha256:c57492df356f01bdc467507e03f20cd453c8c9e5f8b4d4c61aafb9f1c2507750", size = 108400, upload-time = "2026-08-24T16:43:46.473Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/b4/a1/ffdc7aa3bed01c98ef702ce64851ccbd0cb274669ba622f51dd3097b7942/indic_itn-0.2.1-py3-none-any.whl", hash = "sha256:af257506c1f744e76b90bc0bef348286dcdce5037cfa3139ac66a655cb54ecb3", size = 36476, upload-time = "2026-07-22T10:41:43.944Z" },
+    { url = "https://files.pythonhosted.org/packages/45/d1/11068107df486c6e2d336a0b3a268b2b85c17abcb01ec258112e568fbc6b/indic_itn-0.2.10-py3-none-any.whl", hash = "sha256:cb38cc08316120fbb606f8b8c3d4dd87d31089f32f7457094f1dd5ba70211f4b", size = 108111, upload-time = "2026-08-24T16:43:44.765Z" },
 ]
 
 [[package]]
@@ -4402,7 +4402,7 @@ requires-dist = [
     { name = "google-cloud-texttospeech", specifier = ">=2.34.0" },
     { name = "google-cloud-translate", specifier = ">=3.24.0" },
     { name = "import-export", specifier = ">=0.3.1" },
-    { name = "indic-itn", specifier = "==0.2.1" },
+    { name = "indic-itn", specifier = "==0.2.10" },
     { name = "instructor", specifier = ">=1.14.5" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "json-repair", specifier = ">=0.55.1" },
