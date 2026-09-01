@@ -24,7 +24,7 @@ def format_message_as_per_openai_format(chats, intro=None):
         chat_receiver = None
         chat_message = None
         chat_translated_message = None
-        
+
         # variable instialisation
         if isinstance(chat, CompanyChat):
             chat_receiver = getattr(chat.receiver, 'id', None)
@@ -81,7 +81,7 @@ def format_message_as_per_bedrock_format(chats, intro=None, other_info=None):
         chat_receiver = None
         chat_message = None
         chat_translated_message = None
-        
+
         # variable instialisation
         if isinstance(chat, CompanyChat):
             chat_receiver = getattr(chat.receiver, 'id', None)
@@ -165,4 +165,7 @@ def get_ai_profile():
     if cached_profile:
         print("Cache hit")
         return cached_profile
-    return Profile.objects.get(id=1)
+    profile = Profile.objects.get(id=1)
+    cache.set(CacheKeyEnum.AI_PROFILE, profile, timeout=1000)
+    return profile
+    # return Profile.objects.get(id=1)
