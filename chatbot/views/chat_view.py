@@ -401,7 +401,7 @@ def non_llm_chat_view(request):
         status=ChatStatus.COMPLETED,
         sender_id=sender_id,
         receiver=ai_profile,
-        stage=state_machine["name"],
+        stage=next_state["name"],
         file_url=asr_audio,
     )
 
