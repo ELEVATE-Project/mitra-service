@@ -401,7 +401,7 @@ def non_llm_chat_view(request):
         status=ChatStatus.COMPLETED,
         sender_id=sender_id,
         receiver=ai_profile,
-        stage=next_state["name"],
+        stage=state_machine["name"],
         file_url=asr_audio,
     )
 
@@ -449,7 +449,7 @@ def non_llm_chat_view(request):
         status=chat_session.session_status,
         sender=ai_profile,
         receiver=chat_session.profile,
-        stage=state_machine["name"],
+        stage=next_state["name"],
     )
 
     logger.info(
