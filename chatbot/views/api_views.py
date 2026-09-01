@@ -24,9 +24,8 @@ def generate_session_id(request):
         session.create()
         return JsonResponse({'sessionid': session.session_key})
     except Exception as e:
-        print('Exception is here')
-        print(e)
-        traceback.print_exc()
+        logger.error(f'generate_session_id failed: {e}', exc_info=True)
+        return JsonResponse({'error': 'Failed to create session.'}, status=500)
 
 
 @api_view(['POST'])
