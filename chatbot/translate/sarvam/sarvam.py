@@ -73,7 +73,7 @@ class SarvamLanguageService:
 
     def _execute_text_task(
             self, method_name, response_attr, chunks, base_kwargs_builder, extra_kwargs=None,
-            pricing_key="sarvam-translate",
+            pricing_key="sarvam-translate",voice_provider=None
     ):
         try:
             extra_kwargs = extra_kwargs or {}
@@ -108,7 +108,12 @@ class SarvamLanguageService:
 
                         result_text = getattr(response, response_attr, chunk)
 
-                        usage_details, cost_details = compute_translate_usage_and_cost(pricing_key, len(chunk))
+                        # usage_details, cost_details = compute_translate_usage_and_cost(pricing_key, len(chunk))
+                        usage_details, cost_details = compute_translate_usage_and_cost(
+                                                               pricing_key, len(chunk),
+                                                               voice_provider=voice_provider,
+                                                               company_bot=getattr(voice_provider, 'company_bot', None),
+                                                        )
                         gen.update(
                             output={"result_preview": str(result_text)[:200]},
                             usage_details=usage_details,
@@ -157,6 +162,7 @@ class SarvamLanguageService:
                     "spoken_form_numerals_language": other.get("spoken_form_numerals_language"),
                 },
                 pricing_key="sarvam-transliterate",
+                voice_provider=voice_provider
             )
             s.update(output={"result_preview": result[:200], "chunk_count": len(chunks)})
 
@@ -196,6 +202,7 @@ class SarvamLanguageService:
                     "numerals_format": other.get("numerals_format"),
                 },
                 pricing_key="sarvam-translate",
+                voice_provider=voice_provider
             )
             s.update(output={"result_preview": result[:200], "chunk_count": len(chunks)})
 

@@ -166,6 +166,7 @@ class CommonResponseHandler(BaseResponseHandler):
         return is_function_call
 
     def process_response(self, response, chat_session, chunks, streaming_completed=False, **kwargs):
+        # Span: post-processing entry point for one LLM turn — decides retry/function-call/regular-response path.
         with langfuse.start_as_current_observation(
             as_type="span",
             name="process_response",
@@ -174,7 +175,7 @@ class CommonResponseHandler(BaseResponseHandler):
                 "retry_attempt": kwargs.get('retry_attempt', 0),
                 "current_step": chat_session.current_step,
             },
-        ) as span:
+        ) as process_response_span:
             retry_attempt = kwargs.get('retry_attempt', 0)
             skip_llm_call = kwargs.get('skip_llm', False)
             send_bot_question = kwargs.get('send_bot_question', False)
@@ -185,7 +186,7 @@ class CommonResponseHandler(BaseResponseHandler):
                     result = self._send_db_question(
                         bot_question=bot_question, chat_session=chat_session, chunks=chunks, **kwargs
                     )
-                    span.update(output={"path": "db_question", "result": result})
+                    process_response_span.update(output={"path": "db_question", "result": result})
                     return result
 
             current_step = chat_session.current_step
@@ -195,6 +196,7 @@ class CommonResponseHandler(BaseResponseHandler):
                 expected_output_response = None
                 reason_text = None
             else:
+                # Span: classifying whether the LLM response is a function call, a plain reply, or empty.
                 with langfuse.start_as_current_observation(
                     as_type="span",
                     name="analyze_response", input={"response_preview": str(response)[:300]}
@@ -214,8 +216,8 @@ class CommonResponseHandler(BaseResponseHandler):
                             f"Response too short, retrying LLM call (attempt {retry_attempt + 1}/{self.max_retry_attempts})")
                         kwargs['retry_attempt'] = retry_attempt + 1
 
-                        # SPAN, not generation — get_llm_response already creates the real
-                        # generation internally via handle_bedrock_model/handle_openai_response_api
+                        # Span, not generation — get_llm_response already creates the real
+                        # generation internally via handle_bedrock_model/handle_openai_response_api.
                         with langfuse.start_as_current_observation(
                             as_type="span",
                             name="retry_llm_call",
@@ -232,7 +234,7 @@ class CommonResponseHandler(BaseResponseHandler):
 
                                 if new_response:
                                     logger.info("Successfully got new response from LLM on retry")
-                                    span.update(output={"path": "retried", "attempt": retry_attempt + 1})
+                                    process_response_span.update(output={"path": "retried", "attempt": retry_attempt + 1})
                                     return self.process_response(
                                         new_response, chat_session, chunks,
                                         streaming_completed=streaming_completed, **kwargs
@@ -272,14 +274,14 @@ class CommonResponseHandler(BaseResponseHandler):
                 result = self._handle_function_call(
                     response=response, chat_session=chat_session, chunks=chunks, **forward_kwargs
                 )
-                span.update(output={"path": "function_call", "result_preview": str(result)[:300]})
+                process_response_span.update(output={"path": "function_call", "result_preview": str(result)[:300]})
                 return result
             elif is_function_call and isinstance(response, dict) and 'function_call' in response:
                 logger.info(f"FREE_FLOW function call detected: {response}")
                 result = self._handle_freeflow_function_call(
                     response=response, chat_session=chat_session, chunks=chunks, **kwargs
                 )
-                span.update(output={"path": "freeflow_function_call", "result_preview": str(result)[:300]})
+                process_response_span.update(output={"path": "freeflow_function_call", "result_preview": str(result)[:300]})
                 return result
             else:
                 final_response = expected_output_response if (
@@ -288,7 +290,7 @@ class CommonResponseHandler(BaseResponseHandler):
                     response=final_response, chat_session=chat_session, chunks=chunks, current_step=current_step,
                     streaming_completed=streaming_completed, reason=reason_text, **kwargs
                 )
-                span.update(output={"path": "regular_response", "result_preview": str(result)[:300]})
+                process_response_span.update(output={"path": "regular_response", "result_preview": str(result)[:300]})
                 return result
 
     def _extract_response_and_reason(self, response):
@@ -511,11 +513,12 @@ class CommonResponseHandler(BaseResponseHandler):
         return None
 
     def _handle_function_call(self, response, chat_session, chunks, **kwargs):
+        # Span: advancing the state machine and sending the next stage's question after a function call.
         with langfuse.start_as_current_observation(
             as_type="span",
             name="handle_function_call",
             input={"current_step": chat_session.current_step, "response_preview": str(response)[:300]},
-         ) as span:
+         ) as handle_function_call_span:
             company_bot = kwargs['company_bot']
             session_id = kwargs['session_id']
             channel_name = kwargs['channel_name']
@@ -550,7 +553,7 @@ class CommonResponseHandler(BaseResponseHandler):
                 company_bot=company_bot, step=chat_session.current_step
             ).first()
             if not state_machine:
-                span.update(output={"no_next_state_machine": True})
+                handle_function_call_span.update(output={"no_next_state_machine": True})
                 return None
 
             if modified_bot_question:
@@ -585,7 +588,7 @@ class CommonResponseHandler(BaseResponseHandler):
                 other_params=other_params
             )
 
-            span.update(output={
+            handle_function_call_span.update(output={
                 "new_step": chat_session.current_step,
                 "bot_question": bot_question,
                 "session_status": chat_session.session_status,
@@ -596,11 +599,12 @@ class CommonResponseHandler(BaseResponseHandler):
                                  session_id, channel_name, language, profile_id,
                                  chunks, current_step, reason=None,
                                  streaming_completed=False, **kwargs):
+        # Span: saving and sending the bot's plain-text reply for this turn.
         with langfuse.start_as_current_observation(
             as_type="span",
             name="handle_regular_response",
             input={"response_preview": str(response)[:300], "current_step": current_step, "reason": reason},
-        ) as span:
+        ) as handle_regular_response_span:
             state_machine = CompanyStateMachine.objects.filter(
                 company_bot=company_bot, step=chat_session.current_step
             ).first()
@@ -615,7 +619,7 @@ class CommonResponseHandler(BaseResponseHandler):
             if streaming_completed:
                 print("Streaming already completed - skipping duplicate processing")
                 logger.info("Streaming already completed - skipping duplicate processing")
-                span.update(output={"skipped": "streaming_already_completed"})
+                handle_regular_response_span.update(output={"skipped": "streaming_already_completed"})
                 return None
 
             translated_message = self.translate_message(
@@ -642,7 +646,7 @@ class CommonResponseHandler(BaseResponseHandler):
                 other_params=other_params if other_params else None
             )
 
-            span.update(output={"message_saved": message_to_save[:300], "stage": stage})
+            handle_regular_response_span.update(output={"message_saved": message_to_save[:300], "stage": stage})
             return response
 
     def _handle_response_extra_content(self, response, company_bot):
@@ -682,11 +686,12 @@ class CommonResponseHandler(BaseResponseHandler):
         return response, extra_content
 
     def _handle_freeflow_function_call(self, response, chat_session, chunks, **kwargs):
+        # Span: handling a FREE_FLOW bot's function call (e.g. generating and uploading a downloadable file).
         with langfuse.start_as_current_observation(
             as_type="span",
             name="handle_freeflow_function_call",
             input={"function_name": response.get('function_call', {}).get('name')},
-        ) as span:
+        ) as freeflow_function_call_span:
             company_bot = kwargs['company_bot']
             session_id = kwargs['session_id']
             channel_name = kwargs['channel_name']
@@ -775,9 +780,9 @@ class CommonResponseHandler(BaseResponseHandler):
                     }
                 )
 
-                span.update(output={"file_upload_success": file_result.get('success'), "file_url": file_url})
+                freeflow_function_call_span.update(output={"file_upload_success": file_result.get('success'), "file_url": file_url})
                 return bot_message
             else:
                 logger.warning(f"Unknown function call: {function_name}")
-                span.update(output={"error": "unknown_function_call"}, level="ERROR")
+                freeflow_function_call_span.update(output={"error": "unknown_function_call"}, level="ERROR")
                 return self.default_error_message

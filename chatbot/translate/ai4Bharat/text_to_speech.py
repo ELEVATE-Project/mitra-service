@@ -2,6 +2,7 @@ import os
 import traceback
 import requests
 from chatbot.utils.langfuse_client import get_langfuse_client
+from chatbot.utils.stt_pricing import compute_translate_usage_and_cost
 
 langfuse = get_langfuse_client()
 
@@ -74,6 +75,11 @@ def ai4bharat_text_speech(voice_provider, text, gender, source_language):
             print("AI4Bharat API Response Status Code:", response.status_code, response)
 
             char_count = len(text) if text else 0
+            usage_details, cost_details = compute_translate_usage_and_cost(
+                                               "ai4bharat", char_count,
+                                                voice_provider=voice_provider,
+                                                company_bot=getattr(voice_provider, 'company_bot', None),
+                                            )
 
             if response.status_code == 200:
                 audio_data = response.json()
@@ -81,7 +87,8 @@ def ai4bharat_text_speech(voice_provider, text, gender, source_language):
                     audio_content = audio_data['pipelineResponse'][0].get('audio', [{}])[0].get('audioContent', '')
                     gen.update(
                         output={"status": "ok", "audio_length_chars": len(audio_content) if audio_content else 0},
-                        usage_details={"input": char_count, "output": 0, "total": char_count},
+                        usage_details=usage_details,
+                        cost_details=cost_details,
                     )
                     return {
                         'status': 200,

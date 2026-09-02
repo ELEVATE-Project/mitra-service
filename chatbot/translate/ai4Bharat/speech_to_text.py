@@ -165,7 +165,12 @@ def ai4bharat_speech_text(voice_provider, base64, audio_format, source_language,
 
             response = requests.post(ai4bharat_base_url, json=payload, headers=headers, timeout=request_timeout)
 
-            usage_details, cost_details = compute_stt_usage_and_cost("ai4bharat", chunk_duration)
+            # usage_details, cost_details = compute_stt_usage_and_cost("ai4bharat", chunk_duration)
+            usage_details, cost_details = compute_stt_usage_and_cost(
+                                            "ai4bharat", chunk_duration,
+                                             voice_provider=voice_provider,
+                                             company_bot=getattr(voice_provider, 'company_bot', None),
+                                           )
 
             if response.status_code == 200:
                 print("response: ", response.text)

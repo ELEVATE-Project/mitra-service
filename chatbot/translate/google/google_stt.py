@@ -16,7 +16,7 @@ logger = logging.getLogger('django')
 langfuse = get_langfuse_client()
 
 
-def transcribe_chunk(client, project_id, location, config, chunk_number, chunk, chunk_duration):
+def transcribe_chunk(client, project_id, location, config, chunk_number, chunk, chunk_duration, voice_provider=None):
     with langfuse.start_as_current_observation(
         as_type="generation",
         name="google_stt_chunk",
@@ -38,7 +38,12 @@ def transcribe_chunk(client, project_id, location, config, chunk_number, chunk, 
                     if res_result and res_result.alternatives:
                         transcript += res_result.alternatives[0].transcript + " "
 
-            usage_details, cost_details = compute_stt_usage_and_cost("google-speech-v2", chunk_duration)
+            # usage_details, cost_details = compute_stt_usage_and_cost("google-speech-v2", chunk_duration)
+            usage_details, cost_details = compute_stt_usage_and_cost(
+                                           "google-speech-v2", chunk_duration,
+                                            voice_provider=voice_provider,
+                                            company_bot=getattr(voice_provider, 'company_bot', None),
+                                        )
             gen.update(
                 output={"transcript": transcript.strip()},
                 usage_details=usage_details,
@@ -133,7 +138,7 @@ def transcribe_multiple_languages_v2(
                 future_to_chunk = {
                     executor.submit(
                         contextvars.copy_context().run,
-                        transcribe_chunk, client, project_id, location, config, chunk_number, chunk, duration
+                        transcribe_chunk, client, project_id, location, config, chunk_number, chunk, duration,voice_provider
                     ): chunk_number
                     for chunk_number, chunk in chunks
                 }

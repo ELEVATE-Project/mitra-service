@@ -57,7 +57,9 @@ def text_speech_provider(company_bot, text, source_language):
             'status': 500,
             'content': "No voice configuration found!"
         }
-        
+
+    # Span: dispatches to the configured TTS provider (AI4Bharat/Google/Sarvam/Shikshalokam);
+    # the actual paid API call and its generation happen one level deeper, inside each provider module.
     with langfuse.start_as_current_observation(
         as_type="span",
         name="text_speech_provider",
@@ -69,7 +71,7 @@ def text_speech_provider(company_bot, text, source_language):
             "text": text,
             "source_language": source_language,
         },    
-      ) as s:
+      ) as text_speech_span:
         print("Voice Provider:", voice_provider.provider)
         
         # ALL of the logic below must be indented under the 'with' statement
@@ -98,7 +100,7 @@ def text_speech_provider(company_bot, text, source_language):
             }
             
         # Update the span before exiting the context manager
-        s.update(output={"response_status": response.get('status'), "response_content_preview": str(response.get('content'))[:300]})
+        text_speech_span.update(output={"response_status": response.get('status'), "response_content_preview": str(response.get('content'))[:300]})
         
         return response
 
@@ -112,6 +114,8 @@ def speech_text_provider(company_bot, base64, audio_format, source_language):
             'content': "No voice configuration found!"
         }
 
+    # Span: dispatches to the configured STT provider; each provider's generation(s)
+    # (with real token/duration usage and cost) are created inside its own module.
     with langfuse.start_as_current_observation(
         as_type="span",
         name="speech_text_provider",
@@ -122,7 +126,7 @@ def speech_text_provider(company_bot, base64, audio_format, source_language):
             "audio_format": audio_format,
             "source_language": source_language,
         },
-    ) as s:
+    ) as speech_text_span:
         if voice_provider.provider == VoiceProvider.AI4Bharat:
             response = transcribe_ai4bharat_multiple_chunks(
                 base64_audio_file=base64, source_language=source_language, audio_format=audio_format,
@@ -157,13 +161,13 @@ def speech_text_provider(company_bot, base64, audio_format, source_language):
                 audio_format=audio_format, voice_provider=voice_provider
             )
         else:
-            s.update(output={"status": "error", "message": "no_provider_found"})
+            speech_text_span.update(output={"status": "error", "message": "no_provider_found"})
             return {
                 'status': 500,
                 'content': "No provider found!"
             }
 
-        s.update(output={
+        speech_text_span.update(output={
             "status": response.get('status'),
             "transcript_preview": str(response.get('content'))[:300],
         })
@@ -178,6 +182,8 @@ def text_translate_provider(message_body, target_language, source_language, voic
                 target_language=target_language
             )
 
+        # Span: dispatches to the configured translation provider (AI4Bharat/Google/Sarvam/
+        # Custom LLM/Shikshalokam); the actual generation is created one level deeper.
         with langfuse.start_as_current_observation(
             as_type="span",
             name="text_translate_provider",
@@ -188,7 +194,7 @@ def text_translate_provider(message_body, target_language, source_language, voic
                 "source_language": source_language,
                 "target_language": target_language,
             },
-        ) as s:
+        ) as text_translate_span:
             if voice_provider.provider == VoiceProvider.AI4Bharat:
                 response = call_ai4bharat_translation_api(
                     source_language=source_language, target_language=target_language, message_body=message_body,
@@ -224,13 +230,13 @@ def text_translate_provider(message_body, target_language, source_language, voic
                     target_language=target_language, voice_provider=voice_provider
                 )
             else:
-                s.update(output={"status": "error", "message": "no_provider_found"})
+                text_translate_span.update(output={"status": "error", "message": "no_provider_found"})
                 return {
                     'status': 500,
                     'content': "No provider found!"
                 }
 
-            s.update(output={
+            text_translate_span.update(output={
                 "status": response.get('status'),
                 "translated_preview": str(response.get('content'))[:300],
             })

@@ -70,7 +70,12 @@ def translate_text(
             translations = response.glossary_translations if glossary_id else response.translations
 
             char_count = len(text) if text else 0
-            usage_details, cost_details = compute_translate_usage_and_cost("google-translate", char_count)
+            # usage_details, cost_details = compute_translate_usage_and_cost("google-translate", char_count)
+            usage_details, cost_details = compute_translate_usage_and_cost(
+                                         "google-translate", char_count,
+                                          voice_provider=voice_provider,
+                                          company_bot=getattr(voice_provider, 'company_bot', None),
+                                      )
 
             for translation in translations:
                 gen.update(

@@ -117,22 +117,24 @@ class BaseResponseHandler(ABC):
 
     def handle_response(self, **kwargs):
         session_id = kwargs['session_id']
+        # Root span for this response cycle — every span below nests under it.
         with langfuse.start_as_current_observation(
             as_type="span",
             name="handle_response",
             input={"session_id": session_id, "route": kwargs.get('language')},
-        ) as root_span:
+        ) as handle_response_span:
             chat_session = ChatSession.objects.get(session=session_id)
             chunks = []
             is_function_call = False
 
-            with langfuse.start_as_current_observation(as_type="span", name="check_early_return") as span:
+            # Span: checking for a bot-specific early-return path before any LLM call.
+            with langfuse.start_as_current_observation(as_type="span", name="check_early_return") as early_return_span:
                 early_return = self.check_early_return(chat_session, **kwargs)
-                span.update(output={"early_return_type": type(early_return).__name__ if early_return is not None else None})
+                early_return_span.update(output={"early_return_type": type(early_return).__name__ if early_return is not None else None})
 
             if early_return is not None:
                 if isinstance(early_return, str):
-                    root_span.update(output={"path": "early_return_str"})
+                    handle_response_span.update(output={"path": "early_return_str"})
                     return early_return
                 elif isinstance(early_return, dict):
                     if early_return.get('skip_llm', False):
@@ -140,7 +142,7 @@ class BaseResponseHandler(ABC):
                     else:
                         is_function_call = self.is_function_call(response=early_return)
                 else:
-                    root_span.update(output={"path": "early_return_other"})
+                    handle_response_span.update(output={"path": "early_return_other"})
                     return early_return
 
             company_bot = kwargs.get('company_bot')
@@ -174,15 +176,16 @@ class BaseResponseHandler(ABC):
             if state_machine and state_machine.preprocess_output_mode not in [
                 PreProcessOutputMode.NONE, PreProcessOutputMode.SKIP, PreProcessOutputMode.MODIFY_QUESTION
             ]:
+                # Span: running the configured preprocessing step for this state before the LLM call.
                 with langfuse.start_as_current_observation(
                     as_type="span",
                     name="preprocessing.execute_preprocessing",
                     input={"state_machine": state_machine.name},
-                ) as span:
+                ) as preprocessing_span:
                     preprocessing_result = self.preprocessing_service.execute_preprocessing(
                         state_machine, original_prompt, **kwargs
                     )
-                    span.update(output={"action": preprocessing_result.get('action')})
+                    preprocessing_span.update(output={"action": preprocessing_result.get('action')})
 
                 if preprocessing_result['action'] == 'skip':
                     kwargs['skip_llm'] = True
@@ -196,9 +199,9 @@ class BaseResponseHandler(ABC):
             response = None
             streaming_completed = False
             if not is_function_call and not kwargs.get('skip_llm', False):
-                # LLM call boundary — SPAN here, not generation. The real generation
-                # (model, tokens) is created deeper inside handle_bedrock_model /
-                # handle_openai_response_api in llm_script.py — this just times the call.
+                # Span (not generation) around the LLM call boundary — the real generation
+                # (model, tokens, cost) is created deeper inside handle_bedrock_model /
+                # handle_openai_response_api in llm_script.py; this just times the whole call.
                 with langfuse.start_as_current_observation(
                     as_type="span",
                     name="get_llm_response",
@@ -206,7 +209,7 @@ class BaseResponseHandler(ABC):
                         "system_prompt": kwargs.get('system_prompt'),
                         "provider": company_bot.provider,
                     },
-                ) as span:
+                ) as llm_response_span:
                     result = self.get_llm_response(**kwargs)
 
                     if isinstance(result, tuple):
@@ -217,7 +220,7 @@ class BaseResponseHandler(ABC):
                         response = result
                         finish_reason = None
 
-                    span.update(
+                    llm_response_span.update(
                         output=str(response)[:500] if response else None,
                         metadata={"finish_reason": finish_reason},
                     )
@@ -241,13 +244,14 @@ class BaseResponseHandler(ABC):
                         chunks=chunks, status=ChatStatus.IN_PROGRESS, translated_message=translated_message,
                         stage=state_machine.name if state_machine else None
                     )
-                    root_span.update(output={"path": "llm_error"})
+                    handle_response_span.update(output={"path": "llm_error"})
                     return error_message
 
             if response is not None and company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
-                with langfuse.start_as_current_observation(as_type="span", name="apply_turn_response_guard") as span:
+                # Span: enforcing the follow-up probe budget for Bedrock's turn_response tool calls.
+                with langfuse.start_as_current_observation(as_type="span", name="apply_turn_response_guard") as turn_guard_span:
                     response = self.apply_turn_response_guard(response, chat_session, state_machine)
-                    span.update(output={"response_preview": str(response)[:300]})
+                    turn_guard_span.update(output={"response_preview": str(response)[:300]})
 
             if is_function_call and response is None:
                 response = early_return
@@ -259,15 +263,16 @@ class BaseResponseHandler(ABC):
                 is_function_call = self.is_function_call(response=response) if state_machine else False
 
             if is_function_call and state_machine and response:
+                # Span: running postprocessing to decide the next state-machine stage/skip logic.
                 with langfuse.start_as_current_observation(
                     as_type="span",
                     name="postprocessing.execute_postprocessing",
                     input={"state_machine": state_machine.name},
-                ) as span:
+                ) as postprocessing_span:
                     postprocessing_result = self.postprocessing_service.execute_postprocessing(
                         state_machine, response, **kwargs
                     )
-                    span.update(output=postprocessing_result)
+                    postprocessing_span.update(output=postprocessing_result)
 
                 if postprocessing_result.get('skip_next_stage', False):
                     kwargs['skip_next_stage'] = True
@@ -307,7 +312,7 @@ class BaseResponseHandler(ABC):
             result = self.process_response(
                 response, chat_session, chunks, streaming_completed=streaming_completed, **kwargs
             )
-            root_span.update(output={"result_preview": str(result)[:300] if result else None})
+            handle_response_span.update(output={"result_preview": str(result)[:300] if result else None})
             return result
 
     def analyze_response_for_postprocessing(self, response):
@@ -374,6 +379,7 @@ class BaseResponseHandler(ABC):
 
         if company_bot.provider == LLMProvider.BEDROCK_CONVERSE:
             try:
+                # Actual Bedrock call — the generation (model/tokens/cost) is created inside this function.
                 response = handle_bedrock_model(
                     system_prompt=system_prompt,
                     messages=message_to_send,
@@ -440,6 +446,7 @@ class BaseResponseHandler(ABC):
             accumulated_response = ""
             finish_reason = None
 
+            # Actual OpenAI Responses API call — generation is created inside this generator function.
             for chunk_data in handle_openai_response_api(
                     messages=messages,
                     system_prompt=system_prompt,

@@ -235,12 +235,16 @@ def get_bot_error_message(bot_vernacular, error_type):
 
     return data.get(error_type) or data.get("generic_error") or "Please try again!"
 
+
+# @observe wraps this as the trace root — capture_input/output disabled since access_token
+# is passed as an argument and must never be auto-serialized into a span.
 @observe(as_type="span", name="generate_story", capture_input=False, capture_output=False)
 def generate_story(profile_id, session, access_token, flow, language='en'):
     voice_provider = None
     company_bot = None
     print("Working with flow: ", flow)
 
+    # Manually set input/output for the root span, excluding access_token entirely.
     langfuse.update_current_span(
         input={
             "profile_id": profile_id,
@@ -252,6 +256,7 @@ def generate_story(profile_id, session, access_token, flow, language='en'):
         metadata={"flow": str(flow), "language": str(language)},
     )
 
+    # Tags every observation in this block with the flow name, for easy filtering in the Tracing UI.
     with propagate_attributes(tags=[f"flow:{flow}"]):
         try:
             profile = Profile.objects.prefetch_related('profile_address').defer('password').get(id=profile_id)
@@ -259,11 +264,12 @@ def generate_story(profile_id, session, access_token, flow, language='en'):
             profile_data = ProfileSerializer(profile).data
             company_chats = CompanyChat.objects.select_related('sender', 'receiver').filter(session=session).order_by('created_at').values("receiver", "receiver__id", "translated_message", "message", "status", "created_at")
 
+            # Span: resolving the story-generation and validation bots configured for this flow.
             with langfuse.start_as_current_observation(
                 as_type="span", name="get_story_company_bot_simple", input={"flow": flow}
-            ) as s:
+            ) as company_bot_span:
                 company_bot, validate_bot = get_story_company_bot_simple(flow=flow)
-                s.update(output={
+                company_bot_span.update(output={
                     "company_bot_id": getattr(company_bot, 'id', None),
                     "validate_bot_id": getattr(validate_bot, 'id', None),
                 })
@@ -303,21 +309,21 @@ def generate_story(profile_id, session, access_token, flow, language='en'):
 
             tool_content, tool_story = get_tool_values(company_bot=company_bot)
 
-            # Nested span only — the actual LLM calls inside generate_story_llm already
+            # Span (not generation): the actual LLM calls inside generate_story_llm already
             # produce their own generation(s) via handle_bedrock_model/handle_openai_model
-            # in llm_script.py. This span just gives visibility into this step's timing.
+            # in llm_script.py — this just gives visibility into this step's timing.
             with langfuse.start_as_current_observation(
                 as_type="span",
                 name="generate_story_llm",
                 input={"company_bot_id": getattr(company_bot, 'id', None)},
-            ) as s:
+            ) as generate_story_llm_span:
                 response_json_content, response_json_story = asyncio.run(
                     generate_story_llm(
                         formatted_content_prompt=formatted_content_prompt, formatted_story_prompt=formatted_story_prompt,
                         messages=messages, tool_content=tool_content, tool_story=tool_story, company_bot=company_bot
                     )
                 )
-                s.update(output={
+                generate_story_llm_span.update(output={
                     "content_preview": str(response_json_content)[:300],
                     "story_preview": str(response_json_story)[:300],
                 })
@@ -338,11 +344,12 @@ def generate_story(profile_id, session, access_token, flow, language='en'):
                 if company_bot.provider != validate_bot.provider:
                     messages = get_guided_chat(company_bot=validate_bot, company_chats=company_chats, intro=intro_to_pass)
 
+                # Span: story-validation LLM pass — real generation(s) created inside validate_story_llm.
                 with langfuse.start_as_current_observation(
                     as_type="span",
                     name="validate_story_llm",
                     input={"validate_bot_id": getattr(validate_bot, 'id', None), "flow": flow},
-                ) as s:
+                ) as validate_story_llm_span:
                     response_json_story, combined_reason = asyncio.run(
                         validate_story_llm(
                             formatted_content_prompt=validate_content_prompt, formatted_story_prompt=validate_story_prompt,
@@ -350,7 +357,7 @@ def generate_story(profile_id, session, access_token, flow, language='en'):
                             flow=flow
                         )
                     )
-                    s.update(output={
+                    validate_story_llm_span.update(output={
                         "story_preview": str(response_json_story)[:300],
                         "combined_reason_preview": str(combined_reason)[:300] if combined_reason else None,
                     })
@@ -368,13 +375,14 @@ def generate_story(profile_id, session, access_token, flow, language='en'):
 
             logger.info("VALIDATION STORY response_json_story: {story}".format(story=response_json_story))
 
-            with langfuse.start_as_current_observation(as_type="span", name="save_generic_story") as s:
+            # Span: persisting the generated story to the database.
+            with langfuse.start_as_current_observation(as_type="span", name="save_generic_story") as save_story_span:
                 story, problem_statement = save_generic_story(
                     response_json_story=response_json_story, language=language, voice_provider=voice_provider,
                     profile=profile_data, session=session, combined_reason=combined_reason, flow=flow,
                      company_bot=company_bot
                 )
-                s.update(output={"story_id": getattr(story, 'id', None) if story else None})
+                save_story_span.update(output={"story_id": getattr(story, 'id', None) if story else None})
 
             if story:
                 formatted_content = get_formatted_story(story)
@@ -411,6 +419,8 @@ def generate_story(profile_id, session, access_token, flow, language='en'):
             story_id = story.id if story and story.id else ""
             story_content = story.content if story and story.content else ""
 
+            # Root span's final output — this is the source of truth, since @observe's
+            # capture_output=False stops it from being overwritten after the function returns.
             langfuse.update_current_span(output={
                 "status": "ok",
                 "story_id": story_id,
@@ -442,6 +452,8 @@ def generate_story(profile_id, session, access_token, flow, language='en'):
             )
 
             return "", "", error_message, error_type
+
+
 def get_story_company_bot_simple(flow):
     try:
         company_flow = Flow.objects.get(flow_route=flow)

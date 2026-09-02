@@ -155,7 +155,8 @@ def handle_openai_model(
         if top_p is not None and model_to_use not in token_limit_models:
             request_data['top_p'] = top_p
         print("request_data: ", request_data)
-
+        # Track the OpenAI chat completion as a Langfuse generation for LLM observability,
+        # including model details, input messages, tools, and model parameters.
         with langfuse.start_as_current_observation(
             as_type="generation",
             name="openai_chat_completion",
@@ -170,6 +171,7 @@ def handle_openai_model(
             print("raw res: ", response)
 
             usage_details = None
+            cost_details = None
             usage = getattr(response, "usage", None)
             if usage:
                 input_tokens = getattr(usage, "prompt_tokens", 0) or 0
@@ -177,24 +179,32 @@ def handle_openai_model(
                 total_tokens = getattr(usage, "total_tokens", 0) or (input_tokens + output_tokens)
                 usage_details = {"input": input_tokens, "output": output_tokens, "total": total_tokens}
 
+                # Resolve cost directly from company_bot.other_params (same pricing lookup
+                # used everywhere else) so Langfuse doesn't need a Model Definition entry.
+                pricing = get_pricing_from_company_bot(company_bot=company_bot, model_id=model_to_use)
+                if pricing:
+                    input_cost = (input_tokens / 1000) * pricing['input']
+                    output_cost = (output_tokens / 1000) * pricing['output']
+                    cost_details = {"input": input_cost, "output": output_cost, "total": input_cost + output_cost}
+
             if is_json_response:
                 response_content = response.choices[0].message.content
                 response_json = None
                 if response_content:
                     response_json = json.loads(response_content)
-                gen.update(output=response_json, usage_details=usage_details)
+                gen.update(output=response_json, usage_details=usage_details, cost_details=cost_details)
                 return response_json
             elif tools:
                 tool_calls = response.choices[0].message.tool_calls
                 if tool_calls and len(tool_calls) > 0:
-                    gen.update(output={"tool_calls_detected": True}, usage_details=usage_details)
+                    gen.update(output={"tool_calls_detected": True}, usage_details=usage_details, cost_details=cost_details)
                     return {}
                 result = response.choices[0].message.content if response.choices else response
-                gen.update(output=str(result)[:500] if result else None, usage_details=usage_details)
+                gen.update(output=str(result)[:500] if result else None, usage_details=usage_details, cost_details=cost_details)
                 return result
             else:
                 result = response.choices[0].message.content if response.choices else response
-                gen.update(output=str(result)[:500] if result else None, usage_details=usage_details)
+                gen.update(output=str(result)[:500] if result else None, usage_details=usage_details, cost_details=cost_details)
                 return result
     except Exception as e:
         import traceback
@@ -327,7 +337,8 @@ def handle_bedrock_model(
                         break
 
             messages = messages[start_idx:last_user_idx + 1]
-
+    # Track the bedrock_converse chat completion as a Langfuse generation for LLM observability,
+    # including model details, input messages, tools, and model parameters. 
     with langfuse.start_as_current_observation(
         as_type="generation",
         name="bedrock_converse",
@@ -355,6 +366,7 @@ def handle_bedrock_model(
 
             usage_metrics = response.get('usage', {})
             usage_details = None
+            cost_details = None
             if usage_metrics:
                 logger.info("--------------USAGE METRICS-------------")
                 input_tokens = usage_metrics.get('inputTokens', 0)
@@ -372,6 +384,7 @@ def handle_bedrock_model(
                     input_cost = (input_tokens / 1000) * pricing['input']
                     output_cost = (output_tokens / 1000) * pricing['output']
                     total_cost = input_cost + output_cost
+                    cost_details = {"input": input_cost, "output": output_cost, "total": total_cost}
 
                     logger.info(
                         f'💵 Model Cost - Input: ${input_cost:.6f} (${pricing["input"]}/1K), Output: ${output_cost:.6f} '
@@ -403,7 +416,7 @@ def handle_bedrock_model(
                 if isinstance(final_output, dict) and not final_output.get('toolUseId'):
                     logger.error(f"Tool call missing toolUseId, retrying: {final_output}")
                     gen.update(
-                        output=None, usage_details=usage_details,
+                        output=None, usage_details=usage_details, cost_details=cost_details,
                         metadata={"stop_reason": response.get('stopReason'), "retry_reason": "missing_tool_use_id"},
                     )
                     return None
@@ -419,20 +432,20 @@ def handle_bedrock_model(
                         final_output = json_repair.repair_json(json_str, return_objects=True)
                         logger.info('Loads final_output: %s', final_output)
                     except json.JSONDecodeError as e:
-                        gen.update(output=None, usage_details=usage_details, level="ERROR")
+                        gen.update(output=None, usage_details=usage_details, cost_details=cost_details, level="ERROR")
                         return None
                 elif is_json_response:
-                    gen.update(output=None, usage_details=usage_details)
+                    gen.update(output=None, usage_details=usage_details, cost_details=cost_details)
                     return None
                 else:
                     gen.update(
-                        output=content_text, usage_details=usage_details,
+                        output=content_text, usage_details=usage_details, cost_details=cost_details,
                         metadata={"stop_reason": response.get('stopReason')},
                     )
                     return content_text
 
             gen.update(
-                output=final_output, usage_details=usage_details,
+                output=final_output, usage_details=usage_details, cost_details=cost_details,
                 metadata={"stop_reason": response.get('stopReason')},
             )
             return final_output
@@ -895,14 +908,22 @@ def handle_openai_response_api(
                         )
                         usage = getattr(event.response, "usage", None)
                         usage_details = None
+                        cost_details = None
                         if usage:
                             input_tokens = getattr(usage, "input_tokens", 0) or 0
                             output_tokens = getattr(usage, "output_tokens", 0) or 0
                             total_tokens = getattr(usage, "total_tokens", 0) or (input_tokens + output_tokens)
                             usage_details = {"input": input_tokens, "output": output_tokens, "total": total_tokens}
+
+                            pricing = get_pricing_from_company_bot(company_bot=company_bot, model_id=model_to_use)
+                            if pricing:
+                                input_cost = (input_tokens / 1000) * pricing['input']
+                                output_cost = (output_tokens / 1000) * pricing['output']
+                                cost_details = {"input": input_cost, "output": output_cost, "total": input_cost + output_cost}
                         gen.update(
                             output=accumulated_output_text[:2000] if accumulated_output_text else None,
                             usage_details=usage_details,
+                            cost_details=cost_details,
                         )
                         break
 
@@ -967,13 +988,20 @@ def handle_openai_response_api(
 
             usage = getattr(response, "usage", None)
             usage_details = None
+            cost_details = None
             if usage:
                 input_tokens = getattr(usage, "input_tokens", 0) or 0
                 output_tokens = getattr(usage, "output_tokens", 0) or 0
                 total_tokens = getattr(usage, "total_tokens", 0) or (input_tokens + output_tokens)
                 usage_details = {"input": input_tokens, "output": output_tokens, "total": total_tokens}
 
-            gen.update(output=full_text[:2000] if full_text else None, usage_details=usage_details)
+                pricing = get_pricing_from_company_bot(company_bot=company_bot, model_id=model_to_use)
+                if pricing:
+                    input_cost = (input_tokens / 1000) * pricing['input']
+                    output_cost = (output_tokens / 1000) * pricing['output']
+                    cost_details = {"input": input_cost, "output": output_cost, "total": input_cost + output_cost}
+
+            gen.update(output=full_text[:2000] if full_text else None, usage_details=usage_details, cost_details=cost_details)
 
             # Yield single complete response
             yield {

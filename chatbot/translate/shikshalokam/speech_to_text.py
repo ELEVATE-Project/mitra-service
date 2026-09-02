@@ -42,7 +42,13 @@ def sl_speech_to_text(base64_audio_file: str, source_language: str, audio_format
             transcript = response.json().get("text", "")
 
             # No reliable duration available here — cost stays 0 (self-hosted, unpriced)
-            usage_details, cost_details = compute_stt_usage_and_cost("shikshalokam-stt", 0)
+            # usage_details, cost_details = compute_stt_usage_and_cost("shikshalokam-stt", 0)
+            usage_details, cost_details = compute_stt_usage_and_cost(
+                                           "shikshalokam-stt", 0,
+                                           voice_provider=voice_provider,
+                                           company_bot=getattr(voice_provider, 'company_bot', None),
+                                        )
+            
             gen.update(output={"transcript": transcript}, usage_details=usage_details, cost_details=cost_details)
             return {"status": 200, "content": transcript}
         except Exception as e:

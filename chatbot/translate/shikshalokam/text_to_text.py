@@ -44,8 +44,12 @@ def sl_translate(message_body: str, source_language: str, target_language: str, 
             translated = response.json().get("translation", "")
 
             char_count = len(message_body) if message_body else 0
-            usage_details, cost_details = compute_translate_usage_and_cost("shikshalokam-translate", char_count)
-
+            # usage_details, cost_details = compute_translate_usage_and_cost("shikshalokam-translate", char_count)
+            usage_details, cost_details = compute_translate_usage_and_cost(
+                                           "shikshalokam-translate", char_count,
+                                           voice_provider=voice_provider,
+                                           company_bot=getattr(voice_provider, 'company_bot', None),
+                                        )
             gen.update(
                 output={"translated_preview": translated[:200]},
                 usage_details=usage_details,

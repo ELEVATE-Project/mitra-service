@@ -10,6 +10,7 @@ from google.cloud import texttospeech
 
 from chatbot.models import GenderChoices
 from chatbot.utils.langfuse_client import get_langfuse_client
+from chatbot.utils.stt_pricing import compute_translate_usage_and_cost
 
 langfuse = get_langfuse_client()
 
@@ -53,10 +54,19 @@ def google_text_to_speech(message, language_code, voice_provider):
             audio_base64 = base64.b64encode(audio_content).decode("utf-8")
 
             char_count = len(message) if message else 0
+            # gen.update(
+            #     output={"status": "ok", "audio_bytes": len(audio_content)},
+            #     usage_details={"input": char_count, "output": 0, "total": char_count},
+            # )
+            usage_details, cost_details = compute_translate_usage_and_cost(
+                                          "google-cloud-tts", char_count,
+                                         voice_provider=voice_provider,
+                                         company_bot=getattr(voice_provider, 'company_bot', None),
+)
             gen.update(
-                output={"status": "ok", "audio_bytes": len(audio_content)},
-                usage_details={"input": char_count, "output": 0, "total": char_count},
-            )
+                         output={"status": "ok", "audio_bytes": len(audio_content)},
+                         usage_details=usage_details,
+                         cost_details=cost_details)
 
             return {
                 'status': 200,

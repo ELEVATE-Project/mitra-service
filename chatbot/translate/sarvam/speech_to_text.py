@@ -17,7 +17,7 @@ langfuse = get_langfuse_client()
 
 
 def transcribe_single_chunk(
-        client, chunk_number, chunk, audio_format, source_language, model, mode, chunk_duration
+        client, chunk_number, chunk, audio_format, source_language, model, mode, chunk_duration,voice_provider=None
 ):
     with langfuse.start_as_current_observation(
         as_type="generation",
@@ -43,8 +43,12 @@ def transcribe_single_chunk(
                     response = client.speech_to_text.transcribe(**params)
             print("response: ", response)
 
-            usage_details, cost_details = compute_stt_usage_and_cost("sarvam-stt", chunk_duration)
-
+            # usage_details, cost_details = compute_stt_usage_and_cost("sarvam-stt", chunk_duration)
+            usage_details, cost_details = compute_stt_usage_and_cost(
+                                           "sarvam-stt", chunk_duration,
+                                           voice_provider=voice_provider,
+                                           company_bot=getattr(voice_provider, 'company_bot', None),
+                                        )
             if hasattr(response, "transcript"):
                 gen.update(output={"transcript": response.transcript}, usage_details=usage_details, cost_details=cost_details)
                 return (chunk_number, response.transcript)
@@ -92,7 +96,7 @@ def transcribe_sarvam_multiple_chunks(
                     executor.submit(
                         contextvars.copy_context().run,
                         transcribe_single_chunk, client, chunk_number, chunk, audio_format,
-                        source_language, model, mode, duration
+                        source_language, model, mode, duration, voice_provider
                     )
                     for chunk_number, chunk in chunks
                 ]

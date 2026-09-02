@@ -5,6 +5,7 @@ import os
 import requests
 
 from chatbot.utils.langfuse_client import get_langfuse_client
+from chatbot.utils.stt_pricing import compute_translate_usage_and_cost
 
 logger = logging.getLogger("django")
 langfuse = get_langfuse_client()
@@ -41,10 +42,20 @@ def sl_text_to_speech(text: str, source_language: str, voice_provider) -> dict:
             audio_base64 = base64.b64encode(response.content).decode("utf-8")
 
             char_count = len(text) if text else 0
+            # gen.update(
+            #     output={"status": "ok", "audio_bytes": len(response.content)},
+            #     usage_details={"input": char_count, "output": 0, "total": char_count},
+            # )    
+            usage_details, cost_details = compute_translate_usage_and_cost(
+                                                   "shikshalokam-tts", char_count,
+                                                    voice_provider=voice_provider,
+                                                    company_bot=getattr(voice_provider, 'company_bot', None),
+                                                 )
             gen.update(
-                output={"status": "ok", "audio_bytes": len(response.content)},
-                usage_details={"input": char_count, "output": 0, "total": char_count},
-            )
+                         output={"status": "ok", "audio_bytes": len(response.content)},
+                         usage_details=usage_details,
+                         cost_details=cost_details,
+                      )
 
             return {"status": 200, "content": audio_base64}
         except Exception as e:

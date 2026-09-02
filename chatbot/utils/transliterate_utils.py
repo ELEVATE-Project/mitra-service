@@ -33,7 +33,7 @@ def transliterate_text(
             if voice_provider.provider == VoiceProvider.AI4Bharat:
                 response = call_ai4bharat_transliterate_api(
                     source_language=source_language, target_language=target_language, message_body=message_body,
-                    is_sentence=is_sentence
+                    is_sentence=is_sentence, voice_provider=voice_provider
                 )
             elif voice_provider.provider == VoiceProvider.SARVAM:
                 service = SarvamLanguageService()

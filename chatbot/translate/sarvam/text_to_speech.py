@@ -5,6 +5,7 @@ import re
 
 from chatbot.models import LanguageMapping
 from chatbot.utils.langfuse_client import get_langfuse_client
+from chatbot.utils.stt_pricing import compute_translate_usage_and_cost
 
 langfuse = get_langfuse_client()
 
@@ -87,10 +88,20 @@ def sarvam_text_to_speech(message, source_language, voice_provider):
                 }
 
             char_count = len(message) if message else 0
+            # gen.update(
+            #     output={"status": "ok", "audio_bytes": len(audios[0])},
+            #     usage_details={"input": char_count, "output": 0, "total": char_count},
+            # )
+            usage_details, cost_details = compute_translate_usage_and_cost(
+                                              "sarvam-bulbul-tts", char_count,
+                                               voice_provider=voice_provider,
+                                              company_bot=getattr(voice_provider, 'company_bot', None),
+                                            )
             gen.update(
-                output={"status": "ok", "audio_bytes": len(audios[0])},
-                usage_details={"input": char_count, "output": 0, "total": char_count},
-            )
+                        output={"status": "ok", "audio_bytes": len(audios[0])},
+                        usage_details=usage_details,
+                        cost_details=cost_details,
+                      )
 
             return {
                 'status': 200,

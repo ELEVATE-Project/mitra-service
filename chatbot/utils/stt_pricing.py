@@ -1,21 +1,62 @@
-# Per-second USD pricing for speech-to-text providers.
-# Source: internal cost comparison, Aug 2026. Update here when rates change.
-STT_PRICE_PER_SECOND = {
-    "sarvam-stt": 0.00025,       # ~$0.015/min
-    "whisper-1": 0.0001,         # $0.006/min
-    "google-speech-v2": 0.000267,  # $0.016/min
-    "shikshalokam-stt": 0.0,     # self-hosted
-    "ai4bharat": 0.0,   
-}
+import json
+import logging
+
+logger = logging.getLogger('django')
 
 
-def compute_stt_usage_and_cost(model: str, duration_seconds: float):
-    """Returns (usage_details, cost_details) for an STT generation,
-    given the model name and audio duration in seconds."""
+def _parse_other_params(other_params_raw):
+    # """Same parsing as get_pricing_from_company_bot — other_params may be a dict or a JSON string."""
+    if not other_params_raw:
+        return None
+    try:
+        if isinstance(other_params_raw, str):
+            return json.loads(other_params_raw)
+        return other_params_raw
+    except (json.JSONDecodeError, TypeError) as e:
+        logger.error(f"Error parsing other_params: {e}")
+        return None
+
+
+def _get_model_pricing(other_params_raw, model_id):
+    # """Look up model_pricing[model_id] from a single other_params source."""
+    other_params = _parse_other_params(other_params_raw)
+    if not other_params:
+        return None
+    pricing_data = other_params.get('model_pricing')
+    if not pricing_data:
+        return None
+    return pricing_data.get(model_id)
+
+
+def _resolve_rate(voice_provider, company_bot, model_id):
+    # """Resolve the per-1k-unit input rate for a provider, in priority order:
+    # 1. voice_provider.other_params['model_pricing'][model_id]['input_cost_per_1k']
+    # 2. company_bot.other_params['model_pricing'][model_id]['input_cost_per_1k']
+    # 3. None (caller treats this as zero/unpriced)
+    # """
+    for source_name, other_params_raw in (
+        ("voice_provider", getattr(voice_provider, 'other_params', None)),
+        ("company_bot", getattr(company_bot, 'other_params', None)),
+    ):
+        pricing = _get_model_pricing(other_params_raw, model_id)
+        if pricing and 'input_cost_per_1k' in pricing:
+            try:
+                rate_per_1k = float(pricing['input_cost_per_1k'])
+                logger.info(f"💵 Using {source_name}.other_params pricing for '{model_id}': {rate_per_1k}/1k units")
+                return rate_per_1k / 1000
+            except (ValueError, TypeError):
+                logger.error(f"Invalid input_cost_per_1k for '{model_id}' in {source_name}.other_params")
+
+    logger.info(f"💵 No pricing configured for '{model_id}' in voice_provider or company_bot other_params — cost will be 0")
+    return None
+
+
+def compute_stt_usage_and_cost(model: str, duration_seconds: float, voice_provider=None, company_bot=None):
+    # """Returns (usage_details, cost_details) for an STT generation."""
     duration_seconds = duration_seconds or 0
     usage_details = {"input": duration_seconds, "output": 0, "total": duration_seconds}
 
-    rate = STT_PRICE_PER_SECOND.get(model)
+    rate = _resolve_rate(voice_provider, company_bot, model)
     if rate is None:
         return usage_details, None
 
@@ -24,26 +65,14 @@ def compute_stt_usage_and_cost(model: str, duration_seconds: float):
     return usage_details, cost_details
 
 
-# Per-character USD pricing for text translation/transliteration providers.
-# Source: internal cost comparison, Aug 2026. Update here when rates change.
-TRANSLATE_PRICE_PER_CHAR = {
-    "sarvam-translate": 0.000023,        # $0.23 per 10,000 chars
-    "sarvam-transliterate": 0.000023,    # same rate as translate per Sarvam's pricing page
-    "google-translate": 0.00002,         # $20 per 1M chars (Basic/Advanced NMT)
-    "shikshalokam-translate": 0.0,        # self-hosted, unpriced
-    "ai4bharat": 0.0,                     # subscription/quota-based, provider-name keyed
-    # "custom_llm" intentionally excluded — routes through handle_openai_model/handle_bedrock_model,
-    # which already report cost via their own generation. Adding a rate here would double-count it.
-}
-
-
-def compute_translate_usage_and_cost(model: str, char_count: int):
-    """Returns (usage_details, cost_details) for a translation/transliteration generation,
-    given the model name and input character count."""
+def compute_translate_usage_and_cost(model: str, char_count: int, voice_provider=None, company_bot=None):
+    # """Returns (usage_details, cost_details) for a translation/transliteration generation.
+    # Note: "custom_llm" is intentionally never configured here — it routes through
+    # handle_openai_model/handle_bedrock_model, which already report cost via their own generation."""
     char_count = char_count or 0
     usage_details = {"input": char_count, "output": 0, "total": char_count}
 
-    rate = TRANSLATE_PRICE_PER_CHAR.get(model)
+    rate = _resolve_rate(voice_provider, company_bot, model)
     if rate is None:
         return usage_details, None
 

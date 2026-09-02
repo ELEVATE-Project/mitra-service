@@ -19,30 +19,33 @@ class ChatOrchestrator:
 
     def process_chat_request(self, channel_name, session_id, profile_id, language):
         try:
+            # Root span for the whole chat-request lifecycle — every span below nests under this one.
             with langfuse.start_as_current_observation(
                 as_type="span",
                 name="process_chat_request",
                 input={"session_id": session_id, "profile_id": profile_id, "route": self.bot_strategy.get_route()},
-            ) as span:
+            ) as request_span:
 
+                # Span: fetching chat session, company bot, profile, and chat history for this request.
                 with langfuse.start_as_current_observation(
-                   as_type="span",name="get_session_data", input={"session_id": session_id, "profile_id": profile_id}
-                ) as s:
+                    as_type="span", name="get_session_data", input={"session_id": session_id, "profile_id": profile_id}
+                ) as session_data_span:
                     session_data = self.base_service.get_session_data(
                         session_id=session_id, profile_id=profile_id, bot_route=self.bot_strategy.get_route()
                     )
-                    s.update(output={
+                    session_data_span.update(output={
                         "chat_session_id": getattr(session_data['chat_session'], 'id', None),
                         "company_bot_id": getattr(session_data['company_bot'], 'id', None),
                         "profile_found": session_data['profile'] is not None,
                         "company_chats_count": session_data['company_chats'].count(),
                     })
 
-                with langfuse.start_as_current_observation(as_type="span",name="get_bot_vernacular_and_intro") as s:
+                # Span: resolving the bot's vernacular config and intro message for this profile.
+                with langfuse.start_as_current_observation(as_type="span", name="get_bot_vernacular_and_intro") as vernacular_span:
                     bot_vernacular, intro_mssg = self.base_service.get_bot_vernacular_and_intro(
                         company_bot=session_data['company_bot'], profile=session_data['profile']
                     )
-                    s.update(output={"has_vernacular": bot_vernacular is not None, "intro_mssg": intro_mssg})
+                    vernacular_span.update(output={"has_vernacular": bot_vernacular is not None, "intro_mssg": intro_mssg})
 
                 other_info = self.base_service.get_user_profile_info(profile=session_data['profile'])
 
@@ -51,35 +54,37 @@ class ChatOrchestrator:
                     intro_mssg=intro_mssg, other_info=other_info
                 )
 
+                # Span: strategy-specific session processing (e.g. state machine lookup).
                 with langfuse.start_as_current_observation(
                     as_type="span",
                     name="bot_strategy.process_session", input={"session_id": session_id}
-                ) as s:
+                ) as process_session_span:
                     session_result = self.bot_strategy.process_session(
                         session_data, intro_mssg=intro_mssg, other_info=other_info, messages=messages
                     )
-                    s.update(output={k: v for k, v in session_result.items() if k != 'messages'})
+                    process_session_span.update(output={k: v for k, v in session_result.items() if k != 'messages'})
 
                 if session_result.get('error'):
                     result = self._handle_error_response(
                         error_msg=session_result['error'], channel_name=channel_name, language=language,
                         chat_session=session_data['chat_session'], company_bot=session_data['company_bot']
                     )
-                    span.update(output=result)
+                    request_span.update(output=result)
                     return result
 
                 state_machine = session_result.get('state_machine', None)
 
+                # Span: filtering prior chats down to the current state machine stage's relevant history.
                 with langfuse.start_as_current_observation(
                     as_type="span",
                     name="get_filtered_chats",
                     input={"session_id": session_id, "state_machine": getattr(state_machine, 'name', None)},
-                ) as s:
+                ) as filtered_chats_span:
                     temp_company_chats = self.message_handler.get_filtered_chats(
                         session_id=session_id, state_machine=state_machine,
                         company_chats=session_data['company_chats']
                     )
-                    s.update(output={"filtered_count": len(temp_company_chats) if hasattr(temp_company_chats, '__len__') else None})
+                    filtered_chats_span.update(output={"filtered_count": len(temp_company_chats) if hasattr(temp_company_chats, '__len__') else None})
 
                 temp_messages = self.message_handler.prepare_messages(
                     company_bot=session_data['company_bot'], company_chats=temp_company_chats,
@@ -104,6 +109,8 @@ class ChatOrchestrator:
                 if hasattr(self.bot_strategy, 'get_route') and 'oneshot' in self.bot_strategy.get_route():
                     response_params['remaining_stages'] = session_result.get('remaining_stages', [])
 
+                # Span: boundary around the strategy's LLM response — the actual model call/generation
+                # is created deeper inside (llm_script.py), this just times/contains that whole step.
                 with langfuse.start_as_current_observation(
                     as_type="span",
                     name="bot_strategy.get_response",
@@ -112,11 +119,11 @@ class ChatOrchestrator:
                         "messages": messages,
                         "state_machine": getattr(state_machine, 'name', None),
                     },
-                ) as s:
+                ) as get_response_span:
                     response = self.bot_strategy.get_response(**response_params)
-                    s.update(output=response)
+                    get_response_span.update(output=response)
 
-                span.update(output=response)
+                request_span.update(output=response)
                 logger.info('Bot response: %s', response)
                 return response
 
