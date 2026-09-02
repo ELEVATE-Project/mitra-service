@@ -28,10 +28,14 @@ Findings, in the order they usually matter:
                    The photo exists and is unreachable: the row must be created
                    and the report regenerated. It is NOT re-uploaded - the bytes
                    are already in the bucket.
-  NO_FILE_REF      row has neither `file` nor `file_url`, so get_public_url()
-                   returns "" and the report renders <img src="">. The mirror
-                   image of ORPHAN_IN_S3 (PUT failed, POST succeeded); no image
-                   exists to restore, so regeneration cannot fix it.
+  NO_FILE_REF      row has neither `file` nor `file_url` nor `base64_str`, so
+                   get_public_url() returns "" and the report renders
+                   <img src="">. The mirror image of ORPHAN_IN_S3 (PUT failed,
+                   POST succeeded); nothing exists to restore.
+  BASE64_ONLY      same blank render, but base64_str still holds the image.
+                   Recoverable without touching S3 history: upload the bytes,
+                   set file_url, regenerate. Split out from NO_FILE_REF because
+                   the remedy is completely different.
   MISSING_IN_S3    row references a key that is absent from the bucket.
   STALE_REPORT     image row is newer than the stored PDF row, i.e. the report
                    was rendered before the photo was recorded. Needs
@@ -69,13 +73,10 @@ Usage
     python manage.py audit_story_media_s3 --prefix chatbot/storymedia/ \
         --images-only --scan-unattributed --out orphans.csv
 
-    # 3. One flow over a date window.
-    #    NOTE: --flow matches Story.other_params['flow'], which holds
-    #    SessionFlowName values ('guest-discussion', 'guest-mi-story',
-    #    'listening-activity') - NOT Flow.flow_route ('/shikshalokam_chaupal').
-    #    Run --list-flows for the values present in a given database.
+    # 3. One flow over a date window. --flow matches ChatSession.session_type;
+    #    run --list-flows for the values present in a given database.
     python manage.py audit_story_media_s3 --prefix chatbot/storymedia/ \
-        --flow guest-discussion --from 2026-06-01 --to 2026-08-26 \
+        --flow shikshalokam_chaupal --from 2026-06-01 --to 2026-08-26 \
         --images-only --out chaupal.csv
 
     # 4. Specific sessions reported from the field.
@@ -85,12 +86,76 @@ Usage
     # 5. No S3 at all - NO_FILE_REF and STALE_REPORT need only the database.
     python manage.py audit_story_media_s3 --db-only --out blank_rows.csv
 
+Scoping by flow
+---------------
+--flow filters ChatSession.session_type. That column is written when the session
+is created - by chatbot/views/chat_view.py and the consumers - so it exists
+before any Story does.
+
+Do not assume its contents are a closed enum. The flow-specific consumers write
+ChatType members ('shikshalokam_chaupal', 'normal', 'oneshot'), but chat_view.py
+and the generic consumers write whatever the client sent as flow_name, and a
+devqa database shows values that appear in neither ChatType nor SessionFlowName
+('stakeholder-fgd', 'shiksha-samvad', 'bihar-student-fgd', 'delhi-shiksha-samvad').
+Some values, notably 'guest-discussion', appear in BOTH this column and
+Story.other_params['flow'] while selecting completely different sets of stories.
+Run --list-flows against the database you are about to audit; do not carry a
+value over from another environment or from an enum in the source.
+
+It is deliberately NOT Story.other_params['flow']. That key is a client-supplied
+request parameter, copied verbatim from the POST body of end_story /
+end_story_v2 into a JSON blob by save_generic_story
+(chatbot/utils/story_utils/common/generic_story_tasks.py). Three consequences:
+
+  * It is written only by the story-generation path that ran to completion. A
+    session whose story generation never finished has no flow recorded at all -
+    and sessions where something went wrong are exactly the population this
+    audit exists to find. Scoping on it silently drops them.
+  * It is not a single vocabulary. The v1 endpoint dispatches on SessionFlowName
+    values; the v2 endpoint resolves the same string as a Flow.flow_route
+    (get_story_company_bot_simple). Downstream, Story.get_report_type() and
+    migration 0087 both read it as a flow_route.
+  * It is a JSON key with no index, so filtering it is a scan.
+
+The two vocabularies are related but not equal. chatbot/management/commands/
+regenerate_transliterated_reports.py carries the translation:
+
+    SESSION_TYPE_TO_FLOW = {
+        ChatType.shikshaChaupal.value:   # 'shikshalokam_chaupal'
+            SessionFlowName.GuestDiscussion.value,   # 'guest-discussion'
+    }
+
+That is why --flow 'guest-discussion' and --flow 'shikshalokam_chaupal' select
+the same stories through different columns, and why neither matches
+'/shikshalokam_chaupal' - the leading slash belongs to a CompanyBot route, not
+to either field.
+
+--story-flow remains available for filtering Story.other_params['flow']
+directly, which is the right tool when the question is specifically about the
+value get_report_type() reads. Both output columns, session_type and
+story_flow, are written on every row so the two can be reconciled.
+
 Before trusting a full run
 --------------------------
-Run --inspect first. It reports what fraction of the bucket's identifiers
-resolve to a Story. A low rate means the database and the bucket are from
-different environments, or the database is a partial dump - and every
-unresolved identifier would otherwise be reported as an orphan.
+The audit is only meaningful when the bucket and the database come from the
+SAME environment. From the bucket side there is no way to tell an object whose
+StoryMedia row was lost (the bug) from an object belonging to an environment
+this database has never seen (not a bug): both are keys with no matching row.
+So every identifier that fails to resolve becomes a false ORPHAN_IN_S3.
+
+A full run therefore measures the resolve rate itself and refuses to write
+anything below --min-resolve (default 80%). Measured on a mismatched pairing,
+3% of identifiers resolving turns into an ORPHAN_IN_S3 for essentially every
+object swept - a full page of confident, uniformly wrong findings. Printing the
+rate and trusting the reader to act on it is not enough protection for that, so
+the check sits here, where the findings are produced.
+
+--inspect remains the cheap way to see the number, and its id-range comparison
+tells the two failure modes apart: a partial dump overlaps the bucket's range
+sparsely, a different environment sits in a different range. If the rate is low
+and you genuinely understand why, --min-resolve lets the run proceed, and every
+ORPHAN_IN_S3 row is stamped untrustworthy in its notes column so the caveat
+travels with the CSV instead of staying in someone's memory.
 
 Environment
 -----------
@@ -109,15 +174,25 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Max, Min, Q
 from django.utils import timezone
 
-from chatbot.models import Story, StoryMedia, MediaTypeChoices
+from chatbot.models import ChatSession, Story, StoryMedia, MediaTypeChoices
 from chatbot.models.company_models import CompanyChat
 
+
+# The share of a bucket's identifiers that must name a Story in this database
+# before a full run is allowed to write findings. Below this the two sides are
+# not the same environment (or the dump is a subset), and every unresolved
+# identifier becomes a false ORPHAN_IN_S3. 80% is the same bar --inspect uses
+# when it calls a prefix usable, so the two cannot contradict each other.
+DEFAULT_MIN_RESOLVE = 0.8
 
 CSV_COLUMNS = [
     "status",
     "story_id",
     "session",
-    "flow",
+    # session_type is the scoping field --flow filters on; story_flow is the
+    # client-supplied JSON value kept alongside it so the two can be compared.
+    "session_type",
+    "story_flow",
     "report_type",
     "state",
     "district",
@@ -253,9 +328,19 @@ class Command(BaseCommand):
         # Scoping
         parser.add_argument(
             "--flow",
+            help="Comma-separated ChatSession.session_type values, e.g. "
+                 "'shikshalokam_chaupal' or 'stakeholder-fgd'. Not a closed "
+                 "enum - some values are ChatType members and some are whatever "
+                 "the client sent. ALWAYS run --list-flows against the database "
+                 "you are auditing rather than reusing a value from elsewhere.",
+        )
+        parser.add_argument(
+            "--story-flow",
             help="Comma-separated Story.other_params['flow'] values, e.g. "
-                 "'guest-discussion'. These are SessionFlowName values, not "
-                 "Flow.flow_route paths - run --list-flows to see them.",
+                 "'guest-discussion'. Filters the client-supplied JSON key that "
+                 "get_report_type() reads, rather than the session's own type. "
+                 "Prefer --flow unless you specifically mean that key; see the "
+                 "'Scoping by flow' section of this command's docstring.",
         )
         parser.add_argument("--report-type", help="Comma-separated Story.report_type values.")
         parser.add_argument("--state", help="Comma-separated states (case-insensitive).")
@@ -268,11 +353,16 @@ class Command(BaseCommand):
 
         # Behaviour
         parser.add_argument(
-            "--scan-mode", choices=["prefix", "per-story"], default="prefix",
-            help="'prefix' (default) sweeps the whole prefix once and indexes the "
-                 "objects by the story id in the key - a few hundred LIST calls for "
-                 "any scope. 'per-story' issues one LIST per story, which is only "
-                 "cheaper when auditing a handful of sessions out of a large bucket.",
+            "--min-resolve", type=float, default=DEFAULT_MIN_RESOLVE,
+            help=f"Refuse to run when fewer than this share of the bucket's "
+                 f"identifiers name a Story in this database (default "
+                 f"{DEFAULT_MIN_RESOLVE:.0%}). A low rate means the bucket and the "
+                 f"database are different environments, and every unresolved "
+                 f"identifier would be reported as an orphan. Lower it only after "
+                 f"reading --inspect and understanding WHY the rate is low; "
+                 f"--min-resolve 0 disables the check entirely. Runs below "
+                 f"{DEFAULT_MIN_RESOLVE:.0%} mark every ORPHAN_IN_S3 row as "
+                 f"untrustworthy in its notes column.",
         )
         parser.add_argument(
             "--max-objects", type=int, default=2_000_000,
@@ -313,8 +403,10 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--list-flows", action="store_true",
-            help="Never touch S3. Print the distinct other_params['flow'] values "
-                 "with story counts, so --flow can be given a real value.",
+            help="Never touch S3. Print the distinct ChatSession.session_type "
+                 "values with story counts - cross-tabulated against "
+                 "Story.other_params['flow'] - so --flow and --story-flow can "
+                 "each be given a real value.",
         )
 
     # ------------------------------------------------------------------ setup
@@ -447,38 +539,17 @@ class Command(BaseCommand):
             ))
             return
 
-        segments = list(identifiers)
-        numeric = [int(s) for s in segments if s.isdigit()]
-        by_session = set(
-            Story.objects.filter(session__in=segments).values_list("session", flat=True)
-        )
-        by_id = set(
-            str(i) for i in
-            Story.objects.filter(id__in=numeric).values_list("id", flat=True)
-        )
-        resolved = by_session | by_id
+        by_session, by_id, resolved, rate = self.resolve_identifiers(identifiers)
         unresolved = len(identifiers) - len(resolved)
 
-        rate = len(resolved) / len(identifiers)
         self.stdout.write(
             f"\n{len(identifiers)} distinct identifiers under this prefix:\n"
             f"  {len(by_session):>7}  resolve to a Story.session\n"
             f"  {len(by_id):>7}  resolve to a Story.id\n"
             f"  {unresolved:>7}  resolve to neither   ({rate:.0%} resolved)"
         )
-
-        # An id range comparison separates the two ways this goes wrong: a
-        # partial dump overlaps the bucket's range but sparsely, while a
-        # different environment tends to occupy a different range entirely.
-        if numeric:
-            db_range = Story.objects.aggregate(lo=Min("id"), hi=Max("id"))
-            self.stdout.write(
-                f"\n  numeric ids in bucket : {min(numeric)} .. {max(numeric)}\n"
-                f"  Story.id in database  : {db_range['lo']} .. {db_range['hi']}"
-            )
-        missing = sorted(set(segments) - resolved)[:10]
-        if missing:
-            self.stdout.write(f"  examples not in the DB: {', '.join(missing)}")
+        for line in self.describe_resolve_failure(identifiers, resolved):
+            self.stdout.write(line)
 
         if rate >= 0.8:
             self.stdout.write(self.style.SUCCESS(
@@ -500,6 +571,71 @@ class Command(BaseCommand):
                 "usually sits in a different range. Do NOT run a full audit on this\n"
                 "pairing - it would report almost every object as an orphan.\n"
             ))
+
+    def low_confidence_note(self):
+        """
+        The caveat appended to any finding whose truth depends on the bucket and
+        the database being the same environment.
+
+        Two statuses qualify. ORPHAN_IN_S3 is "an object here has no row", which
+        is indistinguishable from "this object belongs to an environment whose
+        rows this database never had". MISSING_IN_S3 is the mirror - "a row
+        points at a key that is not here" - which is equally what you get when
+        the row's key belongs to a bucket other than the one being audited.
+        Both invert into noise on a mismatched pairing, so both carry the mark.
+        """
+        if not self.low_resolve:
+            return ""
+        return (
+            f" | UNTRUSTWORTHY: only {self.resolve_rate:.0%} of this bucket's "
+            f"identifiers resolve to a Story here, so this row may be an "
+            f"environment mismatch rather than a real finding"
+        )
+
+    def resolve_identifiers(self, identifiers):
+        """
+        How many of the bucket's identifier segments name a Story in THIS
+        database.
+
+        This is the single most important number the command computes. It is
+        what separates "the bucket and the database are the same environment"
+        from "they are not", and every ORPHAN_IN_S3 depends on the answer: an
+        identifier that resolves to no Story is indistinguishable, from the
+        bucket side, from an upload whose row was lost.
+
+        Returns (by_session, by_id, resolved, rate).
+        """
+        segments = list(identifiers)
+        if not segments:
+            return set(), set(), set(), 0.0
+        numeric = [int(s) for s in segments if s.isdigit()]
+        by_session = set(
+            Story.objects.filter(session__in=segments).values_list("session", flat=True)
+        )
+        by_id = set(
+            str(i) for i in
+            Story.objects.filter(id__in=numeric).values_list("id", flat=True)
+        )
+        resolved = by_session | by_id
+        return by_session, by_id, resolved, len(resolved) / len(segments)
+
+    def describe_resolve_failure(self, identifiers, resolved):
+        """
+        The lines that separate the two ways a low resolve rate happens: a
+        partial dump overlaps the bucket's id range but sparsely, while a
+        different environment usually occupies a different range entirely.
+        """
+        lines = []
+        numeric = [int(s) for s in identifiers if s.isdigit()]
+        if numeric:
+            db_range = Story.objects.aggregate(lo=Min("id"), hi=Max("id"))
+            lines.append("")
+            lines.append(f"  numeric ids in bucket : {min(numeric)} .. {max(numeric)}")
+            lines.append(f"  Story.id in database  : {db_range['lo']} .. {db_range['hi']}")
+        missing = sorted(set(identifiers) - resolved)[:10]
+        if missing:
+            lines.append(f"  examples not in the DB: {', '.join(missing)}")
+        return lines
 
     def count_objects(self, client, bucket, prefix, cap=5000):
         paginator = client.get_paginator("list_objects_v2")
@@ -538,8 +674,8 @@ class Command(BaseCommand):
             total += 1
             if total > max_objects:
                 raise CommandError(
-                    f"Prefix holds more than {max_objects} objects. Narrow --prefix, "
-                    f"raise --max-objects, or use --scan-mode per-story."
+                    f"Prefix holds more than {max_objects} objects. Narrow --prefix "
+                    f"or raise --max-objects."
                 )
             if total % 50_000 == 0:
                 self.stdout.write(f"  ... {total} objects indexed")
@@ -567,10 +703,30 @@ class Command(BaseCommand):
         if sessions:
             qs = qs.filter(session__in=sessions)
 
+        # Flow scoping goes through ChatSession.session_type rather than
+        # Story.other_params['flow']. The docstring's 'Scoping by flow' section
+        # has the full reasoning; the short version is that the JSON key is a
+        # client-supplied parameter written only by the story-generation path
+        # that completed, while session_type exists from session creation - so
+        # it is present even for the sessions this audit is hunting.
+        #
+        # Story.session and ChatSession.session are both unique CharFields with
+        # no ForeignKey between them, so this is a subquery on the session
+        # string. One extra query for the whole run, not one per story.
         flows = csv_list(opts.get("flow"))
         if flows:
+            qs = qs.filter(
+                session__in=ChatSession.objects.filter(
+                    session_type__in=flows
+                ).values("session")
+            )
+
+        # Escape hatch: the raw JSON key, for when the question really is about
+        # the value get_report_type() and migration 0087 read.
+        story_flows = csv_list(opts.get("story_flow"))
+        if story_flows:
             flow_q = Q()
-            for flow in flows:
+            for flow in story_flows:
                 flow_q |= Q(other_params__flow=flow)
             qs = qs.filter(flow_q)
 
@@ -635,6 +791,47 @@ class Command(BaseCommand):
             ))
         return total_media
 
+    def warn_flow_coverage(self, opts):
+        """
+        --flow resolves through ChatSession, so a story whose session has no
+        ChatSession row cannot be selected by it - silently, because the result
+        is a smaller sweep rather than an error.
+
+        That share is not hypothetical: a partial restore can leave almost every
+        story without one, in which case --flow reaches a sliver of the table and
+        still prints a tidy summary underneath. Say the number out loud before
+        anyone reads the counts.
+
+        Costs one count query, and only when --flow is actually in play.
+        """
+        if not csv_list(opts.get("flow")):
+            return
+
+        total = Story.objects.count()
+        if not total:
+            return
+
+        reachable = Story.objects.filter(
+            session__in=ChatSession.objects.values("session")
+        ).count()
+        share = reachable / total
+
+        self.stdout.write(
+            f"--flow coverage: {reachable} of {total} stories ({share:.1%}) have a "
+            f"ChatSession row and are therefore reachable by --flow"
+        )
+        if share < 0.5:
+            self.stdout.write(self.style.ERROR(
+                f"\n  {total - reachable} stories ({1 - share:.1%}) have no ChatSession row for\n"
+                f"  their session. --flow cannot select them whatever value is passed, so\n"
+                f"  this run covers at most {share:.1%} of the database.\n"
+                f"\n"
+                f"  On a partial dump that is expected. On a full one it means the scope is\n"
+                f"  far narrower than it looks, and a zero finding count says nothing. Check\n"
+                f"  --list-flows, and prefer running unscoped when the question is 'across\n"
+                f"  every cycle' rather than 'this one flow'.\n"
+            ))
+
     def warn_if_empty(self, opts, total):
         """
         A filter that matches nothing looks identical to a clean audit: zeros
@@ -646,8 +843,8 @@ class Command(BaseCommand):
 
         applied = {
             key: opts.get(key)
-            for key in ("flow", "report_type", "state", "district", "session",
-                        "story_id", "date_from", "date_to")
+            for key in ("flow", "story_flow", "report_type", "state", "district",
+                        "session", "story_id", "date_from", "date_to")
             if opts.get(key)
         }
         if not applied:
@@ -663,11 +860,57 @@ class Command(BaseCommand):
             self.stdout.write(f"    --{key.replace('_', '-')} = {value}")
         if "flow" in applied:
             self.stdout.write(self.style.WARNING(
-                "\n--flow matches Story.other_params['flow'] (SessionFlowName values "
-                "such as 'guest-discussion'), not Flow.flow_route paths such as "
-                "'/shikshalokam_chaupal'. Run --list-flows for the values actually present."
+                "\n--flow matches ChatSession.session_type, e.g. "
+                "'shikshalokam_chaupal'. That column is not a closed enum, and the "
+                "values differ between environments. It is not "
+                "Story.other_params['flow'] (use --story-flow for that - note some "
+                "values such as 'guest-discussion' exist in BOTH columns and select "
+                "different stories), and it is not a CompanyBot route such as "
+                "'/shikshalokam_chaupal'. Run --list-flows for the values actually "
+                "present in this database."
+            ))
+        if "story_flow" in applied:
+            self.stdout.write(self.style.WARNING(
+                "\n--story-flow matches the client-supplied Story.other_params['flow'] "
+                "JSON key, which is absent on any story whose generation did not "
+                "complete. If you meant 'every session of this type', use --flow."
             ))
         return False
+
+    # Set by the resolve-rate gate in handle(). low_resolve stays False unless
+    # --min-resolve was lowered below the default and the observed rate is under
+    # it, in which case every ORPHAN_IN_S3 row says so in its notes.
+    resolve_rate = 1.0
+    low_resolve = False
+
+    # Cache of session -> ChatSession.session_type, filled one batch at a time
+    # by iterate(). Every output row carries session_type so that a CSV can be
+    # reconciled against the --flow filter that produced it; without the cache
+    # that column would cost one query per story.
+    _session_types = None
+
+    def prime_session_types(self, sessions):
+        """
+        Resolve session_type for a whole batch in one query.
+
+        Misses are cached as "" as well, so a story whose session has no
+        ChatSession row (partial dump, purged session) is not re-queried every
+        time it is seen.
+        """
+        if self._session_types is None:
+            self._session_types = {}
+        wanted = {s for s in sessions if s and s not in self._session_types}
+        if not wanted:
+            return
+        for session, session_type in ChatSession.objects.filter(
+            session__in=wanted
+        ).values_list("session", "session_type"):
+            self._session_types[session] = session_type or ""
+        for session in wanted:
+            self._session_types.setdefault(session, "")
+
+    def session_type_for(self, session):
+        return (self._session_types or {}).get(session, "")
 
     def iterate(self, stories, limit, chunk_size=500):
         """
@@ -688,7 +931,9 @@ class Command(BaseCommand):
         """
         qs = stories.prefetch_related("story_media")
         if limit:
-            yield from qs[:limit]
+            batch = list(qs[:limit])
+            self.prime_session_types([s.session for s in batch])
+            yield from batch
             return
 
         last_pk = 0
@@ -696,6 +941,7 @@ class Command(BaseCommand):
             batch = list(qs.filter(pk__gt=last_pk)[:chunk_size])
             if not batch:
                 return
+            self.prime_session_types([s.session for s in batch])
             for story in batch:
                 yield story
             last_pk = batch[-1].pk
@@ -743,11 +989,12 @@ class Command(BaseCommand):
         }
 
         self.preflight()
+        self.warn_flow_coverage(opts)
         stories = self.build_queryset(opts)
         total = stories.count()
         if not self.warn_if_empty(opts, total):
             return
-        self.stdout.write(f"Bucket {bucket}, prefix {prefix}, scan-mode {opts['scan_mode']}")
+        self.stdout.write(f"Bucket {bucket}, prefix {prefix}")
         self.stdout.write(f"Auditing {total} stories ...\n")
 
         allowed_hosts = {bucket}
@@ -755,20 +1002,64 @@ class Command(BaseCommand):
         if media_host:
             allowed_hosts.add(media_host)
 
-        object_index = None
+        # One sweep of the whole prefix, always. Listing per story instead would
+        # leave all_keys below empty, and OK_FOREIGN_PATH depends on it: every
+        # migrated row would then be reported MISSING_IN_S3.
+        object_index, _ = self.build_object_index(
+            client, bucket, prefix, opts["max_objects"]
+        )
+
+        # Flat set of every key under the prefix. Needed because the id segment
+        # in a row's stored URL does not always equal that row's story_id -
+        # migrated rows keep the SOURCE environment's story id in the path.
+        # Looking only inside this story's own folder would call such a row
+        # MISSING_IN_S3 even though the object is right there under another
+        # folder.
         all_keys = set()
-        if opts["scan_mode"] == "prefix":
-            object_index, _ = self.build_object_index(
-                client, bucket, prefix, opts["max_objects"]
+        for objs in object_index.values():
+            all_keys.update(key for key, _, _ in objs)
+
+        # ------------------------------------------------------------ the gate
+        #
+        # From the bucket side, an identifier belonging to another environment
+        # and an identifier whose StoryMedia row was lost are the same thing: a
+        # key with no matching row. So on a mismatched pairing every unresolved
+        # identifier becomes a confident ORPHAN_IN_S3, and the run produces a
+        # full page of uniformly wrong findings. --inspect reports this number
+        # too, but a diagnostic nobody is obliged to read is not a safeguard.
+        index_segments = set(object_index)
+        _, _, resolved_segments, self.resolve_rate = self.resolve_identifiers(index_segments)
+        self.stdout.write(
+            f"identifier resolve rate: {len(resolved_segments)} of "
+            f"{len(index_segments)} ({self.resolve_rate:.0%}) of the bucket's "
+            f"identifiers name a Story in this database"
+        )
+        if self.resolve_rate < opts["min_resolve"]:
+            detail = "\n".join(self.describe_resolve_failure(index_segments, resolved_segments))
+            raise CommandError(
+                f"Only {self.resolve_rate:.0%} of the identifiers under {prefix} name a "
+                f"Story in this database, below the --min-resolve floor of "
+                f"{opts['min_resolve']:.0%}.\n"
+                f"{detail}\n\n"
+                f"  Every unresolved identifier would be reported as ORPHAN_IN_S3, so a "
+                f"run on this\n"
+                f"  pairing produces findings that are almost entirely artefacts of the "
+                f"mismatch.\n"
+                f"  Point --bucket at the environment this database came from, or run "
+                f"against a\n"
+                f"  database restored from the environment this bucket belongs to.\n\n"
+                f"  If the low rate is genuinely expected and you know why, rerun with "
+                f"--min-resolve\n"
+                f"  below {self.resolve_rate:.2f}. Nothing was written."
             )
-            # Flat set of every key under the prefix. Needed because the id
-            # segment in a row's stored URL does not always equal that row's
-            # story_id - migrated rows keep the SOURCE environment's story id in
-            # the path. Looking only inside this story's own folder would call
-            # such a row MISSING_IN_S3 even though the object is right there
-            # under another folder.
-            for objs in object_index.values():
-                all_keys.update(key for key, _, _ in objs)
+        self.low_resolve = self.resolve_rate < DEFAULT_MIN_RESOLVE
+        if self.low_resolve:
+            self.stdout.write(self.style.WARNING(
+                f"\n  Proceeding at {self.resolve_rate:.0%} because --min-resolve was "
+                f"lowered. Every ORPHAN_IN_S3\n"
+                f"  row will be marked untrustworthy in its notes column.\n"
+            ))
+
         matched_segments = set()
 
         for story in self.iterate(stories, opts.get("limit")):
@@ -801,18 +1092,11 @@ class Command(BaseCommand):
             if story.session:
                 identifiers.append(story.session)
 
-            if object_index is not None:
-                story_objects = []
-                for ident in identifiers:
-                    if ident in object_index:
-                        matched_segments.add(ident)
-                        story_objects.extend(object_index[ident])
-            else:
-                story_objects = []
-                for ident in identifiers:
-                    story_objects.extend(
-                        self.list_prefix(client, bucket, f"{prefix}{ident}/")
-                    )
+            story_objects = []
+            for ident in identifiers:
+                if ident in object_index:
+                    matched_segments.add(ident)
+                    story_objects.extend(object_index[ident])
 
             for key, size, last_modified in story_objects:
                 if opts["images_only"] and not is_image_key(key):
@@ -834,6 +1118,7 @@ class Command(BaseCommand):
                         "object uploaded to S3 but no StoryMedia row references it - "
                         "the /api/storymedia/ POST never completed"
                     )
+                    notes += self.low_confidence_note()
                 else:
                     seen_media_ids.add(media.id)
                     if not media.include_in_story and media.media_type != MediaTypeChoices.PDF:
@@ -874,16 +1159,29 @@ class Command(BaseCommand):
                     # these, so story_images_page emits <img src=""> and the
                     # report shows nothing - a rendering failure that is invisible
                     # to any S3 comparison, because there is no key to compare.
-                    # Previously these rows were skipped entirely and vanished
-                    # from the audit.
                     if opts["images_only"] and media.media_type == MediaTypeChoices.PDF:
                         continue
-                    counters["NO_FILE_REF"] = counters.get("NO_FILE_REF", 0) + 1
+
+                    # Whether base64_str still holds the bytes decides the
+                    # remedy, so it is checked rather than left to the reader:
+                    # with it the image can be re-uploaded and the row repaired,
+                    # without it the photo is simply gone.
+                    b64_len = len(media.base64_str or "")
+                    if b64_len:
+                        counters["BASE64_ONLY"] = counters.get("BASE64_ONLY", 0) + 1
+                        status_no_key, note_no_key = "BASE64_ONLY", (
+                            f"no file and no file_url, so the report renders a blank "
+                            f"image - but base64_str still holds {b64_len} chars, so "
+                            f"the photo is recoverable: upload it and set file_url"
+                        )
+                    else:
+                        counters["NO_FILE_REF"] = counters.get("NO_FILE_REF", 0) + 1
+                        status_no_key, note_no_key = "NO_FILE_REF", (
+                            "no file, no file_url and no base64_str - get_public_url() "
+                            "returns an empty string and nothing exists to restore"
+                        )
                     rows.append(self.row(
-                        story, "", "", "", media, pdf_row, "NO_FILE_REF",
-                        "row has neither file nor file_url, so get_public_url() "
-                        "returns an empty string and the report renders a blank "
-                        "image - likely a legacy base64-era row; check base64_str",
+                        story, "", "", "", media, pdf_row, status_no_key, note_no_key,
                     ))
                     continue
                 if opts["images_only"] and not is_image_key(claimed):
@@ -910,7 +1208,8 @@ class Command(BaseCommand):
                 rows.append(self.row(
                     story, claimed, "", "", media, pdf_row, "MISSING_IN_S3",
                     "StoryMedia row points at a key that is absent from the bucket - "
-                    "row created but the PUT never landed",
+                    "row created but the PUT never landed"
+                    + self.low_confidence_note(),
                 ))
 
             # Report rendered before the image was recorded.
@@ -932,16 +1231,10 @@ class Command(BaseCommand):
                         ))
 
         if opts["scan_unattributed"]:
-            if object_index is None:
-                self.stdout.write(self.style.WARNING(
-                    "\n--scan-unattributed needs the full prefix index; it is skipped "
-                    "under --scan-mode per-story."
-                ))
-            else:
-                rows.extend(self.scan_unattributed(
-                    object_index, matched_segments, media_base, counters,
-                    images_only=opts["images_only"],
-                ))
+            rows.extend(self.scan_unattributed(
+                object_index, matched_segments, media_base, counters,
+                images_only=opts["images_only"],
+            ))
 
         self.write_out(rows, opts.get("out"))
         self.summarise(counters)
@@ -950,31 +1243,84 @@ class Command(BaseCommand):
 
     def list_flows(self):
         """
-        Distinct flow values with counts. Read straight off other_params rather
-        than through a JSON lookup, so it behaves the same on SQLite and Postgres.
+        What --flow and --story-flow can actually be given, in this database.
+
+        Prints both columns and the cross-tabulation between them, because the
+        two are related but not equal and no amount of prose settles which value
+        a given deployment stores. See the 'Scoping by flow' docstring section.
+
+        The story side is read straight off other_params in Python rather than
+        through a JSON lookup, so it behaves the same on SQLite and Postgres.
         """
         from collections import Counter
 
+        session_types = {}
+        for session, session_type in ChatSession.objects.values_list(
+            "session", "session_type"
+        ).iterator(chunk_size=2000):
+            if session:
+                session_types[session] = session_type or "<null session_type>"
+
+        types = Counter()
         flows = Counter()
+        pairs = Counter()
         states = Counter()
         total = 0
-        for params, state in Story.objects.values_list("other_params", "state").iterator(
-            chunk_size=2000
-        ):
+        for session, params, state in Story.objects.values_list(
+            "session", "other_params", "state"
+        ).iterator(chunk_size=2000):
             total += 1
-            flows[(params or {}).get("flow") or "<no flow>"] += 1
+            session_type = session_types.get(session, "<no ChatSession row>")
+            story_flow = (params or {}).get("flow") or "<no flow>"
+            types[session_type] += 1
+            flows[story_flow] += 1
+            pairs[(session_type, story_flow)] += 1
             states[state or "<no state>"] += 1
 
-        self.stdout.write(f"{total} stories in this database\n")
-        self.stdout.write("flow values:")
-        for flow, count in flows.most_common():
-            self.stdout.write(f"  {count:>7}  {flow}")
+        self.stdout.write(
+            f"{total} stories in this database, "
+            f"{len(session_types)} ChatSession rows\n"
+        )
+
+        self.stdout.write("ChatSession.session_type  ->  pass to --flow:")
+        for session_type, count in types.most_common():
+            self.stdout.write(f"  {count:>7}  {session_type}")
+
+        self.stdout.write("\nStory.other_params['flow']  ->  pass to --story-flow:")
+        for story_flow, count in flows.most_common():
+            self.stdout.write(f"  {count:>7}  {story_flow}")
+
+        self.stdout.write(
+            "\ncross-tab (session_type x story flow) - the mapping in THIS database:"
+        )
+        for (session_type, story_flow), count in pairs.most_common():
+            self.stdout.write(f"  {count:>7}  {session_type:<28} {story_flow}")
+
+        orphaned = types.get("<no ChatSession row>", 0)
+        if orphaned:
+            self.stdout.write(self.style.WARNING(
+                f"\n  {orphaned} stories have no ChatSession row for their session. "
+                f"--flow cannot reach them;\n"
+                f"  in a partial dump this is expected, in a full one it is worth "
+                f"asking about."
+            ))
+        unflowed = flows.get("<no flow>", 0)
+        if unflowed:
+            self.stdout.write(self.style.WARNING(
+                f"\n  {unflowed} stories have no other_params['flow'] at all. "
+                f"--story-flow cannot reach\n"
+                f"  them; --flow can, as long as the ChatSession row exists. This "
+                f"asymmetry is the\n"
+                f"  reason --flow scopes on session_type."
+            ))
+
         self.stdout.write("\nstates:")
         for state, count in states.most_common(25):
             self.stdout.write(f"  {count:>7}  {state}")
+
         self.stdout.write(
-            "\nPass one of the flow values to --flow. If this prints 0 stories, "
-            "the local database has no data to audit - restore a dump first.\n"
+            "\nIf this prints 0 stories, the database has no data to audit - "
+            "restore a dump first.\n"
         )
 
     def run_db_only(self, opts, media_base):
@@ -991,6 +1337,7 @@ class Command(BaseCommand):
         }
 
         self.preflight()
+        self.warn_flow_coverage(opts)
         stories = self.build_queryset(opts)
         total = stories.count()
         if not self.warn_if_empty(opts, total):
@@ -1162,7 +1509,7 @@ class Command(BaseCommand):
                 "s3_last_modified": last_modified.isoformat() if last_modified else "",
                 "session": session,
                 "story_id": story.id if story else "",
-                "flow": (story.other_params or {}).get("flow", "") if story else "",
+                "story_flow": (story.other_params or {}).get("flow", "") if story else "",
                 "state": story.state if story else "",
                 "district": story.district if story else "",
                 "public_url": f"{(media_base or '').rstrip('/')}/{key}" if media_base else "",
@@ -1174,6 +1521,13 @@ class Command(BaseCommand):
                     "not attributable from stored data, needs the S3 access log"
                 ),
             })
+
+        # Fill session_type for the whole set in one query rather than inside the
+        # loop above, so the column is free relative to the work already done.
+        self.prime_session_types([r.get("session") for r in rows])
+        for r in rows:
+            r["session_type"] = self.session_type_for(r.get("session"))
+
         return rows
 
     # ------------------------------------------------------------------ output
@@ -1184,7 +1538,8 @@ class Command(BaseCommand):
             "status": status,
             "story_id": story.id,
             "session": story.session,
-            "flow": params.get("flow", ""),
+            "session_type": self.session_type_for(story.session),
+            "story_flow": params.get("flow", ""),
             "report_type": story.report_type or "",
             "state": story.state or "",
             "district": story.district or "",
@@ -1231,7 +1586,10 @@ class Command(BaseCommand):
             f"STALE_REPORT          : {counters['STALE_REPORT']}"))
         self.stdout.write(self.style.ERROR(
             f"NO_FILE_REF           : {counters.get('NO_FILE_REF', 0)} "
-            f"(row renders a blank image - no file and no file_url)"))
+            f"(blank image, nothing left to restore)"))
+        self.stdout.write(self.style.WARNING(
+            f"BASE64_ONLY           : {counters.get('BASE64_ONLY', 0)} "
+            f"(blank image, but base64_str still holds the photo - recoverable)"))
         self.stdout.write(self.style.WARNING(
             f"HOST_MISMATCH         : {counters.get('HOST_MISMATCH', 0)} "
             f"(key matches but file_url points at another environment's host)"))
