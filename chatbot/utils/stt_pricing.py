@@ -20,12 +20,15 @@ def _parse_other_params(other_params_raw):
 def _get_model_pricing(other_params_raw, model_id):
     # """Look up model_pricing[model_id] from a single other_params source."""
     other_params = _parse_other_params(other_params_raw)
-    if not other_params:
+    if not isinstance(other_params, dict):
         return None
     pricing_data = other_params.get('model_pricing')
-    if not pricing_data:
+    if not isinstance(pricing_data, dict):
         return None
-    return pricing_data.get(model_id)
+    model_pricing = pricing_data.get(model_id)
+    if not isinstance(model_pricing, dict):
+        return None
+    return model_pricing
 
 
 def _resolve_rate(voice_provider, company_bot, model_id):

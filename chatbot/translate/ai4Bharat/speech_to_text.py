@@ -7,7 +7,7 @@ import concurrent.futures
 import contextvars
 import logging
 from functools import lru_cache
-from chatbot.translate.base.speech_to_text import split_audio
+from chatbot.translate.base.speech_to_text import split_audio,get_wav_duration
 from chatbot.utils.langfuse_client import get_langfuse_client
 from indic_itn import IndicITN, get_supported_languages
 from chatbot.utils.stt_pricing import compute_stt_usage_and_cost
@@ -41,7 +41,9 @@ def apply_itn(text: str, source_language: str) -> str:
     return text
 
 
-def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language, voice_provider, chunk_duration=10):
+def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language, voice_provider):
+    # Adding here because we need to compute the duration for cost calculation and logging
+    chunk_duration = get_wav_duration(chunk)
     b64_chunk = base64.b64encode(chunk).decode('utf-8')
     response = ai4bharat_speech_text(
         base64=b64_chunk,
@@ -73,18 +75,21 @@ def transcribe_ai4bharat_multiple_chunks(voice_provider, base64_audio_file, sour
         duration = 10
         if voice_provider.other_params:
             duration = int(voice_provider.other_params.get('chunk_duration', 10))
+            if duration <= 0:
+               raise ValueError("chunk_duration must be greater than zero")
         chunks = split_audio(audio_bytes, chunk_duration=duration)
 
+        current_ctx = contextvars.copy_context()
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(
+                    current_ctx.run,
                     transcribe_single_chunk, 
                     chunk_number, 
                     chunk, 
                     audio_format, 
                     source_language,
-                    voice_provider,
-                    duration
+                    voice_provider
                 )
                 for chunk_number, chunk in chunks
             ]
@@ -92,8 +97,8 @@ def transcribe_ai4bharat_multiple_chunks(voice_provider, base64_audio_file, sour
             transcripts.sort()
 
         raw_transcript = " ".join(content for _, content in transcripts)
-
-        normalisation = voice_provider.other_params.get('normalisation', False)
+        other_params = voice_provider.other_params if voice_provider.other_params else {}
+        normalisation = other_params.get('normalisation', False)
         if isinstance(normalisation, str):
             normalisation = normalisation.strip().lower() in ('true', '1', 'yes')
         elif normalisation is None:
