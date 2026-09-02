@@ -41,7 +41,7 @@ def apply_itn(text: str, source_language: str) -> str:
     return text
 
 
-def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language, voice_provider, chunk_duration):
+def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language, voice_provider, chunk_duration=10):
     b64_chunk = base64.b64encode(chunk).decode('utf-8')
     response = ai4bharat_speech_text(
         base64=b64_chunk,
@@ -59,7 +59,7 @@ def transcribe_single_chunk(chunk_number, chunk, audio_format, source_language, 
 
 
 def transcribe_ai4bharat_multiple_chunks(voice_provider, base64_audio_file, source_language, audio_format):
-    with langfuse.start_as_current_observation(
+ with langfuse.start_as_current_observation(
         as_type="span",
         name="ai4bharat_asr_batch",
         input={
@@ -67,42 +67,51 @@ def transcribe_ai4bharat_multiple_chunks(voice_provider, base64_audio_file, sour
             "audio_format": audio_format,
             "voice_provider_id": getattr(voice_provider, 'id', None),
         },
-    ) as s:
-        try:
-            audio_bytes = base64.b64decode(base64_audio_file)
-            duration = 10
-            if voice_provider.other_params:
-                duration = int(voice_provider.other_params.get('chunk_duration', 10))
-            chunks = split_audio(audio_bytes, chunk_duration=duration)
+    ) as span:
+    try:
+        audio_bytes = base64.b64decode(base64_audio_file)
+        duration = 10
+        if voice_provider.other_params:
+            duration = int(voice_provider.other_params.get('chunk_duration', 10))
+        chunks = split_audio(audio_bytes, chunk_duration=duration)
 
-            # Each task gets its OWN copy_context() call, so each submitted task runs
-            # in a distinct Context object — a single Context cannot be entered via
-            # .run() from more than one thread concurrently (raises RuntimeError).
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                futures = [
-                    executor.submit(
-                        contextvars.copy_context().run,
-                        transcribe_single_chunk,
-                        chunk_number, chunk, audio_format, source_language, voice_provider, duration
-                    )
-                    for chunk_number, chunk in chunks
-                ]
-                transcripts = [future.result() for future in concurrent.futures.as_completed(futures)]
-                transcripts.sort()
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(
+                    transcribe_single_chunk, 
+                    chunk_number, 
+                    chunk, 
+                    audio_format, 
+                    source_language,
+                    voice_provider,
+                    duration
+                )
+                for chunk_number, chunk in chunks
+            ]
+            transcripts = [future.result() for future in concurrent.futures.as_completed(futures)]
+            transcripts.sort()
 
-            raw_transcript = " ".join(content for _, content in transcripts)
-            final_transcript = apply_itn(raw_transcript, source_language)
+        raw_transcript = " ".join(content for _, content in transcripts)
 
-            s.update(
+        normalisation = voice_provider.other_params.get('normalisation', False)
+        if isinstance(normalisation, str):
+            normalisation = normalisation.strip().lower() in ('true', '1', 'yes')
+        elif normalisation is None:
+            normalisation = False
+        else:
+            normalisation = bool(normalisation)
+
+        final_transcript = apply_itn(raw_transcript, source_language) if normalisation else raw_transcript
+
+        span.update(
                 output={"transcript_preview": final_transcript[:300], "chunk_count": len(chunks)},
-            )
-            return {'status': 200, 'content': final_transcript}
+         )
+        return {'status': 200, 'content': final_transcript}
 
-        except Exception as e:
-            logger.error('Error processing file: %s', e, exc_info=True)
-            traceback.print_exc()
-            s.update(output=None, level="ERROR", status_message=str(e))
-            return {'status': 500, 'content': str(e)}
+    except Exception as e:
+        logger.error('Error processing file: %s', e, exc_info=True)
+        traceback.print_exc()
+        return {'status': 500, 'content': str(e)}
 
 
 def ai4bharat_speech_text(voice_provider, base64, audio_format, source_language, chunk_number=None, chunk_duration=10):
@@ -165,12 +174,12 @@ def ai4bharat_speech_text(voice_provider, base64, audio_format, source_language,
 
             response = requests.post(ai4bharat_base_url, json=payload, headers=headers, timeout=request_timeout)
 
-            # usage_details, cost_details = compute_stt_usage_and_cost("ai4bharat", chunk_duration)
             usage_details, cost_details = compute_stt_usage_and_cost(
-                                            "ai4bharat", chunk_duration,
-                                             voice_provider=voice_provider,
-                                             company_bot=getattr(voice_provider, 'company_bot', None),
-                                           )
+                "ai4bharat", 
+                chunk_duration,
+                voice_provider=voice_provider,
+                company_bot=getattr(voice_provider, 'company_bot', None),
+            )
 
             if response.status_code == 200:
                 print("response: ", response.text)

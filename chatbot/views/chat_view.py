@@ -7,7 +7,6 @@ from jwt import ExpiredSignatureError, InvalidTokenError
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from chatbot.celery_tasks.non_llm_tasks import translate_user_answer
 from chatbot.models import ChatSession, ChatStatus, Company, CompanyChat, Profile
 from chatbot.models.company_models import CompanyBot, CompanyStateMachine
 from chatbot.models.enums import OperationTypeChoices
@@ -379,8 +378,25 @@ def non_llm_chat_view(request):
             "error": "Chat session is already marked as completed"
         }, status=400)
 
+    translated_user_message = None
+    if language and language != "en" and message:
+        try:
+            translation_result = text_translate_provider(
+                message_body=message,
+                target_language="en",
+                source_language=language,
+                company_bot=company_bot_id,
+            )
+            if translation_result and translation_result.get("status") == 200:
+                translated_user_message = translation_result.get("content")
+        except Exception as e:
+            logger.info(
+                f"non_llm_chat_view: translation failed for user answer session={session}: {e}"
+            )
+
     company_chat = CompanyChat.objects.create(
         message=message,
+        translated_message=translated_user_message,
         session=session,
         status=ChatStatus.COMPLETED,
         sender_id=sender_id,
@@ -393,18 +409,15 @@ def non_llm_chat_view(request):
         f"non_llm_chat_view: saved CompanyChat id={company_chat.id} for session={session} step={current_step}"
     )
 
-    translate_user_answer.delay(
-        company_chat.id, source_language=language, target_language="en"
-    )
-
+    update_fields = ["current_step"]
     if not next_to_next_state:
         chat_session.session_status = ChatStatus.COMPLETED
-        chat_session.save(update_fields=["current_step", "session_status"])
+        update_fields.append("session_status")
         logger.info(
             f"non_llm_chat_view: session={session} completed at step={next_step}"
         )
 
-    chat_session.save(update_fields=["current_step"])
+    chat_session.save(update_fields=update_fields)
 
     bot_message = next_state["bot_question"]
     translated_bot_message = None
@@ -428,6 +441,16 @@ def non_llm_chat_view(request):
                 logger.info(
                     f"non_llm_chat_view: translation failed for step {next_step}: {e}"
                 )
+
+    CompanyChat.objects.create(
+        message=bot_message,
+        translated_message=translated_bot_message,
+        session=chat_session.session,
+        status=chat_session.session_status,
+        sender=ai_profile,
+        receiver=chat_session.profile,
+        stage=next_state["name"],
+    )
 
     logger.info(
         f"non_llm_chat_view: session={session} advancing to step={next_step} operation_type={next_state['operation_type']}"
