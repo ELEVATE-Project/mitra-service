@@ -180,7 +180,7 @@ def transcribe_audio(
                         # maximum chunk duration.
                         usage_details, cost_details = (
                             compute_stt_usage_and_cost(
-                                "whisper-1",
+                                model,
                                 actual_chunk_duration,
                                 voice_provider=voice_provider,
                                 company_bot=getattr(
