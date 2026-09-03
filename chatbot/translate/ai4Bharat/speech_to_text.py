@@ -79,11 +79,10 @@ def transcribe_ai4bharat_multiple_chunks(voice_provider, base64_audio_file, sour
                raise ValueError("chunk_duration must be greater than zero")
         chunks = split_audio(audio_bytes, chunk_duration=duration)
 
-        current_ctx = contextvars.copy_context()
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(
-                    current_ctx.run,
+                    contextvars.copy_context().run,
                     transcribe_single_chunk, 
                     chunk_number, 
                     chunk, 
