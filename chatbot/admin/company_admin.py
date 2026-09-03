@@ -17,6 +17,7 @@ from django.urls import path
 from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.forms import ModelForm, MultipleChoiceField, CheckboxSelectMultiple
+from inline_actions.admin import InlineActionsMixin, InlineActionsModelAdminMixin
 from ..utils.admin_config.export_mixin import ExportAllFieldsMixin
 
 
@@ -32,7 +33,7 @@ class CompanyBotProgramMappingInline(admin.TabularInline):
     fields = ('state', 'program', 'leader_category', 'is_active')
 
 
-class CompanyStateMachineAdmin(admin.TabularInline):
+class CompanyStateMachineAdmin(InlineActionsMixin, admin.TabularInline):
     model = CompanyStateMachine
     fk_name = 'company_bot'
     extra = 1
@@ -46,10 +47,22 @@ class CompanyStateMachineAdmin(admin.TabularInline):
         'skip_to_step', 'translations'
     )
     exclude = ('type',)  # ✅ hide type
+    inline_actions = ['generate_translation']
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return qs.order_by('step')
+
+    def generate_translation(self, request, obj, parent_obj=None):
+        """Inline action: async-triggers translation gen for this row only."""
+        from chatbot.celery_tasks.non_llm_tasks import generate_state_machine_translations
+
+        generate_state_machine_translations.delay(parent_obj.id, state_machine_id=obj.pk)
+        messages.success(
+            request, f"Translation generation started for step '{obj.name}'."
+        )
+
+    generate_translation.short_description = "Generate (row)"
 
 
 class VoiceProviderAdmin(admin.TabularInline):
@@ -89,7 +102,7 @@ class CompanyAdmin(admin.ModelAdmin):
 
 
 @admin.register(CompanyBot)
-class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
+class CompanyBotAdmin(InlineActionsModelAdminMixin, BatchUploadMixin, SimpleHistoryAdmin):
 
     list_display = ('name', 'company', 'created_at')
     list_filter = (
@@ -104,6 +117,7 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
     ordering = ('-created_at',)
     inlines = [VoiceProviderAdmin, CompanyBotProgramMappingInline]
     actions = ['duplicate_bot', 'export_selected_bots']
+    inline_actions = None  # only the CompanyStateMachine inline uses inline-actions, not this changelist
 
     enable_batch_upload = True
     batch_load_foreign_keys = True
@@ -266,6 +280,16 @@ class CompanyBotAdmin(BatchUploadMixin, SimpleHistoryAdmin):
         if obj and obj.bot_type == CompanyBotTypeChoices.STATE_MACHINE:
             return [VoiceProviderAdmin, CompanyStateMachineAdmin, CompanyBotProgramMappingInline]
         return [VoiceProviderAdmin, CompanyBotProgramMappingInline]
+
+    def get_inline_instances(self, request, obj=None):
+        # django-admin-inlines' inline-action POST handler calls this without `obj`,
+        # which would make get_inlines() drop CompanyStateMachineAdmin for STATE_MACHINE
+        # bots and crash resolving the action. Recover obj from the URL when missing.
+        if obj is None and request.resolver_match:
+            object_id = request.resolver_match.kwargs.get("object_id")
+            if object_id:
+                obj = self.model.objects.filter(pk=object_id).first()
+        return super().get_inline_instances(request, obj)
 
     # Sync Google glossary for TextToText voice providers after inline save
     def duplicate_bot(self, request, queryset):

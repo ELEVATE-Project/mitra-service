@@ -44,9 +44,10 @@ def _upload_audio_to_s3(audio_bytes, company_bot_id, state_machine_id, lang, aud
 
 
 @app.task
-def generate_state_machine_translations(company_bot_id, language=None):
+def generate_state_machine_translations(company_bot_id, state_machine_id=None, language=None):
     """
-    Generate cached translations + TTS audio for all CompanyStateMachines on a bot.
+    Generate cached translations + TTS audio for CompanyStateMachines on a bot.
+    If state_machine_id is provided, only process that single row (used by the per-row admin button).
     If language is provided, only process that language (used for new-language auto-trigger).
     """
     try:
@@ -70,6 +71,8 @@ def generate_state_machine_translations(company_bot_id, language=None):
     tts_voice_map = {v.language: v for v in tts_voices}
 
     state_machines = CompanyStateMachine.objects.filter(company_bot=company_bot)
+    if state_machine_id:
+        state_machines = state_machines.filter(pk=state_machine_id)
 
     bot_vernaculars = list(BotVernacular.objects.values("language", "alt_introductory_message").filter(company_bot=company_bot))
 
