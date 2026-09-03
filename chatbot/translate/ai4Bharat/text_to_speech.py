@@ -76,7 +76,7 @@ def ai4bharat_text_speech(voice_provider, text, gender, source_language):
 
             char_count = len(text) if text else 0
             usage_details, cost_details = compute_translate_usage_and_cost(
-                                               "ai4bharat", char_count,
+                                               service_id, char_count,
                                                 voice_provider=voice_provider,
                                                 company_bot=getattr(voice_provider, 'company_bot', None),
                                             )

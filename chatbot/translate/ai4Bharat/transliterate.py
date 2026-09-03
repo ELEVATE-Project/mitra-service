@@ -72,7 +72,7 @@ def call_ai4bharat_transliterate_api(source_language, target_language, message_b
         # Provider-name keyed pricing (service_id varies by language pair, billing entity doesn't)
         # usage_details, cost_details = compute_translate_usage_and_cost("ai4bharat", char_count)
         usage_details, cost_details = compute_translate_usage_and_cost(
-                                         "ai4bharat", char_count,
+                                         service_id, char_count,
                                           voice_provider=voice_provider,
                                           company_bot=getattr(voice_provider, 'company_bot', None),
                                       )

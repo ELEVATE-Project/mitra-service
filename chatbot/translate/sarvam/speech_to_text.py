@@ -22,7 +22,7 @@ def transcribe_single_chunk(
     with langfuse.start_as_current_observation(
         as_type="generation",
         name="sarvam_stt_chunk",
-        model=model,
+        model="sarvam-stt",
         input={"chunk_number": chunk_number, "source_language": source_language, "mode": mode},
     ) as gen:
         try:
