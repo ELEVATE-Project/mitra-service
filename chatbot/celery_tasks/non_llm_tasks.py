@@ -3,10 +3,12 @@ import logging
 import os
 
 import boto3
+from django.db import transaction
 
 from chatbot.models import CompanyBot, Voice, VoiceType
 from chatbot.models.bot_vernacular_model import BotVernacular
 from chatbot.models.company_models import CompanyStateMachine
+from chatbot.models.enums import OperationTypeChoices
 from chatbot.utils.audio_provider_utils import text_speech_provider, text_translate_provider
 from shikshalokam_mohini.celery_config import app
 
@@ -43,39 +45,57 @@ def _upload_audio_to_s3(audio_bytes, company_bot_id, state_machine_id, lang, aud
         return None
 
 
-@app.task
-def generate_state_machine_translations(company_bot_id, state_machine_id=None, language=None):
+def _resolve_generation_scope(company_bot_id, state_machine_id=None, language=None):
     """
-    Generate cached translations + TTS audio for CompanyStateMachines on a bot.
-    If state_machine_id is provided, only process that single row (used by the per-row admin button).
-    If language is provided, only process that language (used for new-language auto-trigger).
+    Shared setup for both translation and audio generation tasks: resolves the CompanyBot,
+    the CompanyStateMachine rows in scope (single row / bulk with LLM-skip rule / language-filtered),
+    the text-translation language list, and the TTS voice map.
+    Returns None if the CompanyBot doesn't exist.
     """
     try:
         company_bot = CompanyBot.objects.get(id=company_bot_id)
     except CompanyBot.DoesNotExist:
-        logger.info(f"generate_translations: CompanyBot id={company_bot_id} not found")
-        return
+        return None
 
-    ttt_voices = Voice.objects.filter(
-        company_bot=company_bot, type=VoiceType.TextToText
-    )
-    tts_voices = Voice.objects.filter(
-        company_bot=company_bot, type=VoiceType.TextToSpeech
-    )
+    ttt_voices = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToText)
+    tts_voices = Voice.objects.filter(company_bot=company_bot, type=VoiceType.TextToSpeech)
 
     if language:
-        languages = [language]
+        ttt_languages = [language]
+        tts_voices = tts_voices.filter(language=language)
     else:
-        languages = list(ttt_voices.values_list("language", flat=True))
+        ttt_languages = list(ttt_voices.values_list("language", flat=True))
 
     tts_voice_map = {v.language: v for v in tts_voices}
 
     state_machines = CompanyStateMachine.objects.filter(company_bot=company_bot)
+    op_type_by_step = None
     if state_machine_id:
         state_machines = state_machines.filter(pk=state_machine_id)
+    else:
+        state_machines = state_machines.order_by("step")
+        op_type_by_step = dict(
+            CompanyStateMachine.objects.filter(company_bot=company_bot).values_list("step", "operation_type")
+        )
 
-    bot_vernaculars = list(BotVernacular.objects.values("language", "alt_introductory_message").filter(company_bot=company_bot))
+    return company_bot, state_machines, ttt_languages, tts_voice_map, op_type_by_step
 
+
+def _skip_state_machine(sm, op_type_by_step):
+    """LLM-skip rule: in bulk mode, a step whose predecessor isn't NON_LLM is left untouched."""
+    if not sm.bot_question and sm.step != 1:
+        return True
+    if op_type_by_step is not None and sm.operation_type == OperationTypeChoices.LLM:
+        prev_op_type = op_type_by_step.get(sm.step - 1)
+        if prev_op_type != OperationTypeChoices.NON_LLM:
+            return True
+    return False
+
+
+def _load_vernacular_map(company_bot):
+    bot_vernaculars = list(
+        BotVernacular.objects.values("language", "alt_introductory_message").filter(company_bot=company_bot)
+    )
     vernacular_map = {}
     vernacular_lang_counts = {}
     for v in bot_vernaculars:
@@ -85,99 +105,143 @@ def generate_state_machine_translations(company_bot_id, state_machine_id=None, l
     for lang, count in vernacular_lang_counts.items():
         if count > 1:
             logger.info(
-                f"generate_translations: multiple BotVernacular rows for company_bot={company_bot_id} lang={lang}, using first"
+                f"generate_audio: multiple BotVernacular rows for company_bot={company_bot.id} lang={lang}, using first"
             )
+    return vernacular_map
+
+
+def _merge_translations_field(state_machine_id, field, lang_values):
+    """Lock the row, merge `field` -> value for each lang into its cached translations, save."""
+    if not lang_values:
+        return
+    with transaction.atomic():
+        sm = CompanyStateMachine.objects.select_for_update().get(pk=state_machine_id)
+        cached = dict(sm.translations or {})
+        for lang, value in lang_values.items():
+            lang_data = dict(cached.get(lang, {}))
+            lang_data[field] = value
+            cached[lang] = lang_data
+        sm.translations = cached
+        sm.save(update_fields=["translations"])
+
+
+@app.task
+def generate_state_machine_translations(company_bot_id, state_machine_id=None, language=None, generate_audio=False):
+    """
+    Generate cached text translations for CompanyStateMachines on a bot.
+    If state_machine_id is provided, only process that single row (used by the per-row admin button).
+    If language is provided, only process that language (used for new-language auto-trigger).
+    If generate_audio is True, also chains generate_state_machine_audio for the same scope.
+    """
+    scope = _resolve_generation_scope(company_bot_id, state_machine_id, language)
+    if scope is None:
+        logger.info(f"generate_translations: CompanyBot id={company_bot_id} not found")
+        return
+    company_bot, state_machines, languages, _tts_voice_map, op_type_by_step = scope
 
     for sm in state_machines:
-        if not sm.bot_question and sm.step != 1:
+        if sm.step == 1:
+            continue
+        if _skip_state_machine(sm, op_type_by_step):
+            continue
+
+        lang_texts = {}
+        for lang in languages:
+            if lang == "en":
+                continue
+            try:
+                result = text_translate_provider(
+                    message_body=sm.bot_question,
+                    target_language=lang,
+                    source_language="en",
+                    company_bot=company_bot,
+                )
+                if result and result.get("status") == 200:
+                    lang_texts[lang] = result["content"]
+            except Exception as e:
+                logger.info(f"generate_translations: text translation failed sm={sm.id} lang={lang}: {e}")
+
+        if not lang_texts:
+            continue
+
+        _merge_translations_field(sm.pk, "text", lang_texts)
+        logger.info(f"generate_translations: updated sm={sm.id} languages={list(lang_texts.keys())}")
+
+    if generate_audio:
+        generate_state_machine_audio.delay(company_bot_id, state_machine_id=state_machine_id, language=language)
+
+
+@app.task
+def generate_state_machine_audio(company_bot_id, state_machine_id=None, language=None):
+    """
+    Generate cached TTS audio for CompanyStateMachines on a bot, stored under the `audio_s3`
+    key in the translations column. For step 1, audio comes from BotVernacular's
+    alt_introductory_message. For other steps, English audio comes from bot_question directly;
+    other languages are only generated if a cached translation already exists for them.
+    If state_machine_id is provided, only process that single row.
+    If language is provided, only process that language.
+    """
+    scope = _resolve_generation_scope(company_bot_id, state_machine_id, language)
+    if scope is None:
+        logger.info(f"generate_audio: CompanyBot id={company_bot_id} not found")
+        return
+    company_bot, state_machines, _languages, tts_voice_map, op_type_by_step = scope
+
+    if not tts_voice_map:
+        return
+
+    vernacular_map = None
+
+    for sm in state_machines:
+        if _skip_state_machine(sm, op_type_by_step):
             continue
 
         cached = dict(sm.translations or {})
 
-        for lang in languages:
-            lang_data = dict(cached.get(lang, {}))
-
-            if sm.step == 1:
-                lang_data.pop("text", None)
-                vernacular_text = vernacular_map.get(lang)
-
-                if not vernacular_text:
-                    continue
-                tts_voice = tts_voice_map.get(lang)
-                try:
-                    tts_result = text_speech_provider(
-                        company_bot=company_bot,
-                        text=vernacular_text,
-                        source_language=lang,
-                    )
-                    if tts_result and tts_result.get("status") == 200:
-                        audio_b64 = tts_result["content"]
-                        if ";base64," in audio_b64:
-                            audio_b64 = audio_b64.split(";base64,", 1)[1]
-                        audio_bytes = base64.b64decode(audio_b64)
-                        audio_format = "wav"
-                        if tts_voice and tts_voice.other_params:
-                            audio_format = tts_voice.other_params.get(
-                                "output_audio_codec", "wav"
-                            )
-                        url = _upload_audio_to_s3(
-                            audio_bytes, company_bot_id, sm.id, lang, audio_format
-                        )
-                        if url:
-                            lang_data["audio_s3"] = url
-                except Exception as e:
-                    logger.info(f"generate_translations: TTS failed sm={sm.id} lang={lang}: {e}")
-
-                if lang_data:
-                    cached[lang] = lang_data
+        if sm.step == 1:
+            if vernacular_map is None:
+                vernacular_map = _load_vernacular_map(company_bot)
+            lang_texts = {
+                lang: vernacular_map[lang] for lang in tts_voice_map if lang in vernacular_map
+            }
+        else:
+            lang_texts = {}
+            for lang in tts_voice_map:
+                if lang == "en":
+                    lang_texts[lang] = sm.bot_question
                 else:
-                    cached.pop(lang, None)
-                continue
+                    cached_text = cached.get(lang, {}).get("text")
+                    if cached_text:
+                        lang_texts[lang] = cached_text
 
-            # Text translation
-            if lang != "en":
-                try:
-                    result = text_translate_provider(
-                        message_body=sm.bot_question,
-                        target_language=lang,
-                        source_language="en",
-                        company_bot=company_bot,
-                    )
-                    if result and result.get("status") == 200:
-                        lang_data["text"] = result["content"]
-                except Exception as e:
-                    logger.info(f"generate_translations: text translation failed sm={sm.id} lang={lang}: {e}")
+        if not lang_texts:
+            continue
 
-            # TTS
+        lang_audio = {}
+        for lang, text in lang_texts.items():
             tts_voice = tts_voice_map.get(lang)
             try:
-                tts_text = lang_data.get("text") or sm.bot_question
                 tts_result = text_speech_provider(
                     company_bot=company_bot,
-                    text=tts_text,
+                    text=text,
                     source_language=lang,
                 )
                 if tts_result and tts_result.get("status") == 200:
                     audio_b64 = tts_result["content"]
-                    # Strip data URI prefix if present
                     if ";base64," in audio_b64:
                         audio_b64 = audio_b64.split(";base64,", 1)[1]
                     audio_bytes = base64.b64decode(audio_b64)
                     audio_format = "wav"
                     if tts_voice and tts_voice.other_params:
-                        audio_format = tts_voice.other_params.get(
-                            "output_audio_codec", "wav"
-                        )
-                    url = _upload_audio_to_s3(
-                        audio_bytes, company_bot_id, sm.id, lang, audio_format
-                    )
+                        audio_format = tts_voice.other_params.get("output_audio_codec", "wav")
+                    url = _upload_audio_to_s3(audio_bytes, company_bot_id, sm.id, lang, audio_format)
                     if url:
-                        lang_data["audio_s3"] = url
+                        lang_audio[lang] = url
             except Exception as e:
-                logger.info(f"generate_translations: TTS failed sm={sm.id} lang={lang}: {e}")
+                logger.info(f"generate_audio: TTS failed sm={sm.id} lang={lang}: {e}")
 
-            if lang_data:
-                cached[lang] = lang_data
+        if not lang_audio:
+            continue
 
-        CompanyStateMachine.objects.filter(pk=sm.pk).update(translations=cached)
-        logger.info(f"generate_translations: updated sm={sm.id} languages={languages}")
+        _merge_translations_field(sm.pk, "audio_s3", lang_audio)
+        logger.info(f"generate_audio: updated sm={sm.id} languages={list(lang_audio.keys())}")

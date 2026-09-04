@@ -47,7 +47,7 @@ class CompanyStateMachineAdmin(InlineActionsMixin, admin.TabularInline):
         'skip_to_step', 'translations'
     )
     exclude = ('type',)  # ✅ hide type
-    inline_actions = ['generate_translation']
+    inline_actions = ['generate_translation', 'generate_audio']
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -59,10 +59,21 @@ class CompanyStateMachineAdmin(InlineActionsMixin, admin.TabularInline):
 
         generate_state_machine_translations.delay(parent_obj.id, state_machine_id=obj.pk)
         messages.success(
-            request, f"Translation generation started for step '{obj.name}'."
+            request, f"Translation generation started for step '{obj.name}'. Please refresh your page after 15-20 seconds to see the updated JSON in the translations section."
         )
 
-    generate_translation.short_description = "Generate (row)"
+    generate_translation.short_description = "Generate Translations"
+
+    def generate_audio(self, request, obj, parent_obj=None):
+        """Inline action: async-triggers audio gen for this row only."""
+        from chatbot.celery_tasks.non_llm_tasks import generate_state_machine_audio
+
+        generate_state_machine_audio.delay(parent_obj.id, state_machine_id=obj.pk)
+        messages.success(
+            request, f"Audio generation started for step '{obj.name}'."
+        )
+
+    generate_audio.short_description = "Generate Audio"
 
 
 class VoiceProviderAdmin(admin.TabularInline):
@@ -152,9 +163,9 @@ class CompanyBotAdmin(InlineActionsModelAdminMixin, BatchUploadMixin, SimpleHist
         """Admin action: async-triggers translation gen for bot, redirects back to change page."""
         from chatbot.celery_tasks.non_llm_tasks import generate_state_machine_translations
 
-        generate_state_machine_translations.delay(bot_id)
+        generate_state_machine_translations.delay(company_bot_id=bot_id, generate_audio=True)
         self.message_user(
-            request, "Translation generation started in background.", messages.SUCCESS
+            request, "Translation generation started in background. Please refresh your page after 15-20 seconds to see the updated JSON in the translations section.", messages.SUCCESS
         )
         return HttpResponseRedirect(
             reverse("admin:chatbot_companybot_change", args=[bot_id])
@@ -582,7 +593,7 @@ class FlowAdmin(SimpleHistoryAdmin):
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
     raw_id_fields = ('bot', 'story_bot', 'parent_flow', 'default_flow', 'image_config', 'story_validation_bot')
-    
+
     fieldsets = (
         ('Basic Information', {
             'fields': ('flow_name', 'flow_route', 'languages')
