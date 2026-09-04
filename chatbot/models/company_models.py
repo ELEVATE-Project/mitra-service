@@ -472,10 +472,9 @@ class CompanyStateMachine(models.Model):
             from chatbot.celery_tasks.non_llm_tasks import generate_state_machine_translations
             company_bot_id = self.company_bot_id
             state_machine_id = self.pk
-            for lang in langs_to_regenerate:
-                generate_state_machine_translations.delay(
-                        company_bot_id, state_machine_id=state_machine_id, language=lang, generate_audio=True
-                )
+            generate_state_machine_translations.delay(
+                    company_bot_id, state_machine_id=state_machine_id, language=None, generate_audio=True
+            )
 
     def __str__(self):
         return f"{self.company_bot.name} - {self.name}"
