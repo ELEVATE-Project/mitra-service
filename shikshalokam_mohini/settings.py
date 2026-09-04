@@ -110,6 +110,7 @@ INSTALLED_APPS = [
     'simple_history',
     'storages',
     'django_crontab',
+    'inline_actions',
 ]
 
 MIDDLEWARE = [
