@@ -104,7 +104,7 @@ def revoke_state_machine_audio(state_machine_id):
         snapshot = {
             lang: lang_data["audio_s3"]
             for lang, lang_data in (sm.translations or {}).items()
-            if (lang_data or {}).get("audio_s3")
+            if isinstance(lang_data, dict) and lang_data.get("audio_s3")
         }
 
     if not snapshot:
@@ -126,7 +126,7 @@ def revoke_state_machine_audio(state_machine_id):
         cached = dict(sm.translations or {})
         for lang in removed_langs:
             lang_data = cached.get(lang)
-            if not lang_data or lang_data.get("audio_s3") != snapshot[lang]:
+            if not isinstance(lang_data, dict) or lang_data.get("audio_s3") != snapshot[lang]:
                 continue
             lang_data = dict(lang_data)
             del lang_data["audio_s3"]
