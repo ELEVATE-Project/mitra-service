@@ -304,7 +304,8 @@ def generate_state_machine_audio(company_bot_id, state_machine_id=None, language
                 if lang == "en":
                     lang_texts[lang] = sm.bot_question
                 else:
-                    cached_text = cached.get(lang, {}).get("text")
+                    lang_data = cached.get(lang)
+                    cached_text = lang_data.get("text") if isinstance(lang_data, dict) else None
                     if cached_text:
                         lang_texts[lang] = cached_text
 
