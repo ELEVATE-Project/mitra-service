@@ -48,6 +48,10 @@ def _upload_audio_to_s3(audio_bytes, company_bot_id, state_machine_id, lang, aud
 
 def _delete_audio_from_s3(url):
     """Delete an S3 object given its full audio_s3 URL. Returns True if deleted or already absent."""
+    if not S3_MEDIA_URL:
+        logger.info("revoke_audio: S3_MEDIA_URL is not configured, skipping delete")
+        return False
+        
     if not url or not url.startswith(S3_MEDIA_URL):
         logger.info(f"revoke_audio: url does not match S3_MEDIA_URL prefix, skipping delete: {url}")
         return False

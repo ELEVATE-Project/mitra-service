@@ -14,7 +14,7 @@ from chatbot.resources.company_resource import ChatSessionResource
 from django.shortcuts import redirect
 from django.contrib import messages
 from django.urls import path
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, HttpResponseNotAllowed
 from django.urls import reverse
 from django.forms import ModelForm, MultipleChoiceField, CheckboxSelectMultiple
 from inline_actions.admin import InlineActionsMixin, InlineActionsModelAdminMixin
@@ -189,6 +189,9 @@ class CompanyBotAdmin(InlineActionsModelAdminMixin, BatchUploadMixin, SimpleHist
 
     def generate_translations_view(self, request, bot_id):
         """Admin action: async-triggers translation gen for bot, redirects back to change page."""
+        if request.method != "POST":
+            return HttpResponseNotAllowed(["POST"])
+
         from chatbot.celery_tasks.non_llm_tasks import generate_state_machine_translations
 
         generate_state_machine_translations.delay(company_bot_id=bot_id, generate_audio=True)
