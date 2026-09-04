@@ -3,6 +3,7 @@ import logging
 import os
 
 import boto3
+from botocore.exceptions import ClientError
 from django.db import transaction
 
 from chatbot.models import CompanyBot, Voice, VoiceType
@@ -43,6 +44,70 @@ def _upload_audio_to_s3(audio_bytes, company_bot_id, state_machine_id, lang, aud
             f"generate_translations: S3 upload failed for sm={state_machine_id} lang: {e}"
         )
         return None
+
+
+def _delete_audio_from_s3(url):
+    """Delete an S3 object given its full audio_s3 URL. Returns True if deleted or already absent."""
+    if not url or not url.startswith(S3_MEDIA_URL):
+        logger.info(f"revoke_audio: url does not match S3_MEDIA_URL prefix, skipping delete: {url}")
+        return False
+    key = url[len(S3_MEDIA_URL):]
+    try:
+        s3 = boto3.client(
+            "s3",
+            region_name=AWS_REGION,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+        )
+        s3.delete_object(Bucket=S3_BUCKET_NAME, Key=key)
+        return True
+    except ClientError as e:
+        if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
+            return True
+        logger.info(f"revoke_audio: S3 delete failed for key={key}: {e}")
+        return False
+    except Exception as e:
+        logger.info(f"revoke_audio: S3 delete failed for key={key}: {e}")
+        return False
+
+
+def revoke_state_machine_audio(state_machine_id):
+    """
+    Deletes every cached `audio_s3` file for a CompanyStateMachine row from S3, then strips
+    `audio_s3` from `translations` for each language where the S3 delete succeeded (or the
+    object was already gone). Languages whose S3 delete fails keep their `audio_s3` entry
+    untouched so the revoke can be retried. A language left with no other keys after the
+    strip is dropped from `translations` entirely.
+    Returns (removed_langs, failed_langs).
+    """
+    with transaction.atomic():
+        sm = CompanyStateMachine.objects.select_for_update().get(pk=state_machine_id)
+        cached = dict(sm.translations or {})
+
+        removed_langs = []
+        failed_langs = []
+        for lang, lang_data in cached.items():
+            url = (lang_data or {}).get("audio_s3")
+            if not url:
+                continue
+            if _delete_audio_from_s3(url):
+                lang_data = dict(lang_data)
+                del lang_data["audio_s3"]
+                if lang_data:
+                    cached[lang] = lang_data
+                else:
+                    cached[lang] = None  # marked for removal below
+                removed_langs.append(lang)
+            else:
+                failed_langs.append(lang)
+
+        if not removed_langs:
+            return removed_langs, failed_langs
+
+        cached = {lang: data for lang, data in cached.items() if data}
+        sm.translations = cached or None
+        sm.save(update_fields=["translations"])
+        return removed_langs, failed_langs
 
 
 def _resolve_generation_scope(company_bot_id, state_machine_id=None, language=None):

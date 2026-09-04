@@ -47,7 +47,10 @@ class CompanyStateMachineAdmin(InlineActionsMixin, admin.TabularInline):
         'skip_to_step', 'translations'
     )
     exclude = ('type',)  # ✅ hide type
-    inline_actions = ['generate_translation', 'generate_audio']
+    inline_actions = ['generate_translation', 'generate_audio', 'revoke_audio']
+
+    class Media:
+        js = ('chatbot/admin/js/confirm_revoke_audio.js',)
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -74,6 +77,31 @@ class CompanyStateMachineAdmin(InlineActionsMixin, admin.TabularInline):
         )
 
     generate_audio.short_description = "Generate Audio"
+
+    def revoke_audio(self, request, obj, parent_obj=None):
+        """Inline action: deletes all cached audio_s3 files for this row from S3, strips them from translations."""
+        from chatbot.celery_tasks.non_llm_tasks import revoke_state_machine_audio
+
+        removed_langs, failed_langs = revoke_state_machine_audio(obj.pk)
+
+        if not removed_langs and not failed_langs:
+            messages.info(request, f"No cached audio found for step '{obj.name}'.")
+        else:
+            if removed_langs:
+                messages.success(
+                    request, f"Revoked audio for step '{obj.name}': {', '.join(removed_langs)}."
+                )
+            if failed_langs:
+                messages.error(
+                    request,
+                    f"Failed to delete S3 audio for step '{obj.name}': {', '.join(failed_langs)}. "
+                    "Left untouched, retry revoke.",
+                )
+
+    revoke_audio.short_description = "Revoke Audio"
+
+    def get_revoke_audio_css(self, obj=None):
+        return "confirm-revoke-audio"
 
 
 class VoiceProviderAdmin(admin.TabularInline):
