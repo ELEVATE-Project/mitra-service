@@ -455,6 +455,7 @@ class CompanyStateMachine(models.Model):
         langs_to_regenerate = []
         if self.pk:
             old = CompanyStateMachine.objects.filter(pk=self.pk).values('bot_question', 'translations').first()
+            self.full_clean()
             if self.operation_type == OperationTypeChoices.LLM or self.step == 1:
                 super().save(*args, **kwargs)
                 return
@@ -463,6 +464,7 @@ class CompanyStateMachine(models.Model):
                 if old['translations'] and self.bot_question:
                     langs_to_regenerate = list(old['translations'].keys())
                 self.translations = None
+
         self.full_clean()
         super().save(*args, **kwargs)
 
