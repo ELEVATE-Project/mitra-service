@@ -3,8 +3,15 @@ import logging
 import os
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from django.db import transaction
+
+S3_CLIENT_CONFIG = Config(
+    connect_timeout=5,
+    read_timeout=10,
+    retries={"max_attempts": 3, "mode": "standard"},
+)
 
 from chatbot.models import CompanyBot, Voice, VoiceType
 from chatbot.models.bot_vernacular_model import BotVernacular
@@ -31,6 +38,7 @@ def _upload_audio_to_s3(audio_bytes, company_bot_id, state_machine_id, lang, aud
             region_name=AWS_REGION,
             aws_access_key_id=AWS_ACCESS_KEY_ID,
             aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+            config=S3_CLIENT_CONFIG,
         )
         s3.put_object(
             Bucket=S3_BUCKET_NAME,
@@ -62,6 +70,7 @@ def _delete_audio_from_s3(url):
             region_name=AWS_REGION,
             aws_access_key_id=AWS_ACCESS_KEY_ID,
             aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+            config=S3_CLIENT_CONFIG,
         )
         s3.delete_object(Bucket=S3_BUCKET_NAME, Key=key)
         return True
@@ -82,33 +91,49 @@ def revoke_state_machine_audio(state_machine_id):
     object was already gone). Languages whose S3 delete fails keep their `audio_s3` entry
     untouched so the revoke can be retried. A language left with no other keys after the
     strip is dropped from `translations` entirely.
+
+    S3 deletes run outside any DB lock (network calls can be slow); the row is locked only
+    to snapshot URLs up front and again to apply the diff. If another writer changed a
+    language's audio_s3 in between (e.g. a fresh generate), that language's stored URL no
+    longer matches the snapshot and is left alone even if the snapshot's URL was deleted.
+
     Returns (removed_langs, failed_langs).
     """
     with transaction.atomic():
         sm = CompanyStateMachine.objects.select_for_update().get(pk=state_machine_id)
+        snapshot = {
+            lang: lang_data["audio_s3"]
+            for lang, lang_data in (sm.translations or {}).items()
+            if (lang_data or {}).get("audio_s3")
+        }
+
+    if not snapshot:
+        return [], []
+
+    removed_langs = []
+    failed_langs = []
+    for lang, url in snapshot.items():
+        if _delete_audio_from_s3(url):
+            removed_langs.append(lang)
+        else:
+            failed_langs.append(lang)
+
+    if not removed_langs:
+        return removed_langs, failed_langs
+
+    with transaction.atomic():
+        sm = CompanyStateMachine.objects.select_for_update().get(pk=state_machine_id)
         cached = dict(sm.translations or {})
-
-        removed_langs = []
-        failed_langs = []
-        for lang, lang_data in cached.items():
-            url = (lang_data or {}).get("audio_s3")
-            if not url:
+        for lang in removed_langs:
+            lang_data = cached.get(lang)
+            if not lang_data or lang_data.get("audio_s3") != snapshot[lang]:
                 continue
-            if _delete_audio_from_s3(url):
-                lang_data = dict(lang_data)
-                del lang_data["audio_s3"]
-                if lang_data:
-                    cached[lang] = lang_data
-                else:
-                    cached[lang] = None  # marked for removal below
-                removed_langs.append(lang)
+            lang_data = dict(lang_data)
+            del lang_data["audio_s3"]
+            if lang_data:
+                cached[lang] = lang_data
             else:
-                failed_langs.append(lang)
-
-        if not removed_langs:
-            return removed_langs, failed_langs
-
-        cached = {lang: data for lang, data in cached.items() if data}
+                del cached[lang]
         sm.translations = cached or None
         sm.save(update_fields=["translations"])
         return removed_langs, failed_langs
