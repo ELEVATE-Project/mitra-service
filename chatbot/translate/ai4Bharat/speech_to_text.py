@@ -177,46 +177,50 @@ def ai4bharat_speech_text(voice_provider, base64, audio_format, source_language,
                 request_timeout = 30
 
             response = requests.post(ai4bharat_base_url, json=payload, headers=headers, timeout=request_timeout)
+            cid = response.headers.get('x-correlation-id', 'N/A')
 
             usage_details, cost_details = compute_stt_usage_and_cost(
-                service_id, 
+                service_id,
                 chunk_duration,
                 voice_provider=voice_provider,
                 company_bot=getattr(voice_provider, 'company_bot', None),
             )
 
             if response.status_code == 200:
-                print("response: ", response.text)
                 audio_data = json_repair.repair_json(response.text, return_objects=True)
                 if isinstance(audio_data, dict) and 'pipelineResponse' in audio_data:
                     audio_content = audio_data['pipelineResponse'][0].get('output', [{}])[0].get('source', '')
-                    print("TRANSCRIPT: ", audio_content)
+                    logger.info(f"[AI4Bharat][STT] status={response.status_code} x-correlation-id={cid}")
                     gen.update(
                         output={"transcript": audio_content},
                         usage_details=usage_details,
                         cost_details=cost_details,
+                        metadata={"x_correlation_id": cid},
                     )
                     return {
                         'status': 200,
                         'content': audio_content
                     }
                 else:
+                    logger.error(f"[AI4Bharat][STT] status={response.status_code} x-correlation-id={cid} error=unexpected_format")
                     gen.update(
                         output={"status": "error", "message": "unexpected_format"},
                         usage_details=usage_details,
                         cost_details=cost_details,
                         level="ERROR",
+                        metadata={"x_correlation_id": cid},
                     )
                     return {
                         'status': 500,
                         'content': 'Unexpected response format from AI4Bharat API'
                     }
             else:
-                print("Error in response: ", response.text)
+                logger.error(f"[AI4Bharat][STT] status={response.status_code} x-correlation-id={cid} error={response.text}")
                 gen.update(
                     output={"status": "error", "status_code": response.status_code},
                     level="ERROR",
                     status_message=f"AI4Bharat returned {response.status_code}",
+                    metadata={"x_correlation_id": cid},
                 )
                 return {
                     'status': response.status_code,
@@ -224,9 +228,8 @@ def ai4bharat_speech_text(voice_provider, base64, audio_format, source_language,
                 }
 
         except Exception as e:
-            logger.error('Error processing file: %s', e, exc_info=True)
-            traceback.print_exc()
-            gen.update(output=None, level="ERROR", status_message=str(e))
+            logger.error(f"[AI4Bharat][STT] x-correlation-id=N/A error={e}", exc_info=True)
+            gen.update(output=None, level="ERROR", status_message=str(e), metadata={"x_correlation_id": "N/A"})
             return {
                 'status': 500,
                 'content': str(e)
