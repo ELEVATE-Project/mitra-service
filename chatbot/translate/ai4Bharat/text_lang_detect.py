@@ -1,6 +1,8 @@
 import os
-import traceback
+import logging
 import requests
+
+logger = logging.getLogger('django')
 
 ai4bharat_api_key = os.getenv("BHASHANI_API_KEY")
 ai4bharat_base_url = os.getenv("BHASHANI_BASE_URL")
@@ -37,26 +39,27 @@ def call_ai4bharat_text_lang_detect_api(message_body):
 
     try:
         response = requests.post(api_url, json=payload, headers=headers, timeout=10)
-        print("Response: ", response)
-        print("Res text: ", response.json())
+        cid = response.headers.get('x-correlation-id', 'N/A')
         if response.status_code == 200:
             lang_detect_data = response.json()
             if isinstance(lang_detect_data, dict) and 'pipelineResponse' in lang_detect_data:
                 lang_detect_message = (lang_detect_data['pipelineResponse'][0].get('output', [{}])[0].
                                            get('langPrediction', [{}])[0].get('langCode', 'en'))
 
-                print("lang_detect_message: ", lang_detect_message)
+                logger.info(f"[AI4Bharat][LANGDETECT] status={response.status_code} x-correlation-id={cid}")
                 return {
                     'status': 200,
                     'content': lang_detect_message
                 }
+            logger.error(f"[AI4Bharat][LANGDETECT] status={response.status_code} x-correlation-id={cid} error=no_pipelineResponse")
+        else:
+            logger.error(f"[AI4Bharat][LANGDETECT] status={response.status_code} x-correlation-id={cid} error={response.text}")
         return {
             'status': 200,
             'content': message_body
         }
     except Exception as e:
-        print(f"Error during language detect API call: {str(e)}")
-        traceback.print_exc()
+        logger.error(f"[AI4Bharat][LANGDETECT] x-correlation-id=N/A error={e}", exc_info=True)
         return {
             'status': 500,
             'content': f"Error during language detect API call: {str(e)}"

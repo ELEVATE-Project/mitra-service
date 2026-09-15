@@ -1,5 +1,4 @@
 import os
-import traceback
 import requests
 from chatbot.translate.ai4Bharat.base_translation import get_service_id
 import logging
@@ -20,7 +19,6 @@ def call_ai4bharat_transliterate_api(source_language, target_language, message_b
     )
     if pipeline_response and pipeline_response.get('success'):
         service_id = pipeline_response.get('service_id', '')
-        print("service_id: ", service_id)
 
     payload = {
         "pipelineTasks": [
@@ -56,28 +54,26 @@ def call_ai4bharat_transliterate_api(source_language, target_language, message_b
 
     try:
         response = requests.post(api_url, json=payload, headers=headers, timeout=timeout)
-        print("Response: ", response)
-        print("Res text: ", response.json())
-        logger.info(f"Response from AI4Bharat Transliteration: {response}")
-        logger.info(f"JSON Response from AI4Bharat Transliteration: {response.json()}")
+        cid = response.headers.get('x-correlation-id', 'N/A')
         if response.status_code == 200:
             transliteration_message_data = response.json()
             if isinstance(transliteration_message_data, dict) and 'pipelineResponse' in transliteration_message_data:
                 transliteration_message = transliteration_message_data['pipelineResponse'][0].get('output', [{}])[0].get('target', '')
 
-                print("transliteration: ", transliteration_message)
+                logger.info(f"[AI4Bharat][TRANSLIT] status={response.status_code} x-correlation-id={cid}")
                 return {
                     'status': 200,
                     'content': transliteration_message
                 }
+            logger.error(f"[AI4Bharat][TRANSLIT] status={response.status_code} x-correlation-id={cid} error=no_pipelineResponse")
+        else:
+            logger.error(f"[AI4Bharat][TRANSLIT] status={response.status_code} x-correlation-id={cid} error={response.text}")
         return {
             'status': 200,
             'content': message_body
         }
     except Exception as e:
-        print(f"Error during transliteration API call: {str(e)}")
-        logger.error(f"Error during transliteration API call: {str(e)}")
-        traceback.print_exc()
+        logger.error(f"[AI4Bharat][TRANSLIT] x-correlation-id=N/A error={e}", exc_info=True)
         return {
             'status': 500,
             'content': message_body
