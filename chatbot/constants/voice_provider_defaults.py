@@ -8,18 +8,15 @@ VOICE_PROVIDER_DEFAULTS = {
             "serviceId": "bhashini/iitm/asr-dravidian--gpu--t4",
             "samplingRate": 16000,
             "preProcessors": [],
-            "postProcessors": [],
-            "request_timeout": 60
+            "postProcessors": []
         },
         VoiceType.TextToText: {
-            "serviceId": "bhashini/iiith/nmt-all",
-            "request_timeout": 30
+            "serviceId": "bhashini/iiith/nmt-all"
         },
         VoiceType.Transliterate: {},
         VoiceType.TextToSpeech: {
             "serviceId": "Bhashini/IITM/TTS",
-            "samplingRate": 22050,
-            "request_timeout": 30
+            "samplingRate": 22050
         }
     },
 
@@ -77,18 +74,6 @@ VOICE_PROVIDER_DEFAULTS = {
             "numerals_format": "native",
             "spoken_form": True,
             "spoken_form_numerals_language": "native"
-        }
-    },
-
-    VoiceProvider.SHIKSHALOKAM: {
-        VoiceType.SpeechToText: {
-            "request_timeout": 60
-        },
-        VoiceType.TextToText: {
-            "request_timeout": 60
-        },
-        VoiceType.TextToSpeech: {
-            "request_timeout": 60
         }
     },
 

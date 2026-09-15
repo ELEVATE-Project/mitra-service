@@ -102,7 +102,6 @@ class FlowImageConfigView(generics.GenericAPIView):
         try:
             flow = Flow.objects.select_related('image_config_id').get(
                 flow_route=flow_route,
-                active=True
             )
             
             if not flow.image_config_id:
@@ -173,7 +172,7 @@ class FlowConnectionInfoView(generics.GenericAPIView):
         
         try:
             flow = Flow.objects.select_related('bot', 'image_config').prefetch_related('child_flows').get(
-                flow_route=flow_route
+                flow_route=flow_route,
             )
             
             # Check if flow is active

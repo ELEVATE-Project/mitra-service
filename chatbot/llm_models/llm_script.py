@@ -107,8 +107,25 @@ def handle_openai_model(
         else:
             model_to_use = LLMModel.GPT4_O_MINI
 
-        if system_prompt and isinstance(system_prompt, list):
-            messages = system_prompt+messages
+        if isinstance(system_prompt, list):
+            fixed_system = []
+
+            for msg in system_prompt:
+                content = msg.get("content")
+
+                if isinstance(content, list):
+                    inner = content[0]
+                    if isinstance(inner, dict):
+                        content = inner.get("content") or inner.get("text", "")
+                    else:
+                        content = str(inner)
+
+                fixed_system.append({
+                    "role": msg.get("role", "system"),
+                    "content": content
+                })
+
+            messages = fixed_system + messages
 
         request_data = {
             "model": model_to_use,
@@ -237,7 +254,6 @@ def handle_bedrock_model(
         aws_secret_access_key=aws_secret_key if aws_secret_key else AWS_SECRET_KEY,
         config=boto_config
     )
-    print("aws_key used: ", aws_key if aws_key else AWS_KEY)
     if model_name:
         model_id = model_name
     else:
@@ -342,9 +358,6 @@ def handle_bedrock_model(
                 final_output = json_repair.repair_json(content_tool, return_objects=True)
             else:
                 final_output = content_tool
-            if isinstance(final_output, dict) and not final_output.get('toolUseId'):
-                logger.error(f"Tool call missing toolUseId, retrying: {final_output}")
-                return None
         else:
             content_text = content.get('text')
             json_start = content_text.find('{')

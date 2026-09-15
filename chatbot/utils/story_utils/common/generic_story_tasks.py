@@ -462,8 +462,7 @@ def create_generic_story_translation(story, language, english_data, voice_provid
                     translated_data[field] = translate_field(
                         voice_provider=voice_provider,
                         message_body=field_value,
-                        target_language=language,
-                        company_bot=company_bot
+                        target_language=language
                     )
                 except Exception as e:
                     logger.info(f"Could not translate field {field}: {e}")

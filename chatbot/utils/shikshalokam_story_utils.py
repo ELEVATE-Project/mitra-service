@@ -32,6 +32,7 @@ logger = logging.getLogger("django")
 base_url = os.getenv("SHIKSHALOKAM_BASE_URL")
 
 
+
 def save_shikshalokam_story(
         story, problem_statement, chat_history, access_token, project_id, session,
         profile, conversation, flow
@@ -359,7 +360,7 @@ def get_story_html(story, profile, flow):
 
 def get_html_from_template(story, profile, flow, auth=False, language=None):
     project = Project.objects.filter(story=story).first()
-    flow_obj = Flow.objects.get(flow_route=flow)
+    flow_obj = Flow.objects.get(flow_route=flow, active=True)
 
     language_used = language
 
@@ -406,6 +407,9 @@ def get_html_from_template(story, profile, flow, auth=False, language=None):
         translated_story = StoryTranslation.objects.select_related("story").get(story__session=story.session, language=language)
         render_params.get("story", {})["title"] = translated_story.title
         render_params.get("story", {})["content"] = translated_story.content
+        render_params.get("story", {})["objective"] = translated_story.objective
+        render_params.get("story", {})["action_steps"] = translated_story.action_steps
+        render_params.get("story", {})["impact"] = translated_story.impact
         render_params.get("story", {})["location"] = translated_story.location
         render_params.get("story", {})["other_params"] = translated_story.other_params
 
