@@ -1,6 +1,5 @@
 import base64
 import os
-import traceback
 import requests
 import json_repair
 import concurrent.futures
@@ -53,8 +52,7 @@ def transcribe_ai4bharat_multiple_chunks(voice_provider, base64_audio_file, sour
         return {'status': 200, 'content': transcript}
 
     except Exception as e:
-        logger.error('Error processing file: %s', e, exc_info=True)
-        traceback.print_exc()
+        logger.error(f"[AI4Bharat][STT] chunked-transcribe x-correlation-id=N/A error={e}", exc_info=True)
         return {'status': 500, 'content': str(e)}
 
 
@@ -109,32 +107,32 @@ def ai4bharat_speech_text(voice_provider, base64, audio_format, source_language)
             request_timeout = 30
 
         response = requests.post(ai4bharat_base_url, json=payload, headers=headers, timeout=request_timeout)
+        cid = response.headers.get('x-correlation-id', 'N/A')
 
         if response.status_code == 200:
-            print("response: ", response.text)
             audio_data = json_repair.repair_json(response.text, return_objects=True)
             if isinstance(audio_data, dict) and 'pipelineResponse' in audio_data:
                 audio_content = audio_data['pipelineResponse'][0].get('output', [{}])[0].get('source', '')
-                print("TRANSCRIPT: ", audio_content)
+                logger.info(f"[AI4Bharat][STT] status={response.status_code} x-correlation-id={cid}")
                 return {
                     'status': 200,
                     'content': audio_content
                 }
             else:
+                logger.error(f"[AI4Bharat][STT] status={response.status_code} x-correlation-id={cid} error=unexpected_format")
                 return {
                     'status': 500,
                     'content': 'Unexpected response format from AI4Bharat API'
                 }
         else:
-            print("Error in response: ", response.text)
+            logger.error(f"[AI4Bharat][STT] status={response.status_code} x-correlation-id={cid} error={response.text}")
             return {
                 'status': response.status_code,
                 'content': 'Failed to fetch audio from AI4Bharat API'
             }
 
     except Exception as e:
-        logger.error('Error processing file: %s', e, exc_info=True)
-        traceback.print_exc()
+        logger.error(f"[AI4Bharat][STT] x-correlation-id=N/A error={e}", exc_info=True)
         return {
             'status': 500,
             'content': str(e)
