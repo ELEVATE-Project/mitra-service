@@ -1,10 +1,11 @@
 import os
-import traceback
+import logging
 import requests
 from chatbot.utils.langfuse_client import get_langfuse_client
 from chatbot.utils.stt_pricing import compute_translate_usage_and_cost
 
 langfuse = get_langfuse_client()
+logger = logging.getLogger('django')
 
 ai4bharat_api_key = os.getenv("BHASHANI_API_KEY")
 ai4bharat_base_url = os.getenv("BHASHANI_BASE_URL")
@@ -31,9 +32,6 @@ def ai4bharat_text_speech(voice_provider, text, gender, source_language):
     ) as gen:
         try:
             api_url = ai4bharat_base_url
-            print("gender: ", gender)
-            print("source_language: ", source_language)
-            print("original text: ", text)
 
             payload = {
                 "pipelineTasks": [
@@ -64,7 +62,6 @@ def ai4bharat_text_speech(voice_provider, text, gender, source_language):
                 'Authorization': ai4bharat_authorization,
             }
             request_timeout = other_params.get("request_timeout", 10)
-            print("REQUEST TIMEOUT VALUE:", request_timeout)
 
             try:
                 request_timeout = float(request_timeout)
@@ -72,7 +69,7 @@ def ai4bharat_text_speech(voice_provider, text, gender, source_language):
                 request_timeout = 10
 
             response = requests.post(api_url, json=payload, headers=headers, timeout=request_timeout)
-            print("AI4Bharat API Response Status Code:", response.status_code, response)
+            cid = response.headers.get('x-correlation-id', 'N/A')
 
             char_count = len(text) if text else 0
             usage_details, cost_details = compute_translate_usage_and_cost(
@@ -85,31 +82,37 @@ def ai4bharat_text_speech(voice_provider, text, gender, source_language):
                 audio_data = response.json()
                 if isinstance(audio_data, dict) and 'pipelineResponse' in audio_data:
                     audio_content = audio_data['pipelineResponse'][0].get('audio', [{}])[0].get('audioContent', '')
+                    logger.info(f"[AI4Bharat][TTS] status={response.status_code} x-correlation-id={cid}")
                     gen.update(
                         output={"status": "ok", "audio_length_chars": len(audio_content) if audio_content else 0},
                         usage_details=usage_details,
                         cost_details=cost_details,
+                        metadata={"x_correlation_id": cid},
                     )
                     return {
                         'status': 200,
                         'content': audio_content
                     }
                 else:
+                    logger.error(f"[AI4Bharat][TTS] status={response.status_code} x-correlation-id={cid} error=unexpected_format")
                     gen.update(
                         output={"status": "error", "message": "Unexpected response format"},
                         usage_details={"input": char_count, "output": 0, "total": char_count},
                         level="ERROR",
+                        metadata={"x_correlation_id": cid},
                     )
                     return {
                         'status': 500,
                         'content': 'Unexpected response format from AI4Bharat API'
                     }
             else:
+                logger.error(f"[AI4Bharat][TTS] status={response.status_code} x-correlation-id={cid} error={response.text}")
                 gen.update(
                     output={"status": "error", "status_code": response.status_code},
                     usage_details={"input": char_count, "output": 0, "total": char_count},
                     level="ERROR",
                     status_message=f"AI4Bharat returned {response.status_code}",
+                    metadata={"x_correlation_id": cid},
                 )
                 return {
                     'status': response.status_code,
@@ -117,8 +120,8 @@ def ai4bharat_text_speech(voice_provider, text, gender, source_language):
                 }
 
         except Exception as e:
-            traceback.print_exc()
-            gen.update(output=None, level="ERROR", status_message=str(e))
+            logger.error(f"[AI4Bharat][TTS] x-correlation-id=N/A error={e}", exc_info=True)
+            gen.update(output=None, level="ERROR", status_message=str(e), metadata={"x_correlation_id": "N/A"})
             return {
                 'status': 500,
                 'content': str(e)

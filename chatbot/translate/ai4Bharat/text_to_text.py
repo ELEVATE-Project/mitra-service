@@ -1,5 +1,4 @@
 import os
-import traceback
 import requests
 import logging
 
@@ -78,41 +77,41 @@ def call_ai4bharat_translation_api(voice_provider, source_language, target_langu
                 headers=headers,
                 timeout=request_timeout
             )
-            print("Response: ", response)
-            print("Res text: ", response.json())
-            logger.info(f"Response from AI4Bharat Text Translation {response}")
-            logger.info(f"JSON Response from AI4Bharat Text Translation {response.json()}")
+            cid = response.headers.get('x-correlation-id', 'N/A')
 
             if response.status_code == 200:
                 translated_data = response.json()
                 if isinstance(translated_data, dict) and 'pipelineResponse' in translated_data:
                     translated_message = translated_data['pipelineResponse'][0].get('output', [{}])[0].get('target', '')
 
-                    print("translated_message: ", translated_message)
+                    logger.info(f"[AI4Bharat][T2T] status={response.status_code} x-correlation-id={cid}")
                     gen.update(
                         output={"translated_preview": translated_message[:200]},
                         usage_details=usage_details,
                         cost_details=cost_details,
+                        metadata={"x_correlation_id": cid},
                     )
                     return {
                         'status': 200,
                         'content': translated_message
                     }
+                logger.error(f"[AI4Bharat][T2T] status={response.status_code} x-correlation-id={cid} error=no_pipelineResponse")
+            else:
+                logger.error(f"[AI4Bharat][T2T] status={response.status_code} x-correlation-id={cid} error={response.text}")
 
             gen.update(
                 output={"status": "fallback", "message": "no_pipelineResponse"},
                 usage_details=usage_details,
                 cost_details=cost_details,
+                metadata={"x_correlation_id": cid},
             )
             return {
                 'status': 200,
                 'content': message_body
             }
         except Exception as e:
-            logger.error('Error processing: %s', e, exc_info=True)
-            print(f"Error during translation API call: {str(e)}")
-            traceback.print_exc()
-            gen.update(output=None, level="ERROR", status_message=str(e))
+            logger.error(f"[AI4Bharat][T2T] x-correlation-id=N/A error={e}", exc_info=True)
+            gen.update(output=None, level="ERROR", status_message=str(e), metadata={"x_correlation_id": "N/A"})
             return {
                 'status': 500,
                 'content': f"Error during translation API call: {str(e)}"
