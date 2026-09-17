@@ -67,6 +67,7 @@ Step 2, restricted to StoryTranslation only.
 import csv
 import logging
 import os
+import time
 
 from django.core.management.base import BaseCommand, CommandError
 
@@ -114,6 +115,10 @@ class Command(BaseCommand):
     )
 
     MAX_REPORT_ATTEMPTS = 3
+    # Rate-limit protection for generate_story: pause after every N stories
+    # regenerated so a large backfill doesn't hammer the report pipeline.
+    COOL_OFF_EVERY = 50
+    COOL_OFF_SECONDS = 10
 
     def add_arguments(self, parser):
         parser.add_argument("--csv", required=True, help="CSV produced by audit_story_media_s3.")
@@ -151,6 +156,7 @@ class Command(BaseCommand):
 
         created = skipped_no_story = 0
         regen_ok = regen_skipped = regen_failed = 0
+        regenerated_count = 0
 
         for story_id in sorted(by_story):
             story = Story.objects.filter(id=story_id).first()
@@ -192,6 +198,18 @@ class Command(BaseCommand):
                 regen_skipped += 1
             else:
                 regen_failed += 1
+
+            regenerated_count += 1
+            if not dry_run and regenerated_count % self.COOL_OFF_EVERY == 0:
+                self.stdout.write(
+                    f"  ... cooling off {self.COOL_OFF_SECONDS}s after "
+                    f"{regenerated_count} stories"
+                )
+                logger.info(
+                    "[regen_from_audit] cool-off %ss after %d stories",
+                    self.COOL_OFF_SECONDS, regenerated_count,
+                )
+                time.sleep(self.COOL_OFF_SECONDS)
 
         self._summary(created, skipped_no_story, regen_ok, regen_skipped, regen_failed, dry_run)
 
