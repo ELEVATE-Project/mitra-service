@@ -185,9 +185,12 @@ class Command(BaseCommand):
                 if not objects:
                     continue
 
-                file_urls = [
-                    fu for fu in story.story_media.values_list("file_url", flat=True) if fu
-                ]
+                file_urls = []
+                for fu, f in story.story_media.values_list("file_url", "file"):
+                    if fu:
+                        file_urls.append(fu)
+                    elif f:
+                        file_urls.append(f'https://{os.environ.get("S3_BUCKET_NAME")}/{f}')
 
                 for key, _size, _last_modified in objects:
                     file_name = key.rsplit("/", 1)[-1]
