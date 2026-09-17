@@ -23,7 +23,9 @@ For every Story (optionally scoped by --story-id / --from / --to):
 
 Story rows are streamed with `.iterator(chunk_size=500)` - the table is large
 and nothing about a single story's audit needs the rest of the table in
-memory.
+memory. Flagged rows are likewise never held in full: they're buffered and
+flushed to the CSV every --flush-every (default 100) rows, since millions of
+rows can be flagged.
 
 Without --dry-run, once the CSV is written this command calls
 `regenerate_reports_from_s3_audit` (--csv <out>) directly, which creates the
@@ -39,7 +41,9 @@ Usage
 """
 
 import csv
+import logging
 import os
+import resource
 from datetime import datetime, time as dtime
 
 from django.core.management import call_command
@@ -47,6 +51,14 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from chatbot.models import Story
+
+logger = logging.getLogger("django")
+
+
+def rss_mb():
+    """Peak RSS so far, in MB (ru_maxrss is KB on Linux, bytes on macOS)."""
+    val = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return val / 1024 if os.uname().sysname == "Linux" else val / (1024 * 1024)
 
 CSV_COLUMNS = ["story_id", "s3_key"]
 
@@ -92,6 +104,10 @@ class Command(BaseCommand):
         parser.add_argument("--to", dest="date_to", help="Story.created_at <= this.")
         parser.add_argument("--out", required=True, help="CSV output path for flagged (ORPHAN_IN_S3) rows.")
         parser.add_argument("--dry-run", action="store_true", help="Write the CSV only; skip backfill + regen.")
+        parser.add_argument(
+            "--flush-every", type=int, default=100,
+            help="Write flagged rows to CSV in batches of this size, instead of holding them all in memory (default: 100).",
+        )
 
     # ------------------------------------------------------------------ setup
 
@@ -138,58 +154,73 @@ class Command(BaseCommand):
     def handle(self, *args, **opts):
         client, bucket = self.get_storage_client()
         stories = self.build_queryset(opts)
+        flush_every = opts["flush_every"]
 
-        rows = []
         examined = 0
         flagged = 0
+        buffer = []
 
         self.stdout.write(f"bucket: {bucket}")
+        logger.info("[audit_s3] START rss=%.1fMB", rss_mb())
 
-        for story in stories.iterator(chunk_size=500):
-            examined += 1
-            if examined % 200 == 0:
-                self.stdout.write(f"  ... {examined} stories examined")
+        with open(opts["out"], "w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=CSV_COLUMNS)
+            writer.writeheader()
 
-            prefix = f"chatbot/storymedia/{story.id}/"
-            objects = [
-                (key, size, last_modified)
-                for key, size, last_modified in self.list_prefix(client, bucket, prefix)
-                if is_image_key(key)
-            ]
-            if not objects:
-                continue
+            for story in stories.iterator(chunk_size=500):
+                examined += 1
+                if examined % 200 == 0:
+                    self.stdout.write(f"  ... {examined} stories examined")
+                    logger.info(
+                        "[audit_s3] progress examined=%d flagged=%d rss=%.1fMB",
+                        examined, flagged, rss_mb(),
+                    )
 
-            file_urls = [
-                fu for fu in story.story_media.values_list("file_url", flat=True) if fu
-            ]
+                prefix = f"chatbot/storymedia/{story.id}/"
+                objects = [
+                    (key, size, last_modified)
+                    for key, size, last_modified in self.list_prefix(client, bucket, prefix)
+                    if is_image_key(key)
+                ]
+                if not objects:
+                    continue
 
-            for key, _size, _last_modified in objects:
-                file_name = key.rsplit("/", 1)[-1]
-                suffix = f"chatbot/storymedia/{story.id}/{file_name}"
-                if any(fu.endswith(suffix) for fu in file_urls):
-                    continue  # OK: some StoryMedia row already claims this object
+                file_urls = [
+                    fu for fu in story.story_media.values_list("file_url", flat=True) if fu
+                ]
 
-                flagged += 1
-                rows.append({"story_id": story.id, "s3_key": key})
+                for key, _size, _last_modified in objects:
+                    file_name = key.rsplit("/", 1)[-1]
+                    suffix = f"chatbot/storymedia/{story.id}/{file_name}"
+                    if any(fu.endswith(suffix) for fu in file_urls):
+                        continue  # OK: some StoryMedia row already claims this object
 
-        self.write_out(rows, opts["out"])
+                    flagged += 1
+                    buffer.append({"story_id": story.id, "s3_key": key})
+                    if len(buffer) >= flush_every:
+                        writer.writerows(buffer)
+                        buffer.clear()
+
+            if buffer:
+                writer.writerows(buffer)
+                buffer.clear()
+
+        self.stdout.write(f"Wrote {flagged} rows to {opts['out']}")
         self.stdout.write(f"stories examined: {examined}")
         self.stdout.write(self.style.WARNING(f"ORPHAN_IN_S3: {flagged}"))
+        logger.info(
+            "[audit_s3] scan done examined=%d flagged=%d rss=%.1fMB",
+            examined, flagged, rss_mb(),
+        )
 
         if opts["dry_run"]:
             self.stdout.write("[dry-run] skipping backfill + regeneration.")
             return
 
-        if not rows:
+        if not flagged:
             self.stdout.write("Nothing to backfill.")
             return
 
+        logger.info("[audit_s3] pre-regen rss=%.1fMB", rss_mb())
         call_command("regenerate_reports_from_s3_audit", csv=opts["out"], column="story_id")
-
-    def write_out(self, rows, out_path):
-        with open(out_path, "w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=CSV_COLUMNS)
-            writer.writeheader()
-            for row in rows:
-                writer.writerow(row)
-        self.stdout.write(f"Wrote {len(rows)} rows to {out_path}")
+        logger.info("[audit_s3] END rss=%.1fMB", rss_mb())
