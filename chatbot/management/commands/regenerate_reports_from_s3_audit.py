@@ -65,10 +65,8 @@ Step 2, restricted to StoryTranslation only.
 """
 
 import csv
-import gc
 import logging
 import os
-import resource
 import time
 
 from django.core.management.base import BaseCommand, CommandError
@@ -87,12 +85,6 @@ from chatbot.models import (
 from chatbot.utils.story_utils.story_utils import generate_story
 
 logger = logging.getLogger("django")
-
-
-def rss_mb():
-    """Peak RSS so far, in MB (ru_maxrss is KB on Linux, bytes on macOS)."""
-    val = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    return val / 1024 if os.uname().sysname == "Linux" else val / (1024 * 1024)
 
 # Same translation regenerate_transliterated_reports.py uses: shikshalokam_chaupal
 # reports are generated with the GuestDiscussion flow.
@@ -158,8 +150,8 @@ class Command(BaseCommand):
             return
 
         logger.info(
-            "[regen_from_audit] START csv=%s column=%s stories=%d flow_override=%s dry_run=%s rss=%.1fMB",
-            opts["csv"], opts["column"], len(by_story), self.flow_override, dry_run, rss_mb(),
+            "[regen_from_audit] START csv=%s column=%s stories=%d flow_override=%s dry_run=%s",
+            opts["csv"], opts["column"], len(by_story), self.flow_override, dry_run,
         )
 
         created = skipped_no_story = 0
@@ -212,14 +204,6 @@ class Command(BaseCommand):
                 self.stdout.write(
                     f"  ... cooling off {self.COOL_OFF_SECONDS}s after "
                     f"{regenerated_count} stories"
-                )
-                collected = gc.collect()
-                logger.info(
-                    "[regen_from_audit] cool-off %ss after %d stories rss=%.1fMB "
-                    "gc_collected=%d gc_garbage=%d flow_cache=%d voice_cache=%d",
-                    self.COOL_OFF_SECONDS, regenerated_count, rss_mb(),
-                    collected, len(gc.garbage),
-                    len(self._flow_row_cache), len(self._story_voice_cache),
                 )
                 time.sleep(self.COOL_OFF_SECONDS)
 
@@ -381,8 +365,8 @@ class Command(BaseCommand):
     def _summary(self, created, skipped_no_story, regen_ok, regen_skipped, regen_failed, dry_run):
         logger.info(
             "[regen_from_audit] DONE dry_run=%s storymedia_created=%d skipped_no_story=%d "
-            "regen_ok=%d regen_skipped=%d regen_failed=%d rss=%.1fMB",
-            dry_run, created, skipped_no_story, regen_ok, regen_skipped, regen_failed, rss_mb(),
+            "regen_ok=%d regen_skipped=%d regen_failed=%d",
+            dry_run, created, skipped_no_story, regen_ok, regen_skipped, regen_failed,
         )
         self.stdout.write("\n" + "=" * 50)
         prefix = "[dry-run] " if dry_run else ""

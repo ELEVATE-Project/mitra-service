@@ -43,7 +43,6 @@ Usage
 import csv
 import logging
 import os
-import resource
 from datetime import datetime, time as dtime
 
 from django.core.management import call_command
@@ -53,12 +52,6 @@ from django.utils import timezone
 from chatbot.models import Story
 
 logger = logging.getLogger("django")
-
-
-def rss_mb():
-    """Peak RSS so far, in MB (ru_maxrss is KB on Linux, bytes on macOS)."""
-    val = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    return val / 1024 if os.uname().sysname == "Linux" else val / (1024 * 1024)
 
 CSV_COLUMNS = ["story_id", "s3_key"]
 
@@ -161,7 +154,6 @@ class Command(BaseCommand):
         buffer = []
 
         self.stdout.write(f"bucket: {bucket}")
-        logger.info("[audit_s3] START rss=%.1fMB", rss_mb())
 
         with open(opts["out"], "w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=CSV_COLUMNS)
@@ -171,10 +163,6 @@ class Command(BaseCommand):
                 examined += 1
                 if examined % 200 == 0:
                     self.stdout.write(f"  ... {examined} stories examined")
-                    logger.info(
-                        "[audit_s3] progress examined=%d flagged=%d rss=%.1fMB",
-                        examined, flagged, rss_mb(),
-                    )
 
                 prefix = f"chatbot/storymedia/{story.id}/"
                 objects = [
@@ -211,10 +199,6 @@ class Command(BaseCommand):
         self.stdout.write(f"Wrote {flagged} rows to {opts['out']}")
         self.stdout.write(f"stories examined: {examined}")
         self.stdout.write(self.style.WARNING(f"ORPHAN_IN_S3: {flagged}"))
-        logger.info(
-            "[audit_s3] scan done examined=%d flagged=%d rss=%.1fMB",
-            examined, flagged, rss_mb(),
-        )
 
         if opts["dry_run"]:
             self.stdout.write("[dry-run] skipping backfill + regeneration.")
@@ -224,6 +208,4 @@ class Command(BaseCommand):
             self.stdout.write("Nothing to backfill.")
             return
 
-        logger.info("[audit_s3] pre-regen rss=%.1fMB", rss_mb())
         call_command("regenerate_reports_from_s3_audit", csv=opts["out"], column="story_id")
-        logger.info("[audit_s3] END rss=%.1fMB", rss_mb())
