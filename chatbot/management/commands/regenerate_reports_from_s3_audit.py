@@ -199,13 +199,14 @@ class Command(BaseCommand):
             else:
                 regen_failed += 1
 
-            regenerated_count += 1
-            if not dry_run and regenerated_count % self.COOL_OFF_EVERY == 0:
-                self.stdout.write(
-                    f"  ... cooling off {self.COOL_OFF_SECONDS}s after "
-                    f"{regenerated_count} stories"
-                )
-                time.sleep(self.COOL_OFF_SECONDS)
+            if not dry_run and outcome != "skipped":
+                regenerated_count += 1
+                if regenerated_count % self.COOL_OFF_EVERY == 0:
+                    self.stdout.write(
+                        f"  ... cooling off {self.COOL_OFF_SECONDS}s after "
+                        f"{regenerated_count} stories"
+                    )
+                    time.sleep(self.COOL_OFF_SECONDS)
 
         self._summary(created, skipped_no_story, regen_ok, regen_skipped, regen_failed, dry_run)
 
