@@ -417,7 +417,10 @@ def handle_bedrock_model(
                     logger.error(f"Tool call missing toolUseId, retrying: {final_output}")
                     gen.update(
                         output=None, usage_details=usage_details, cost_details=cost_details,
-                        metadata={"stop_reason": response.get('stopReason'), "retry_reason": "missing_tool_use_id"},
+                        metadata={
+                            "stop_reason": response.get('stopReason'), "retry_reason": "missing_tool_use_id",
+                            "raw_response": response,
+                        },
                     )
                     return None
             else:
@@ -432,21 +435,27 @@ def handle_bedrock_model(
                         final_output = json_repair.repair_json(json_str, return_objects=True)
                         logger.info('Loads final_output: %s', final_output)
                     except json.JSONDecodeError as e:
-                        gen.update(output=None, usage_details=usage_details, cost_details=cost_details, level="ERROR")
+                        gen.update(
+                            output=None, usage_details=usage_details, cost_details=cost_details, level="ERROR",
+                            metadata={"raw_response": response},
+                        )
                         return None
                 elif is_json_response:
-                    gen.update(output=None, usage_details=usage_details, cost_details=cost_details)
+                    gen.update(
+                        output=None, usage_details=usage_details, cost_details=cost_details,
+                        metadata={"raw_response": response},
+                    )
                     return None
                 else:
                     gen.update(
                         output=content_text, usage_details=usage_details, cost_details=cost_details,
-                        metadata={"stop_reason": response.get('stopReason')},
+                        metadata={"stop_reason": response.get('stopReason'), "raw_response": response},
                     )
                     return content_text
 
             gen.update(
                 output=final_output, usage_details=usage_details, cost_details=cost_details,
-                metadata={"stop_reason": response.get('stopReason')},
+                metadata={"stop_reason": response.get('stopReason'), "raw_response": response},
             )
             return final_output
         except ClientError as e:
