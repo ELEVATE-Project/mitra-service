@@ -17,6 +17,11 @@ nav:
 
   - Getting Started:
       - Developer Setup: setup/developer_setup.md
+  - Project Configuration:
+      - Django Settings: project/settings.md
+      - Celery Configuration: project/celery.md
+      - ASGI, WSGI and Root URLs: project/asgi_wsgi_urls.md
+      - Makefile: project/makefile.md
   - Applications:
        - Chatbot:
           - Overview: apps/chatbot/overview.md
@@ -37,6 +42,26 @@ nav:
           - Translation Layer: apps/chatbot/chatbot_translate.md
           - Models: apps/chatbot/models.md
           - Views: apps/chatbot/views.md
+          - Middlewares: apps/chatbot/chatbot_middlewares.md
+          - Response Handlers: apps/chatbot/chatbot_response_handlers.md
+          - Pre/Post Processing: apps/chatbot/chatbot_processing.md
+          - Free Flow Service: apps/chatbot/chatbot_free_flow.md
+          - Storage Services: apps/chatbot/chatbot_storage.md
+          - I18n Export: apps/chatbot/chatbot_i18n_export.md
+          - LLM Models: apps/chatbot/chatbot_llm_models.md
+          - Story Utilities: apps/chatbot/chatbot_story_utils.md
+          - Knowledge Service: apps/chatbot/chatbot_knowledge_service.md
+          - Media Preview: apps/chatbot/chatbot_media_preview.md
+          - Shiksha Chaupal Utilities: apps/chatbot/chatbot_shiksha_chaupal_utils.md
+          - Cron Tasks: apps/chatbot/chatbot_cron_tasks.md
+          - Constants: apps/chatbot/chatbot_constants.md
+          - Exceptions: apps/chatbot/chatbot_exceptions.md
+          - Import/Export Resources: apps/chatbot/chatbot_resources.md
+          - Programs: apps/chatbot/chatbot_programs.md
+          - Non-LLM Tasks (State Machine Translations and Audio): apps/chatbot/chatbot_non_llm_tasks.md
+          - CSV Correction: apps/chatbot/chatbot_csv_correction.md
+          - Story Media S3 Audit: apps/chatbot/chatbot_media_audit.md
+          - Static Assets: apps/chatbot/chatbot_static.md
        - Shikshalokam:
           - Overview: apps/shikshalokam/overview.md
           - Utils: apps/shikshalokam/utils.md
@@ -44,6 +69,9 @@ nav:
           - Admin: apps/shikshalokam/admin.md
           - URLs: apps/shikshalokam/urls.md
           - Models: apps/shikshalokam/models.md
+          - Serializers: apps/shikshalokam/serializers.md
+          - Import/Export Resources: apps/shikshalokam/resources.md
+          - Scripts: apps/shikshalokam/scripts.md
        - Observability:
            - Overview: apps/observability/overview.md
            - Admin: apps/observability/observability_admin.md
@@ -58,6 +86,8 @@ nav:
       - Translation Layer: backend/translate.md
       - Large Language Model: backend/llm.md
       - Enums: backend/enums.md
+      - Langfuse Tracing: backend/langfuse.md
+      - STT and Translation Pricing: backend/stt_pricing.md
 
   - Integrations:
       - Vector DB:
@@ -66,3 +96,12 @@ nav:
             - Developer Guide: integrations/vector_db/qdrant/developer_guide.md
             - System Architecture: integrations/vector_db/qdrant/system_architecture.md
             - Testing Guide: integrations/vector_db/qdrant/testing_guide.md
+
+  - Deployment:
+      - Ansible Deployment: deployment/ansible.md
+      - PgBouncer Deployment: deployment/pgbouncer.md
+      - Docker and Scripts: deployment/docker.md
+      - Docker Entrypoint: deployment/docker_entrypoint.md
+
+  - Reference:
+      - Glossary: reference/glossary.md
