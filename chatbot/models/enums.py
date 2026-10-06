@@ -287,6 +287,7 @@ class StoryLanguageChoices(models.TextChoices):
     TAMIL = 'ta', _('Tamil')
     PUNJABI = 'pa', _('Punjabi')
     BENGALI = 'bn', _('Bengali')
+    MARATHI = 'mr', _('Marathi')
 
 
 class StorySourceChoices(models.TextChoices):
@@ -554,4 +555,3 @@ class LanguageOperationChoices(models.TextChoices):
 class OperationTypeChoices(models.TextChoices):
     LLM = 'llm', _('LLM')
     NON_LLM = 'non_llm', _('Non-LLM')
-
