@@ -1,8 +1,10 @@
 from django.contrib import admin
+from django.db import models
 from simple_history.admin import SimpleHistoryAdmin
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import BotVernacular
 from chatbot.models.story_vernacular_model import StoryVernacular
+from chatbot.widgets.json_widget import PrettyJSONWidget
 
 
 @admin.register(BotVernacular)
@@ -35,6 +37,9 @@ class StoryVernacularAdmin(SimpleHistoryAdmin):
     raw_id_fields = ('company_bot', )
     search_fields = ('company_bot__name', 'language')
     date_hierarchy = 'created_at'
+    formfield_overrides = {
+        models.JSONField: {'widget': PrettyJSONWidget},
+    }
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)

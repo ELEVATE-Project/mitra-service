@@ -1,6 +1,7 @@
 import logging
 
 from django.contrib import admin
+from django.db import models
 from django.db.models import Q
 from pydantic import ValidationError
 from simple_history.admin import SimpleHistoryAdmin
@@ -21,6 +22,7 @@ from django.urls import reverse
 from django.forms import ModelForm, MultipleChoiceField, CheckboxSelectMultiple
 from inline_actions.admin import InlineActionsMixin, InlineActionsModelAdminMixin
 from ..utils.admin_config.export_mixin import ExportAllFieldsMixin
+from chatbot.widgets.json_widget import PrettyJSONWidget
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,9 @@ class CompanyStateMachineAdmin(InlineActionsMixin, admin.TabularInline):
     )
     exclude = ('type',)  # ✅ hide type
     inline_actions = ['generate_translation', 'generate_audio', 'revoke_audio']
+    formfield_overrides = {
+        models.JSONField: {'widget': PrettyJSONWidget},
+    }
 
     class Media:
         js = ('chatbot/admin/js/confirm_revoke_audio.js',)
@@ -111,6 +116,9 @@ class CompanyStateMachineAdmin(InlineActionsMixin, admin.TabularInline):
 class VoiceProviderAdmin(admin.TabularInline):
     model = Voice
     extra = 1
+    formfield_overrides = {
+        models.JSONField: {'widget': PrettyJSONWidget},
+    }
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -161,6 +169,9 @@ class CompanyBotAdmin(InlineActionsModelAdminMixin, BatchUploadMixin, SimpleHist
     inlines = [VoiceProviderAdmin, CompanyBotProgramMappingInline]
     actions = ['duplicate_bot', 'export_selected_bots']
     inline_actions = None  # only the CompanyStateMachine inline uses inline-actions, not this changelist
+    formfield_overrides = {
+        models.JSONField: {'widget': PrettyJSONWidget},
+    }
 
     enable_batch_upload = True
     batch_load_foreign_keys = True
@@ -422,6 +433,9 @@ class CompanyChatAdmin(ExportAllFieldsMixin, admin.ModelAdmin):
 
     export_filename = "company_chats.xlsx"
     resource_class = CompanyChatResource
+    formfield_overrides = {
+        models.JSONField: {'widget': PrettyJSONWidget},
+    }
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
@@ -483,6 +497,9 @@ class ChatSessionAdmin(ExportAllFieldsMixin, admin.ModelAdmin):
     readonly_fields = ('created_at',)
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
+    formfield_overrides = {
+        models.JSONField: {'widget': PrettyJSONWidget},
+    }
 
     resource_class = ChatSessionResource
 

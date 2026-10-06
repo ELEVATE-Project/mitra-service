@@ -1,23 +1,19 @@
 from botocore.client import Config as BotoConfig
 from botocore.exceptions import ClientError
 from chatbot.models import LLMModel
-from chatbot.models.enums import LLMProvider
 from chatbot.utils.env_parser import load_env_to_dict
-from chatbot.utils.llm import LLM
 from chatbot.utils.langfuse_client import get_langfuse_client
 from typing import Optional, List, Dict
 from django.core.validators import URLValidator
 from openai import OpenAI
-from pprint import pprint
 from retrying import retry
-from chatbot.models import LLMModel, Company
+from chatbot.models import Company
 import boto3
 import json
 import json_repair
 import logging
 import os
 import requests
-import traceback
 
 
 logger = logging.getLogger('django')
@@ -270,12 +266,12 @@ def handle_bedrock_model(
         connect_timeout = company_bot.get('connect_timeout', 5.0)
         read_timeout = company_bot.get('read_timeout', 10.0)
         chat_history_limit = company_bot.get('chat_history_limit', 1000)
-        output_config = company_bot.get("other_params", {}).get("outputConfig")
+        output_config = (company_bot.get("other_params") or {}).get("outputConfig")
     else:
         connect_timeout = getattr(company_bot, 'connect_timeout', 5.0)
         read_timeout = getattr(company_bot, 'read_timeout', 10.0)
         chat_history_limit = getattr(company_bot, 'chat_history_limit', 1000)
-        output_config = getattr(company_bot, "other_params", {}).get("outputConfig")
+        output_config = (getattr(company_bot, "other_params", None) or {}).get("outputConfig")
 
     env_dict = load_env_to_dict(company_bot.provider_keys)
     if env_dict.get("AWS_REGION"):
