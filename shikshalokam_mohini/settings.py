@@ -167,7 +167,8 @@ DATABASES = {
         'USER': os.getenv('PGBOUNCER_DATABASE_USER'),
         'PASSWORD': os.getenv('PGBOUNCER_DATABASE_PASSWORD'),
         'HOST': os.getenv('PGBOUNCER_DATABASE_HOST'),
-        'PORT': os.getenv('PGBOUNCER_DATABASE_PORT')
+        'PORT': os.getenv('PGBOUNCER_DATABASE_PORT'),
+        'DISABLE_SERVER_SIDE_CURSORS': os.environ.get('DISABLE_SERVER_SIDE_CURSORS', True)
     },
     'source_db': {
         'ENGINE': 'django.db.backends.postgresql',
