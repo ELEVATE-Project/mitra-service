@@ -32,7 +32,7 @@ class CompanyBotOtherParams(BaseModel):
 
     custom_model: Optional[str] = None
     outputConfig: Optional[dict] = None
-    configs_to_exclude: Optional[List[str]] = []
+    configs_to_exclude: List[str] = []
     model_pricing: Optional[Dict[str, dict]] = None
 
 
