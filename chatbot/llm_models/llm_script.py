@@ -262,16 +262,19 @@ def handle_bedrock_model(
         aws_secret_key=None, stop_sequences=None
 ):
     # Support company_bot as either dict or model instance
+    configs_to_exclude: list[str] = []
     if isinstance(company_bot, dict):
         connect_timeout = company_bot.get('connect_timeout', 5.0)
         read_timeout = company_bot.get('read_timeout', 10.0)
         chat_history_limit = company_bot.get('chat_history_limit', 1000)
         output_config = (company_bot.get("other_params") or {}).get("outputConfig")
+        configs_to_exclude = (company_bot.get("other_params") or {}).get("configs_to_exclude", [])
     else:
         connect_timeout = getattr(company_bot, 'connect_timeout', 5.0)
         read_timeout = getattr(company_bot, 'read_timeout', 10.0)
         chat_history_limit = getattr(company_bot, 'chat_history_limit', 1000)
         output_config = (getattr(company_bot, "other_params", None) or {}).get("outputConfig")
+        configs_to_exclude = (getattr(company_bot, "other_params", None) or {}).get("configs_to_exclude", [])
 
     env_dict = load_env_to_dict(company_bot.provider_keys)
     if env_dict.get("AWS_REGION"):
@@ -300,15 +303,14 @@ def handle_bedrock_model(
         model_id = 'meta.llama3-1-8b-instruct-v1:0'
 
     inference_config = {}
-    additional_model_fields = {}
 
-    if max_token:
+    if max_token and "maxTokens" not in configs_to_exclude:
         inference_config['maxTokens'] = max_token
-    if temperature is not None:
+    if temperature is not None and "temperature" not in configs_to_exclude:
         inference_config['temperature'] = temperature
-    if top_p:
+    if top_p and "topP" not in configs_to_exclude:
         inference_config['topP'] = top_p
-    if stop_sequences:
+    if stop_sequences and "stopSequences" not in configs_to_exclude:
         inference_config['stopSequences'] = stop_sequences
 
     # Remove trailing assistant message
@@ -342,7 +344,7 @@ def handle_bedrock_model(
         as_type="generation",
         name="bedrock_converse",
         model=model_id,
-        input={"system_prompt": system_prompt, "messages": messages, "tools": tools, "outputConfig": output_config },
+        input={"system_prompt": system_prompt, "messages": messages, "tools": tools, "outputConfig": output_config, "inferenceConfig": inference_config },
         model_parameters={"temperature": temperature, "max_tokens": max_token, "top_p": top_p},
     ) as gen:
         try:
@@ -364,7 +366,7 @@ def handle_bedrock_model(
             logger.info('Bedrock request payload: %s', request_payload)
             response = bedrock_runtime.converse(**request_payload)
 
-            logger.info('Conversation Bedrock response: %s', json.dumps(response))
+            logger.info('Conversation Bedrock response: %s', json.dumps(response, default=str))
             print('Conversation Bedrock response: ', response)
 
             usage_metrics = response.get('usage', {})
@@ -410,6 +412,10 @@ def handle_bedrock_model(
 
             content_arr = response['output']['message']['content']
             content = content_arr[0]
+            for block in content_arr:
+                if 'toolUse' in block or 'text' in block:
+                    content = block
+                    break
             content_tool = content.get('toolUse')
             if content_tool:
                 if isinstance(content_tool, str):

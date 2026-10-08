@@ -17,7 +17,7 @@ from chatbot.resources.company_resource import ChatSessionResource
 from django.shortcuts import redirect
 from django.contrib import messages
 from django.urls import path
-from django.http import HttpResponseRedirect, HttpResponseNotAllowed
+from django.http import HttpResponseRedirect
 from django.urls import reverse
 from django.forms import ModelForm, MultipleChoiceField, CheckboxSelectMultiple
 from inline_actions.admin import InlineActionsMixin, InlineActionsModelAdminMixin
@@ -416,12 +416,9 @@ class CompanyBotAdmin(InlineActionsModelAdminMixin, BatchUploadMixin, SimpleHist
 
 @admin.register(CompanyChat)
 class CompanyChatAdmin(ExportAllFieldsMixin, admin.ModelAdmin):
-    list_display = ('session', 'sender', 'receiver', 'message', 'translated_message', 'created_at', 'stage')
+    list_display = ('session', 'sender_id', 'receiver_id', 'message', 'translated_message', 'created_at', 'stage')
     list_filter = (
         CustomAdvanceDateFilter,
-        ProfileCompanyChatFilter,
-        ProfileEmailFilter,
-        'session',
         CompanyChatCompanyFilter,
         'stage'
     )
