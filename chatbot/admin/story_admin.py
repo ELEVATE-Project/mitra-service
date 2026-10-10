@@ -1,6 +1,8 @@
 from django.utils.html import format_html
 from django.contrib import admin
+from django.db import models
 from django.db.models import Q
+from chatbot.widgets.json_widget import PrettyJSONWidget
 from chatbot.filter.admin_filter import StoryCompanyFilter, StoryStateFilter, StoryDistrictFilter, StoryBlockFilter
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.filter.flow_filter import FlowFilter
@@ -64,6 +66,9 @@ class StoryAdmin(admin.ModelAdmin):
     list_per_page = 20
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
+    formfield_overrides = {
+        models.JSONField: {'widget': PrettyJSONWidget},
+    }
 
     def user_name_from_other_params(self, obj):
         return obj.other_params.get('user_name') if obj.other_params else ''
@@ -207,6 +212,9 @@ class StoryTranslationAdmin(admin.ModelAdmin):
     raw_id_fields = ('story',)
     list_per_page = 20
     date_hierarchy = 'created_at'
+    formfield_overrides = {
+        models.JSONField: {'widget': PrettyJSONWidget},
+    }
 
     def story_session(self, obj):
         """Display session from related story"""

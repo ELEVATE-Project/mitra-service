@@ -1,4 +1,5 @@
 from django.utils.html import format_html
+from django.db import models
 from import_export.admin import ExportActionMixin, ImportMixin
 from django.contrib import admin
 from simple_history.admin import SimpleHistoryAdmin
@@ -8,6 +9,7 @@ from chatbot.models import Profile, ProfileType
 from chatbot.resources.resource import ProfileResource
 from chatbot.models.geo_models import ProfileAddress
 from chatbot.models.media_models import ProfileMedia
+from chatbot.widgets.json_widget import PrettyJSONWidget
 
 
 class ProfileAddressInline(admin.StackedInline):
@@ -51,6 +53,9 @@ class ProfileAdmin(ImportMixin, ExportActionMixin, SimpleHistoryAdmin):
     search_fields = ['first_name', 'email', 'phone']
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
+    formfield_overrides = {
+        models.JSONField: {'widget': PrettyJSONWidget},
+    }
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)

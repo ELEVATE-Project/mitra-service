@@ -1,10 +1,12 @@
 import os
 from copy import deepcopy
+from typing import Dict, List, Optional
 
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from django.core.validators import MinValueValidator, MaxValueValidator
+from pydantic import BaseModel, ConfigDict, ValidationError as PydanticValidationError
 from simple_history.models import HistoricalRecords
 
 from chatbot.constants import api_responses
@@ -18,6 +20,20 @@ from chatbot.models.enums import (
 )
 
 S3_BASE_URL = os.getenv('S3_BASE_URL')
+
+
+class CompanyBotOtherParams(BaseModel):
+    """
+    LLM/model-config subset of CompanyBot.other_params. Unknown keys (e.g. knowledge-service
+    extraction config, detail_filter_score) are ignored - this only validates the LLM-related
+    keys. Checked via CompanyBot.clean(), so it runs admin-side only, not on API/script saves.
+    """
+    model_config = ConfigDict(extra="ignore", protected_namespaces=())
+
+    custom_model: Optional[str] = None
+    outputConfig: Optional[dict] = None
+    configs_to_exclude: List[str] = []
+    model_pricing: Optional[Dict[str, dict]] = None
 
 
 class Company(models.Model):
@@ -169,6 +185,15 @@ class CompanyBot(models.Model):
     )
 
     history = HistoricalRecords()
+
+    def clean(self):
+        super().clean()
+
+        if self.other_params:
+            try:
+                CompanyBotOtherParams.model_validate(self.other_params)
+            except PydanticValidationError as exc:
+                raise ValidationError({'other_params': str(exc)})
 
     def __str__(self):
         return self.name

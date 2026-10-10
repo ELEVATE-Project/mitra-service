@@ -1,23 +1,19 @@
 from botocore.client import Config as BotoConfig
 from botocore.exceptions import ClientError
 from chatbot.models import LLMModel
-from chatbot.models.enums import LLMProvider
 from chatbot.utils.env_parser import load_env_to_dict
-from chatbot.utils.llm import LLM
 from chatbot.utils.langfuse_client import get_langfuse_client
 from typing import Optional, List, Dict
 from django.core.validators import URLValidator
 from openai import OpenAI
-from pprint import pprint
 from retrying import retry
-from chatbot.models import LLMModel, Company
+from chatbot.models import Company
 import boto3
 import json
 import json_repair
 import logging
 import os
 import requests
-import traceback
 
 
 logger = logging.getLogger('django')
@@ -266,14 +262,19 @@ def handle_bedrock_model(
         aws_secret_key=None, stop_sequences=None
 ):
     # Support company_bot as either dict or model instance
+    configs_to_exclude: list[str] = []
     if isinstance(company_bot, dict):
         connect_timeout = company_bot.get('connect_timeout', 5.0)
         read_timeout = company_bot.get('read_timeout', 10.0)
         chat_history_limit = company_bot.get('chat_history_limit', 1000)
+        output_config = (company_bot.get("other_params") or {}).get("outputConfig")
+        configs_to_exclude = (company_bot.get("other_params") or {}).get("configs_to_exclude", [])
     else:
         connect_timeout = getattr(company_bot, 'connect_timeout', 5.0)
         read_timeout = getattr(company_bot, 'read_timeout', 10.0)
         chat_history_limit = getattr(company_bot, 'chat_history_limit', 1000)
+        output_config = (getattr(company_bot, "other_params", None) or {}).get("outputConfig")
+        configs_to_exclude = (getattr(company_bot, "other_params", None) or {}).get("configs_to_exclude", [])
 
     env_dict = load_env_to_dict(company_bot.provider_keys)
     if env_dict.get("AWS_REGION"):
@@ -302,16 +303,16 @@ def handle_bedrock_model(
         model_id = 'meta.llama3-1-8b-instruct-v1:0'
 
     inference_config = {}
-    additional_model_fields = {}
 
-    if max_token:
+    if max_token and "maxTokens" not in configs_to_exclude:
         inference_config['maxTokens'] = max_token
-    if temperature is not None:
+    if temperature is not None and "temperature" not in configs_to_exclude:
         inference_config['temperature'] = temperature
-    if top_p:
+    if top_p and "topP" not in configs_to_exclude:
         inference_config['topP'] = top_p
-    if stop_sequences:
+    if stop_sequences and "stopSequences" not in configs_to_exclude:
         inference_config['stopSequences'] = stop_sequences
+
     # Remove trailing assistant message
     if messages and messages[-1]['role'] == 'assistant':
         messages.pop()
@@ -338,12 +339,12 @@ def handle_bedrock_model(
 
             messages = messages[start_idx:last_user_idx + 1]
     # Track the bedrock_converse chat completion as a Langfuse generation for LLM observability,
-    # including model details, input messages, tools, and model parameters. 
+    # including model details, input messages, tools, and model parameters.
     with langfuse.start_as_current_observation(
         as_type="generation",
         name="bedrock_converse",
         model=model_id,
-        input={"system_prompt": system_prompt, "messages": messages, "tools": tools},
+        input={"system_prompt": system_prompt, "messages": messages, "tools": tools, "outputConfig": output_config, "inferenceConfig": inference_config },
         model_parameters={"temperature": temperature, "max_tokens": max_token, "top_p": top_p},
     ) as gen:
         try:
@@ -354,6 +355,10 @@ def handle_bedrock_model(
             }
             if inference_config:
                 request_payload['inferenceConfig'] = inference_config
+
+            if output_config:
+                request_payload["outputConfig"] = output_config
+
             if tools:
                 print("tools: ", tools)
                 request_payload['toolConfig'] = tools.get('toolConfig')
@@ -361,7 +366,7 @@ def handle_bedrock_model(
             logger.info('Bedrock request payload: %s', request_payload)
             response = bedrock_runtime.converse(**request_payload)
 
-            logger.info('Conversation Bedrock response: %s', json.dumps(response))
+            logger.info('Conversation Bedrock response: %s', json.dumps(response, default=str))
             print('Conversation Bedrock response: ', response)
 
             usage_metrics = response.get('usage', {})
@@ -407,6 +412,10 @@ def handle_bedrock_model(
 
             content_arr = response['output']['message']['content']
             content = content_arr[0]
+            for block in content_arr:
+                if 'toolUse' in block or 'text' in block:
+                    content = block
+                    break
             content_tool = content.get('toolUse')
             if content_tool:
                 if isinstance(content_tool, str):
@@ -417,7 +426,10 @@ def handle_bedrock_model(
                     logger.error(f"Tool call missing toolUseId, retrying: {final_output}")
                     gen.update(
                         output=None, usage_details=usage_details, cost_details=cost_details,
-                        metadata={"stop_reason": response.get('stopReason'), "retry_reason": "missing_tool_use_id"},
+                        metadata={
+                            "stop_reason": response.get('stopReason'), "retry_reason": "missing_tool_use_id",
+                            "raw_response": response,
+                        },
                     )
                     return None
             else:
@@ -432,21 +444,27 @@ def handle_bedrock_model(
                         final_output = json_repair.repair_json(json_str, return_objects=True)
                         logger.info('Loads final_output: %s', final_output)
                     except json.JSONDecodeError as e:
-                        gen.update(output=None, usage_details=usage_details, cost_details=cost_details, level="ERROR")
+                        gen.update(
+                            output=None, usage_details=usage_details, cost_details=cost_details, level="ERROR",
+                            metadata={"raw_response": response},
+                        )
                         return None
                 elif is_json_response:
-                    gen.update(output=None, usage_details=usage_details, cost_details=cost_details)
+                    gen.update(
+                        output=None, usage_details=usage_details, cost_details=cost_details,
+                        metadata={"raw_response": response},
+                    )
                     return None
                 else:
                     gen.update(
                         output=content_text, usage_details=usage_details, cost_details=cost_details,
-                        metadata={"stop_reason": response.get('stopReason')},
+                        metadata={"stop_reason": response.get('stopReason'), "raw_response": response},
                     )
                     return content_text
 
             gen.update(
                 output=final_output, usage_details=usage_details, cost_details=cost_details,
-                metadata={"stop_reason": response.get('stopReason')},
+                metadata={"stop_reason": response.get('stopReason'), "raw_response": response},
             )
             return final_output
         except ClientError as e:
@@ -474,7 +492,7 @@ def get_file_metadata_from_vector_store(client, vector_store_ids, file_id):
     """
     if not vector_store_ids:
         return None
-    
+
     try:
         # Try each vector store until we find the file
         for vs_id in vector_store_ids:
@@ -484,20 +502,20 @@ def get_file_metadata_from_vector_store(client, vector_store_ids, file_id):
                     vector_store_id=vs_id,
                     file_id=file_id
                 )
-                
+
                 # Check if attributes exist
                 if hasattr(vs_file, 'attributes') and vs_file.attributes:
                     logger.info(f"Found metadata for file {file_id} in vector store {vs_id}")
                     return vs_file.attributes
-                    
+
             except Exception as e:
                 # File not in this vector store, try next
                 logger.error(f"File {file_id} not found in vector store {vs_id}: {e}")
                 continue
-        
+
         logger.info(f"No metadata found for file {file_id} in any vector store")
         return None
-        
+
     except Exception as e:
         logger.error(f"Error fetching file metadata for {file_id}: {e}")
         return None
@@ -512,7 +530,7 @@ def add_source_with_organization(source_entry, metadata):
     # Add URL if present in metadata
     if metadata and 'url' in metadata:
         source_entry['url'] = metadata['url']
-    
+
     # Check for company slug in metadata
     company_slug = metadata.get('company', 'shikshalokamstaging')
     if company_slug:
@@ -529,7 +547,7 @@ def add_source_with_organization(source_entry, metadata):
                 logger.info(f"Company with slug '{company_slug}' not found in database")
         except Exception as e:
             logger.error(f"Error fetching company with slug '{company_slug}': {e}")
-    
+
     return source_entry
 
 

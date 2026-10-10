@@ -2,6 +2,7 @@ from django.contrib import admin
 from simple_history.admin import SimpleHistoryAdmin
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import PDFTemplates
+from chatbot.widgets.json_widget import PrettyJSONWidget
 
 
 @admin.register(PDFTemplates)
@@ -41,4 +42,5 @@ class PDFTemplatesAdmin(SimpleHistoryAdmin):
             kwargs['widget'] = admin.widgets.AdminTextareaWidget(attrs={'rows': 20, 'cols': 100})
         elif db_field.name == 'constants_json':
             kwargs['help_text'] = 'Enter constants as JSON object, e.g., {"key1": "value1", "key2": "value2"}'
+            kwargs['widget'] = PrettyJSONWidget
         return super().formfield_for_dbfield(db_field, request, **kwargs)
