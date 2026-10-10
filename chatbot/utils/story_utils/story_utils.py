@@ -253,11 +253,15 @@ def generate_story(profile_id, session, access_token, flow, language='en'):
             "language": language,
             # access_token intentionally excluded — never trace auth credentials
         },
-        metadata={"flow": str(flow), "language": str(language)},
+        metadata={"flow": str(flow), "language": str(language), "profile_id": str(profile_id) if profile_id else None, "session_id": session },
     )
 
     # Tags every observation in this block with the flow name, for easy filtering in the Tracing UI.
-    with propagate_attributes(tags=[f"flow:{flow}"]):
+    with propagate_attributes(
+        session_id=session,
+        user_id=str(profile_id) if profile_id else None,
+        tags=[f"flow:{flow}"]
+    ):
         try:
             profile = Profile.objects.prefetch_related('profile_address').defer('password').get(id=profile_id)
 
