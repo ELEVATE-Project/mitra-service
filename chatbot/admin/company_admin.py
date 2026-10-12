@@ -621,6 +621,7 @@ LANGUAGE_CHOICES = [
     ("ta", "Tamil"),
     ("pa", "Punjabi"),
     ("bn", "Bengali"),
+    ("mr", "Marathi")
 ]
 
 

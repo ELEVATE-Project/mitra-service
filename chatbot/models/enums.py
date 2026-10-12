@@ -287,6 +287,7 @@ class StoryLanguageChoices(models.TextChoices):
     TAMIL = 'ta', _('Tamil')
     PUNJABI = 'pa', _('Punjabi')
     BENGALI = 'bn', _('Bengali')
+    MARATHI = 'mr', _('Marathi')
 
 
 class StorySourceChoices(models.TextChoices):
