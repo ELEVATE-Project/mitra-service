@@ -3,9 +3,14 @@ Migrate data from a source Postgres DB to the target DB using Django ORM.
 
 Source DB must be configured as 'source_db' in DATABASES (via SOURCE_DATABASE_* env vars).
 
+S3 objects referenced by CompanyChat.file_url and StoryMedia.file / file_url are copied
+server-side from --src-bucket to --target-bucket (both required, bare bucket names such as
+'mohini-static.shikshalokam.org') before each row is inserted; the row is skipped if any copy
+fails. StoryMedia keys are rewritten to the target story id. Dry run HEAD-checks source objects.
+
 Usage:
     # Migrate everything
-    python manage.py migrate_data
+    python manage.py migrate_data --src-bucket <src> --target-bucket <target>
 
     # Migrate only transactional data within a date range, plus all referenced
     # Company / CompanyBot / Flow / ImageConfiguration / PDFTemplates / Profile
@@ -46,18 +51,21 @@ Bot sub-models (CompanyStateMachine, Voice, Theme, BotVernacular, StoryVernacula
 only migrate for CompanyBots newly created in this run.
 """
 
+import argparse
 import json
+import logging
 import os
+import re
 from collections import namedtuple
 from dataclasses import dataclass, field
-from datetime import date, datetime, time
+from datetime import datetime, time
 from itertools import islice
-from typing import Optional, Set
+from typing import Any, Optional, Set
 
-import requests
+import boto3
+from botocore.config import Config
 from django.conf import settings
-from django.core.files.base import ContentFile
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
 from chatbot.models.bot_vernacular_model import BotVernacular
@@ -78,6 +86,13 @@ from chatbot.models.story_vernacular_model import StoryVernacular
 from chatbot.models.theme_models import Theme
 
 SRC = "source_db"
+
+logger = logging.getLogger("django")
+
+# Bare S3 bucket name in DNS form, e.g. 'mohini-static.shikshalokam.org'
+BUCKET_NAME_RE = re.compile(r"^(?=.{3,63}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$")
+S3_URL_SCHEMES = ("https://", "s3://")
+S3_CLIENT_CONFIG = Config(retries={"max_attempts": 5, "mode": "standard"})
 
 # A parsed --date-from / --date-to value.
 #   value    : datetime (date-only inputs land on that date at 00:00:00)
@@ -136,6 +151,71 @@ def _save_timestamps(model_class, pk, src_obj):
     if update:
         model_class.objects.filter(pk=pk).update(**update)
 
+def parse_bucket_arg(raw: str) -> str:
+    """Accept a bare bucket name like 'mohini-static.shikshalokam.org' (no scheme, no path)."""
+    if not BUCKET_NAME_RE.match(raw):
+        raise argparse.ArgumentTypeError(
+            f"Expected bare bucket name like 'mohini-static.shikshalokam.org', got '{raw}'"
+        )
+    return raw
+
+
+class S3MigrationError(Exception):
+    pass
+
+
+def copy_s3_key(ctx, key: str, src_prefix: str, target_prefix: str) -> str:
+    """
+    Copy src_bucket/key to target_bucket/<target_prefix + rest of key>, return new key.
+    Key must start with src_prefix. Dry run only HEAD-checks the source object.
+    """
+    if not key.startswith(src_prefix):
+        ctx.stat("S3Object").errored += 1
+        raise S3MigrationError(f"key '{key}' does not start with expected prefix '{src_prefix}'")
+    new_key = target_prefix + key[len(src_prefix):]
+    if (key, new_key) in ctx.copied_keys:
+        return new_key
+
+    s = ctx.stat("S3Object")
+    s.processed += 1
+    try:
+        if ctx.dry_run:
+            ctx.s3.head_object(Bucket=ctx.src_bucket, Key=key)
+        else:
+            ctx.s3.copy(
+                {"Bucket": ctx.src_bucket, "Key": key},
+                ctx.target_bucket,
+                new_key,
+                ExtraArgs={"MetadataDirective": "COPY"},
+            )
+    except Exception as exc:
+        s.errored += 1
+        action = "head" if ctx.dry_run else "copy"
+        raise S3MigrationError(
+            f"{action} s3://{ctx.src_bucket}/{key} -> s3://{ctx.target_bucket}/{new_key} failed: {exc}"
+        ) from exc
+    s.created += 1
+    ctx.copied_keys.add((key, new_key))
+    return new_key
+
+
+def validate_and_upload_object(ctx, file_url: str, src_prefix: str, target_prefix: str) -> str:
+    """
+    If file_url is 'https://<src_bucket>/<key>' or 's3://<src_bucket>/<key>', copy the object
+    to the target bucket and return the same URL pointing at the target bucket / new key.
+    Anything else (empty, legacy base64, other hosts) is returned unchanged.
+    """
+    if not file_url:
+        return file_url
+    for scheme in S3_URL_SCHEMES:
+        head = f"{scheme}{ctx.src_bucket}/"
+        if file_url.startswith(head):
+            new_key = copy_s3_key(ctx, file_url[len(head):], src_prefix, target_prefix)
+            return f"{scheme}{ctx.target_bucket}/{new_key}"
+    ctx.stat("S3Object").skipped += 1
+    logger.info(f"migrate_data: file_url not in src bucket, kept as-is: {file_url[:100]}")
+    return file_url
+
 
 @dataclass
 class Stats:
@@ -148,6 +228,13 @@ class Stats:
 
 @dataclass
 class MigrationContext:
+    # S3 object migration
+    src_bucket: str = ""
+    target_bucket: str = ""
+    s3: Any = None
+    dry_run: bool = False
+    # (src_key, target_key) pairs already copied (or HEAD-checked in dry run)
+    copied_keys: set = field(default_factory=set)
     # ID remaps: source_id → target_id
     company_id_map: dict = field(default_factory=dict)
     bot_id_map: dict = field(default_factory=dict)
@@ -329,6 +416,18 @@ class Command(BaseCommand):
             default=None,
             help="Restrict migration to a single CompanyBot route (e.g. shiksha-samvad)",
         )
+        parser.add_argument(
+            "--src-bucket",
+            type=parse_bucket_arg,
+            required=True,
+            help="Source S3 bucket name, e.g. 'qa-mohini-static.shikshalokam.org'",
+        )
+        parser.add_argument(
+            "--target-bucket",
+            type=parse_bucket_arg,
+            required=True,
+            help="Target S3 bucket name, e.g. 'mohini-static.shikshalokam.org'",
+        )
 
     def handle(self, *args, **options):
         batch_size = options["batch_size"]
@@ -336,12 +435,30 @@ class Command(BaseCommand):
         date_from = options["date_from"]
         date_to = options["date_to"]
         session_name = options["session_name"]
+        src_bucket = options["src_bucket"]
+        target_bucket = options["target_bucket"]
+
+        if src_bucket == target_bucket:
+            raise CommandError("--src-bucket and --target-bucket must differ")
+
+        s3 = boto3.client(
+            "s3",
+            region_name=os.getenv("AWS_REGION"),
+            aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+            aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+            config=S3_CLIENT_CONFIG,
+        )
+        for bucket in (src_bucket, target_bucket):
+            try:
+                s3.head_bucket(Bucket=bucket)
+            except Exception as exc:
+                raise CommandError(f"S3 bucket '{bucket}' not reachable: {exc}")
 
         if dry_run:
             self.stdout.write(self.style.WARNING("DRY RUN — no writes will occur\n"))
 
         scope = build_scope(date_from, date_to, session_name, self.stdout)
-        ctx = MigrationContext()
+        ctx = MigrationContext(src_bucket=src_bucket, target_bucket=target_bucket, s3=s3, dry_run=dry_run)
 
         steps = [
             ("Company", lambda: migrate_companies(ctx, scope, batch_size, dry_run, self.stdout)),
@@ -910,6 +1027,13 @@ def migrate_company_chats(ctx, scope, batch_size, dry_run, stdout):
             if src.session not in valid_sessions:
                 ctx.log_skip("CompanyChat", src.id, f"session '{src.session}' has no parent ChatSession in source")
                 continue
+
+            # Copy S3 objects before insert; any copy failure skips the row
+            try:
+                file_url = _migrate_chat_file_urls(ctx, src)
+            except S3MigrationError as exc:
+                ctx.log_error("CompanyChat", src.id, exc)
+                continue
             if dry_run:
                 continue
             try:
@@ -929,7 +1053,7 @@ def migrate_company_chats(ctx, scope, batch_size, dry_run, stdout):
                     message_type=src.message_type,
                     stage=src.stage,
                     other_params=src.other_params,
-                    file_url=src.file_url,
+                    file_url=file_url,
                 )
                 obj.save()
                 if src.updated_at:
@@ -938,6 +1062,16 @@ def migrate_company_chats(ctx, scope, batch_size, dry_run, stdout):
             except Exception as exc:
                 ctx.log_error("CompanyChat", src.id, exc)
     stdout.write(f"  {s.processed} processed, {s.skipped} skipped")
+
+
+def _migrate_chat_file_urls(ctx, src) -> Optional[str]:
+    """file_url is comma-separated; each part is copied independently (non-S3 parts kept as-is)."""
+    if not src.file_url:
+        return src.file_url
+    prefix = f"chatbot/companychat/{src.session}/"
+    return ",".join(
+        validate_and_upload_object(ctx, part, prefix, prefix) for part in src.file_url.split(",")
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1003,36 +1137,26 @@ def migrate_stories(ctx, scope, batch_size, dry_run, stdout):
 
 def migrate_story_media(ctx, batch_size, dry_run, stdout):
     s = ctx.stat("StoryMedia")
-    # src_s3_base = os.getenv("SOURCE_S3_MEDIA_URL", "").rstrip("/")
-
     qs = StoryMedia.objects.using(SRC).filter(story_id__in=ctx.story_id_map.keys())
     for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
         for src in batch:
             s.processed += 1
             tgt_story_id = ctx.story_id_map.get(src.story_id)
-            if tgt_story_id is None or dry_run:
+            if tgt_story_id is None:
                 continue
 
-            # # Resolve source file URL — prefer file_url field, fall back to constructing from base
-            # if src.file_url:
-            #     source_url = src.file_url
-            # elif src.file and src_s3_base:
-            #     source_url = f"{src_s3_base}/{str(src.file)}"
-            # else:
-            #     ctx.log_error("StoryMedia", src.id, "no source file URL available — set SOURCE_S3_MEDIA_URL env var")
-            #     continue
+            # Copy S3 objects before insert; any copy failure skips the row
+            src_prefix = f"chatbot/storymedia/{src.story_id}/"
+            target_prefix = f"chatbot/storymedia/{tgt_story_id}/"
+            try:
+                file_key = copy_s3_key(ctx, src.file.name, src_prefix, target_prefix) if src.file else src.file
+                file_url = validate_and_upload_object(ctx, src.file_url, src_prefix, target_prefix)
+            except S3MigrationError as exc:
+                ctx.log_error("StoryMedia", src.id, exc)
+                continue
+            if dry_run:
+                continue
 
-            # # Download file from source S3
-            # try:
-            #     resp = requests.get(source_url, timeout=60)
-            #     resp.raise_for_status()
-            #     filename = os.path.basename(str(src.file)) if src.file else src.name
-            #     file_content = ContentFile(resp.content, name=filename)
-            # except Exception as exc:
-            #     ctx.log_error("StoryMedia", src.id, f"download failed [{source_url}]: {exc}")
-            #     continue
-
-            # Bucket names are identical — copy file path and URL directly without re-uploading
             try:
                 obj = StoryMedia(
                     story_id=tgt_story_id,
@@ -1041,18 +1165,10 @@ def migrate_story_media(ctx, batch_size, dry_run, stdout):
                     base64_str=src.base64_str,
                     source_path=src.source_path,
                     media_type=src.media_type,
-                    file=src.file,
-                    file_url=src.file_url,
+                    file=file_key,
+                    file_url=file_url,
                 )
                 obj.save()
-                # # Upload file to target S3
-                # try:
-                #     obj.file.save(filename, file_content, save=True)
-                #     StoryMedia.objects.filter(pk=obj.pk).update(file_url=obj.file.url)
-                # except Exception as exc:
-                #     obj.delete()
-                #     ctx.log_error("StoryMedia", src.id, f"upload to target S3 failed: {exc}")
-                #     continue
                 _save_timestamps(StoryMedia, obj.pk, src)
                 s.created += 1
             except Exception as exc:
