@@ -6,7 +6,9 @@ Source DB must be configured as 'source_db' in DATABASES (via SOURCE_DATABASE_* 
 S3 objects referenced by CompanyChat.file_url and StoryMedia.file / file_url are copied
 server-side from --src-bucket to --target-bucket (both required, bare bucket names such as
 'mohini-static.shikshalokam.org') before each row is inserted; the row is skipped if any copy
-fails. StoryMedia keys are rewritten to the target story id. Dry run HEAD-checks source objects.
+fails. StoryMedia keys are rewritten to the target story id. Objects already present in the
+target bucket are not re-copied (reruns resume). Dry run HEAD-checks target, then source.
+Target bucket needs s3:ListBucket so missing keys return 404 (checked at startup).
 
 Usage:
     # Migrate everything
@@ -64,6 +66,7 @@ from typing import Any, Optional, Set
 
 import boto3
 from botocore.config import Config
+from botocore.exceptions import ClientError
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
@@ -93,6 +96,7 @@ logger = logging.getLogger("django")
 BUCKET_NAME_RE = re.compile(r"^(?=.{3,63}$)[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$")
 S3_URL_SCHEMES = ("https://", "s3://")
 S3_CLIENT_CONFIG = Config(retries={"max_attempts": 5, "mode": "standard"})
+S3_NOT_FOUND_CODES = ("404", "NoSuchKey", "NotFound")
 
 # A parsed --date-from / --date-to value.
 #   value    : datetime (date-only inputs land on that date at 00:00:00)
@@ -164,6 +168,17 @@ class S3MigrationError(Exception):
     pass
 
 
+def s3_key_exists(s3, bucket: str, key: str) -> bool:
+    """HEAD bucket/key: True on 200, False on 404, raise ClientError on anything else (e.g. 403)."""
+    try:
+        s3.head_object(Bucket=bucket, Key=key)
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") in S3_NOT_FOUND_CODES:
+            return False
+        raise
+    return True
+
+
 def copy_s3_key(ctx, key: str, src_prefix: str, target_prefix: str) -> str:
     """
     Copy src_bucket/key to target_bucket/<target_prefix + rest of key>, return new key.
@@ -173,11 +188,18 @@ def copy_s3_key(ctx, key: str, src_prefix: str, target_prefix: str) -> str:
         ctx.stat("S3Object").errored += 1
         raise S3MigrationError(f"key '{key}' does not start with expected prefix '{src_prefix}'")
     new_key = target_prefix + key[len(src_prefix):]
-    if (key, new_key) in ctx.copied_keys:
-        return new_key
 
     s = ctx.stat("S3Object")
     s.processed += 1
+    try:
+        exists = s3_key_exists(ctx.s3, ctx.target_bucket, new_key)
+    except ClientError as exc:
+        s.errored += 1
+        raise S3MigrationError(f"head s3://{ctx.target_bucket}/{new_key} failed: {exc}") from exc
+    if exists:
+        s.existed += 1
+        return new_key
+
     try:
         if ctx.dry_run:
             ctx.s3.head_object(Bucket=ctx.src_bucket, Key=key)
@@ -195,7 +217,6 @@ def copy_s3_key(ctx, key: str, src_prefix: str, target_prefix: str) -> str:
             f"{action} s3://{ctx.src_bucket}/{key} -> s3://{ctx.target_bucket}/{new_key} failed: {exc}"
         ) from exc
     s.created += 1
-    ctx.copied_keys.add((key, new_key))
     return new_key
 
 
@@ -224,6 +245,7 @@ class Stats:
     updated: int = 0
     skipped: int = 0
     errored: int = 0
+    existed: int = 0
 
 
 @dataclass
@@ -233,8 +255,6 @@ class MigrationContext:
     target_bucket: str = ""
     s3: Any = None
     dry_run: bool = False
-    # (src_key, target_key) pairs already copied (or HEAD-checked in dry run)
-    copied_keys: set = field(default_factory=set)
     # ID remaps: source_id → target_id
     company_id_map: dict = field(default_factory=dict)
     bot_id_map: dict = field(default_factory=dict)
@@ -271,6 +291,7 @@ class MigrationContext:
             stdout.write(
                 f"  {entity:<30} processed={s.processed:>6}  created={s.created:>6}"
                 f"  updated={s.updated:>6}  skipped={s.skipped:>6}  errored={s.errored:>6}"
+                f"  existed={s.existed:>6}"
             )
 
 
