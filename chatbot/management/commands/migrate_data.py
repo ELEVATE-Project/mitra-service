@@ -26,14 +26,26 @@ Usage:
     python manage.py migrate_data --dry-run [--date-from ...] [--date-to ...] \
         --session_name shiksha-samvad
 
+    # Only the sessions listed in a CSV column (cannot combine with date / --session_name)
+    python manage.py migrate_data --sessions-csv sessions.csv --sessions-csv-column session_id
+
     # Dry run (count rows, no writes)
     python manage.py migrate_data --dry-run [--date-from ...] [--date-to ...]
+
+Scope:
+    ChatSessions are selected by date range / bot route, or by CSV. CompanyChat and Story
+    always follow the in-scope ChatSessions (matched on session), never their own created_at.
 
 Date/time filters:
     --date-from / --date-to accept 'YYYY-MM-DD' (whole day) or
     'YYYY-MM-DD HH:MM[:SS]' (exact time). Filters run against created_at, so
-    time-of-day is honoured. If settings.USE_TZ is True, naive inputs are made
+    time-of-day is honoured (ChatSession only). If settings.USE_TZ is True, naive inputs are made
     timezone-aware in the current timezone before filtering.
+
+Sessions CSV:
+    --sessions-csv / --sessions-csv-column go together; the column is picked by header name.
+    Values are trimmed, blanks skipped, duplicates dropped (file read as utf-8-sig). CSV
+    sessions missing from source are logged (entity CSVSession) to migration_errors.jsonl.
 
 Timestamp handling:
     auto_now_add / auto_now fields are overwritten via QuerySet.update() after
@@ -51,13 +63,27 @@ Upsert keys:
 
 Bot sub-models (CompanyStateMachine, Voice, Theme, BotVernacular, StoryVernacular)
 only migrate for CompanyBots newly created in this run.
+
+Resource logging (logger 'django' -> info.log, prefix 'migrate_data[res]'):
+    Per step: wall time, CPU time / %, current + peak RSS, RSS delta, gc counts, DB query log
+    sizes, MigrationContext container sizes. Per batch: rows, RSS, CPU %.
+    --trace-memory adds tracemalloc: top per-line allocation growth per step and top live
+    allocations at the end (noticeably slower; use to locate leaks).
+    KNOWN ISSUE: memory grows over long runs; these logs exist to locate it, not fix it.
+    Current RSS needs /proc (Linux); elsewhere only peak RSS is reported.
 """
 
 import argparse
+import csv
 import json
 import logging
+import gc
 import os
 import re
+import resource
+import sys
+import time as time_mod
+import tracemalloc
 from collections import namedtuple
 from dataclasses import dataclass, field
 from datetime import datetime, time
@@ -69,6 +95,8 @@ from botocore.config import Config
 from botocore.exceptions import ClientError
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
+from django.db import connections
+from django.db.models import QuerySet
 from django.utils import timezone
 
 from chatbot.models.bot_vernacular_model import BotVernacular
@@ -142,6 +170,149 @@ def chunked(iterable, n):
         yield chunk
 
 
+def iter_batches(ctx, label, qs, batch_size):
+    """Batches of a source queryset; logs resource usage after each batch."""
+    for i, batch in enumerate(chunked(qs.iterator(chunk_size=batch_size), batch_size), 1):
+        yield batch
+        if ctx.monitor is not None:
+            ctx.monitor.batch(label, i, len(batch))
+
+
+# ---------------------------------------------------------------------------
+# Resource monitoring (CPU / memory) — diagnostics only, see docstring
+# ---------------------------------------------------------------------------
+
+TRACEMALLOC_TOP_N = 15
+TRACEMALLOC_FILTERS = (
+    tracemalloc.Filter(False, tracemalloc.__file__),
+    tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
+    tracemalloc.Filter(False, "<frozen importlib._bootstrap_external>"),
+    tracemalloc.Filter(False, "<unknown>"),
+)
+
+
+def _mb(n: Optional[int]) -> str:
+    return "n/a" if n is None else f"{n / (1024 * 1024):.1f}MB"
+
+
+def _current_rss_bytes() -> Optional[int]:
+    """Resident set size now; Linux only (/proc), None elsewhere."""
+    try:
+        with open("/proc/self/statm") as f:
+            return int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _peak_rss_bytes() -> int:
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    return peak if sys.platform == "darwin" else peak * 1024  # Linux reports KB
+
+
+def _cpu_seconds() -> float:
+    ru = resource.getrusage(resource.RUSAGE_SELF)
+    return ru.ru_utime + ru.ru_stime
+
+
+class ResourceMonitor:
+    """
+    Logs CPU / memory per step (checkpoint) and per batch, to find where memory grows.
+    CPU % = process CPU time / wall time over the interval; >100% means multiple threads
+    (e.g. boto3 S3 transfer threads).
+    """
+
+    def __init__(self, trace_memory: bool):
+        self.trace_memory = trace_memory
+        self.ctx = None  # MigrationContext, attached once built
+        if trace_memory:
+            tracemalloc.start()
+        self._snapshot = self._take_snapshot()
+        self._run_start = self._step_start = self._batch_last = self._sample()
+
+    def _take_snapshot(self):
+        if not self.trace_memory:
+            return None
+        return tracemalloc.take_snapshot().filter_traces(TRACEMALLOC_FILTERS)
+
+    @staticmethod
+    def _sample() -> dict:
+        return {"wall": time_mod.monotonic(), "cpu": _cpu_seconds(), "rss": _current_rss_bytes()}
+
+    @staticmethod
+    def _cpu_pct(start: dict, end: dict) -> float:
+        wall = end["wall"] - start["wall"]
+        return 100.0 * (end["cpu"] - start["cpu"]) / wall if wall > 0 else 0.0
+
+    @staticmethod
+    def _rss_delta(start: dict, end: dict) -> str:
+        if start["rss"] is None or end["rss"] is None:
+            return "n/a"
+        return f"{(end['rss'] - start['rss']) / (1024 * 1024):+.1f}MB"
+
+    def _ctx_sizes(self) -> str:
+        c = self.ctx
+        if c is None:
+            return ""
+        return (
+            f" ctx[company_map={len(c.company_id_map)} bot_map={len(c.bot_id_map)}"
+            f" flow_map={len(c.flow_id_map)} profile_map={len(c.profile_id_map)}"
+            f" story_map={len(c.story_id_map)} skipped_sessions={len(c.skipped_sessions)}"
+            f" dry_run_sessions={len(c.dry_run_migrated_sessions)} errors={len(c.errors)}]"
+        )
+
+    def batch(self, label: str, index: int, rows: int):
+        now = self._sample()
+        traced = ""
+        if self.trace_memory:
+            cur, peak = tracemalloc.get_traced_memory()
+            traced = f" traced={_mb(cur)} traced_peak={_mb(peak)}"
+        logger.info(
+            f"migrate_data[res] batch {label} #{index} rows={rows} rss={_mb(now['rss'])}"
+            f" rss_step_delta={self._rss_delta(self._step_start, now)}"
+            f" cpu={self._cpu_pct(self._batch_last, now):.0f}%{traced}"
+        )
+        self._batch_last = now
+
+    def checkpoint(self, label: str):
+        now = self._sample()
+        start = self._step_start
+        queries = {alias: len(connections[alias].queries_log) for alias in (SRC, "default")}
+        logger.info(
+            f"migrate_data[res] step {label} wall={now['wall'] - start['wall']:.1f}s"
+            f" cpu_time={now['cpu'] - start['cpu']:.1f}s cpu={self._cpu_pct(start, now):.0f}%"
+            f" rss={_mb(now['rss'])} rss_delta={self._rss_delta(start, now)}"
+            f" peak_rss={_mb(_peak_rss_bytes())} gc_counts={gc.get_count()}"
+            f" query_log={queries}{self._ctx_sizes()}"
+        )
+        if self.trace_memory:
+            snapshot = self._take_snapshot()
+            growth = [d for d in snapshot.compare_to(self._snapshot, "lineno") if d.size_diff > 0]
+            for d in growth[:TRACEMALLOC_TOP_N]:
+                logger.info(
+                    f"migrate_data[res]   grew {label}: {d.size_diff / 1024:+.1f}KB"
+                    f" (now {d.size / 1024:.1f}KB, {d.count_diff:+d} blocks) {d.traceback[0]}"
+                )
+            self._snapshot = snapshot
+        self._step_start = self._batch_last = now
+
+    def finish(self):
+        now = self._sample()
+        start = self._run_start
+        logger.info(
+            f"migrate_data[res] run total wall={now['wall'] - start['wall']:.1f}s"
+            f" cpu_time={now['cpu'] - start['cpu']:.1f}s cpu={self._cpu_pct(start, now):.0f}%"
+            f" rss={_mb(now['rss'])} rss_delta={self._rss_delta(start, now)}"
+            f" peak_rss={_mb(_peak_rss_bytes())}"
+        )
+        if self.trace_memory:
+            for stat in self._take_snapshot().statistics("lineno")[:TRACEMALLOC_TOP_N]:
+                logger.info(
+                    f"migrate_data[res]   live at end: {stat.size / 1024:.1f}KB"
+                    f" ({stat.count} blocks) {stat.traceback[0]}"
+                )
+            tracemalloc.stop()
+
+
 def _save_timestamps(model_class, pk, src_obj):
     """
     Overwrite auto_now_add / auto_now managed fields with source values.
@@ -162,6 +333,36 @@ def parse_bucket_arg(raw: str) -> str:
             f"Expected bare bucket name like 'mohini-static.shikshalokam.org', got '{raw}'"
         )
     return raw
+
+
+def parse_csv_path_arg(raw: str) -> str:
+    if not os.path.isfile(raw):
+        raise argparse.ArgumentTypeError(f"CSV file not found: '{raw}'")
+    return raw
+
+
+def read_csv_sessions(path: str, column: str, stdout) -> list:
+    """Unique, trimmed, non-blank values of `column` (by header name), in file order."""
+    with open(path, newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        headers = reader.fieldnames or []
+        if column not in headers:
+            raise CommandError(f"Column '{column}' not in CSV headers: {headers}")
+        total = blanks = 0
+        sessions = {}  # dict keeps file order while deduping
+        for row in reader:
+            total += 1
+            value = (row.get(column) or "").strip()
+            if not value:
+                blanks += 1
+                continue
+            sessions[value] = None
+    stdout.write(
+        f"CSV '{path}': {total} rows, {len(sessions)} unique sessions, {blanks} blank skipped"
+    )
+    if not sessions:
+        raise CommandError(f"No session values in column '{column}' of '{path}'")
+    return list(sessions)
 
 
 class S3MigrationError(Exception):
@@ -271,6 +472,8 @@ class MigrationContext:
     dry_run_migrated_sessions: set = field(default_factory=set)
     stats: dict = field(default_factory=dict)
     errors: list = field(default_factory=list)
+    # CPU / memory diagnostics (None = off)
+    monitor: Optional[ResourceMonitor] = None
 
     def stat(self, entity) -> Stats:
         if entity not in self.stats:
@@ -296,61 +499,64 @@ class MigrationContext:
 
 
 # ---------------------------------------------------------------------------
-# Date-range scope discovery
+# Scope discovery (date range / bot route / sessions CSV)
 # ---------------------------------------------------------------------------
 
 @dataclass
 class MigrationScope:
     """
-    When date range is provided, only migrate entities referenced by
-    transactional records (ChatSession, CompanyChat, Story) in that range.
-    None means "migrate all".
+    Scoped run: only migrate in-scope ChatSessions, the CompanyChat / Story rows of
+    those sessions, and every entity they reference. None means "migrate all".
     """
-    date_from: Optional[DateArg] = None
-    date_to: Optional[DateArg] = None
-    session_name: Optional[str] = None
+    # Source ChatSession queryset in scope; CompanyChat / Story follow its sessions
+    sessions_qs: Optional[QuerySet] = None
     # Source IDs to restrict each entity (None = all)
     company_ids: Optional[Set[int]] = None
     bot_ids: Optional[Set[int]] = None
     image_config_ids: Optional[Set[int]] = None
     flow_ids: Optional[Set[int]] = None
     profile_ids: Optional[Set[int]] = None
-    # Session strings in scope (set only when session_name given)
-    session_strings: Optional[Set[str]] = None
+    # CSV session values with no ChatSession in source
+    missing_csv_sessions: list = field(default_factory=list)
 
 
 def build_scope(date_from: Optional[DateArg], date_to: Optional[DateArg],
-                session_name: Optional[str], stdout) -> MigrationScope:
-    if not date_from and not date_to and not session_name:
+                session_name: Optional[str], csv_sessions: Optional[list], stdout) -> MigrationScope:
+    if csv_sessions is None and not date_from and not date_to and not session_name:
         return MigrationScope()
 
-    stdout.write(
-        f"Building migration scope for date_from={date_from} date_to={date_to} "
-        f"session_name={session_name!r} ..."
-    )
-
-    date_filter = _range_kwargs(date_from, date_to)
-
-    # session_name is a CompanyBot route — resolve its source bot IDs
     route_bot_ids = None
-    if session_name:
-        route_bot_ids = set(
-            CompanyBot.objects.using(SRC).filter(route=session_name).values_list("id", flat=True)
+    missing_csv_sessions = []
+    if csv_sessions is not None:
+        stdout.write(f"Building migration scope for {len(csv_sessions)} CSV sessions ...")
+        sessions_qs = ChatSession.objects.using(SRC).filter(session__in=csv_sessions)
+        found = set(sessions_qs.values_list("session", flat=True))
+        missing_csv_sessions = [s for s in csv_sessions if s not in found]
+        if missing_csv_sessions:
+            stdout.write(
+                f"  WARNING: {len(missing_csv_sessions)} CSV sessions not in source, "
+                f"e.g. {missing_csv_sessions[:10]}"
+            )
+    else:
+        stdout.write(
+            f"Building migration scope for date_from={date_from} date_to={date_to} "
+            f"session_name={session_name!r} ..."
         )
-        if not route_bot_ids:
-            stdout.write(f"  WARNING: no CompanyBot route='{session_name}' in source — scope empty")
+        sessions_qs = ChatSession.objects.using(SRC).filter(**_range_kwargs(date_from, date_to))
 
-    # Collect referenced source IDs from transactional models
-    sessions_qs = ChatSession.objects.using(SRC).filter(**date_filter)
-    chats_qs = CompanyChat.objects.using(SRC).filter(**date_filter)
-    stories_qs = Story.objects.using(SRC).filter(**date_filter)
+        # session_name is a CompanyBot route — resolve its source bot IDs
+        if session_name:
+            route_bot_ids = set(
+                CompanyBot.objects.using(SRC).filter(route=session_name).values_list("id", flat=True)
+            )
+            if not route_bot_ids:
+                stdout.write(f"  WARNING: no CompanyBot route='{session_name}' in source — scope empty")
+            sessions_qs = sessions_qs.filter(company_bot_id__in=route_bot_ids)
 
-    session_strings = None
-    if route_bot_ids is not None:
-        sessions_qs = sessions_qs.filter(company_bot_id__in=route_bot_ids)
-        session_strings = set(sessions_qs.values_list("session", flat=True).distinct())
-        chats_qs = chats_qs.filter(session__in=session_strings)
-        stories_qs = stories_qs.filter(session__in=session_strings)
+    # Chats / stories belong to in-scope sessions, regardless of their own created_at
+    session_subquery = sessions_qs.values("session")
+    chats_qs = CompanyChat.objects.using(SRC).filter(session__in=session_subquery)
+    stories_qs = Story.objects.using(SRC).filter(session__in=session_subquery)
 
     bot_ids = set(sessions_qs.values_list("company_bot_id", flat=True).distinct()) - {None}
     if route_bot_ids is not None:
@@ -390,20 +596,17 @@ def build_scope(date_from: Optional[DateArg], date_to: Optional[DateArg],
     stdout.write(
         f"  Scope: {len(company_ids)} companies, {len(bot_ids)} bots, "
         f"{len(flow_ids)} flows, {len(image_config_ids)} image configs, "
-        f"{len(profile_ids)} profiles"
-        + (f", {len(session_strings)} sessions" if session_strings is not None else "")
+        f"{len(profile_ids)} profiles, {sessions_qs.count()} sessions"
     )
 
     return MigrationScope(
-        date_from=date_from,
-        date_to=date_to,
-        session_name=session_name,
+        sessions_qs=sessions_qs,
         company_ids=company_ids,
         bot_ids=bot_ids,
         image_config_ids=image_config_ids,
         flow_ids=flow_ids,
         profile_ids=profile_ids,
-        session_strings=session_strings,
+        missing_csv_sessions=missing_csv_sessions,
     )
 
 
@@ -438,6 +641,23 @@ class Command(BaseCommand):
             help="Restrict migration to a single CompanyBot route (e.g. shiksha-samvad)",
         )
         parser.add_argument(
+            "--sessions-csv",
+            type=parse_csv_path_arg,
+            default=None,
+            help="CSV of session ids to migrate (excludes --date-from/--date-to/--session_name)",
+        )
+        parser.add_argument(
+            "--sessions-csv-column",
+            type=str,
+            default=None,
+            help="Header name of the session id column in --sessions-csv",
+        )
+        parser.add_argument(
+            "--trace-memory",
+            action="store_true",
+            help="Enable tracemalloc per-line allocation logs (slower; for leak hunting)",
+        )
+        parser.add_argument(
             "--src-bucket",
             type=parse_bucket_arg,
             required=True,
@@ -458,9 +678,18 @@ class Command(BaseCommand):
         session_name = options["session_name"]
         src_bucket = options["src_bucket"]
         target_bucket = options["target_bucket"]
+        sessions_csv = options["sessions_csv"]
+        sessions_csv_column = options["sessions_csv_column"]
+        monitor = ResourceMonitor(trace_memory=options["trace_memory"])
 
         if src_bucket == target_bucket:
             raise CommandError("--src-bucket and --target-bucket must differ")
+        if bool(sessions_csv) != bool(sessions_csv_column):
+            raise CommandError("--sessions-csv and --sessions-csv-column must be passed together")
+        if sessions_csv and (date_from or date_to or session_name):
+            raise CommandError(
+                "--sessions-csv cannot be combined with --date-from / --date-to / --session_name"
+            )
 
         s3 = boto3.client(
             "s3",
@@ -478,8 +707,18 @@ class Command(BaseCommand):
         if dry_run:
             self.stdout.write(self.style.WARNING("DRY RUN — no writes will occur\n"))
 
-        scope = build_scope(date_from, date_to, session_name, self.stdout)
-        ctx = MigrationContext(src_bucket=src_bucket, target_bucket=target_bucket, s3=s3, dry_run=dry_run)
+        csv_sessions = (
+            read_csv_sessions(sessions_csv, sessions_csv_column, self.stdout) if sessions_csv else None
+        )
+        monitor.checkpoint("startup")
+        scope = build_scope(date_from, date_to, session_name, csv_sessions, self.stdout)
+        monitor.checkpoint("build_scope")
+        ctx = MigrationContext(
+            src_bucket=src_bucket, target_bucket=target_bucket, s3=s3, dry_run=dry_run, monitor=monitor
+        )
+        monitor.ctx = ctx
+        for session in scope.missing_csv_sessions:
+            ctx.log_skip("CSVSession", session, "session not found in source ChatSession")
 
         steps = [
             ("Company", lambda: migrate_companies(ctx, scope, batch_size, dry_run, self.stdout)),
@@ -498,9 +737,13 @@ class Command(BaseCommand):
 
         for label, fn in steps:
             self.stdout.write(f"\n--- {label} ---")
-            fn()
+            try:
+                fn()
+            finally:
+                monitor.checkpoint(label)
 
         ctx.print_summary(self.stdout)
+        monitor.finish()
 
         if ctx.errors and not dry_run:
             with open("migration_errors.jsonl", "w") as f:
@@ -518,7 +761,7 @@ def migrate_companies(ctx, scope, batch_size, dry_run, stdout):
     qs = Company.objects.using(SRC)
     if scope.company_ids is not None:
         qs = qs.filter(id__in=scope.company_ids)
-    for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
+    for batch in iter_batches(ctx, "Company", qs, batch_size):
         for src in batch:
             s.processed += 1
             if dry_run:
@@ -552,7 +795,7 @@ def migrate_bots(ctx, scope, batch_size, dry_run, stdout):
     qs = CompanyBot.objects.using(SRC)
     if scope.bot_ids is not None:
         qs = qs.filter(id__in=scope.bot_ids)
-    for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
+    for batch in iter_batches(ctx, "CompanyBot", qs, batch_size):
         for src in batch:
             s.processed += 1
             tgt_company_id = ctx.company_id_map.get(src.company_id)
@@ -615,7 +858,7 @@ def migrate_image_configs(ctx, scope, batch_size, dry_run, stdout):
     qs = ImageConfiguration.objects.using(SRC)
     if scope.image_config_ids is not None:
         qs = qs.filter(id__in=scope.image_config_ids)
-    for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
+    for batch in iter_batches(ctx, "ImageConfiguration", qs, batch_size):
         for src in batch:
             s.processed += 1
             if dry_run:
@@ -707,7 +950,7 @@ def migrate_pdf_templates(ctx, scope, batch_size, dry_run, stdout):
     # Filter by flows in scope if scoped run
     if scope.flow_ids is not None:
         qs = qs.filter(flow_id__in=scope.flow_ids)
-    for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
+    for batch in iter_batches(ctx, "PDFTemplates", qs, batch_size):
         for src in batch:
             s.processed += 1
             if dry_run:
@@ -753,7 +996,7 @@ def migrate_bot_submodels(ctx, scope, batch_size, dry_run, stdout):
 def _migrate_state_machines(ctx, src_ids, batch_size, dry_run, stdout):
     s = ctx.stat("CompanyStateMachine")
     qs = CompanyStateMachine.objects.using(SRC).filter(company_bot_id__in=src_ids)
-    for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
+    for batch in iter_batches(ctx, "CompanyStateMachine", qs, batch_size):
         for src in batch:
             s.processed += 1
             tgt_bot_id = ctx.bot_id_map.get(src.company_bot_id)
@@ -805,7 +1048,7 @@ def _migrate_voices(ctx, src_ids, batch_size, dry_run, stdout):
         tgt_bot_ids = [ctx.bot_id_map[sid] for sid in src_ids if sid in ctx.bot_id_map]
         pre_existing_count = Voice.objects.filter(company_bot_id__in=tgt_bot_ids).count()
         Voice.objects.filter(company_bot_id__in=tgt_bot_ids).delete()
-    for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
+    for batch in iter_batches(ctx, "Voice", qs, batch_size):
         for src in batch:
             s.processed += 1
             tgt_bot_id = ctx.bot_id_map.get(src.company_bot_id)
@@ -874,7 +1117,7 @@ def _migrate_themes(ctx, new_src_ids, batch_size, dry_run, stdout):
 def _migrate_bot_vernacular(ctx, src_ids, batch_size, dry_run, stdout):
     s = ctx.stat("BotVernacular")
     qs = BotVernacular.objects.using(SRC).filter(company_bot_id__in=src_ids)
-    for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
+    for batch in iter_batches(ctx, "BotVernacular", qs, batch_size):
         for src in batch:
             s.processed += 1
             tgt_bot_id = ctx.bot_id_map.get(src.company_bot_id)
@@ -904,7 +1147,7 @@ def _migrate_bot_vernacular(ctx, src_ids, batch_size, dry_run, stdout):
 def _migrate_story_vernacular(ctx, new_src_ids, batch_size, dry_run, stdout):
     s = ctx.stat("StoryVernacular")
     qs = StoryVernacular.objects.using(SRC).filter(company_bot_id__in=new_src_ids)
-    for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
+    for batch in iter_batches(ctx, "StoryVernacular", qs, batch_size):
         for src in batch:
             s.processed += 1
             tgt_bot_id = ctx.bot_id_map.get(src.company_bot_id)
@@ -933,7 +1176,7 @@ def migrate_profiles(ctx, scope, batch_size, dry_run, stdout):
     qs = Profile.objects.using(SRC)
     if scope.profile_ids is not None:
         qs = qs.filter(id__in=scope.profile_ids)
-    for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
+    for batch in iter_batches(ctx, "Profile", qs, batch_size):
         for src in batch:
             s.processed += 1
             tgt_company_id = ctx.company_id_map.get(src.company_id)
@@ -990,11 +1233,9 @@ def migrate_chat_sessions(ctx, scope, batch_size, dry_run, stdout):
     s = ctx.stat("ChatSession")
     existing = set(ChatSession.objects.values_list("session", flat=True))
 
-    date_filter = _date_filter(scope)
-    qs = ChatSession.objects.using(SRC).filter(**date_filter)
-    qs = _apply_session_scope(qs, scope)
+    qs = scope.sessions_qs if scope.sessions_qs is not None else ChatSession.objects.using(SRC).all()
 
-    for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
+    for batch in iter_batches(ctx, "ChatSession", qs, batch_size):
         for src in batch:
             s.processed += 1
             if src.session in existing:
@@ -1035,11 +1276,9 @@ def migrate_chat_sessions(ctx, scope, batch_size, dry_run, stdout):
 def migrate_company_chats(ctx, scope, batch_size, dry_run, stdout):
     s = ctx.stat("CompanyChat")
     valid_sessions = ctx.dry_run_migrated_sessions if dry_run else set(ChatSession.objects.values_list("session", flat=True))
-    date_filter = _date_filter(scope)
-    qs = CompanyChat.objects.using(SRC).filter(**date_filter)
-    qs = _apply_session_scope(qs, scope)
+    qs = _apply_session_scope(CompanyChat.objects.using(SRC).all(), scope)
 
-    for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
+    for batch in iter_batches(ctx, "CompanyChat", qs, batch_size):
         for src in batch:
             s.processed += 1
             if src.session in ctx.skipped_sessions:
@@ -1102,11 +1341,9 @@ def _migrate_chat_file_urls(ctx, src) -> Optional[str]:
 def migrate_stories(ctx, scope, batch_size, dry_run, stdout):
     s = ctx.stat("Story")
     existing = set(Story.objects.values_list("session", flat=True))
-    date_filter = _date_filter(scope)
-    qs = Story.objects.using(SRC).filter(**date_filter)
-    qs = _apply_session_scope(qs, scope)
+    qs = _apply_session_scope(Story.objects.using(SRC).all(), scope)
 
-    for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
+    for batch in iter_batches(ctx, "Story", qs, batch_size):
         for src in batch:
             s.processed += 1
             if src.session in existing:
@@ -1159,7 +1396,7 @@ def migrate_stories(ctx, scope, batch_size, dry_run, stdout):
 def migrate_story_media(ctx, batch_size, dry_run, stdout):
     s = ctx.stat("StoryMedia")
     qs = StoryMedia.objects.using(SRC).filter(story_id__in=ctx.story_id_map.keys())
-    for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
+    for batch in iter_batches(ctx, "StoryMedia", qs, batch_size):
         for src in batch:
             s.processed += 1
             tgt_story_id = ctx.story_id_map.get(src.story_id)
@@ -1204,7 +1441,7 @@ def migrate_story_media(ctx, batch_size, dry_run, stdout):
 def migrate_story_translations(ctx, batch_size, dry_run, stdout):
     s = ctx.stat("StoryTranslation")
     qs = StoryTranslation.objects.using(SRC).filter(story_id__in=ctx.story_id_map.keys())
-    for batch in chunked(qs.iterator(chunk_size=batch_size), batch_size):
+    for batch in iter_batches(ctx, "StoryTranslation", qs, batch_size):
         for src in batch:
             s.processed += 1
             tgt_story_id = ctx.story_id_map.get(src.story_id)
@@ -1247,12 +1484,8 @@ def migrate_story_translations(ctx, batch_size, dry_run, stdout):
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _date_filter(scope: MigrationScope) -> dict:
-    return _range_kwargs(scope.date_from, scope.date_to)
-
-
 def _apply_session_scope(qs, scope: MigrationScope):
-    """Restrict a transactional queryset to sessions in scope (session_name run)."""
-    if scope.session_strings is not None:
-        qs = qs.filter(session__in=scope.session_strings)
+    """Restrict a source CompanyChat / Story queryset to the sessions of in-scope ChatSessions."""
+    if scope.sessions_qs is not None:
+        qs = qs.filter(session__in=scope.sessions_qs.values("session"))
     return qs
