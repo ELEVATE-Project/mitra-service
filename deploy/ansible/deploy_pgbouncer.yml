@@ -1,0 +1,100 @@
+---
+# Restarts the pgbouncer container that sits in front of this environment's
+# Postgres DB, on the same host mitra-backend-service is deployed to.
+#
+# Runs the SAME WAY as deploy.yml: committed to this repo, checked out by
+# Jenkins, and invoked via the ansiblePlaybook plugin over SSH against the
+# shared inventory (/opt/ansibleConfigs/inventories/<env>.ini) using the same
+# credentialsId ('elevate') the deploy job already uses successfully - see
+# the pgbouncer Jenkinsfile's "ansible run" stage.
+#
+#   ansible-playbook -i /opt/ansibleConfigs/inventories/dev.ini -l dev \
+#     deploy/ansible/deploy_pgbouncer.yml -e vault_address=<per-env vault KV v2 base URL>
+#
+# vault_address has NO real default here on purpose, same reasoning as
+# deploy.yml's repo_url/repo_ref - the real Vault URL is an
+# environment-specific value that lives only in each Jenkins job's config,
+# never committed to git.
+
+- name: Fetch DB env from Vault and restart pgbouncer
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    pgbouncer_dir: /opt/deployment/backend/mitra-service/pg-bouncer
+    vault_token_path: /opt/deployment/.token
+    vault_address: "https://demo-vault-domain/v1/Dev_env/data/"
+    # Dedicated secret for pgbouncer (not shared with the app's own
+    # mitra_backend_service_env) - assumed to hold the same
+    # DATABASE_HOST/PORT/NAME/USER/PASSWORD key names.
+    vault_env_path: "mitra_pg_bouncer_env"
+
+    # Host port pgbouncer listens on (container side is always 5432,
+    # pgbouncer's own internal default) - overridable via -e pgbouncer_host_port=...
+    pgbouncer_host_port: 6400
+
+  tasks:
+    # ---- 1. Fetch env from Vault, mapped to pgbouncer's DB_* names ----
+    # Renamed here (DATABASE_* -> DB_*) AND written straight to a
+    # docker --env-file, deliberately NOT sourced through bash below -
+    # docker's env-file parser reads "KEY=VALUE" literally with no shell
+    # re-interpretation, so special characters in the password (this DB's
+    # actual password contains $, <, > - all bash metacharacters) can't get
+    # mangled or trigger redirection/expansion the way `source .env` would.
+    - name: Ensure jq is installed (required to parse Vault's JSON response)
+      apt:
+        name: jq
+        state: present
+        update_cache: true
+
+    - name: Ensure pgbouncer_dir exists
+      file:
+        path: "{{ pgbouncer_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Read the Vault token from disk
+      slurp:
+        src: "{{ vault_token_path }}"
+      register: vault_token_raw
+
+    - name: Fetch DB env from Vault and write pgbouncer.env (Docker env-file format)
+      shell: >
+        curl --silent --insecure --location --request GET
+        '{{ vault_address }}{{ vault_env_path }}'
+        --header 'X-Vault-Token: {{ vault_token_raw.content | b64decode | trim }}'
+        | jq -r '.data.data |
+        {DB_HOST: .DATABASE_HOST, DB_PORT: .DATABASE_PORT, DB_USER: .DATABASE_USER,
+         DB_PASSWORD: .DATABASE_PASSWORD, DB_NAME: .DATABASE_NAME} |
+        to_entries | map("\(.key)=\(.value)") | .[]'
+        > {{ pgbouncer_dir }}/pgbouncer.env
+
+    - name: Restrict pgbouncer.env permissions (contains DB credentials)
+      file:
+        path: "{{ pgbouncer_dir }}/pgbouncer.env"
+        mode: "0600"
+
+    # ---- 2. Run/restart pgbouncer using that env-file -------------------
+    - name: Remove any existing pgbouncer container
+      command: docker rm -f pgbouncer
+      failed_when: false
+
+    - name: Start pgbouncer container
+      command: >
+        docker run -d
+        --name pgbouncer
+        -p {{ pgbouncer_host_port }}:5432
+        --env-file {{ pgbouncer_dir }}/pgbouncer.env
+        -e AUTH_TYPE=scram-sha-256
+        -e POOL_MODE=transaction
+        -e MAX_CLIENT_CONN=100
+        -e DEFAULT_POOL_SIZE=20
+        edoburu/pgbouncer:latest
+
+    - name: Verify pgbouncer container is running
+      command: docker inspect -f '{{ "{{.State.Running}}" }}' pgbouncer
+      register: pgbouncer_running
+      retries: 5
+      delay: 3
+      until: pgbouncer_running.stdout == "true"

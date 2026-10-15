@@ -1,0 +1,405 @@
+import csv
+import io
+import json
+import logging
+from collections import Counter
+
+from django.contrib.admin.views.decorators import staff_member_required
+from django.core.cache import cache
+from django.http import JsonResponse
+from django.utils.decorators import method_decorator
+from django.views.generic import TemplateView
+
+from chatbot.constants import api_responses
+
+logger = logging.getLogger('django')
+
+CSV_REQUIRED_COLS = {"id", "State", "District"}
+BLOCK_COL = "Block"
+ROLE_COL = "Role"
+
+ROLE_CACHE_KEY_TEMPLATE = "csv_correction:role:{name}"
+ROLE_CACHE_TIMEOUT = 120
+
+STATUS_COL = "status"
+REMARKS_COL = "remarks"
+REPORT_COLS = (STATUS_COL, REMARKS_COL)
+
+STATUS_UPDATED = "Updated"
+STATUS_UNCHANGED = "Unchanged"
+STATUS_REJECTED = "Rejected"
+
+MAPPING_REQUIRED_FIELDS = {"state", "district"}
+
+STATE_DISTRICT_BOT_ROUTE = "/state-classification-guest-discussion"
+
+
+def _load_state_district_mapping():
+    """
+    Fetch and index the state/district mapping from the CompanyBot whose route is
+    STATE_DISTRICT_BOT_ROUTE. Raises ValueError with a user-facing message on any
+    failure, so the caller can hard-fail the whole upload before touching any row.
+    """
+    from chatbot.models.company_models import CompanyBot
+
+    try:
+        bot = CompanyBot.objects.get(route=STATE_DISTRICT_BOT_ROUTE)
+    except CompanyBot.DoesNotExist:
+        raise ValueError(api_responses.CSV_STATE_DISTRICT_BOT_NOT_FOUND)
+
+    try:
+        raw = bot.dynamic_context
+        data = raw if isinstance(raw, dict) else json.loads(raw)
+        states = data["states"]
+    except (TypeError, ValueError, KeyError):
+        raise ValueError(api_responses.CSV_STATE_DISTRICT_MAPPING_INVALID)
+
+    state_names = set()
+    state_districts = {}
+    district_index = {}
+    try:
+        for state in states:
+            state_name = str(state["name"]).strip()
+            state_names.add(state_name)
+            district_names = {str(d["name"]).strip() for d in state.get("districts", [])}
+            state_districts[state_name] = district_names
+            for district_name in district_names:
+                district_index.setdefault(district_name, []).append(state_name)
+    except (TypeError, KeyError, AttributeError):
+        raise ValueError(api_responses.CSV_STATE_DISTRICT_MAPPING_INVALID)
+
+    return {
+        "state_names": state_names,
+        "state_districts": state_districts,
+        "district_index": district_index,
+    }
+
+
+def _extract_fields(row: dict) -> dict:
+    return {
+        "id":       (row.get("id") or "").strip(),
+        "state":    (row.get("State") or "").strip(),
+        "district": (row.get("District") or "").strip(),
+        "block":    (row.get(BLOCK_COL) or "").strip(),
+        "role":     (row.get(ROLE_COL) or "").strip(),
+    }
+
+
+def _resolve_role_id(role_name: str):
+    """
+    Look up a Role's id by name, cache-aside via Redis (best-effort — a cache
+    failure falls back to the DB read rather than failing the row). Returns the
+    id, or None if no Role with that name exists.
+    """
+    from chatbot.models.story_models import Role
+
+    cache_key = ROLE_CACHE_KEY_TEMPLATE.format(name=role_name)
+
+    try:
+        cached_id = cache.get(cache_key)
+    except Exception as exc:
+        logger.error(f"CSV correction: role cache read failed for '{role_name}': {exc}", exc_info=True)
+        cached_id = None
+
+    if cached_id is not None:
+        return cached_id
+
+    role_id = Role.objects.filter(name=role_name).values_list("id", flat=True).first()
+    if role_id is None:
+        return None
+
+    try:
+        cache.set(cache_key, role_id, timeout=ROLE_CACHE_TIMEOUT)
+    except Exception as exc:
+        logger.error(f"CSV correction: role cache write failed for '{role_name}': {exc}", exc_info=True)
+
+    return role_id
+
+
+def _validate_row(fields: dict, mapping: dict) -> list:
+    errors = []
+
+    state_val = fields["state"]
+    district_val = fields["district"]
+    role_val = fields["role"]
+
+    if role_val:
+        role_id = _resolve_role_id(role_val)
+        if role_id is None:
+            errors.append(api_responses.CSV_ROW_UNKNOWN_ROLE_TEMPLATE.format(role=role_val))
+        else:
+            fields["role_id"] = role_id
+
+    if not state_val and not district_val:
+        return errors
+
+    if state_val and state_val not in mapping["state_names"]:
+        errors.append(api_responses.CSV_ROW_UNKNOWN_STATE_TEMPLATE.format(state=state_val))
+        return errors
+
+    if not district_val:
+        return errors
+
+    if state_val:
+        if district_val not in mapping["state_districts"].get(state_val, set()):
+            actual_states = mapping["district_index"].get(district_val)
+            if actual_states:
+                errors.append(
+                    api_responses.CSV_ROW_DISTRICT_WRONG_STATE_TEMPLATE.format(
+                        district=district_val,
+                        actual_states=", ".join(sorted(actual_states)),
+                        state=state_val,
+                    )
+                )
+            else:
+                errors.append(
+                    api_responses.CSV_ROW_UNKNOWN_DISTRICT_TEMPLATE.format(district=district_val)
+                )
+    else:
+        candidate_states = mapping["district_index"].get(district_val)
+        if not candidate_states:
+            errors.append(
+                api_responses.CSV_ROW_UNKNOWN_DISTRICT_TEMPLATE.format(district=district_val)
+            )
+        elif len(candidate_states) > 1:
+            errors.append(
+                api_responses.CSV_ROW_AMBIGUOUS_DISTRICT_TEMPLATE.format(
+                    district=district_val,
+                    candidate_states=", ".join(sorted(candidate_states)),
+                )
+            )
+        else:
+            fields["state"] = candidate_states[0]
+
+    return errors
+
+
+def _apply_to_story(story, fields: dict) -> bool:
+    """Apply only the values that differ. Return True if anything changed."""
+    changed = False
+
+    if fields["state"] and story.state != fields["state"]:
+        story.state = fields["state"]
+        changed = True
+    if fields["district"] and story.district != fields["district"]:
+        story.district = fields["district"]
+        changed = True
+    if fields["block"] and story.block != fields["block"]:
+        story.block = fields["block"]
+        changed = True
+    role_id = fields.get("role_id")
+    if role_id is not None and story.role_id != role_id:
+        story.role_id = role_id
+        changed = True
+
+    if changed:
+        _update_mapping_stage(story)
+
+    return changed
+
+
+def _update_mapping_stage(story):
+    from chatbot.models.enums import StoryStatusChoices
+
+    fully_mapped = all(getattr(story, f, None) for f in MAPPING_REQUIRED_FIELDS)
+    story.stage = StoryStatusChoices.COMPLETED if fully_mapped else StoryStatusChoices.PENDING
+
+
+def _neutralise_formula(value):
+    """
+    Stop a spreadsheet from evaluating uploaded text as a formula.
+
+    The report file echoes back cells the uploader supplied, so a value such as
+    =cmd|'/c calc'!A1 would execute when the file is opened in Excel or Sheets. Prefixing
+    with an apostrophe makes the cell literal text; the apostrophe is not displayed.
+    """
+    text = "" if value is None else str(value)
+    if text[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + text
+    return text
+
+
+def _build_report_csv(report_rows: list, original_headers: list) -> str:
+    headers = list(original_headers) + list(REPORT_COLS)
+    output = io.StringIO()
+    writer = csv.DictWriter(output, fieldnames=headers, extrasaction="ignore")
+    # Headers come from the uploaded file too, so they need the same treatment. The
+    # fieldnames stay unchanged so DictWriter can still map each row's keys.
+    writer.writerow({h: _neutralise_formula(h) for h in headers})
+    for item in report_rows:
+        row = {k: _neutralise_formula(v) for k, v in dict(item["row"]).items()}
+        row[STATUS_COL] = _neutralise_formula(item["status"])
+        row[REMARKS_COL] = _neutralise_formula(item["remark"])
+        writer.writerow(row)
+    return output.getvalue()
+
+
+@method_decorator(staff_member_required, name="dispatch")
+class CsvCorrectionView(TemplateView):
+    """
+    Admin screen for correcting report metadata in bulk from an uploaded CSV.
+    GET renders the upload page; POST validates every row against the master data before
+    committing anything, then returns a summary and a per-row report file covering every
+    uploaded id, with its outcome and remark. Requires the Story change permission, not merely staff
+    access, because a single upload can rewrite every report in the database.
+    """
+
+    template_name = "admin/csv_correction/csv_correction.html"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["model_name"] = "Story"
+        return context
+
+    def post(self, request, *args, **kwargs):
+        # staff_member_required only proves the user can reach the admin. Bulk-rewriting
+        # every Story needs the change permission for the model itself, checked before
+        # anything is parsed or saved.
+        if not request.user.has_perm("chatbot.change_story"):
+            return JsonResponse(
+                {"success": False, "error": api_responses.CSV_NO_PERMISSION},
+                status=403,
+            )
+
+        uploaded_file = request.FILES.get("csv_file")
+
+        if not uploaded_file:
+            return JsonResponse({"success": False, "error": api_responses.CSV_NO_FILE_UPLOADED}, status=400)
+        if not uploaded_file.name.lower().endswith(".csv"):
+            return JsonResponse(
+                {"success": False, "error": api_responses.CSV_INVALID_FILE_FORMAT},
+                status=400,
+            )
+
+        try:
+            content = uploaded_file.read().decode("utf-8-sig")
+            reader = csv.DictReader(io.StringIO(content))
+            headers = list(reader.fieldnames or [])
+            rows = list(reader)
+        except Exception as exc:
+            return JsonResponse({"success": False, "error": api_responses.CSV_PARSE_FAILED_TEMPLATE.format(error=exc)}, status=400)
+
+        original_headers = [h for h in headers if h not in REPORT_COLS]
+
+        missing = CSV_REQUIRED_COLS - set(original_headers)
+        if missing:
+            return JsonResponse(
+                {"success": False,
+                 "error": api_responses.CSV_MISSING_COLUMNS_TEMPLATE.format(
+                     columns=", ".join(sorted(missing))
+                 )},
+                status=400,
+            )
+
+        if not rows:
+            return JsonResponse({"success": False, "error": api_responses.CSV_EMPTY_FILE}, status=400)
+
+        # `or ""` rather than a get() default: csv.DictReader maps every column a short
+        # row does not reach to None, so the key exists with a None value and the default
+        # never applies. Calling .strip() on that raised an unhandled AttributeError.
+        # Matches how _extract_fields reads the same column.
+        ids = [(r.get("id") or "").strip() for r in rows]
+        dupes = [rid for rid, cnt in Counter(ids).items() if cnt > 1 and rid]
+        if dupes:
+            return JsonResponse(
+                {"success": False,
+                 "error": api_responses.CSV_DUPLICATE_IDS_TEMPLATE.format(
+                     ids=', '.join(dupes[:10])
+                 )},
+                status=400,
+            )
+
+        try:
+            mapping = _load_state_district_mapping()
+        except ValueError as exc:
+            return JsonResponse({"success": False, "error": str(exc)}, status=400)
+
+        from chatbot.models.story_models import Story
+
+        processed = successful = unchanged = rejected = 0
+        report_rows = []
+
+        for row in rows:
+            fields = _extract_fields(row)
+
+            if not fields["state"] and not fields["district"] and not fields["block"] and not fields["role"]:
+                rejected += 1
+                report_rows.append(
+                    {"row": row, "status": STATUS_REJECTED, "remark": api_responses.CSV_ROW_ALL_FIELDS_BLANK}
+                )
+                continue
+
+            processed += 1
+
+            raw_id = fields["id"]
+            if not raw_id:
+                rejected += 1
+                report_rows.append(
+                    {"row": row, "status": STATUS_REJECTED, "remark": api_responses.CSV_ROW_ID_EMPTY}
+                )
+                continue
+
+            errors = _validate_row(fields, mapping)
+            if errors:
+                rejected += 1
+                report_rows.append(
+                    {"row": row, "status": STATUS_REJECTED, "remark": "; ".join(errors)}
+                )
+                continue
+
+            try:
+                story = Story.objects.get(pk=int(raw_id))
+            except (ValueError, TypeError, Story.DoesNotExist):
+                rejected += 1
+                report_rows.append({
+                    "row": row,
+                    "status": STATUS_REJECTED,
+                    "remark": api_responses.CSV_ROW_STORY_NOT_FOUND_TEMPLATE.format(story_id=raw_id),
+                })
+                continue
+            except Exception as exc:
+                rejected += 1
+                report_rows.append({
+                    "row": row,
+                    "status": STATUS_REJECTED,
+                    "remark": api_responses.CSV_ROW_DB_ERROR_TEMPLATE.format(error=exc),
+                })
+                continue
+
+            if not _apply_to_story(story, fields):
+                unchanged += 1
+                report_rows.append({
+                    "row": row,
+                    "status": STATUS_UNCHANGED,
+                    "remark": api_responses.CSV_ROW_UNCHANGED,
+                })
+                continue
+
+            try:
+                story.full_clean()
+                story.save()
+                successful += 1
+                report_rows.append({"row": row, "status": STATUS_UPDATED, "remark": ""})
+            except Exception as exc:
+                rejected += 1
+                report_rows.append({
+                    "row": row,
+                    "status": STATUS_REJECTED,
+                    "remark": api_responses.CSV_ROW_SAVE_FAILED_TEMPLATE.format(error=exc),
+                })
+
+        import base64
+        report = _build_report_csv(report_rows, original_headers)
+        report_csv_b64 = base64.b64encode(report.encode("utf-8")).decode("ascii")
+
+        return JsonResponse({
+            "success": True,
+            "stats": {
+                "total_processed": processed,
+                "successful_updates": successful,
+                "unchanged_rows": unchanged,
+                "rejected_rows": rejected,
+            },
+            "report_csv": report_csv_b64,
+            "report_count": len(report_rows),
+        })
