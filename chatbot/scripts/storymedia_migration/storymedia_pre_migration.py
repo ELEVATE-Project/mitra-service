@@ -1179,7 +1179,7 @@ class PreMigration:
 
                 return
 
-            derived_file = "/" + key
+            derived_file = key.lstrip("/")
 
             if self.dry_run:
 
@@ -1257,7 +1257,7 @@ class PreMigration:
             )
         )
 
-        generated_file = "/" + key
+        generated_file = key.lstrip("/")
 
         generated_file_url = (
             f"{S3_MEDIA_URL}/{key}"
@@ -1785,5 +1785,5 @@ def main():
         db.close()
 
 
-if __name__ == "__main__":
-    main()
+# if __name__ == "__main__":
+#     main()
