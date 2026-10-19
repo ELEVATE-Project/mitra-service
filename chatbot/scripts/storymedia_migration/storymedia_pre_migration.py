@@ -86,11 +86,11 @@ load_dotenv()
 # CONFIGURATION
 # ============================================================
 
-DB_HOST = os.getenv("DATABASE_HOST", "localhost")
-DB_PORT = int(os.getenv("DATABASE_PORT", "5400"))
-DB_NAME = os.getenv("DATABASE_NAME", "qa_backup")
-DB_USER = os.getenv("DATABASE_USER", "admin")
-DB_PASSWORD = os.getenv("DATABASE_PASSWORD", "")
+DB_HOST = os.getenv("PGBOUNCER_DATABASE_HOST", "localhost")
+DB_PORT = int(os.getenv("PGBOUNCER_DATABASE_PORT", "5400"))
+DB_NAME = os.getenv("PGBOUNCER_DATABASE_NAME", "qa_backup")
+DB_USER = os.getenv("PGBOUNCER_DATABASE_USER", "admin")
+DB_PASSWORD = os.getenv("PGBOUNCER_DATABASE_PASSWORD", "")
 
 S3_BUCKET_NAME = os.getenv(
     "S3_BUCKET_NAME",

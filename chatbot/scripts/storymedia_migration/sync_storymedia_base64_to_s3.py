@@ -21,11 +21,11 @@ from psycopg2.extras import RealDictCursor
 load_dotenv()
 
 
-DB_HOST = os.getenv("DATABASE_HOST")
-DB_PORT = int(os.getenv("DATABASE_PORT", "5432"))
-DB_NAME = os.getenv("DATABASE_NAME")
-DB_USER = os.getenv("DATABASE_USER")
-DB_PASSWORD = os.getenv("DATABASE_PASSWORD")
+DB_HOST = os.getenv("PGBOUNCER_DATABASE_HOST")
+DB_PORT = int(os.getenv("PGBOUNCER_DATABASE_PORT", "5400"))
+DB_NAME = os.getenv("PGBOUNCER_DATABASE_NAME")
+DB_USER = os.getenv("PGBOUNCER_DATABASE_USER")
+DB_PASSWORD = os.getenv("PGBOUNCER_DATABASE_PASSWORD")
 
 S3_BASE_URL = os.getenv(
     "S3_BASE_URL",
