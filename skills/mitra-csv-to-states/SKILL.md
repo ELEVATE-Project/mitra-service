@@ -1,6 +1,7 @@
 ---
 name: mitra-csv-to-states
-description: Generate a Mitra voice-bot's global_context.txt and per-question state_<step_number>_prompt.txt files from a question-bank CSV (columns: Step Number, Main Question, Expected responses, When To Probe). Use whenever the user has a survey/interview question bank in a CSV or spreadsheet and wants it turned into the state-machine prompt files for the Mitra chatbot harness (the one with structured_memory_output-style JSON turns, PRIMARY questions, one-probe-then-complete state derivation). Trigger on mentions of "question bank", "state prompts", "global_context.txt", "state_N_prompt", or a CSV of survey questions meant to become interview-bot states — even if the user just pastes a CSV and says "turn this into states" or "build the prompts for this".
+description: |
+  Generate a Mitra voice-bot's global_context.txt and per-question state_<step_number>_prompt.txt files from a question-bank CSV (columns: Step Number, Main Question, Expected responses, When To Probe). Use whenever the user has a survey/interview question bank in a CSV or spreadsheet and wants it turned into the state-machine prompt files for the Mitra chatbot harness (the one with structured_memory_output-style JSON turns, PRIMARY questions, one-probe-then-complete state derivation). Trigger on mentions of "question bank", "state prompts", "global_context.txt", "state_N_prompt", or a CSV of survey questions meant to become interview-bot states — even if the user just pastes a CSV and says "turn this into states" or "build the prompts for this".
 ---
 
 # Mitra CSV → state files
