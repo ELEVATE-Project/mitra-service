@@ -1,7 +1,9 @@
 from django.contrib import admin
+from django.db import models
 from simple_history.admin import SimpleHistoryAdmin
 from chatbot.filter.custom_date_from_filter import CustomAdvanceDateFilter
 from chatbot.models import Theme, ThemeType
+from chatbot.widgets.json_widget import PrettyJSONWidget
 # from rangefilter.filters import DateTimeRangeFilter
 
 
@@ -11,13 +13,16 @@ class ThemeAdmin(SimpleHistoryAdmin):
     list_filter = (
         CustomAdvanceDateFilter,
         # ('updated_at', DateTimeRangeFilter),
-        'bot', 
+        'bot',
         'theme_type'
     )
     search_fields = ('bot__name', 'themes')
     raw_id_fields = ('bot', 'master_theme')
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
+    formfield_overrides = {
+        models.JSONField: {'widget': PrettyJSONWidget},
+    }
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)

@@ -29,7 +29,7 @@ class BaseChatService:
     @staticmethod
     def get_bot_vernacular_and_intro(company_bot, profile):
         """Handle bot vernacular and intro message logic"""
-        bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot).first()
+        bot_vernacular = BotVernacular.objects.filter(company_bot=company_bot, language="en").first()
         intro_mssg = None
 
         if bot_vernacular:
