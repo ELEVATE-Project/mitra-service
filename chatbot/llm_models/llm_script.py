@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from botocore.client import Config as BotoConfig
 from botocore.exceptions import ClientError
 from chatbot.models import LLMModel
@@ -21,7 +23,24 @@ langfuse = get_langfuse_client()
 validate = URLValidator()
 AWS_KEY = os.getenv('AWS_ACCESS_KEY_ID')
 AWS_SECRET_KEY = os.getenv('AWS_SECRET_ACCESS_KEY')
-llm_retry_number = int(os.getenv('LLM_RETRY_NUMBER'))
+llm_retry_number = int(os.environ.get('LLM_RETRY_NUMBER', '3'))
+
+
+@lru_cache(maxsize=1)
+def get_bedrock_client(region: str, aws_access_key_id: str, aws_secret_access_key: str, connect_timeout: int, read_timeout: int):
+    boto_config = BotoConfig(
+        connect_timeout=connect_timeout,
+        read_timeout=read_timeout,
+        retries={"mode": "adaptive"}
+    )
+
+    return boto3.client(
+        service_name='bedrock-runtime',
+        region_name=region,
+        aws_access_key_id=aws_access_key_id,
+        aws_secret_access_key=aws_secret_access_key,
+        config=boto_config
+    )
 
 
 def get_custom_model(company_bot):
@@ -269,29 +288,25 @@ def handle_bedrock_model(
         chat_history_limit = company_bot.get('chat_history_limit', 1000)
         output_config = (company_bot.get("other_params") or {}).get("outputConfig")
         configs_to_exclude = (company_bot.get("other_params") or {}).get("configs_to_exclude", [])
+        provider_keys = company_bot.get("provider_keys")
     else:
         connect_timeout = getattr(company_bot, 'connect_timeout', 5.0)
         read_timeout = getattr(company_bot, 'read_timeout', 10.0)
         chat_history_limit = getattr(company_bot, 'chat_history_limit', 1000)
         output_config = (getattr(company_bot, "other_params", None) or {}).get("outputConfig")
         configs_to_exclude = (getattr(company_bot, "other_params", None) or {}).get("configs_to_exclude", [])
+        provider_keys = getattr(company_bot, "provider_keys", None)
 
-    env_dict = load_env_to_dict(company_bot.provider_keys)
+    env_dict = load_env_to_dict(provider_keys)
     if env_dict.get("AWS_REGION"):
         region_name = env_dict.get("AWS_REGION")
 
-    boto_config = BotoConfig(
-        connect_timeout=connect_timeout,
-        read_timeout=read_timeout,
-        retries={"mode": "adaptive"}
-    )
-
-    bedrock_runtime = boto3.client(
-        service_name='bedrock-runtime',
-        region_name=region_name,
+    bedrock_runtime = get_bedrock_client(
+        region=region_name,
         aws_access_key_id=aws_key if aws_key else AWS_KEY,
         aws_secret_access_key=aws_secret_key if aws_secret_key else AWS_SECRET_KEY,
-        config=boto_config
+        connect_timeout=connect_timeout,
+        read_timeout=read_timeout,
     )
     print("aws_key used: ", aws_key if aws_key else AWS_KEY)
     custom_model = get_custom_model(company_bot)
