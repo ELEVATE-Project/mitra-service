@@ -402,6 +402,7 @@ def non_llm_chat_view(request):
                     target_language="en",
                     source_language=language,
                     company_bot=company_bot_id,
+                    is_sentence=True
                 )
                 if translation_result and translation_result.get("status") == 200:
 
