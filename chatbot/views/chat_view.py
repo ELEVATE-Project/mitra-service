@@ -266,7 +266,6 @@ def save_ptm_chats(request):
 
 
 @api_view(["POST"])
-@observe(as_type="span", name="non_llm_chat_view",capture_output=False,)
 def non_llm_chat_view(request):
     """
     Guest HTTP endpoint for NON_LLM state machine steps.
@@ -334,15 +333,6 @@ def non_llm_chat_view(request):
 
     if not company_bot_id:
         return Response({"error": "No bot configured for this session."}, status=400)
-
-    langfuse.update_current_span(
-     input={"user_message": message},
-     metadata={
-        "session_id": str(session),
-        "profile_id": str(profile_id) if profile_id else "",
-        "bot_route": str(chat_session.company_bot.route),
-      },
-    )
 
     current_step = (
         chat_session.current_step if chat_session.current_step is not None else 0
