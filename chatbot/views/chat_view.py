@@ -404,7 +404,10 @@ def non_llm_chat_view(request):
                     company_bot=company_bot_id,
                 )
                 if translation_result and translation_result.get("status") == 200:
+
                     translated_user_message = translation_result.get("content")
+                    if translated_user_message and isinstance(translated_user_message, list) and len(translated_user_message) > 0:
+                        translated_user_message = translated_user_message[0]
 
         except Exception as e:
             logger.info(
