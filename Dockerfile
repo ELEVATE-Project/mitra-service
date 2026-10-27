@@ -1,7 +1,9 @@
 FROM python:3.11-slim
 
-# uv installs dependencies from uv.lock - the same lockfile the Ansible deploy
-# uses (`uv sync --frozen`), so the image and the servers get identical packages.
+# uv installs dependencies the same way the Ansible deploy ends up doing: it
+# syncs uv.lock, and if pyproject.toml has changed without uv.lock being
+# updated, it re-locks from pyproject.toml first (on the servers this happens
+# via the un-frozen `uv run ... migrate` step).
 COPY --from=ghcr.io/astral-sh/uv:0.9.5 /uv /uvx /bin/
 
 # Set environment variables
@@ -31,7 +33,7 @@ WORKDIR /app/backend
 # Install Python dependencies first (only the lockfile is copied) so this layer
 # stays cached until dependencies change. Dev group (stubs, ruff) is skipped.
 COPY pyproject.toml uv.lock /app/backend/
-RUN uv sync --frozen --no-dev --no-install-project --no-cache
+RUN uv sync --no-dev --no-install-project --no-cache
 
 # Copy project files
 COPY . /app/backend
