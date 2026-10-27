@@ -9,10 +9,15 @@ from rest_framework.response import Response
 
 from chatbot.models import ChatSession, ChatStatus, Company, CompanyChat, Profile
 from chatbot.models.company_models import CompanyBot, CompanyStateMachine
-from chatbot.models.enums import OperationTypeChoices
+from chatbot.models.enums import OperationTypeChoices, TextConversionType
 from chatbot.utils.audio_provider_utils import text_translate_provider
 from chatbot.utils.chat_utils import get_ai_profile
+from chatbot.utils.langfuse_client import get_langfuse_client
 from chatbot.utils.ptm_utils.chat_utils import save_question_answer_utils
+from chatbot.utils.transliterate_utils import transliterate_text
+from langfuse import observe
+
+langfuse = get_langfuse_client()
 
 JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")
 
@@ -261,6 +266,7 @@ def save_ptm_chats(request):
 
 
 @api_view(["POST"])
+@observe(as_type="span", name="non_llm_chat_view",capture_output=False,)
 def non_llm_chat_view(request):
     """
     Guest HTTP endpoint for NON_LLM state machine steps.
@@ -329,6 +335,15 @@ def non_llm_chat_view(request):
     if not company_bot_id:
         return Response({"error": "No bot configured for this session."}, status=400)
 
+    langfuse.update_current_span(
+     input={"user_message": message},
+     metadata={
+        "session_id": str(session),
+        "profile_id": str(profile_id) if profile_id else "",
+        "bot_route": str(chat_session.company_bot.route),
+      },
+    )
+
     current_step = (
         chat_session.current_step if chat_session.current_step is not None else 0
     )
@@ -337,7 +352,7 @@ def non_llm_chat_view(request):
     next_to_next_step = current_step + 2
     state_machines = CompanyStateMachine.objects.filter(
         company_bot_id=company_bot_id, step__in=(current_step, next_step, next_to_next_step)
-    ).values("step", "name", "operation_type", "bot_question", "translations")
+    ).values("step", "name", "operation_type", "bot_question", "translations", "text_conversion_type")
 
     states = {}
     for state in state_machines:
@@ -381,14 +396,26 @@ def non_llm_chat_view(request):
     translated_user_message = None
     if language and language != "en" and message:
         try:
-            translation_result = text_translate_provider(
-                message_body=message,
-                target_language="en",
-                source_language=language,
-                company_bot=company_bot_id,
-            )
-            if translation_result and translation_result.get("status") == 200:
-                translated_user_message = translation_result.get("content")
+            if state_machine.get("text_conversion_type") == TextConversionType.TRANSLATE:
+                translation_result = text_translate_provider(
+                    message_body=message,
+                    target_language="en",
+                    source_language=language,
+                    company_bot=company_bot_id,
+                )
+                if translation_result and translation_result.get("status") == 200:
+                    translated_user_message = translation_result.get("content")
+
+            elif state_machine.get("text_conversion_type") == TextConversionType.TRANSLITERATE:
+                translation_result = transliterate_text(
+                    message_body=message,
+                    target_language="en",
+                    source_language=language,
+                    company_bot=company_bot_id,
+                )
+                if translation_result and translation_result.get("status") == 200:
+                    translated_user_message = translation_result.get("content")
+
         except Exception as e:
             logger.info(
                 f"non_llm_chat_view: translation failed for user answer session={session}: {e}"
