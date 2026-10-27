@@ -7,7 +7,7 @@ requires-python = ">=3.11"
 dependencies = [
     "asgiref>=3.11.0",
     "beautifulsoup4>=4.14.3",
-    "boto3>=1.42.37",
+    "boto3==1.43",
     "botocore>=1.42.37",
     "celery>=5.6.2",
     "channels>=4.3.2",

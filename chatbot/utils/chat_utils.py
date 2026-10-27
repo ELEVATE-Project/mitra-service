@@ -53,7 +53,7 @@ def format_message_as_per_openai_format(chats, intro=None):
 
 
 def format_message_as_per_bedrock_format(chats, intro=None, other_info=None):
-    ai_user = Profile.objects.values("id").get(id=1)
+    ai_user = get_ai_profile()
     if intro:
         if other_info:
             user_name = other_info.get('first_name', None)
@@ -93,7 +93,7 @@ def format_message_as_per_bedrock_format(chats, intro=None, other_info=None):
             chat_message = chat.get("message")
             chat_translated_message = chat.get("translated_message")
 
-        if chat_receiver == ai_user.get("id"):
+        if chat_receiver == ai_user.id:
             user_message = chat_message
             if chat_translated_message is not None and chat_translated_message != '':
                 user_message = chat_translated_message
@@ -102,10 +102,13 @@ def format_message_as_per_bedrock_format(chats, intro=None, other_info=None):
                 'content': [{'text': user_message}]
             })
         else:
-            messages.append({
-                'role': 'assistant',
-                "content": [{'text': chat_message}]
-            })
+            if len(messages) > 0 and messages[-1].get("role") == "assistant":
+                messages[-1]["content"] = [{'text': chat_message}]
+            else:
+                messages.append({
+                    'role': 'assistant',
+                    "content": [{'text': chat_message}]
+                })
 
     if not messages or messages[0].get('role') != 'user':
         messages.insert(0, {
