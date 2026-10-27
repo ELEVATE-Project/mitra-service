@@ -37,6 +37,7 @@ Thumbs.db
 # Environment files
 .env
 .env.local
+config/secrets.json
 
 # Logs
 logs/

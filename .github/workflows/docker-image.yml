@@ -12,7 +12,7 @@ on:
         default: ''
 
 env:
-  DOCKER_IMAGE_NAME: elevate-mitra-backend-service # Configure your image name here
+  DOCKER_IMAGE_NAME: mitra-backend # Configure your image name here
   DOCKER_REGISTRY: docker.io
   DOCKER_NAMESPACE: shikshalokamqa
 
@@ -82,7 +82,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
