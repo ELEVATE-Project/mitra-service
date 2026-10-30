@@ -755,6 +755,61 @@ class PDFTemplates(models.Model):
         ]
 
 
+class MEDIATemplates(models.Model):
+    """
+    Model for storing MEDIA templates used in flows.
+    Contains template configurations for generating MEDIA with dynamic content.
+    """
+    template = models.TextField(
+        help_text="Template content for MEDIA generation (e.g., HTML, EJS template)."
+    )
+    template_name = models.CharField(
+        max_length=255,
+        unique=True,
+        help_text="Unique name identifier for this template."
+    )
+    user_type = models.CharField(
+        max_length=20,
+        choices=UserTypeChoices.choices,
+        default=UserTypeChoices.ALL,
+        help_text="User types that can use this template (guest, auth, or all)."
+    )
+    constants_json = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="JSON object containing constants/variables used in the template."
+    )
+    flow = models.ForeignKey(
+        Flow,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='media_templates',
+        help_text="Flow associated with this template."
+    )
+    tag = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        help_text="Report classification tag (e.g., mi-story, discussion-report)."
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
+
+    def __str__(self):
+        return f"{self.template_name} ({self.user_type})"
+
+    class Meta:
+        verbose_name = "MEDIA Template"
+        verbose_name_plural = "MEDIA Templates"
+        indexes = [
+            models.Index(fields=['template_name']),
+            models.Index(fields=['user_type']),
+        ]
+
+
 class CompanyBotProgramMapping(models.Model):
     """
     Maps a company bot and a state to the programme running there.
