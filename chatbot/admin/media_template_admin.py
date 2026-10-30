@@ -40,5 +40,7 @@ class MEDIATemplatesAdmin(SimpleHistoryAdmin):
         if db_field.name == 'template':
             kwargs['widget'] = admin.widgets.AdminTextareaWidget(attrs={'rows': 20, 'cols': 100})
         elif db_field.name == 'constants_json':
-            kwargs['help_text'] = 'Enter constants as JSON object, e.g., {"key1": "value1", "key2": "value2"}'
+            kwargs['help_text'] = ('Enter constants as a JSON object keyed by language code, '
+                                   'e.g., {"en": {"title": "Thank you"}, "hi": {"title": "धन्यवाद"}}. '
+                                   'An "en" block is required as the fallback.')
         return super().formfield_for_dbfield(db_field, request, **kwargs)

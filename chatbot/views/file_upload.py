@@ -27,6 +27,12 @@ def _clean_name(name):
     name = SAFE_NAME.sub("_", basename(name or ""))
     return name or "file"
 
+def _is_safe_key(key):
+    """Reject empty keys and keys with empty, "." or ".." segments. Dots inside a name are fine."""
+    if not key:
+        return False
+    return all(segment not in ("", ".", "..") for segment in key.split("/"))
+
 
 class PresignedUploadView(APIView):
     # No authentication_classes or permission_classes. The project defaults apply.
@@ -77,7 +83,7 @@ class PresignedDownloadView(APIView):
     # GET /api/media/presigned-download/?path=<sourcePath>
     def get(self, request):
         path = (request.query_params.get("path") or "").lstrip("/")
-        if not path or ".." in path:
+        if not _is_safe_key(path):
             return Response({"message": "Invalid path.", "status": 400},
                             status=status.HTTP_400_BAD_REQUEST)
 
