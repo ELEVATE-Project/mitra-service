@@ -32,6 +32,9 @@ from chatbot.views.story_views import end_story, end_story_v2, StoryListCreateVi
     StoryRetrieveUpdateDestroyView, StoryMediaListCreateView, StoryMediaRetrieveUpdateDestroyView
 from rest_framework.routers import DefaultRouter
 from chatbot.views.Media.media_api_views import MediaViewSet
+from chatbot.views.template_details_view import TemplateDetailsView
+from chatbot.views.file_upload import PresignedUploadView,PresignedDownloadView
+
 
 app_name = "chatbot"
 
@@ -145,4 +148,10 @@ urlpatterns = [
     # AI Documents Search - Alternative endpoint for the same functionality
     path('ai/documents/search', MediaSearchV2View.as_view(), name='ai-documents-search'),
 
+    # Template Details View for shareable templates
+    path('api/template-details/<int:template_id>/', TemplateDetailsView.as_view(), name='template-details'),
+
+    # Presigned URL endpoints for S3 storage
+   path('api/media/presigned-url/', PresignedUploadView.as_view(), name='media-presigned-url'),
+   path('api/media/presigned-download/', PresignedDownloadView.as_view(), name='media-presigned-download'),
 ]
