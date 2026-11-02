@@ -805,7 +805,6 @@ class MEDIATemplates(models.Model):
         verbose_name = "MEDIA Template"
         verbose_name_plural = "MEDIA Templates"
         indexes = [
-            models.Index(fields=['template_name']),
             models.Index(fields=['user_type']),
         ]
 
