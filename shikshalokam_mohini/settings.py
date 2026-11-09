@@ -15,6 +15,7 @@ import re
 from datetime import timedelta
 import sentry_sdk
 from dotenv import load_dotenv
+from socket import gethostname, gethostbyname
 
 load_dotenv()
 
@@ -82,7 +83,7 @@ CORS_ALLOWED_METHODS = [
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 
-# ALLOWED_HOSTS.append(gethostbyname(gethostname()))
+ALLOWED_HOSTS.append(gethostbyname(gethostname()))
 
 
 # Application definition
