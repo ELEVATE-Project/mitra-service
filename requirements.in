@@ -162,4 +162,4 @@ coreschema
 ############################
 # Text Normalization
 ############################
-indic-itn==0.3.4
+indic-itn==0.4.0
