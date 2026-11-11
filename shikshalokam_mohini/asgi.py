@@ -18,20 +18,22 @@ django_asgi_app = get_asgi_application()
 import django
 django.setup()  # Extra insurance that Django is fully set up
 import chatbot.routing
+import os
 
 from channels.sessions import CookieMiddleware, SessionMiddleware
 from channels.auth import AuthMiddlewareStack
 from channels.routing import ProtocolTypeRouter, URLRouter
-from channels.security.websocket import AllowedHostsOriginValidator
+from channels.security.websocket import OriginValidator
 
 
 application = ProtocolTypeRouter(
     {
         "http": django_asgi_app,
-        "websocket": AllowedHostsOriginValidator(
-            AuthMiddlewareStack(
-                CookieMiddleware(SessionMiddleware(URLRouter(chatbot.routing.websocket_urlpatterns)))
-            )
-        ),
+        "websocket": OriginValidator(
+                    AuthMiddlewareStack(
+                        CookieMiddleware(SessionMiddleware(URLRouter(chatbot.routing.websocket_urlpatterns)))
+                    ),
+                    os.environ.get("ALLOWED_HOSTS", "").split(",")
+                ),
     }
 )
