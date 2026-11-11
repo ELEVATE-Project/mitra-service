@@ -17,11 +17,15 @@ from chatbot.views.Media.upload_views import BatchMediaUploadView
 
 
 class KeyValueInline(admin.TabularInline):
+    """Inline editor for the key-value pairs attached to a Media object."""
+
     model = KeyValue
     extra = 1
 
 
 class MediaImagesInline(admin.TabularInline):
+    """Inline editor for the images extracted from a Media object."""
+
     model = MediaImage
     extra = 1
     fk_name = 'media'
@@ -31,6 +35,8 @@ class MediaImagesInline(admin.TabularInline):
 
 @admin.register(Media)
 class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
+    """Admin for Media files, with tag handling, display-mode bulk change and batch upload URLs."""
+
     form = MediaAdminForm
     list_display = (
         'file_name', 'get_title', 'media_type', 'display_mode', 'parent__name',
@@ -53,12 +59,28 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
     ordering = ('-created_at',)
 
     def file_name(self, obj):
+        """Return the Media name for the list display.
+
+        Args:
+            obj (Media): The Media row being listed.
+
+        Returns:
+            str: The value of ``obj.name``.
+        """
         return obj.name
 
     file_name.short_description = "File name"
 
     def get_title(self, obj):
-        """Get TITLE from key-value pairs"""
+        """Return the TITLE key-value for the list display, truncated to 50 characters.
+
+        Args:
+            obj (Media): The Media row being listed.
+
+        Returns:
+            str: The title, shortened with "..." if longer than 50 characters.
+                "-" if there is no title or the lookup fails.
+        """
         try:
             title_kv = obj.key_values.filter(key__iexact='title').first()
             if title_kv and title_kv.value:
@@ -75,11 +97,32 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
     get_title.admin_order_field = 'key_values__value'
 
     def get_queryset(self, request):
-        """Optimize queries by prefetching related objects"""
+        """Return the changelist queryset with related objects prefetched.
+
+        Prefetching key values, tags and parent avoids one query per row in the list view.
+
+        Args:
+            request (HttpRequest): The current admin request.
+
+        Returns:
+            QuerySet: The Media queryset with prefetches applied.
+        """
         qs = super().get_queryset(request)
         return qs.prefetch_related('key_values', 'tags', 'parent')
 
     def save_model(self, request, obj, form, change):
+        """Save the Media object, then set its tags from the manual and preserved auto tags.
+
+        Manual tags come from ``obj._manual_tags_to_set`` and auto tags from
+        ``obj._auto_tags_to_preserve``. Both are set by the form. Missing attributes
+        are treated as empty lists.
+
+        Args:
+            request (HttpRequest): The current admin request.
+            obj (Media): The Media instance being saved.
+            form (ModelForm): The bound admin form.
+            change (bool): True when editing an existing object, False when creating one.
+        """
         super().save_model(request, obj, form, change)
 
         manual_tags = getattr(obj, '_manual_tags_to_set', [])
@@ -91,6 +134,19 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
         obj.tags.set(manual_tags + auto_tags)
 
     def get_fieldsets(self, request, obj=None):
+        """Build the form layout, with fewer editable fields for moderators.
+
+        Moderators cannot edit ``company_bot``, ``parent`` or ``priority``. The
+        "Auto Tags" fieldset appears only for saved objects that have tags created by
+        user 1 (the automatic tagger).
+
+        Args:
+            request (HttpRequest): The current admin request. Used to find the user's Profile.
+            obj (Media | None): The Media being edited, or None when adding a new one.
+
+        Returns:
+            list[tuple]: Django fieldset definitions for the change form.
+        """
         # Check if user is a MODERATOR
         is_moderator = False
         try:
@@ -130,7 +186,17 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
         return fieldsets
 
     def get_actions(self, request):
-        """Remove the delete selected action"""
+        """Return the admin actions for the changelist.
+
+        Currently this returns Django's default action set unchanged. The
+        "delete selected" action is kept, and the code to remove it is commented out.
+
+        Args:
+            request (HttpRequest): The current admin request.
+
+        Returns:
+            dict: Map of action name to (function, name, description).
+        """
         actions = super().get_actions(request)
         # if 'delete_selected' in actions:
         #     del actions['delete_selected']
@@ -138,9 +204,14 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
 
     @action(description="Change display mode")
     def change_display_mode_action(self, request, queryset):
-        """
-        Custom action to change display_mode for selected Media objects.
-        Redirects to a change form where user can select the new display_mode.
+        """Store the selected Media IDs in the session and redirect to the display-mode form.
+
+        Args:
+            request (HttpRequest): The current admin request. The session stores the IDs.
+            queryset (QuerySet): The Media objects selected in the changelist.
+
+        Returns:
+            HttpResponseRedirect: Redirect to the ``change-display-mode/`` view.
         """
         # Store the selected objects in the session for processing
         selected_ids = queryset.values_list('id', flat=True)
@@ -150,8 +221,17 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
         return HttpResponseRedirect(f"{request.path}change-display-mode/")
 
     def change_display_mode(self, request):
-        """
-        View to handle display mode changes for selected media objects.
+        """Show the display-mode form (GET) or apply the chosen mode (POST).
+
+        The selected IDs come from the session, set by ``change_display_mode_action``.
+        POST accepts ``display_mode`` and ``apply_to``. ``apply_to='all'`` updates every
+        Media row. Any other value updates only the selected rows.
+
+        Args:
+            request (HttpRequest): The current admin request.
+
+        Returns:
+            HttpResponse: The form page on GET, or a redirect after a POST or error.
         """
         selected_ids = request.session.get('selected_media_ids', [])
 
@@ -196,7 +276,13 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
         return render(request, 'admin/change_display_mode.html', context)
 
     def get_urls(self):
-        """Add custom URLs for batch upload and display mode change"""
+        """Add the custom admin URLs for display mode, batch upload and the API endpoints.
+
+        Custom routes are placed before Django's default routes so they match first.
+
+        Returns:
+            list[django.urls.URLPattern]: The custom URL patterns followed by the default ones.
+        """
         from django.urls import path
         urls = super().get_urls()
         custom_urls = [
@@ -233,6 +319,15 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
         return custom_urls + urls
 
     def delete_queryset(self, request, queryset):
+        """Delete the selected Media objects one at a time, collecting any failures.
+
+        Deleting per object means one failure does not stop the others. Failed IDs
+        and their error messages are shown to the user as an error message.
+
+        Args:
+            request (HttpRequest): The current admin request, used for the message.
+            queryset (QuerySet): The Media objects to delete.
+        """
         errors = []
 
         for obj in queryset:
@@ -251,6 +346,8 @@ class MediaAdmin(SimpleHistoryAdmin, admin.ModelAdmin):
 
 @admin.register(Tag)
 class MasterTagAdmin(BatchUploadMixin, admin.ModelAdmin):
+    """Admin for master tags, with batch upload support."""
+
     list_display = ('name', 'status', 'source_type', 'created_by', 'created_at')
     list_filter = (
         CustomAdvanceDateFilter,
@@ -268,6 +365,16 @@ class MasterTagAdmin(BatchUploadMixin, admin.ModelAdmin):
     batch_upload_fields = ['name', 'status', 'description', 'created_by']
 
     def save_model(self, request, obj, form, change):
+        """Save a new tag as APPROVED and MANUAL, linked to the requesting user's Profile.
+
+        Existing tags are saved without changes to these fields.
+
+        Args:
+            request (HttpRequest): The current admin request. Used to find the user's Profile.
+            obj (Tag): The Tag instance being saved.
+            form (ModelForm): The bound admin form.
+            change (bool): True when editing an existing object, False when creating one.
+        """
         print("In save")
         if not obj.pk:
             print("obj.pk= ", obj.pk)

@@ -11,7 +11,7 @@ from chatbot.models import ChatSession, ChatStatus, Company, CompanyChat, Profil
 from chatbot.models.company_models import CompanyBot, CompanyStateMachine
 from chatbot.models.enums import OperationTypeChoices, TextConversionType
 from chatbot.utils.audio_provider_utils import text_translate_provider
-from chatbot.utils.chat_utils import get_ai_profile
+from chatbot.utils.chat_utils import get_ai_profile, build_validation_response
 from chatbot.utils.langfuse_client import get_langfuse_client
 from chatbot.utils.ptm_utils.chat_utils import save_question_answer_utils
 from chatbot.utils.transliterate_utils import transliterate_text
@@ -163,6 +163,7 @@ def create_chatsession(request):
             c.save(update_fields=["company_bot"])
 
     first_bot_audio_s3_url = None
+    first_validations = None
 
     if company_bot:
         step = c.current_step if c.current_step is not None else 0
@@ -173,10 +174,11 @@ def create_chatsession(request):
         if first_state:
             first_bot_question = first_state.bot_question
             first_operation_type = first_state.operation_type
+            # Always check for cached audio (including English)
+            cached = (first_state.translations or {}).get(language, {})
+            first_bot_audio_s3_url = cached.get("audio_s3")
             if language and language != "en" and first_bot_question:
-                cached = (first_state.translations or {}).get(language, {})
                 translated_bot_question = cached.get("text")
-                first_bot_audio_s3_url = cached.get("audio_s3")
                 if not translated_bot_question:
                     try:
                         translation_result = text_translate_provider(
@@ -193,6 +195,8 @@ def create_chatsession(request):
                     except Exception as e:
                         logger.info(f"Translation failed for first_bot_question: {e}")
 
+            first_validations = build_validation_response(first_state, language=language)
+
     logger.info(
         f"create_chatsession: session={session}, created={created}, first_bot_question={bool(first_bot_question)}"
     )
@@ -208,11 +212,19 @@ def create_chatsession(request):
                 "session_status": c.session_status,
                 "profile_id": profile.id,
             },
+            # Backward-compatible keys
             "first_bot_question": first_bot_question,
             "translated_bot_question": translated_bot_question,
             "first_bot_audio_s3_url": first_bot_audio_s3_url,
             "current_step": current_step,
             "operation_type": first_operation_type,
+            # Uniform keys matching non_llm_chat_view response shape
+            "bot_message": first_bot_question,
+            "translated_bot_message": translated_bot_question,
+            "audio_s3_url": first_bot_audio_s3_url,
+            "step": current_step,
+            "is_new_session": created,
+            "validations": first_validations,
         },
         status=200,
     )
@@ -342,7 +354,11 @@ def non_llm_chat_view(request):
     next_to_next_step = current_step + 2
     state_machines = CompanyStateMachine.objects.filter(
         company_bot_id=company_bot_id, step__in=(current_step, next_step, next_to_next_step)
-    ).values("step", "name", "operation_type", "bot_question", "translations", "text_conversion_type")
+    ).values(
+        "step", "name", "operation_type", "bot_question", "translations", "text_conversion_type",
+        "validate_method", "validation_type", "render_as", "error_message",
+        "validation_config", "min_choices", "max_choices",
+    )
 
     states = {}
     for state in state_machines:
@@ -477,6 +493,8 @@ def non_llm_chat_view(request):
         f"non_llm_chat_view: session={session} advancing to step={next_step} operation_type={next_state['operation_type']}"
     )
 
+    validations = build_validation_response(next_state, language=language)
+
     return Response(
         {
             "is_complete": False if next_to_next_state is not None else True,
@@ -486,6 +504,7 @@ def non_llm_chat_view(request):
             "audio_s3_url": audio_s3_url,
             "operation_type": next_state["operation_type"],
             "is_new_session": is_new_session,
+            "validations": validations,
         },
         status=200,
     )
