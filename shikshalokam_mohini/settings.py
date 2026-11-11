@@ -82,8 +82,15 @@ CORS_ALLOWED_METHODS = [
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '').split(',')
 
-# ALLOWED_HOSTS.append(gethostbyname(gethostname()))
+ALLOWED_CIDR_NETS = os.getenv('ALLOWED_CIDR_NETS', None)
+if type(ALLOWED_CIDR_NETS) is str and ALLOWED_CIDR_NETS.strip() != '':
+    ALLOWED_CIDR_NETS = ALLOWED_CIDR_NETS.split(',')
+else:
+    ALLOWED_CIDR_NETS = []
 
+print("="*50)
+print(ALLOWED_CIDR_NETS, "ALLOWED_CIDR_NETS")
+print("="*50)
 
 # Application definition
 
@@ -114,6 +121,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'allow_cidr.middleware.AllowCIDRMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
