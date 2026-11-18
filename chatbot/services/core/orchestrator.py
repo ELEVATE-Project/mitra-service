@@ -17,7 +17,11 @@ class ChatOrchestrator:
         self.prompt_builder = PromptBuilder()
         self.message_handler = MessageHandler()
 
-    def process_chat_request(self, channel_name, session_id, profile_id, language):
+    def process_chat_request(self, channel_name, session_id, profile_id, language, user_details=None):
+        # user_details (login feature): decoded-JWT userDetails of a logged-in user, or None for guests.
+        # It is passed through to the response handler as kwargs['user_details'], where profile-linked
+        # steps are auto-filled from user_details['userProfile']. Defaults to None so the other callers
+        # of this method (chaupal, oneshot, guided, ...) keep working unchanged.
         try:
             # Root span for the whole chat-request lifecycle — every span below nests under this one.
             with langfuse.start_as_current_observation(
@@ -105,7 +109,29 @@ class ChatOrchestrator:
                     'profile_id': profile_id,
                     'temp_messages': temp_messages,
                     'intro_mssg': intro_mssg,
+                    'user_details': user_details,
                 }
+
+                # DEV ONLY (login feature): simulates the decoded-JWT userDetails until JWT integration
+                # passes it from the consumer (async_consumer -> get_flow_response -> here).
+                # Comment out this block to test the guest flow. Must be removed before merge (stage 6).
+                response_params['user_details'] = {
+                    "userToken": "dev-token",
+                    "userId": "dev-user-id",
+                    "userProfile": {
+                        "profileid": 47,
+                        "company": "shikshalokamstaging",
+                        "has_accepted_tnc": True,
+                        "route": "en",
+                        "reroute_url": "g",
+                        "name": "Vin",
+                        "role": "HM",
+                        "school_name": "Gvt public school",
+                        "district": "Bangalore",
+                        "state": "Karnataka",
+                    },
+                }
+
                 if hasattr(self.bot_strategy, 'get_route') and 'oneshot' in self.bot_strategy.get_route():
                     response_params['remaining_stages'] = session_result.get('remaining_stages', [])
 
