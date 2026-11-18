@@ -6,8 +6,13 @@ A CompanyStateMachine step can be marked `is_linked_to_profile = True` with a `p
 has a value for that key, the bot does not ask the question: the profile value is saved as the
 user's answer, exactly like a typed answer, and the conversation moves on to the next step.
 
+A question that asks for several things at once (e.g. "...the village, block, district and state...")
+can list several comma-separated keys: `village,block,district,state`. It is auto-filled only when the
+profile has a value for every key, as "Village: Rampur, Block: Hosakote, District: Bangalore,
+State: Karnataka"; if any one is missing the question is asked, so a partial answer is never saved.
+
 Rules (see .claude/work/login/profile-autofill-plan.md, D1-D3 / A1-A5):
-  - The configured key is used as-is; it is never matched against the question text.
+  - The configured key(s) are used as-is; they are never matched against the question text.
   - Guests, or users whose profile has no usable value for the key, are asked the question as usual.
   - Several linked steps in a row are all answered in one go.
   - The answer is saved in the profile's own wording (`message`), with `translated_message = NULL`,
@@ -43,6 +48,36 @@ def _get(state_machine, field):
     return getattr(state_machine, field, None)
 
 
+def parse_profile_keys(raw_profile_key):
+    """
+    Split a configured profile_key into a clean list of keys, in the configured order.
+
+    "village, block ,district,,state " -> ["village", "block", "district", "state"]. Spaces around keys and
+    empty entries (stray commas) are ignored, and a key listed twice is kept once. Also used by
+    CompanyStateMachine.clean() to store the normalised form, so admin typos never reach the lookup.
+    """
+    keys = []
+    for key in (raw_profile_key or "").split(","):
+        key = key.strip()
+        if key and key not in keys:
+            keys.append(key)
+    return keys
+
+
+def _profile_value(user_profile, key):
+    """The profile's value for `key` as a non-empty string, or None if it is missing or unusable."""
+    value = user_profile.get(key)
+    if value is None or isinstance(value, (dict, list)):
+        return None
+    value = str(value).strip()
+    return value or None
+
+
+def _key_label(key):
+    """Human-readable label for a profile key: "district" -> "District", "school_name" -> "School name"."""
+    return key.replace("_", " ").strip().capitalize()
+
+
 def get_profile_answer(state_machine, user_profile):
     """
     Return the profile value to auto-fill this step with, or None if the user must be asked.
@@ -50,29 +85,36 @@ def get_profile_answer(state_machine, user_profile):
     `state_machine` may be a model instance or a `.values()` dict. Returns None (ask the user) when:
       - the step is missing or not linked to the profile, or has no profile_key
       - there is no profile (guest) or the profile has no value for the key
+      - with several keys: the profile is missing a value for ANY of them (no partial answers)
       - the value is empty / whitespace only
       - the step is a MULTIPLE_CHOICE question and the value matches none of its choices,
         since saving an answer the step would never accept is worse than asking.
+    One key returns the bare value ("Bangalore"); several keys return labelled values joined in the
+    configured order ("Village: Rampur, Block: Hosakote, District: Bangalore, State: Karnataka").
     Numbers (e.g. a pincode stored as int) are converted to strings.
     """
     if not state_machine or not _get(state_machine, "is_linked_to_profile"):
         return None
 
-    profile_key = (_get(state_machine, "profile_key") or "").strip()
-    if not profile_key or not isinstance(user_profile, dict):
+    profile_keys = parse_profile_keys(_get(state_machine, "profile_key"))
+    if not profile_keys or not isinstance(user_profile, dict):
+        return None
+    profile_key = ",".join(profile_keys)
+
+    values = [_profile_value(user_profile, key) for key in profile_keys]
+    if any(value is None for value in values):
         return None
 
-    value = user_profile.get(profile_key)
-    if value is None or isinstance(value, (dict, list)):
-        return None
-    value = str(value).strip()
-    if not value:
-        return None
+    if len(profile_keys) == 1:
+        value = values[0]
+    else:
+        value = ", ".join(f"{_key_label(key)}: {val}" for key, val in zip(profile_keys, values))
 
     if _get(state_machine, "validation_type") == ValidationTypeChoices.MULTIPLE_CHOICE:
         choices = (_get(state_machine, "validation_config") or {}).get("choices") or []
         # Accept the value if it equals any choice's key or English label (case-insensitive).
         # A step with no choices configured has nothing to validate against, so it is allowed.
+        # A combined multi-key answer will normally match no choice, so such a step is asked.
         accepted = {
             str(option).strip().lower()
             for choice in choices if isinstance(choice, dict)
@@ -142,7 +184,8 @@ def auto_fill_profile_steps(chat_session, company_bot, start_step, user_profile,
         ai_profile = get_ai_profile()
 
         for state, value in to_fill:
-            meta = {"source": "profile", "profile_key": state["profile_key"].strip(), "auto_filled": True}
+            meta = {"source": "profile", "profile_key": ",".join(parse_profile_keys(state["profile_key"])),
+                    "auto_filled": True}
 
             # Question row: English text in `message`, cached translation (if any) in
             # `translated_message`, the same layout a normally asked question has. No live

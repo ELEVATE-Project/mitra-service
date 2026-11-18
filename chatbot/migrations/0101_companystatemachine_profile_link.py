@@ -4,6 +4,7 @@
 # Adds is_linked_to_profile / profile_key to CompanyStateMachine and to its simple-history table.
 # Existing rows get is_linked_to_profile = false (kept as a real DB default via db_default) and
 # profile_key = NULL, so no existing bot changes behaviour until a step is explicitly linked in the admin.
+# profile_key holds one key or a comma-separated list of keys (e.g. village,block,district,state).
 
 from django.db import migrations, models
 
@@ -23,7 +24,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='companystatemachine',
             name='profile_key',
-            field=models.CharField(blank=True, help_text="Key in the user's profile whose value answers this question, e.g. state, district, name. Required when 'Linked to user profile' is checked. The value is used as-is; it is not matched against the question text.", max_length=100, null=True, verbose_name='Profile key'),
+            field=models.CharField(blank=True, help_text="Key(s) in the user's profile that answer this question, e.g. district, or several keys separated by commas, e.g. village,block,district,state (spaces are ignored). With several keys the question is auto-filled only if the profile has a value for every one of them, as 'Village: ..., Block: ..., ...'; otherwise it is asked. Required when 'Linked to user profile' is checked. Keys are used as-is; they are not matched against the question text.", max_length=255, null=True, verbose_name='Profile key'),
         ),
         migrations.AddField(
             model_name='historicalcompanystatemachine',
@@ -33,6 +34,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='historicalcompanystatemachine',
             name='profile_key',
-            field=models.CharField(blank=True, help_text="Key in the user's profile whose value answers this question, e.g. state, district, name. Required when 'Linked to user profile' is checked. The value is used as-is; it is not matched against the question text.", max_length=100, null=True, verbose_name='Profile key'),
+            field=models.CharField(blank=True, help_text="Key(s) in the user's profile that answer this question, e.g. district, or several keys separated by commas, e.g. village,block,district,state (spaces are ignored). With several keys the question is auto-filled only if the profile has a value for every one of them, as 'Village: ..., Block: ..., ...'; otherwise it is asked. Required when 'Linked to user profile' is checked. Keys are used as-is; they are not matched against the question text.", max_length=255, null=True, verbose_name='Profile key'),
         ),
     ]
