@@ -843,6 +843,18 @@ wheels = [
 ]
 
 [[package]]
+name = "django-allow-cidr"
+version = "0.8.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "django" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/12/e0/d811149809b1e4cb2daf357b44b71f240feea0718549b0a2ab2af3c4f63f/django_allow_cidr-0.8.0.tar.gz", hash = "sha256:d6f80230621dd5b19ec1665b85abf8218b02556ff7cf0ddda41e2607267a3277", size = 6982, upload-time = "2025-04-08T08:52:14.456Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/2a/10ebaba1950c113efae2b38dc5e1ec38a86e1141e97b7e729f2fb4bbb87b/django_allow_cidr-0.8.0-py2.py3-none-any.whl", hash = "sha256:724ce76b7b4a25c641ddcd33777e2e95da622dd2c11937f0d76d0cd3d54b1622", size = 4975, upload-time = "2025-04-08T08:52:13.198Z" },
+]
+
+[[package]]
 name = "django-celery-results"
 version = "2.6.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1815,11 +1827,11 @@ wheels = [
 
 [[package]]
 name = "indic-itn"
-version = "0.2.10"
+version = "0.3.3"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/17/1f/700af893bfd979c48bb807e7b944f2dc93bdfe18cd4aa9b836b6fc6cbfec/indic_itn-0.2.10.tar.gz", hash = "sha256:c57492df356f01bdc467507e03f20cd453c8c9e5f8b4d4c61aafb9f1c2507750", size = 108400, upload-time = "2026-08-24T16:43:46.473Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/95/94/2161a149e4dc98fe14a37f633eed53f6a3ccf4578c0c4b922e6a5037217b/indic_itn-0.3.3.tar.gz", hash = "sha256:4ee66d575980c220ded428256b8e18d31aa39c84ae60fbefdb8b87d1af6391e0", size = 199219, upload-time = "2026-10-27T07:03:38.975Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/45/d1/11068107df486c6e2d336a0b3a268b2b85c17abcb01ec258112e568fbc6b/indic_itn-0.2.10-py3-none-any.whl", hash = "sha256:cb38cc08316120fbb606f8b8c3d4dd87d31089f32f7457094f1dd5ba70211f4b", size = 108111, upload-time = "2026-08-24T16:43:44.765Z" },
+    { url = "https://files.pythonhosted.org/packages/90/60/d5ae01358a19bb059746472af41a67afd63fe628183ad5647d0ae135d877/indic_itn-0.3.3-py3-none-any.whl", hash = "sha256:632d61eab1f9da0485097890cf68e056d9cb9b1ff94c327065e997fde3953830", size = 159280, upload-time = "2026-10-27T07:03:37.346Z" },
 ]
 
 [[package]]
@@ -4311,6 +4323,7 @@ dependencies = [
     { name = "django" },
     { name = "django-admin-inlines" },
     { name = "django-admin-rangefilter" },
+    { name = "django-allow-cidr" },
     { name = "django-celery-results" },
     { name = "django-cors-headers" },
     { name = "django-countries" },
@@ -4404,6 +4417,7 @@ requires-dist = [
     { name = "django", specifier = "==5.2.0" },
     { name = "django-admin-inlines", specifier = ">=1.1.0" },
     { name = "django-admin-rangefilter", specifier = ">=0.13.5" },
+    { name = "django-allow-cidr", specifier = ">=0.8.0" },
     { name = "django-celery-results", specifier = ">=2.6.0" },
     { name = "django-cors-headers", specifier = ">=4.9.0" },
     { name = "django-countries", specifier = ">=8.2.0" },
@@ -4426,7 +4440,7 @@ requires-dist = [
     { name = "google-cloud-texttospeech", specifier = ">=2.34.0" },
     { name = "google-cloud-translate", specifier = ">=3.24.0" },
     { name = "import-export", specifier = ">=0.3.1" },
-    { name = "indic-itn", specifier = "==0.2.10" },
+    { name = "indic-itn", specifier = "==0.3.3" },
     { name = "instructor", specifier = ">=1.14.5" },
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "json-repair", specifier = ">=0.55.1" },
