@@ -1,4 +1,5 @@
-from chatbot.models import ChatStatus, CompanyChat, CompanyBotTypeChoices, LLMProvider, BotVernacular
+from chatbot.models import ChatStatus, CompanyChat, CompanyBotTypeChoices, LLMProvider, BotVernacular, Profile
+from chatbot.models.enums import PreProcessType
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.services.response_handlers.base_response_handler import BaseResponseHandler
 from chatbot.utils.shiksha_chaupal.date_utils import handle_date_prompt
@@ -10,6 +11,8 @@ import json
 from json_repair import repair_json
 from chatbot.utils.media_preview.media_creation import create_and_upload_file
 from chatbot.utils.profile_autofill import auto_fill_profile_steps
+from chatbot.services.core.base_service import BaseChatService
+from chatbot.services.core.message_handler import MessageHandler
 
 logger = logging.getLogger('django')
 langfuse = get_langfuse_client()
@@ -684,7 +687,7 @@ class CommonResponseHandler(BaseResponseHandler):
         step straight after the current one. Returns (action, modified_bot_question): action is
         'skip', 'modify_question' or 'continue'. Any failure is logged and treated as 'continue', so the
         question is still asked. `kwargs` are the handler kwargs (company_bot, messages, ...), passed on to
-        the preprocessor exactly as handle_response does.
+        the preprocessor exactly as handle_response does, except for `messages` (see below).
         """
         company_bot = kwargs['company_bot']
         state_machine = CompanyStateMachine.objects.filter(
@@ -692,9 +695,29 @@ class CommonResponseHandler(BaseResponseHandler):
         ).first()
         if not state_machine:
             return 'continue', None
+
+        # kwargs['messages'] was built by the orchestrator at the start of the request, before auto-fill
+        # saved its question/answer rows, and the preprocessors read only that list (they never query the
+        # session). Rebuild it from the session history with the same builder the orchestrator uses, so a
+        # skip / modify decision can depend on an auto-filled answer (e.g. role = HM). Only done when the
+        # step actually has preprocessing, so other steps cost no extra queries; on any error the original
+        # list is used and preprocessing still runs.
+        preprocess_kwargs = kwargs
+        if state_machine.preprocess_type != PreProcessType.NONE:
+            try:
+                company_chats = CompanyChat.objects.filter(session=kwargs['session_id']).order_by('created_at')
+                profile = Profile.objects.filter(id=kwargs.get('profile_id')).first()
+                messages = MessageHandler.prepare_messages(
+                    company_bot=company_bot, company_chats=company_chats, intro_mssg=kwargs.get('intro_mssg'),
+                    other_info=BaseChatService.get_user_profile_info(profile=profile)
+                )
+                preprocess_kwargs = {**kwargs, 'messages': messages}
+            except Exception as e:
+                logger.error(f"Could not refresh messages after profile auto-fill for step {state_machine.step}: {e}")
+
         try:
             result = self.preprocessing_service.execute_preprocessing(
-                state_machine, kwargs.get('system_prompt', []), **kwargs
+                state_machine, kwargs.get('system_prompt', []), **preprocess_kwargs
             )
         except Exception as e:
             logger.error(f"Preprocessing after profile auto-fill failed for step {state_machine.step}: {e}")
