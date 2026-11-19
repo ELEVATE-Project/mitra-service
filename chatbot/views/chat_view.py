@@ -12,6 +12,7 @@ from chatbot.models.company_models import CompanyBot, CompanyStateMachine
 from chatbot.models.enums import OperationTypeChoices, TextConversionType
 from chatbot.utils.audio_provider_utils import text_translate_provider
 from chatbot.utils.chat_utils import get_ai_profile, build_validation_response
+from chatbot.utils.profile_autofill import auto_fill_profile_steps
 from chatbot.utils.langfuse_client import get_langfuse_client
 from chatbot.utils.ptm_utils.chat_utils import save_question_answer_utils
 from chatbot.utils.transliterate_utils import transliterate_text
@@ -284,7 +285,35 @@ def non_llm_chat_view(request):
     No auth required. Saves user message, advances step, returns next bot question.
     """
 
+    # DEV ONLY (login feature): simulates the decoded-JWT userDetails that JWT integration will put on
+    # request.data["userDetails"]. Comment out this block to test the guest flow. Assumes a JSON body
+    # (what the frontend sends); a form-encoded body is an immutable QueryDict and can't be assigned to.
+    request.data["userDetails"] = {
+        "userToken": "dev-token",
+        "userId": "dev-user-id",
+        "userProfile": {
+            "profileid": 47,
+            "company": "shikshalokamstaging",
+            "has_accepted_tnc": True,
+            "route": "en",
+            "reroute_url": "g",
+            "name": "Vin",
+            "role": "HM",
+            "school_name": "Gvt public school",
+            "district": "Bangalore",
+            "state": "Karnataka",
+        },
+    }
+
     body = request.data
+
+    # Logged-in users carry their decoded-JWT details in request.data["userDetails"]; guests don't.
+    # Missing, not a dict, or an empty object all mean "guest" ({}), and the profile auto-fill below is
+    # skipped entirely, so the existing flow runs unchanged.
+    user_details = request.data.get("userDetails") if request.data else None
+    if not isinstance(user_details, dict) or not user_details:
+        user_details = {}
+
     session = body.get("session")
     profile_id = body.get("profile_id")
     message = body.get("message")
@@ -352,13 +381,15 @@ def non_llm_chat_view(request):
 
     next_step = current_step + 1
     next_to_next_step = current_step + 2
-    state_machines = CompanyStateMachine.objects.filter(
-        company_bot_id=company_bot_id, step__in=(current_step, next_step, next_to_next_step)
-    ).values(
+    # Shared with the re-query after a profile auto-fill below, so both build the same response.
+    step_fields = (
         "step", "name", "operation_type", "bot_question", "translations", "text_conversion_type",
         "validate_method", "validation_type", "render_as", "error_message",
         "validation_config", "min_choices", "max_choices",
     )
+    state_machines = CompanyStateMachine.objects.filter(
+        company_bot_id=company_bot_id, step__in=(current_step, next_step, next_to_next_step)
+    ).values(*step_fields)
 
     states = {}
     for state in state_machines:
@@ -445,6 +476,66 @@ def non_llm_chat_view(request):
     logger.info(
         f"non_llm_chat_view: saved CompanyChat id={company_chat.id} for session={session} step={current_step}"
     )
+
+    # Profile auto-fill (login feature): only for logged-in users (non-empty user_details). If the next
+    # step(s) have is_linked_to_profile = True, a profile_key, and a value for that key in
+    # user_details["userProfile"], they are answered and saved here instead of being sent to the user.
+    # Guests never enter this path, so for them the flow below runs exactly as before.
+    autofill = {"step": next_step, "filled_steps": [], "completed": False}
+    if user_details:
+        autofill = auto_fill_profile_steps(
+            chat_session,
+            company_bot_id,
+            start_step=next_step,
+            user_profile=user_details.get("userProfile"),
+            profile_id=sender_id,
+            language=language,
+        )
+    if autofill["filled_steps"]:
+        if autofill["completed"]:
+            # Every remaining step came from the profile, so there is no question left to send.
+            # Keep current_step on the last step and send today's HTTP end signal
+            # (is_complete=True) with an empty message; the frontend ends the flow on it.
+            chat_session.current_step = autofill["step"]
+            chat_session.session_status = ChatStatus.COMPLETED
+            chat_session.save(update_fields=["current_step", "session_status"])
+            logger.info(
+                f"non_llm_chat_view: session={session} completed by profile auto-fill at step={autofill['step']}"
+            )
+            return Response(
+                {
+                    "is_complete": True,
+                    "step": autofill["step"],
+                    "bot_message": None,
+                    "translated_bot_message": None,
+                    "audio_s3_url": None,
+                    "operation_type": None,
+                    "is_new_session": is_new_session,
+                    "validations": None,
+                },
+                status=200,
+            )
+
+        # The first step that still needs the user can be several steps ahead, outside the
+        # current/+1/+2 prefetch above, so load it (and the one after, for the completion check).
+        next_step = autofill["step"]
+        next_to_next_step = next_step + 1
+        chat_session.current_step = next_step
+        states = {
+            state["step"]: state
+            for state in CompanyStateMachine.objects.filter(
+                company_bot_id=company_bot_id, step__in=(next_step, next_to_next_step)
+            ).values(*step_fields)
+        }
+        next_state = states.get(next_step)
+        next_to_next_state = states.get(next_to_next_step)
+        if not next_state:
+            # Only reachable if auto-fill stopped part-way on an unexpected error; the answers it
+            # saved are valid, so close the session the same way the completed branch does.
+            chat_session.current_step = autofill["filled_steps"][-1]
+            chat_session.session_status = ChatStatus.COMPLETED
+            chat_session.save(update_fields=["current_step", "session_status"])
+            return Response({"error": "Chat session is already marked as completed"}, status=400)
 
     update_fields = ["current_step"]
     if not next_to_next_state:

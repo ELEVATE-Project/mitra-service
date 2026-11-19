@@ -390,6 +390,33 @@ class CompanyStateMachine(models.Model):
         help_text="If True, this state will be skipped for authenticated users."
     )
 
+    # Profile auto-fill (login feature): when the flow is about to move to a step that is linked to the
+    # user's profile, and the logged-in user's profile has a non-empty value for `profile_key`, the backend
+    # saves that value as the user's answer and moves on without asking the question. If anything is
+    # missing (guest user, no profile, key not present, empty value) the question is asked as usual.
+    # `profile_key` may list several comma-separated keys for a question that asks for several things at
+    # once (e.g. village,block,district,state); then every key must have a value, or the question is asked.
+    # db_default keeps a real DEFAULT on the column, so inserts from code that doesn't know this field
+    # (other branches, raw SQL, data-migration scripts) still succeed with False.
+    is_linked_to_profile = models.BooleanField(
+        default=False,
+        db_default=False,
+        verbose_name="Linked to user profile",
+        help_text="If True, this question is answered automatically from the logged-in user's profile "
+                  "(using Profile key) and is not shown to the user. Guests are always asked."
+    )
+    profile_key = models.CharField(
+        max_length=255,
+        null=True,
+        blank=True,
+        verbose_name="Profile key",
+        help_text="Key(s) in the user's profile that answer this question, e.g. district, or several keys "
+                  "separated by commas, e.g. village,block,district,state (spaces are ignored). With several "
+                  "keys the question is auto-filled only if the profile has a value for every one of them, as "
+                  "'Village: ..., Block: ..., ...'; otherwise it is asked. Required when 'Linked to user "
+                  "profile' is checked. Keys are used as-is; they are not matched against the question text."
+    )
+
     validate_method = models.CharField(
         max_length=10,
         choices=ValidateMethodChoices.choices,
@@ -502,6 +529,20 @@ class CompanyStateMachine(models.Model):
                 raise ValidationError({
                     'max_choices': "Max choices must be greater than or equal to min choices."
                 })
+
+        # --- Validation: profile auto-fill ---
+        # Store the key list normalised ("village , block," -> "village,block"; "" -> None), so the runtime
+        # lookup in the user's profile doesn't miss because of stray spaces or commas typed in the admin.
+        # Imported here because chatbot.utils.profile_autofill imports this module.
+        from chatbot.utils.profile_autofill import parse_profile_keys
+        self.profile_key = ','.join(parse_profile_keys(self.profile_key)) or None
+        # A linked step without a key could never be auto-filled and would silently fall back to asking,
+        # which is almost certainly a configuration mistake, so reject it here. save() runs full_clean(),
+        # so this also guards admin edits, bot import and bot duplication.
+        if self.is_linked_to_profile and not self.profile_key:
+            raise ValidationError({
+                'profile_key': "Profile key is required when 'Linked to user profile' is checked."
+            })
 
     def save(self, *args, **kwargs):
         langs_to_regenerate = []

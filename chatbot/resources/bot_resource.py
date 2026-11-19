@@ -74,6 +74,9 @@ class CompanyBotResource(resources.ModelResource):
                 'postprocess_bot_name': sm.postprocess_bot.name if sm.postprocess_bot else None,
                 'postprocess_output_mode': sm.postprocess_output_mode,
                 'skip_to_step': sm.skip_to_step,
+                # Profile auto-fill settings (login feature)
+                'is_linked_to_profile': sm.is_linked_to_profile,
+                'profile_key': sm.profile_key,
             }
             sm_data.append(sm_dict)
         return json.dumps(sm_data)
@@ -171,6 +174,10 @@ class CompanyBotResource(resources.ModelResource):
                         postprocess_bot=postprocess_bot,
                         postprocess_output_mode=sm_dict.get('postprocess_output_mode', 'none'),
                         skip_to_step=sm_dict.get('skip_to_step'),
+                        # Defaults keep files exported before the profile auto-fill feature importable:
+                        # those steps come in as not linked, exactly as they behaved when exported.
+                        is_linked_to_profile=sm_dict.get('is_linked_to_profile', False),
+                        profile_key=sm_dict.get('profile_key'),
                     )
             except (json.JSONDecodeError, KeyError) as e:
                 pass  # Skip if JSON is invalid
