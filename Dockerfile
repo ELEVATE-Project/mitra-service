@@ -17,6 +17,10 @@ ENV PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH"
 
 # Install system dependencies
+# ffmpeg: converts uploaded audio to 16 kHz mono WAV for /api/asr/
+#   (chatbot/utils/audio_converter_utils.py runs the `ffmpeg` binary) and is
+#   the backend pydub uses for non-WAV audio. Not a Python package, so it must
+#   be installed here; see system_dependencies.md.
 RUN apt-get update && apt-get install -y \
     postgresql-client \
     gcc \
@@ -25,7 +29,12 @@ RUN apt-get update && apt-get install -y \
     libffi-dev \
     libssl-dev \
     curl \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
+
+# Fail the build early if ffmpeg is missing, instead of failing on the first
+# voice message in a running pod.
+RUN ffmpeg -version > /dev/null
 
 # Set working directory
 WORKDIR /app/backend
