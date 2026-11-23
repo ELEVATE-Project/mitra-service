@@ -25,14 +25,51 @@
     return rows;
   }
 
+  function getContainerAndPrefix(btn, type){
+    var c = btn.previousElementSibling;
+    if (!c || !c.classList.contains('dyn-rows-container')) {
+      if (btn.parentElement) {
+        c = btn.parentElement.querySelector('.dyn-rows-container');
+      }
+    }
+    if (!c) {
+      c = document.getElementById(btn.getAttribute('data-container'));
+    }
+    if (!c) return { container: null, prefix: '' };
+
+    var prefix = c.getAttribute('data-prefix') || '';
+    if (!prefix || prefix.indexOf('__prefix__') !== -1) {
+      var rawId = (c.id || '').replace(/^container-id_/, '');
+      var parts = rawId.split('-');
+      if (parts.length > 1) {
+        prefix = parts.slice(0, -1).join('-') + '-' + type;
+      } else {
+        var panel = btn.closest('.inline-related');
+        if (panel) {
+          var anyInput = panel.querySelector('input[name^="companystatemachine_set-"], select[name^="companystatemachine_set-"]');
+          if (anyInput) {
+            var m = anyInput.name.match(/^(companystatemachine_set-\d+)-/);
+            if (m) prefix = m[1] + '-' + type;
+          }
+        }
+      }
+      if (!prefix) prefix = type;
+      c.setAttribute('data-prefix', prefix);
+    }
+    if (c.id) {
+      btn.setAttribute('data-container', c.id);
+    }
+    return { container: c, prefix: prefix };
+  }
+
   // ── Dynamic rows: add choice ──
   document.addEventListener('click',function(e){
     var btn=e.target.closest('.dyn-add-choice-btn');
     if(!btn) return;
     e.preventDefault();
-    var c=document.getElementById(btn.getAttribute('data-container'));
+    var info=getContainerAndPrefix(btn, 'choice');
+    var c=info.container, prefix=info.prefix;
     if(!c) return;
-    var prefix=c.getAttribute('data-prefix');
     var idx=nextIdx(c);
     var d=document.createElement('div');
     d.className='dyn-row';
@@ -51,9 +88,9 @@
     var btn=e.target.closest('.dyn-add-error-btn');
     if(!btn) return;
     e.preventDefault();
-    var c=document.getElementById(btn.getAttribute('data-container'));
+    var info=getContainerAndPrefix(btn, 'error');
+    var c=info.container, prefix=info.prefix;
     if(!c) return;
-    var prefix=c.getAttribute('data-prefix');
     var idx=nextIdx(c);
     var d=document.createElement('div');
     d.className='dyn-row';
@@ -232,5 +269,11 @@
   var grp=document.querySelector('.inline-group');
   if(grp){
     new MutationObserver(function(){init();}).observe(grp,{childList:true,subtree:false});
+  }
+
+  if(window.jQuery){
+    window.jQuery(document).on('formset:added', function(){
+      init();
+    });
   }
 })();

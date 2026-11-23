@@ -166,12 +166,22 @@ def create_chatsession(request):
     first_validations = None
 
     if company_bot:
-        step = c.current_step if c.current_step is not None else 0
+        step = c.current_step if c.current_step is not None else 1
         first_state = CompanyStateMachine.objects.filter(
             company_bot=company_bot, step=step
         ).first()
 
+        if not first_state and c.current_step is None:
+            first_state = CompanyStateMachine.objects.filter(
+                company_bot=company_bot, step=0
+            ).first()
+
         if first_state:
+            current_step = first_state.step
+            if c.current_step != current_step:
+                c.current_step = current_step
+                c.save(update_fields=["current_step"])
+
             first_bot_question = first_state.bot_question
             first_operation_type = first_state.operation_type
             # Always check for cached audio (including English)
@@ -346,23 +356,23 @@ def non_llm_chat_view(request):
     if not company_bot_id:
         return Response({"error": "No bot configured for this session."}, status=400)
 
-    current_step = (
-        chat_session.current_step if chat_session.current_step is not None else 0
+    if chat_session.current_step is None:
+        first_sm = CompanyStateMachine.objects.filter(company_bot_id=company_bot_id).order_by('step').first()
+        current_step = first_sm.step if first_sm else 1
+    else:
+        current_step = chat_session.current_step
+
+    subsequent_states = list(
+        CompanyStateMachine.objects.filter(
+            company_bot_id=company_bot_id, step__gte=current_step
+        ).order_by('step')[:3].values(
+            "step", "name", "operation_type", "bot_question", "translations", "text_conversion_type",
+            "validate_method", "validation_type", "render_as", "error_message",
+            "validation_config", "min_choices", "max_choices",
+        )
     )
 
-    next_step = current_step + 1
-    next_to_next_step = current_step + 2
-    state_machines = CompanyStateMachine.objects.filter(
-        company_bot_id=company_bot_id, step__in=(current_step, next_step, next_to_next_step)
-    ).values(
-        "step", "name", "operation_type", "bot_question", "translations", "text_conversion_type",
-        "validate_method", "validation_type", "render_as", "error_message",
-        "validation_config", "min_choices", "max_choices",
-    )
-
-    states = {}
-    for state in state_machines:
-        states[state["step"]] = state
+    states = {state["step"]: state for state in subsequent_states}
 
     state_machine = states.get(current_step)
     if not state_machine:
@@ -372,6 +382,19 @@ def non_llm_chat_view(request):
 
     if state_machine["operation_type"] != OperationTypeChoices.NON_LLM:
         return Response({"error": "Current step is not a NON_LLM step."}, status=400)
+
+    # Determine next_state and next_to_next_state by sequence order
+    next_state = None
+    next_to_next_state = None
+    for idx, s in enumerate(subsequent_states):
+        if s["step"] == current_step:
+            if idx + 1 < len(subsequent_states):
+                next_state = subsequent_states[idx + 1]
+            if idx + 2 < len(subsequent_states):
+                next_to_next_state = subsequent_states[idx + 2]
+            break
+
+    next_step = next_state["step"] if next_state else current_step + 1
 
     sender_id: int | None = None
     if profile_id:
@@ -391,8 +414,6 @@ def non_llm_chat_view(request):
         return Response({"error": "AI profile not found."}, status=400)
 
     chat_session.current_step = next_step
-    next_state = states.get(next_step)
-    next_to_next_state = states.get(next_to_next_step)
 
     if not next_state:
         return Response({

@@ -73,6 +73,8 @@ class BotVernacularListCreateView(APIView):
 
         # First question, translation, audio, and validations from state machine
         step_one = CompanyStateMachine.objects.filter(company_bot=bot, step=1).first()
+        if not step_one:
+            step_one = CompanyStateMachine.objects.filter(company_bot=bot).order_by('step').first()
         if step_one:
             data['first_bot_question'] = step_one.bot_question
             data['operation_type'] = step_one.operation_type
@@ -94,6 +96,23 @@ class BotVernacularListCreateView(APIView):
 
             from chatbot.utils.chat_utils import build_validation_response
             data['validations'] = build_validation_response(step_one, language=language)
+
+        # Full state_machine_steps list with validations for front-ends that pre-load all questions
+        all_steps = CompanyStateMachine.objects.filter(company_bot=bot).order_by('step')
+        if all_steps.exists():
+            from chatbot.utils.chat_utils import build_validation_response
+            data['state_machine_steps'] = [
+                {
+                    "step": s.step,
+                    "operation_type": s.operation_type,
+                    "bot_question": s.bot_question,
+                    "validate_method": s.validate_method,
+                    "validation_type": s.validation_type,
+                    "render_as": s.render_as,
+                    "validations": build_validation_response(s, language=language),
+                }
+                for s in all_steps
+            ]
 
         return Response(data)
 
