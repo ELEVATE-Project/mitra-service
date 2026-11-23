@@ -166,15 +166,14 @@ def create_chatsession(request):
     first_validations = None
 
     if company_bot:
-        step = c.current_step if c.current_step is not None else 1
-        first_state = CompanyStateMachine.objects.filter(
-            company_bot=company_bot, step=step
-        ).first()
-
-        if not first_state and c.current_step is None:
+        if c.current_step is not None:
             first_state = CompanyStateMachine.objects.filter(
-                company_bot=company_bot, step=0
+                company_bot=company_bot, step=c.current_step
             ).first()
+        else:
+            first_state = CompanyStateMachine.objects.filter(
+                company_bot=company_bot
+            ).order_by("step").first()
 
         if first_state:
             current_step = first_state.step

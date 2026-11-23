@@ -247,3 +247,137 @@ class ConfigurableValidationsTest(TestCase):
         self.assertEqual(len(response.data["state_machine_steps"]), 2)
         self.assertEqual(response.data["state_machine_steps"][1]["step"], 2)
         self.assertIsNotNone(response.data["state_machine_steps"][1]["validations"])
+
+    def test_create_chatsession_initializes_from_lowest_step_0(self):
+        """Test create_chatsession initializes unset session with lowest step (0) and preserves resumed step."""
+        from unittest.mock import patch
+        import jwt
+
+        bot0 = CompanyBot.objects.create(
+            name="Step 0 Bot", company=self.company, route="/bot-step-0", context="Step 0 context"
+        )
+        CompanyStateMachine.objects.create(
+            company_bot=bot0,
+            name="Step 0 Intro",
+            step=0,
+            operation_type=OperationTypeChoices.NON_LLM,
+            bot_question="Welcome, what is your language?",
+            validate_method=ValidateMethodChoices.NONE,
+        )
+        CompanyStateMachine.objects.create(
+            company_bot=bot0,
+            name="Step 1 Name",
+            step=1,
+            operation_type=OperationTypeChoices.NON_LLM,
+            bot_question="What is your name?",
+            validate_method=ValidateMethodChoices.NONE,
+        )
+
+        secret_key = "test-jwt-secret-key"
+        token = jwt.encode(
+            {"data": {"id": self.profile.userid, "name": "Test User"}, "roles": []},
+            secret_key,
+            algorithm="HS256",
+        )
+        factory = APIRequestFactory()
+        request = factory.post(
+            "/api/create-chatsession/",
+            {
+                "session": "test-session-step0",
+                "bot_route": "/bot-step-0",
+                "email": self.profile.email,
+                "preferred_language": {"value": "en"},
+            },
+            HTTP_X_AUTH_TOKEN=token,
+            format="json",
+        )
+
+        with patch("chatbot.views.chat_view.JWT_PUBLIC_KEY", secret_key):
+            response = create_chatsession(request)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["current_step"], 0)
+        self.assertEqual(response.data["step"], 0)
+        self.assertEqual(response.data["first_bot_question"], "Welcome, what is your language?")
+
+        # Resumed session preserves current_step
+        session0 = ChatSession.objects.get(session="test-session-step0")
+        session0.current_step = 1
+        session0.save(update_fields=["current_step"])
+
+        request_resumed = factory.post(
+            "/api/create-chatsession/",
+            {
+                "session": "test-session-step0",
+                "bot_route": "/bot-step-0",
+                "email": self.profile.email,
+                "preferred_language": {"value": "en"},
+            },
+            HTTP_X_AUTH_TOKEN=token,
+            format="json",
+        )
+
+        with patch("chatbot.views.chat_view.JWT_PUBLIC_KEY", secret_key):
+            response_resumed = create_chatsession(request_resumed)
+
+        self.assertEqual(response_resumed.status_code, 200)
+        self.assertEqual(response_resumed.data["current_step"], 1)
+        self.assertEqual(response_resumed.data["step"], 1)
+        self.assertEqual(response_resumed.data["first_bot_question"], "What is your name?")
+
+    def test_company_state_machine_inline_formset_rejects_duplicate_steps(self):
+        """Test CompanyStateMachineInlineFormSet rejects duplicate steps for the same bot."""
+        from django.forms.models import inlineformset_factory
+        from chatbot.admin.company_admin import CompanyStateMachineInlineFormSet
+        from chatbot.models.enums import TextConversionType, PreProcessType, PreProcessOutputMode, PostProcessType, PostProcessOutputMode
+
+        test_bot = CompanyBot.objects.create(
+            name="Inline Formset Bot", company=self.company, route="/inline-formset-bot", context="Context"
+        )
+
+        StateMachineFormSet = inlineformset_factory(
+            CompanyBot,
+            CompanyStateMachine,
+            form=CompanyStateMachineForm,
+            formset=CompanyStateMachineInlineFormSet,
+            fk_name="company_bot",
+            extra=2,
+        )
+
+        duplicate_data = {
+            "companystatemachine_set-TOTAL_FORMS": "2",
+            "companystatemachine_set-INITIAL_FORMS": "0",
+            "companystatemachine_set-MIN_NUM_FORMS": "0",
+            "companystatemachine_set-MAX_NUM_FORMS": "1000",
+            "companystatemachine_set-0-step": "1",
+            "companystatemachine_set-0-name": "Step 1 A",
+            "companystatemachine_set-0-operation_type": OperationTypeChoices.NON_LLM,
+            "companystatemachine_set-0-text_conversion_type": TextConversionType.TRANSLATE,
+            "companystatemachine_set-0-preprocess_type": PreProcessType.NONE,
+            "companystatemachine_set-0-preprocess_output_mode": PreProcessOutputMode.NONE,
+            "companystatemachine_set-0-postprocess_type": PostProcessType.NONE,
+            "companystatemachine_set-0-postprocess_output_mode": PostProcessOutputMode.NONE,
+            "companystatemachine_set-0-validate_method": ValidateMethodChoices.NONE,
+            "companystatemachine_set-1-step": "1",
+            "companystatemachine_set-1-name": "Step 1 B",
+            "companystatemachine_set-1-operation_type": OperationTypeChoices.NON_LLM,
+            "companystatemachine_set-1-text_conversion_type": TextConversionType.TRANSLATE,
+            "companystatemachine_set-1-preprocess_type": PreProcessType.NONE,
+            "companystatemachine_set-1-preprocess_output_mode": PreProcessOutputMode.NONE,
+            "companystatemachine_set-1-postprocess_type": PostProcessType.NONE,
+            "companystatemachine_set-1-postprocess_output_mode": PostProcessOutputMode.NONE,
+            "companystatemachine_set-1-validate_method": ValidateMethodChoices.NONE,
+        }
+
+        formset = StateMachineFormSet(data=duplicate_data, instance=test_bot)
+        self.assertFalse(formset.is_valid())
+        self.assertTrue(
+            any("Duplicate step 1. Each step must be unique for a bot." in str(err) for err in formset.non_form_errors())
+        )
+
+        # Distinct steps pass
+        valid_data = dict(duplicate_data)
+        valid_data["companystatemachine_set-1-step"] = "2"
+        valid_formset = StateMachineFormSet(data=valid_data, instance=test_bot)
+        self.assertTrue(valid_formset.is_valid(), valid_formset.errors)
+
