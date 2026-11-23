@@ -531,6 +531,14 @@ class CompanyStateMachine(models.Model):
     def __str__(self):
         return f"{self.company_bot.name} - {self.name}"
 
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['company_bot', 'step'],
+                name='unique_company_bot_step',
+            ),
+        ]
+
 
 class ImageConfiguration(models.Model):
     """

@@ -49,7 +49,7 @@ class BotVernacularListCreateView(APIView):
 
     def get(self, request, *args, **kwargs):
         """Return vernacular fields + first question from state machine for given lang+bot route."""
-        language = request.query_params.get('language')
+        language = request.query_params.get('target_language') or request.query_params.get('language')
         route = request.query_params.get('company_bot__route')
 
         if not language or not route:
@@ -72,9 +72,7 @@ class BotVernacularListCreateView(APIView):
         data['default_name'] = english_bot.name if english_bot else ""
 
         # First question, translation, audio, and validations from state machine
-        step_one = CompanyStateMachine.objects.filter(company_bot=bot, step=1).first()
-        if not step_one:
-            step_one = CompanyStateMachine.objects.filter(company_bot=bot).order_by('step').first()
+        step_one = CompanyStateMachine.objects.filter(company_bot=bot).order_by('step').first()
         if step_one:
             data['first_bot_question'] = step_one.bot_question
             data['operation_type'] = step_one.operation_type
@@ -98,21 +96,10 @@ class BotVernacularListCreateView(APIView):
             data['validations'] = build_validation_response(step_one, language=language)
 
         # Full state_machine_steps list with validations for front-ends that pre-load all questions
-        all_steps = CompanyStateMachine.objects.filter(company_bot=bot).order_by('step')
-        if all_steps.exists():
-            from chatbot.utils.chat_utils import build_validation_response
-            data['state_machine_steps'] = [
-                {
-                    "step": s.step,
-                    "operation_type": s.operation_type,
-                    "bot_question": s.bot_question,
-                    "validate_method": s.validate_method,
-                    "validation_type": s.validation_type,
-                    "render_as": s.render_as,
-                    "validations": build_validation_response(s, language=language),
-                }
-                for s in all_steps
-            ]
+        from chatbot.utils.chat_utils import build_state_machine_steps_response
+        state_machine_steps = build_state_machine_steps_response(bot, language=language)
+        if state_machine_steps:
+            data['state_machine_steps'] = state_machine_steps
 
         return Response(data)
 

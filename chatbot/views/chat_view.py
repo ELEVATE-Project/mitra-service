@@ -335,9 +335,17 @@ def non_llm_chat_view(request):
             if not resolved_company_bot:
                 return Response({"error": "Invalid company_bot."}, status=400)
 
+        initial_step = 1
+        if resolved_company_bot:
+            first_state = CompanyStateMachine.objects.filter(
+                company_bot=resolved_company_bot
+            ).order_by("step").first()
+            if first_state:
+                initial_step = first_state.step
+
         chat_session = ChatSession(
             profile_id=profile_id,
-            current_step=1,
+            current_step=initial_step,
             language=language,
             company_bot=resolved_company_bot,
             session_status=ChatStatus.IN_PROGRESS,
@@ -355,7 +363,9 @@ def non_llm_chat_view(request):
     if not company_bot_id:
         return Response({"error": "No bot configured for this session."}, status=400)
 
-    if chat_session.current_step is None:
+    if chat_session.current_step is None or not CompanyStateMachine.objects.filter(
+        company_bot_id=company_bot_id, step=chat_session.current_step
+    ).exists():
         first_sm = CompanyStateMachine.objects.filter(company_bot_id=company_bot_id).order_by('step').first()
         current_step = first_sm.step if first_sm else 1
     else:
@@ -385,15 +395,20 @@ def non_llm_chat_view(request):
     # Determine next_state and next_to_next_state by sequence order
     next_state = None
     next_to_next_state = None
-    for idx, s in enumerate(subsequent_states):
-        if s["step"] == current_step:
-            if idx + 1 < len(subsequent_states):
-                next_state = subsequent_states[idx + 1]
-            if idx + 2 < len(subsequent_states):
-                next_to_next_state = subsequent_states[idx + 2]
+    for index, state in enumerate(subsequent_states):
+        if state["step"] == current_step:
+            if index + 1 < len(subsequent_states):
+                next_state = subsequent_states[index + 1]
+            if index + 2 < len(subsequent_states):
+                next_to_next_state = subsequent_states[index + 2]
             break
 
-    next_step = next_state["step"] if next_state else current_step + 1
+    if not next_state:
+        return Response({
+            "error": "Chat session is already marked as completed"
+        }, status=400)
+
+    next_step = next_state["step"]
 
     sender_id: int | None = None
     if profile_id:
@@ -413,11 +428,6 @@ def non_llm_chat_view(request):
         return Response({"error": "AI profile not found."}, status=400)
 
     chat_session.current_step = next_step
-
-    if not next_state:
-        return Response({
-            "error": "Chat session is already marked as completed"
-        }, status=400)
 
     translated_user_message = None
     if language and language != "en" and message:

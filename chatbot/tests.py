@@ -381,3 +381,101 @@ class ConfigurableValidationsTest(TestCase):
         valid_formset = StateMachineFormSet(data=valid_data, instance=test_bot)
         self.assertTrue(valid_formset.is_valid(), valid_formset.errors)
 
+    def test_company_state_machine_db_unique_constraint(self):
+        """Test database UniqueConstraint raises IntegrityError or ValidationError on duplicate company_bot + step."""
+        from django.db import IntegrityError
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        test_bot = CompanyBot.objects.create(
+            name="Unique Bot", company=self.company, route="/unique-bot", context="Context"
+        )
+        CompanyStateMachine.objects.create(
+            company_bot=test_bot, name="Step 10", step=10, operation_type=OperationTypeChoices.NON_LLM
+        )
+        with self.assertRaises((DjangoValidationError, IntegrityError)):
+            CompanyStateMachine.objects.create(
+                company_bot=test_bot, name="Step 10 Duplicate", step=10, operation_type=OperationTypeChoices.NON_LLM
+            )
+        with self.assertRaises(IntegrityError):
+            CompanyStateMachine.objects.bulk_create([
+                CompanyStateMachine(company_bot=test_bot, name="Step 10 Bulk", step=10, operation_type=OperationTypeChoices.NON_LLM)
+            ])
+
+    def test_non_llm_chat_view_starting_with_step_greater_than_one(self):
+        """Test non_llm_chat_view correctly finds first step and advances for bots starting above step 1."""
+        bot_offset = CompanyBot.objects.create(
+            name="Offset Bot", company=self.company, route="/offset-bot", context="Context"
+        )
+        CompanyStateMachine.objects.create(
+            company_bot=bot_offset,
+            name="Step 5",
+            step=5,
+            operation_type=OperationTypeChoices.NON_LLM,
+            bot_question="Step 5 question",
+        )
+        CompanyStateMachine.objects.create(
+            company_bot=bot_offset,
+            name="Step 7",
+            step=7,
+            operation_type=OperationTypeChoices.NON_LLM,
+            bot_question="Step 7 question",
+        )
+
+        factory = APIRequestFactory()
+        request = factory.post(
+            "/api/non-llm-chat/",
+            {
+                "session": "test-session-offset-bot",
+                "company_bot": bot_offset.id,
+                "profile_id": self.profile.id,
+                "message": "Start",
+                "language": "en",
+            },
+            format="json",
+        )
+
+        response = non_llm_chat_view(request)
+        self.assertEqual(response.status_code, 200)
+        # Session started at lowest step (5) and advanced to step 7
+        self.assertEqual(response.data["step"], 7)
+        self.assertEqual(response.data["bot_message"], "Step 7 question")
+        self.assertTrue(response.data["is_complete"])
+
+        # Chat session should now be at step 7
+        session = ChatSession.objects.get(session="test-session-offset-bot")
+        self.assertEqual(session.current_step, 7)
+
+    def test_shared_state_machine_steps_helper(self):
+        """Test build_state_machine_steps_response returns complete ordered list."""
+        from chatbot.utils.chat_utils import build_state_machine_steps_response
+
+        steps = build_state_machine_steps_response(self.bot, language="en")
+        self.assertEqual(len(steps), 2)
+        self.assertEqual(steps[0]["step"], 1)
+        self.assertEqual(steps[0]["bot_question"], "Select role")
+        self.assertIsNotNone(steps[0]["validations"])
+        self.assertEqual(steps[1]["step"], 2)
+        self.assertEqual(steps[1]["bot_question"], "Select grade")
+
+    def test_bot_vernacular_view_with_target_language_and_steps(self):
+        """Test BotVernacularListCreateView accepts target_language and returns state_machine_steps."""
+        from chatbot.models import BotVernacular
+        from chatbot.views.drf_views import BotVernacularListCreateView
+
+        BotVernacular.objects.create(
+            company_bot=self.bot,
+            language="hi",
+            name="Test Bot Hindi",
+            introductory_message="Namaste",
+        )
+
+        factory = APIRequestFactory()
+        view = BotVernacularListCreateView.as_view()
+
+        # Query using target_language
+        request = factory.get(f"/api/bot-vernacular/?company_bot__route={self.bot.route}&target_language=hi")
+        response = view(request)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("state_machine_steps", response.data)
+        self.assertEqual(len(response.data["state_machine_steps"]), 2)
+

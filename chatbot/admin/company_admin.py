@@ -32,9 +32,6 @@ class CompanyStateMachineInlineFormSet(BaseInlineFormSet):
     """Rejects duplicate step values per bot in the state machine inline formset."""
 
     def clean(self):
-        super().clean()
-        if any(self.errors):
-            return
         seen_steps = set()
         for form in self.forms:
             if not hasattr(form, "cleaned_data"):
@@ -50,6 +47,7 @@ class CompanyStateMachineInlineFormSet(BaseInlineFormSet):
                     f"Duplicate step {step}. Each step must be unique for a bot."
                 )
             seen_steps.add(step)
+        super().clean()
 
 
 class CompanyBotProgramMappingInline(admin.TabularInline):
