@@ -56,6 +56,13 @@ class CompanyStateMachineAdmin(InlineActionsMixin, admin.StackedInline):
         ('Question & Context', {
             'fields': ('bot_question', 'completion_criteria', 'context', 'tool_context'),
         }),
+        # Kept expanded (no 'collapse') so it's obvious at a glance which questions are auto-filled from
+        # the user's profile and won't be shown to logged-in users.
+        ('Profile Linking', {
+            'description': "Answer this question automatically from the logged-in user's profile. "
+                           "Guests, or users whose profile has no value for the key, are asked as usual.",
+            'fields': ('is_linked_to_profile', 'profile_key'),
+        }),
         ('Preprocessing', {
             'classes': ('collapse',),
             'fields': (

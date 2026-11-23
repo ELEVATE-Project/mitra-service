@@ -1,4 +1,5 @@
-from chatbot.models import ChatStatus, CompanyChat, CompanyBotTypeChoices, LLMProvider, BotVernacular
+from chatbot.models import ChatStatus, CompanyChat, CompanyBotTypeChoices, LLMProvider, BotVernacular, Profile
+from chatbot.models.enums import PreProcessType
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.services.response_handlers.base_response_handler import BaseResponseHandler
 from chatbot.utils.shiksha_chaupal.date_utils import handle_date_prompt
@@ -9,6 +10,9 @@ import logging
 import json
 from json_repair import repair_json
 from chatbot.utils.media_preview.media_creation import create_and_upload_file
+from chatbot.utils.profile_autofill import auto_fill_profile_steps
+from chatbot.services.core.base_service import BaseChatService
+from chatbot.services.core.message_handler import MessageHandler
 
 logger = logging.getLogger('django')
 langfuse = get_langfuse_client()
@@ -528,6 +532,14 @@ class CommonResponseHandler(BaseResponseHandler):
             skip_next_stage_preprocessing = kwargs.get('skip_next_stage_preprocessing', False)
             target_stage = kwargs.get('target_stage')
             modified_bot_question = kwargs.get('modified_bot_question')
+
+            # Profile auto-fill (login feature): user_details comes from the orchestrator's response_params.
+            # Guests and other callers don't send it. Missing, not a dict, or an empty object all mean
+            # "guest" ({}), and the auto-fill below is skipped entirely, so the existing flow is unchanged.
+            user_details = kwargs.get('user_details')
+            if not isinstance(user_details, dict) or not user_details:
+                user_details = {}
+
             if skip_next_stage:
                 if target_stage and isinstance(target_stage, int):
                     if skip_next_stage_preprocessing:
@@ -543,6 +555,77 @@ class CommonResponseHandler(BaseResponseHandler):
                 logger.info(f"Skipping next stage {chat_session.current_step - 1} due to preprocessing")
             else:
                 chat_session.current_step += 1
+
+            # Profile auto-fill: the step advance above (including any preprocessing skip) picked the next
+            # step. If that step, and possibly the ones after it, are linked to the user's profile and the
+            # profile has values for them, they are answered and saved here without asking the user, and
+            # current_step moves to the first step that still needs an answer. The code below then sends
+            # that step's question exactly as it would have sent the original one.
+            #
+            # Next-stage preprocessing (handle_response) ran for the step right after the current one. When
+            # that step gets auto-filled, the step we actually land on has had no preprocessing, so it is
+            # run here. If it says "skip", we move one step further and try auto-fill again from there;
+            # every pass moves forward, so the loop always ends.
+            #
+            # Only logged-in users (non-empty user_details) get here; for guests autofill stays empty and
+            # the loop never runs.
+            autofill = {"step": chat_session.current_step, "filled_steps": [], "completed": False}
+            if user_details:
+                autofill = auto_fill_profile_steps(
+                    chat_session,
+                    company_bot,
+                    start_step=chat_session.current_step,
+                    user_profile=user_details.get('userProfile'),
+                    profile_id=profile_id,
+                    language=language,
+                )
+            auto_filled_steps = []
+            while autofill["filled_steps"]:
+                auto_filled_steps.extend(autofill["filled_steps"])
+                # A question rewritten by earlier preprocessing belongs to a step that has now been
+                # auto-filled or skipped, not to the step we will ask, so it must not be reused.
+                modified_bot_question = None
+
+                if autofill["completed"]:
+                    # Every remaining step came from the profile, so there is no question left to send.
+                    # Keep current_step on the last step and push today's end-of-flow message
+                    # (finish_reason "stop", source "bot") with an empty text. Sending nothing would leave
+                    # the frontend waiting, as it only ends the flow when it receives this message.
+                    # translate_and_send_message passes an empty message straight through untranslated.
+                    chat_session.current_step = autofill["step"]
+                    chat_session.session_status = ChatStatus.COMPLETED
+                    chat_session.save()
+                    self.translate_message(
+                        message="", channel_name=channel_name, step_number=chat_session.current_step,
+                        language=language, company_bot=company_bot
+                    )
+                    handle_function_call_span.update(output={
+                        "new_step": chat_session.current_step,
+                        "auto_filled_steps": auto_filled_steps,
+                        "session_status": chat_session.session_status,
+                    })
+                    return response
+
+                chat_session.current_step = autofill["step"]
+                preprocess_action, preprocess_question = self._preprocess_step_after_autofill(
+                    chat_session, **kwargs
+                )
+                if preprocess_action == 'modify_question':
+                    modified_bot_question = preprocess_question
+                if preprocess_action != 'skip':
+                    break
+
+                # Preprocessing skips the landed step, the same as the existing skip_next_stage_preprocessing
+                # (+1 past the skipped step). The step after it may itself be profile-linked.
+                chat_session.current_step += 1
+                autofill = auto_fill_profile_steps(
+                    chat_session,
+                    company_bot,
+                    start_step=chat_session.current_step,
+                    user_profile=user_details.get('userProfile'),
+                    profile_id=profile_id,
+                    language=language,
+                )
 
             total_steps = CompanyStateMachine.objects.filter(company_bot=company_bot).count()
             if chat_session.current_step >= total_steps:
@@ -592,8 +675,57 @@ class CommonResponseHandler(BaseResponseHandler):
                 "new_step": chat_session.current_step,
                 "bot_question": bot_question,
                 "session_status": chat_session.session_status,
+                "auto_filled_steps": auto_filled_steps,
             })
             return response
+
+    def _preprocess_step_after_autofill(self, chat_session, **kwargs):
+        """
+        Run the preprocessing configured on the step reached after a profile auto-fill.
+
+        Mirrors the next-stage preprocessing in BaseResponseHandler.handle_response, which only covers the
+        step straight after the current one. Returns (action, modified_bot_question): action is
+        'skip', 'modify_question' or 'continue'. Any failure is logged and treated as 'continue', so the
+        question is still asked. `kwargs` are the handler kwargs (company_bot, messages, ...), passed on to
+        the preprocessor exactly as handle_response does, except for `messages` (see below).
+        """
+        company_bot = kwargs['company_bot']
+        state_machine = CompanyStateMachine.objects.filter(
+            company_bot=company_bot, step=chat_session.current_step
+        ).first()
+        if not state_machine:
+            return 'continue', None
+
+        # kwargs['messages'] was built by the orchestrator at the start of the request, before auto-fill
+        # saved its question/answer rows, and the preprocessors read only that list (they never query the
+        # session). Rebuild it from the session history with the same builder the orchestrator uses, so a
+        # skip / modify decision can depend on an auto-filled answer (e.g. role = HM). Only done when the
+        # step actually has preprocessing, so other steps cost no extra queries; on any error the original
+        # list is used and preprocessing still runs.
+        preprocess_kwargs = kwargs
+        if state_machine.preprocess_type != PreProcessType.NONE:
+            try:
+                company_chats = CompanyChat.objects.filter(session=kwargs['session_id']).order_by('created_at')
+                profile = Profile.objects.filter(id=kwargs.get('profile_id')).first()
+                messages = MessageHandler.prepare_messages(
+                    company_bot=company_bot, company_chats=company_chats, intro_mssg=kwargs.get('intro_mssg'),
+                    other_info=BaseChatService.get_user_profile_info(profile=profile)
+                )
+                preprocess_kwargs = {**kwargs, 'messages': messages}
+            except Exception as e:
+                logger.error(f"Could not refresh messages after profile auto-fill for step {state_machine.step}: {e}")
+
+        try:
+            result = self.preprocessing_service.execute_preprocessing(
+                state_machine, kwargs.get('system_prompt', []), **preprocess_kwargs
+            )
+        except Exception as e:
+            logger.error(f"Preprocessing after profile auto-fill failed for step {state_machine.step}: {e}")
+            return 'continue', None
+        action = result.get('action', 'continue')
+        if action == 'modify_question':
+            return action, result.get('modified_bot_question')
+        return action, None
 
     def _handle_regular_response(self, response, chat_session, company_bot,
                                  session_id, channel_name, language, profile_id,
