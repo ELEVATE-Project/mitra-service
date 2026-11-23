@@ -292,7 +292,6 @@ def handle_bedrock_model(
         aws_secret_access_key=aws_secret_key if aws_secret_key else AWS_SECRET_KEY,
         config=boto_config
     )
-    print("aws_key used: ", aws_key if aws_key else AWS_KEY)
     custom_model = get_custom_model(company_bot)
     if custom_model:
         model_id = custom_model

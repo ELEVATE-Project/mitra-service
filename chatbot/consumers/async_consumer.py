@@ -50,7 +50,6 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
 
     async def receive(self, text_data):
         try:
-            logger.info(f"Received text data via common websocket: {text_data}")
             text_data_json = json.loads(text_data)
             message_type = text_data_json.get('type', None)
             company_chat_status = None
@@ -168,7 +167,6 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
     def handle_access_token(self, access_token):
         user_id = None
         if access_token:
-            print("Access Token: ", access_token)
             try:
                 decoded = jwt.decode(access_token, PUBLIC_KEY, algorithms=["HS256"])
                 print("Decoded JWT: ", decoded)

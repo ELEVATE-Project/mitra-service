@@ -39,8 +39,6 @@ class MitraBedrockConsumer(BaseConsumer):
             self.close()
 
         def receive(self, text_data):
-            print(text_data)
-            logger.info('Received text_data: %s', text_data)
             text_data_json = json.loads(text_data)
             message_type = text_data_json.get('type', None)
 
@@ -55,7 +53,6 @@ class MitraBedrockConsumer(BaseConsumer):
                           f"route: {self.route}")
                     logger.info("Authenticated with session_id: %s, profile_id: %s, route: %s",
                                 self.session_id, self.profile_id, self.route)
-                    print(f"Received access_token: {self.access_token}")
                     user_id = None 
                     if self.access_token:
                         try:
