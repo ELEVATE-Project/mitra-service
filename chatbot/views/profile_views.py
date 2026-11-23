@@ -9,7 +9,6 @@ from chatbot.utils.profile_utils import create_profile_utils
 def create_profile_views(request):
     body = request.data
     access_token = body.get('access_token')
-    print("Access token: ", access_token)
 
     if not access_token:
         return Response({

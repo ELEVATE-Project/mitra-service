@@ -98,7 +98,6 @@ class GuidedGuestConsumer(BaseConsumer):
             self.close()
 
         def receive(self, text_data):
-            print(text_data)
             text_data_json = json.loads(text_data)
             message_type = text_data_json.get('type', None)
             company_chat_status = None
@@ -190,7 +189,6 @@ class GuidedGuestConsumer(BaseConsumer):
                 if self.route != 'en' and text_data_json and text_data_json.get('text'):
                     translated_message = self.translate_message(message=text_data_json['text'])
 
-                print("text_data_json: ", text_data_json)
                 if message_type != 'authenticate' and text_data_json and text_data_json.get('text'):
                     chat_session = ChatSession.objects.filter(session=self.session_id).order_by('-created_at').first()
                     current_stage=None

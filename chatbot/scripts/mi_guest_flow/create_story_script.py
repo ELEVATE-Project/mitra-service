@@ -80,7 +80,7 @@ def create_specific_stories(sessions, access_token):
                 failed_sessions.append(session_str)
                 continue
 
-            print(f"Passing, profile_id: {profile_id} & session_str: {session_str} & access_token: {access_token} & "
+            print(f"Passing, profile_id: {profile_id} & session_str: {session_str} & "
                   f"flow: {flow} & language: {language}")
             story_id, content, error_msg = create_story_object(
                 profile_id=profile_id,

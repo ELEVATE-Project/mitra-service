@@ -12,7 +12,6 @@ from chatbot.utils.elevate.profile_utils import handle_elevate_profile
 @api_view(['GET'])
 def read_elevate_profile(request):
     access_token = request.headers.get('X-auth-token')
-    print("Access token: ", access_token)
 
     if not access_token:
         return Response({

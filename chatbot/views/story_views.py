@@ -294,7 +294,6 @@ class StoryMediaRetrieveUpdateDestroyView(generics.RetrieveUpdateDestroyAPIView)
         flow = request.data.get('flow')
         print("session_value: ", session_value)
         print("flow: ", flow)
-        print("access_token: ", access_token)
 
         try:
             if is_partial:
