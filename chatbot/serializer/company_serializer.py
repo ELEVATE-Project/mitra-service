@@ -99,8 +99,8 @@ class FlowConnectionInfoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Flow
-        fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config', 'create_story', 'editor_config', 'default_flow')
-        read_only_fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config', 'default_flow')
+        fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config', 'create_story', 'editor_config', 'default_flow',"login_config")
+        read_only_fields = ('flow_route', 'websocket_url', 'bot_route', 'isParentFlow', 'children_flows', 'image_config', 'default_flow',"login_config")
     
     def get_isParentFlow(self, obj):
         """Check if this flow has children."""
@@ -130,3 +130,5 @@ class FlowConnectionInfoSerializer(serializers.ModelSerializer):
         if obj.image_config:
             return ImageConfigurationSerializer(obj.image_config).data
         return None
+
+    

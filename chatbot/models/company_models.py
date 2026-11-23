@@ -566,7 +566,11 @@ class ImageConfiguration(models.Model):
             models.Index(fields=['name']),
         ]
 
-
+class LoginConfig(models.TextChoices):
+    MANDATORY = "mandatory", "Mandatory"
+    NOT_REQUIRED = "not_required", "Not required"
+    OPTIONAL = "optional", "Optional"
+    
 class Flow(models.Model):
     """
     Flow model representing a conversation flow configuration.
@@ -647,6 +651,12 @@ class Flow(models.Model):
         choices=CreateStoryChoices.choices,
         default=CreateStoryChoices.ALL,
         help_text="Whether to post process the story or not"
+    )
+    login_config = models.CharField(
+        max_length=20,
+        choices=LoginConfig.choices,
+        default=LoginConfig.NOT_REQUIRED,
+        help_text="Login behaviour for MITRA: mandatory, not_required (guest flow), or optional.",
     )
     default_flow = models.ForeignKey(
         'self',

@@ -1,9 +1,5 @@
 import logging
-import os
 
-import jwt
-from django.http import JsonResponse
-from jwt import ExpiredSignatureError, InvalidTokenError
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -16,12 +12,29 @@ from chatbot.utils.langfuse_client import get_langfuse_client
 from chatbot.utils.ptm_utils.chat_utils import save_question_answer_utils
 from chatbot.utils.transliterate_utils import transliterate_text
 from langfuse import observe
+from chatbot.utils.session_auth import attach_user_to_session
+
 
 langfuse = get_langfuse_client()
 
-JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")
-
 logger = logging.getLogger("django")
+
+
+def resolve_profile(profile_id, user_details):
+    """
+    Returns the Profile for this request, or None.
+
+    Prefers the verified token user, looked up by Profile.userid.
+    Falls back to profile_id from the body, which must be our Profile primary key.
+    The Elevate user ID is never used as a primary key.
+    """
+    if user_details is not None:
+        profile = Profile.objects.filter(userid=user_details.userId).first()
+        if profile is not None:
+            return profile
+    if profile_id:
+        return Profile.objects.filter(id=profile_id).first()
+    return None
 
 
 @api_view(['POST'])
@@ -81,28 +94,10 @@ def create_chatsession(request):
     body = request.data
     session = body.get('session')
     email = body.get('email')
-    preferred_language =  body.get('preferred_language', {}).get('value')
+    preferred_language = body.get('preferred_language', {}).get('value')
 
-    access_token = request.headers.get("X-auth-token")
-    if not access_token:
-        return JsonResponse({"message": "Access token missing"}, status=401)
-
-    try:
-        decoded = jwt.decode(
-            access_token,
-            JWT_PUBLIC_KEY,
-            algorithms=["HS256"]
-        )
-        user_id = decoded.get("data", {}).get("id")
-        first_name = decoded.get("data", {}).get("name")
-        user_roles = decoded.get("roles", [])
-
-    except ExpiredSignatureError:
-        return JsonResponse({"message": "Access token expired"}, status=401)
-
-    except InvalidTokenError:
-        return JsonResponse({"message": "Invalid access token"}, status=401)
-
+    # Verified by JWTAuthMiddleware. None for guests and invalid tokens.
+    details = getattr(request, 'user_details', None)
 
     if not session:
         return Response({"error": "session is required."}, status=400)
@@ -115,17 +110,24 @@ def create_chatsession(request):
     except Exception as e:
         return Response({"error": f"{e}"}, status=400)
 
-    profile, created = Profile.objects.get_or_create(
-        userid = user_id,
-        defaults={
-            'first_name': first_name,
-            'email': email,
-            'password': 'grit@123',
-            'preferred_route': preferred_language,
-            'company': company,
-            "designation": user_roles
-        }
-    )
+    # Logged-in users get a profile bound to their token user ID. Guests get none.
+    profile = None
+    if details is not None:
+        claims = request.user_claims or {}
+        first_name = (claims.get("data") or {}).get("name")
+        user_roles = claims.get("roles", [])
+
+        profile, created = Profile.objects.get_or_create(
+            userid=details.userId,
+            defaults={
+                'first_name': first_name,
+                'email': email,
+                'password': 'grit@123',
+                'preferred_route': preferred_language,
+                'company': company,
+                "designation": user_roles
+            }
+        )
 
     bot_route = body.get("bot_route")
     language = body.get("language", "en")
@@ -140,6 +142,8 @@ def create_chatsession(request):
             "session_type",
             "profile_id",
             "company_bot__id",
+            "user_id",
+            "user_profile",
         )
         .get_or_create(
             session=session,
@@ -149,6 +153,10 @@ def create_chatsession(request):
             },
         )
     )
+
+    # Binds user_id and user_profile on the session. No-op for guests and for
+    # sessions that already have a user_id.
+    attach_user_to_session(c, details)
 
     first_bot_question = None
     translated_bot_question = None
@@ -210,7 +218,7 @@ def create_chatsession(request):
             "chatsession": {
                 "session": c.session,
                 "session_status": c.session_status,
-                "profile_id": profile.id,
+                "profile_id": profile.id if profile else None,
             },
             # Backward-compatible keys
             "first_bot_question": first_bot_question,
@@ -316,6 +324,8 @@ def non_llm_chat_view(request):
                 "session_type",
                 "profile_id",
                 "company_bot_id",
+                "user_id",
+                "user_profile",
             )
             .get(session=session)
         )
@@ -326,8 +336,12 @@ def non_llm_chat_view(request):
             if not resolved_company_bot:
                 return Response({"error": "Invalid company_bot."}, status=400)
 
+        profile = resolve_profile(profile_id, getattr(request, "user_details", None))
+        if profile is None:
+            return Response({"error": "Profile not found for this session."}, status=400)
+
         chat_session = ChatSession(
-            profile_id=profile_id,
+            profile=profile,
             current_step=1,
             language=language,
             company_bot=resolved_company_bot,
@@ -338,8 +352,10 @@ def non_llm_chat_view(request):
         chat_session.save()
         is_new_session = True
 
+    attach_user_to_session(chat_session, getattr(request, "user_details", None))
+
     if chat_session.session_status == ChatStatus.COMPLETED:
-        return Response({ "error": "Chat session is already marked as completed" }, status=400)
+        return Response({"error": "Chat session is already marked as completed"}, status=400)
 
     company_bot_id = chat_session.company_bot_id
 
@@ -373,15 +389,9 @@ def non_llm_chat_view(request):
     if state_machine["operation_type"] != OperationTypeChoices.NON_LLM:
         return Response({"error": "Current step is not a NON_LLM step."}, status=400)
 
-    sender_id: int | None = None
-    if profile_id:
-        try:
-            sender_id = Profile.objects.values_list("id", flat=True).get(id=profile_id)
-        except Profile.DoesNotExist:
-            sender_id = chat_session.profile_id
-    else:
-        sender_id = chat_session.profile_id
-
+    # The session's profile is the sender. profile_id from the body is only used
+    # when the session was created above, so it can't change the sender later.
+    sender_id = chat_session.profile_id
     if sender_id is None:
         return Response({"error": "No profile resolved for this session."}, status=400)
 
