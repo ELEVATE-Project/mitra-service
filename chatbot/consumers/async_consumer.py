@@ -23,6 +23,10 @@ from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.audio_provider_utils import text_translate_provider
 from chatbot.utils.transliterate_utils import transliterate_text
 
+from chatbot.utils.session_auth import attach_user_to_session
+from middleware.user_details import UserDetails
+from django.conf import settings
+
 logger = logging.getLogger('django')
 PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")
 
@@ -38,6 +42,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
         self.flow_name = None
         self.ip_address = None
         self.access_token = None
+        self.user_details = None
         self.background_tasks = set()
 
     async def disconnect(self, code):
@@ -62,6 +67,8 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 self.bot_route = text_data_json.get('bot_route')
                 self.flow_name = text_data_json.get('flow_name')
                 self.ip_address = text_data_json.get('address')
+                self.access_token = text_data_json.get('access_token')
+
 
                 profile = await self.get_profile(self.profile_id)
                 logger.info(
@@ -69,11 +76,11 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                     self.channel_name, self.session_id, self.profile_id, self.route
                 )
 
-                user_id = await self.handle_access_token(self.access_token)
+                self.user_details = await self.handle_access_token(self.access_token)
                 self.company_bot = await self.get_company_bot(profile, self.bot_route)
 
                 await self.create_chat_session(
-                    self.session_id, profile, self.company_bot, self.ip_address, user_id
+                    self.session_id, profile, self.company_bot, self.ip_address, self.user_details
                 )
             else:
                 if not self.session_id or not self.bot_route:
@@ -166,19 +173,24 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
 
     @database_sync_to_async
     def handle_access_token(self, access_token):
-        user_id = None
-        if access_token:
-            print("Access Token: ", access_token)
-            try:
-                decoded = jwt.decode(access_token, PUBLIC_KEY, algorithms=["HS256"])
-                print("Decoded JWT: ", decoded)
-                if decoded:
-                    user_id = decoded.get("data", {}).get("id")
-            except Exception as e:
-                logger.error('JWT Decode Error: %s', e, exc_info=True)
-                print(f"JWT Decode Error: {e}")
-        logger.info("User_id: %s", user_id)
-        return user_id
+        """Verifies the token the same way JWTAuthMiddleware does. Returns UserDetails or None."""
+        if not access_token:
+            return None
+        try:
+            claims = jwt.decode(
+                access_token,
+                settings.JWT_VERIFY_KEY,
+                algorithms=[settings.JWT_ALGORITHM],
+                options={"require": ["exp"]},
+            )
+        except jwt.PyJWTError as e:
+            logger.error('JWT Decode Error: %s', e)
+            return None
+
+        user_id = (claims.get("data") or {}).get("id")
+        if user_id is None:
+            return None
+        return UserDetails(token=access_token, user_id=str(user_id))
 
     @database_sync_to_async
     def get_company_bot(self, profile, route):
@@ -188,7 +200,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
             return CompanyBot.objects.get(route=route)
 
     @database_sync_to_async
-    def create_chat_session(self, session_id, profile, company_bot, ip_address, user_id):
+    def create_chat_session(self, session_id, profile, company_bot, ip_address, user_details):
         step_number = 1
         if profile and profile.first_name and profile.first_name != '':
             try:
@@ -198,6 +210,7 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 step_number = challenges_step.step
             except CompanyStateMachine.DoesNotExist:
                 step_number = 1
+
         cs, cs_created = ChatSession.objects.get_or_create(
             session=session_id,
             defaults={
@@ -206,11 +219,14 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 'language': self.route,
                 'company_bot': company_bot,
                 'session_status': ChatStatus.IN_PROGRESS,
-                'user_id': user_id,
                 'session_type': self.flow_name
             }
         )
         logger.info(f"Chatsession: %s %s", cs, cs_created)
+
+        # Binds user_id and user_profile. No-op for guests and for sessions already bound,
+        # so it also binds a guest session the user later logs into.
+        attach_user_to_session(cs, user_details)
 
         if not cs_created:
             if cs.language != self.route:

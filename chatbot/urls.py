@@ -15,7 +15,7 @@ from chatbot.views.kafka_views import sync_user_project_view
 from chatbot.views.location_views import get_location_view, get_ip_location_view
 from chatbot.views.Media.media_views import MediaSearchView
 from chatbot.views.Media.media_api_views import MediaSearchV2View
-from chatbot.views.profile_views import create_profile_views
+from chatbot.views.profile_views import create_profile_views,get_profile_details
 from django.urls import path, include
 from chatbot.views import api_views
 from chatbot.views.bhashini_views import text_speech_view, speech_text, text_translation_view, text_transliterate_view
@@ -154,4 +154,7 @@ urlpatterns = [
     # Presigned URL endpoints for S3 storage
    path('api/media/presigned-url/', PresignedUploadView.as_view(), name='media-presigned-url'),
    path('api/media/presigned-download/', PresignedDownloadView.as_view(), name='media-presigned-download'),
+   
+   #get elevate profile details
+   path('api/get-profile-details/', get_profile_details, name="get-profile-details"),
 ]

@@ -1,9 +1,5 @@
 import logging
-import os
 
-import jwt
-from django.http import JsonResponse
-from jwt import ExpiredSignatureError, InvalidTokenError
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -12,16 +8,34 @@ from chatbot.models.company_models import CompanyBot, CompanyStateMachine
 from chatbot.models.enums import OperationTypeChoices, TextConversionType
 from chatbot.utils.audio_provider_utils import text_translate_provider
 from chatbot.utils.chat_utils import get_ai_profile, build_validation_response
+from chatbot.utils.profile_autofill import auto_fill_profile_steps
 from chatbot.utils.langfuse_client import get_langfuse_client
 from chatbot.utils.ptm_utils.chat_utils import save_question_answer_utils
 from chatbot.utils.transliterate_utils import transliterate_text
 from langfuse import observe
+from chatbot.utils.session_auth import attach_user_to_session
+
 
 langfuse = get_langfuse_client()
 
-JWT_PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")
-
 logger = logging.getLogger("django")
+
+
+def resolve_profile(profile_id, user_details):
+    """
+    Returns the Profile for this request, or None.
+
+    Prefers the verified token user, looked up by Profile.userid.
+    Falls back to profile_id from the body, which must be our Profile primary key.
+    The Elevate user ID is never used as a primary key.
+    """
+    if user_details is not None:
+        profile = Profile.objects.filter(userid=user_details.userId).first()
+        if profile is not None:
+            return profile
+    if profile_id:
+        return Profile.objects.filter(id=profile_id).first()
+    return None
 
 
 @api_view(['POST'])
@@ -81,28 +95,10 @@ def create_chatsession(request):
     body = request.data
     session = body.get('session')
     email = body.get('email')
-    preferred_language =  body.get('preferred_language', {}).get('value')
+    preferred_language = body.get('preferred_language', {}).get('value')
 
-    access_token = request.headers.get("X-auth-token")
-    if not access_token:
-        return JsonResponse({"message": "Access token missing"}, status=401)
-
-    try:
-        decoded = jwt.decode(
-            access_token,
-            JWT_PUBLIC_KEY,
-            algorithms=["HS256"]
-        )
-        user_id = decoded.get("data", {}).get("id")
-        first_name = decoded.get("data", {}).get("name")
-        user_roles = decoded.get("roles", [])
-
-    except ExpiredSignatureError:
-        return JsonResponse({"message": "Access token expired"}, status=401)
-
-    except InvalidTokenError:
-        return JsonResponse({"message": "Invalid access token"}, status=401)
-
+    # Verified by JWTAuthMiddleware. None for guests and invalid tokens.
+    details = getattr(request, 'user_details', None)
 
     if not session:
         return Response({"error": "session is required."}, status=400)
@@ -115,17 +111,24 @@ def create_chatsession(request):
     except Exception as e:
         return Response({"error": f"{e}"}, status=400)
 
-    profile, created = Profile.objects.get_or_create(
-        userid = user_id,
-        defaults={
-            'first_name': first_name,
-            'email': email,
-            'password': 'grit@123',
-            'preferred_route': preferred_language,
-            'company': company,
-            "designation": user_roles
-        }
-    )
+    # Logged-in users get a profile bound to their token user ID. Guests get none.
+    profile = None
+    if details is not None:
+        claims = request.user_claims or {}
+        first_name = (claims.get("data") or {}).get("name")
+        user_roles = claims.get("roles", [])
+
+        profile, created = Profile.objects.get_or_create(
+            userid=details.userId,
+            defaults={
+                'first_name': first_name,
+                'email': email,
+                'password': 'grit@123',
+                'preferred_route': preferred_language,
+                'company': company,
+                "designation": user_roles
+            }
+        )
 
     bot_route = body.get("bot_route")
     language = body.get("language", "en")
@@ -140,6 +143,8 @@ def create_chatsession(request):
             "session_type",
             "profile_id",
             "company_bot__id",
+            "user_id",
+            "user_profile",
         )
         .get_or_create(
             session=session,
@@ -149,6 +154,10 @@ def create_chatsession(request):
             },
         )
     )
+
+    # Binds user_id and user_profile on the session. No-op for guests and for
+    # sessions that already have a user_id.
+    attach_user_to_session(c, details)
 
     first_bot_question = None
     translated_bot_question = None
@@ -219,7 +228,7 @@ def create_chatsession(request):
             "chatsession": {
                 "session": c.session,
                 "session_status": c.session_status,
-                "profile_id": profile.id,
+                "profile_id": profile.id if profile else None,
             },
             # Backward-compatible keys
             "first_bot_question": first_bot_question,
@@ -293,6 +302,23 @@ def non_llm_chat_view(request):
     No auth required. Saves user message, advances step, returns next bot question.
     """
 
+  
+  
+
+    # Verified by JWTAuthMiddleware. None for guests and invalid tokens.
+    details = getattr(request, "user_details", None)
+
+
+    # Logged-in users carry their decoded-JWT details in request.data["userDetails"]; guests don't.
+    # Missing, not a dict, or an empty object all mean "guest" ({}), and the profile auto-fill below is
+    # skipped entirely, so the existing flow runs unchanged.
+    # Shape the auto-fill helper expects. Empty for guests, so auto-fill is skipped.
+    user_details = {}
+    if details is not None:
+        profile_data = details.userProfile  # cached user/read result, or None if the call failed
+        if profile_data:
+            user_details = {"userId": details.userId, "userProfile": profile_data}
+
     body = request.data
     session = body.get("session")
     profile_id = body.get("profile_id")
@@ -325,6 +351,8 @@ def non_llm_chat_view(request):
                 "session_type",
                 "profile_id",
                 "company_bot_id",
+                "user_id",
+                "user_profile",
             )
             .get(session=session)
         )
@@ -335,6 +363,10 @@ def non_llm_chat_view(request):
             if not resolved_company_bot:
                 return Response({"error": "Invalid company_bot."}, status=400)
 
+        profile = resolve_profile(profile_id, getattr(request, "user_details", None))
+        if profile is None:
+            return Response({"error": "Profile not found for this session."}, status=400)
+
         initial_step = 1
         if resolved_company_bot:
             first_state = CompanyStateMachine.objects.filter(
@@ -344,7 +376,7 @@ def non_llm_chat_view(request):
                 initial_step = first_state.step
 
         chat_session = ChatSession(
-            profile_id=profile_id,
+            profile=profile,
             current_step=initial_step,
             language=language,
             company_bot=resolved_company_bot,
@@ -355,8 +387,10 @@ def non_llm_chat_view(request):
         chat_session.save()
         is_new_session = True
 
+    attach_user_to_session(chat_session, getattr(request, "user_details", None))
+
     if chat_session.session_status == ChatStatus.COMPLETED:
-        return Response({ "error": "Chat session is already marked as completed" }, status=400)
+        return Response({"error": "Chat session is already marked as completed"}, status=400)
 
     company_bot_id = chat_session.company_bot_id
 
@@ -371,14 +405,16 @@ def non_llm_chat_view(request):
     else:
         current_step = chat_session.current_step
 
+    # Shared with the re-query after a profile auto-fill below, so both build the same response.
+    step_fields = (
+        "step", "name", "operation_type", "bot_question", "translations", "text_conversion_type",
+        "validate_method", "validation_type", "render_as", "error_message",
+        "validation_config", "min_choices", "max_choices",
+    )
     subsequent_states = list(
         CompanyStateMachine.objects.filter(
             company_bot_id=company_bot_id, step__gte=current_step
-        ).order_by('step')[:3].values(
-            "step", "name", "operation_type", "bot_question", "translations", "text_conversion_type",
-            "validate_method", "validation_type", "render_as", "error_message",
-            "validation_config", "min_choices", "max_choices",
-        )
+        ).order_by('step')[:3].values(*step_fields)
     )
 
     states = {state["step"]: state for state in subsequent_states}
@@ -410,15 +446,9 @@ def non_llm_chat_view(request):
 
     next_step = next_state["step"]
 
-    sender_id: int | None = None
-    if profile_id:
-        try:
-            sender_id = Profile.objects.values_list("id", flat=True).get(id=profile_id)
-        except Profile.DoesNotExist:
-            sender_id = chat_session.profile_id
-    else:
-        sender_id = chat_session.profile_id
-
+    # The session's profile is the sender. profile_id from the body is only used
+    # when the session was created above, so it can't change the sender later.
+    sender_id = chat_session.profile_id
     if sender_id is None:
         return Response({"error": "No profile resolved for this session."}, status=400)
 
@@ -475,6 +505,65 @@ def non_llm_chat_view(request):
     logger.info(
         f"non_llm_chat_view: saved CompanyChat id={company_chat.id} for session={session} step={current_step}"
     )
+
+    # Profile auto-fill (login feature): only for logged-in users (non-empty user_details). If the next
+    # step(s) have is_linked_to_profile = True, a profile_key, and a value for that key in
+    # user_details["userProfile"], they are answered and saved here instead of being sent to the user.
+    # Guests never enter this path, so for them the flow below runs exactly as before.
+    autofill = {"step": next_step, "filled_steps": [], "completed": False}
+    if user_details:
+        autofill = auto_fill_profile_steps(
+            chat_session,
+            company_bot_id,
+            start_step=next_step,
+            user_profile=user_details.get("userProfile"),
+            profile_id=sender_id,
+            language=language,
+        )
+    if autofill["filled_steps"]:
+        if autofill["completed"]:
+            # Every remaining step came from the profile, so there is no question left to send.
+            # Keep current_step on the last step and send today's HTTP end signal
+            # (is_complete=True) with an empty message; the frontend ends the flow on it.
+            chat_session.current_step = autofill["step"]
+            chat_session.session_status = ChatStatus.COMPLETED
+            chat_session.save(update_fields=["current_step", "session_status"])
+            logger.info(
+                f"non_llm_chat_view: session={session} completed by profile auto-fill at step={autofill['step']}"
+            )
+            return Response(
+                {
+                    "is_complete": True,
+                    "step": autofill["step"],
+                    "bot_message": None,
+                    "translated_bot_message": None,
+                    "audio_s3_url": None,
+                    "operation_type": None,
+                    "is_new_session": is_new_session,
+                    "validations": None,
+                },
+                status=200,
+            )
+
+        # The first step that still needs the user can be several steps ahead, outside the
+        # three-step prefetch above, so load it (and the one after it by order, for the
+        # completion check). Step numbers may have gaps, so "after" means next by order, not +1.
+        next_step = autofill["step"]
+        chat_session.current_step = next_step
+        landed_states = list(
+            CompanyStateMachine.objects.filter(
+                company_bot_id=company_bot_id, step__gte=next_step
+            ).order_by("step")[:2].values(*step_fields)
+        )
+        next_state = landed_states[0] if landed_states and landed_states[0]["step"] == next_step else None
+        next_to_next_state = landed_states[1] if next_state and len(landed_states) > 1 else None
+        if not next_state:
+            # Only reachable if auto-fill stopped part-way on an unexpected error; the answers it
+            # saved are valid, so close the session the same way the completed branch does.
+            chat_session.current_step = autofill["filled_steps"][-1]
+            chat_session.session_status = ChatStatus.COMPLETED
+            chat_session.save(update_fields=["current_step", "session_status"])
+            return Response({"error": "Chat session is already marked as completed"}, status=400)
 
     update_fields = ["current_step"]
     if not next_to_next_state:

@@ -41,6 +41,7 @@ def post_profile(request):
         company = Company.objects.get(slug=company_slug)
 
         email = data['email']
+        token_user_id = str(request.elevate_user_id) if getattr(request, 'elevate_user_id', None) else None
         first_name = data.get('first_name', '')
         target_language = data.get('preferred_route', None)
         if first_name and first_name != '' and target_language:
@@ -60,7 +61,18 @@ def post_profile(request):
             flow = Flow.objects.values('id').get(flow_route=flow_route)
             data['latest_flow'] = flow.get('id')
 
-        profile = Profile.objects.filter(email=email, company=company).first()
+        profile = None
+        if token_user_id:
+            profile = Profile.objects.filter(userid=token_user_id, company=company).first()
+
+        if profile is None:
+            profile = Profile.objects.filter(email=email, company=company).first()
+            if profile and token_user_id and profile.userid and str(profile.userid) != token_user_id:
+                return Response({
+                    'status': 'error',
+                    'message': 'This email is already linked to another user'
+                }, status=409)
+
         if profile:
             serializer = ProfileSerializer(profile, data=data)
         else:
@@ -72,7 +84,10 @@ def post_profile(request):
                     return Response(serializer.data)
             serializer = ProfileSerializer(data=data)
         if serializer.is_valid():
-            serializer.save(company=company)
+            save_kwargs = {'company': company}
+            if token_user_id:
+                save_kwargs['userid'] = token_user_id
+            serializer.save(**save_kwargs)
             return Response(serializer.data)
         else:
             return Response({

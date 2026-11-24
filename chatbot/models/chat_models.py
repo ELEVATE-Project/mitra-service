@@ -28,7 +28,11 @@ class ChatSession(models.Model):
     user_id = models.CharField(max_length=400, null=True, blank=True)
     session_type = models.CharField(max_length=255, null=True, blank=True)
     other_params = models.JSONField(null=True, blank=True)
-
+    user_profile = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Snapshot of the user's profile (userProfile from elevate) for this session.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
