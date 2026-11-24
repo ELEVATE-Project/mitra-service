@@ -507,7 +507,7 @@ class CompanyStateMachine(models.Model):
         langs_to_regenerate = []
         if self.pk:
             old = CompanyStateMachine.objects.filter(pk=self.pk).values('bot_question', 'translations').first()
-            self.full_clean()
+            self.full_clean(validate_constraints=False)
             if self.operation_type == OperationTypeChoices.LLM:
                 super().save(*args, **kwargs)
                 return
@@ -517,7 +517,7 @@ class CompanyStateMachine(models.Model):
                     langs_to_regenerate = list(old['translations'].keys())
                 self.translations = None
 
-        self.full_clean()
+        self.full_clean(validate_constraints=False)
         super().save(*args, **kwargs)
 
         if langs_to_regenerate:
@@ -536,6 +536,7 @@ class CompanyStateMachine(models.Model):
             models.UniqueConstraint(
                 fields=['company_bot', 'step'],
                 name='unique_company_bot_step',
+                deferrable=models.Deferrable.DEFERRED,
             ),
         ]
 

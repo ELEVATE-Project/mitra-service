@@ -382,9 +382,8 @@ class ConfigurableValidationsTest(TestCase):
         self.assertTrue(valid_formset.is_valid(), valid_formset.errors)
 
     def test_company_state_machine_db_unique_constraint(self):
-        """Test database UniqueConstraint raises IntegrityError or ValidationError on duplicate company_bot + step."""
-        from django.db import IntegrityError
-        from django.core.exceptions import ValidationError as DjangoValidationError
+        """Test database deferred UniqueConstraint raises IntegrityError on duplicate company_bot + step."""
+        from django.db import IntegrityError, transaction, connection
 
         test_bot = CompanyBot.objects.create(
             name="Unique Bot", company=self.company, route="/unique-bot", context="Context"
@@ -392,14 +391,38 @@ class ConfigurableValidationsTest(TestCase):
         CompanyStateMachine.objects.create(
             company_bot=test_bot, name="Step 10", step=10, operation_type=OperationTypeChoices.NON_LLM
         )
-        with self.assertRaises((DjangoValidationError, IntegrityError)):
-            CompanyStateMachine.objects.create(
-                company_bot=test_bot, name="Step 10 Duplicate", step=10, operation_type=OperationTypeChoices.NON_LLM
-            )
         with self.assertRaises(IntegrityError):
-            CompanyStateMachine.objects.bulk_create([
-                CompanyStateMachine(company_bot=test_bot, name="Step 10 Bulk", step=10, operation_type=OperationTypeChoices.NON_LLM)
-            ])
+            with transaction.atomic():
+                CompanyStateMachine.objects.create(
+                    company_bot=test_bot, name="Step 10 Duplicate", step=10, operation_type=OperationTypeChoices.NON_LLM
+                )
+                with connection.cursor() as cursor:
+                    cursor.execute("SET CONSTRAINTS ALL IMMEDIATE;")
+
+    def test_company_state_machine_step_swap_in_transaction(self):
+        """Test that swapping two steps within an atomic transaction succeeds due to deferred constraint."""
+        from django.db import transaction
+
+        test_bot = CompanyBot.objects.create(
+            name="Swap Bot", company=self.company, route="/swap-bot", context="Context"
+        )
+        step1 = CompanyStateMachine.objects.create(
+            company_bot=test_bot, name="Step 1", step=1, operation_type=OperationTypeChoices.NON_LLM
+        )
+        step2 = CompanyStateMachine.objects.create(
+            company_bot=test_bot, name="Step 2", step=2, operation_type=OperationTypeChoices.NON_LLM
+        )
+
+        with transaction.atomic():
+            step1.step = 2
+            step1.save()
+            step2.step = 1
+            step2.save()
+
+        step1.refresh_from_db()
+        step2.refresh_from_db()
+        self.assertEqual(step1.step, 2)
+        self.assertEqual(step2.step, 1)
 
     def test_non_llm_chat_view_starting_with_step_greater_than_one(self):
         """Test non_llm_chat_view correctly finds first step and advances for bots starting above step 1."""
