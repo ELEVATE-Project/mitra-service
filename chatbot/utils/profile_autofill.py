@@ -64,9 +64,22 @@ def parse_profile_keys(raw_profile_key):
     return keys
 
 
+def _lookup(user_profile, key):
+    """Walk a dotted path through nested dicts and lists, e.g. 'organizations.0.name'."""
+    value = user_profile
+    for part in key.split("."):
+        if isinstance(value, dict):
+            value = value.get(part)
+        elif isinstance(value, list) and part.isdigit() and int(part) < len(value):
+            value = value[int(part)]
+        else:
+            return None
+    return value
+
+
 def _profile_value(user_profile, key):
     """The profile's value for `key` as a non-empty string, or None if it is missing or unusable."""
-    value = user_profile.get(key)
+    value = _lookup(user_profile, key)
     if value is None or isinstance(value, (dict, list)):
         return None
     value = str(value).strip()
@@ -74,8 +87,9 @@ def _profile_value(user_profile, key):
 
 
 def _key_label(key):
-    """Human-readable label for a profile key: "district" -> "District", "school_name" -> "School name"."""
-    return key.replace("_", " ").strip().capitalize()
+    """Human-readable label: "profileState.label" -> "Label", "district" -> "District"."""
+    last = key.split(".")[-1]
+    return last.replace("_", " ").strip().capitalize()
 
 
 def get_profile_answer(state_machine, user_profile):
@@ -160,8 +174,8 @@ def auto_fill_profile_steps(chat_session, company_bot, start_step, user_profile,
     try:
         company_bot_id = getattr(company_bot, "id", company_bot)
 
-        # One query for every remaining step; the loop below walks them by step number, the same
-        # "+1" progression both chat paths use.
+        # One query for every remaining step; the loop below walks them in step order. Step numbers
+        # may have gaps (e.g. 1, 2, 5), so the step after 2 is 5, not 3.
         steps = {
             state["step"]: state
             for state in CompanyStateMachine.objects.filter(
@@ -169,14 +183,18 @@ def auto_fill_profile_steps(chat_session, company_bot, start_step, user_profile,
             ).values(*_STEP_FIELDS)
         }
 
+        # The caller lands on start_step; if that step doesn't exist there is nothing to fill.
+        if start_step not in steps:
+            return result
+
         to_fill = []
-        step = start_step
-        while step in steps:
+        next_unfilled_step = None
+        for step in sorted(steps):
             value = get_profile_answer(steps[step], user_profile)
             if value is None:
+                next_unfilled_step = step
                 break
             to_fill.append((steps[step], value))
-            step += 1
 
         if not to_fill:
             return result
@@ -216,8 +234,8 @@ def auto_fill_profile_steps(chat_session, company_bot, start_step, user_profile,
             )
             result["filled_steps"].append(state["step"])
 
-        if step in steps:
-            result["step"] = step
+        if next_unfilled_step is not None:
+            result["step"] = next_unfilled_step
         else:
             # Ran past the final step: the whole rest of the flow came from the profile. Report the
             # last real step (max step number), not step + 1, so the frontend's step counter

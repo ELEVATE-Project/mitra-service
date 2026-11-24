@@ -19,11 +19,35 @@ from django.urls import path
 from django.http import HttpResponseRedirect, HttpResponseNotAllowed
 from django.urls import reverse
 from django.forms import ModelForm, MultipleChoiceField, CheckboxSelectMultiple
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.forms.models import BaseInlineFormSet
 from inline_actions.admin import InlineActionsMixin, InlineActionsModelAdminMixin
 from ..utils.admin_config.export_mixin import ExportAllFieldsMixin
 from chatbot.admin.forms import CompanyStateMachineForm
 
 logger = logging.getLogger(__name__)
+
+
+class CompanyStateMachineInlineFormSet(BaseInlineFormSet):
+    """Rejects duplicate step values per bot in the state machine inline formset."""
+
+    def clean(self):
+        seen_steps = set()
+        for form in self.forms:
+            if not hasattr(form, "cleaned_data"):
+                continue
+            cleaned = form.cleaned_data
+            if cleaned.get("DELETE"):
+                continue
+            step = cleaned.get("step")
+            if step is None:
+                continue
+            if step in seen_steps:
+                raise DjangoValidationError(
+                    f"Duplicate step {step}. Each step must be unique for a bot."
+                )
+            seen_steps.add(step)
+        super().clean()
 
 
 class CompanyBotProgramMappingInline(admin.TabularInline):
@@ -41,6 +65,7 @@ class CompanyBotProgramMappingInline(admin.TabularInline):
 class CompanyStateMachineAdmin(InlineActionsMixin, admin.StackedInline):
     model = CompanyStateMachine
     form = CompanyStateMachineForm
+    formset = CompanyStateMachineInlineFormSet
     fk_name = 'company_bot'
     extra = 0
     raw_id_fields = ['preprocess_bot', 'postprocess_bot']
