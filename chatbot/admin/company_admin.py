@@ -531,7 +531,7 @@ class ChatSessionAdmin(ExportAllFieldsMixin, admin.ModelAdmin):
     )
     search_fields = ('session', 'title', 'profile__first_name')
     raw_id_fields = ('profile',)
-    readonly_fields = ('created_at',)
+    readonly_fields = ('created_at',"user_profile")
     date_hierarchy = 'created_at'
     ordering = ('-created_at',)
 
@@ -674,10 +674,11 @@ class FlowAdmin(SimpleHistoryAdmin):
 
     list_display = (
         'flow_name', 'flow_route', 'bot', 'active', 'hidden',
-        'user_type', 'created_at'
+        'user_type', 'login_config', 'created_at'
     )
+    list_editable = ('login_config',)
     list_filter = (
-        'active', 'hidden', 'user_type',
+        'active', 'hidden', 'user_type', 'login_config',
         'bot__company', CustomAdvanceDateFilter, 'create_story'
     )
     search_fields = ('flow_name', 'flow_route', 'bot__name')
@@ -694,7 +695,10 @@ class FlowAdmin(SimpleHistoryAdmin):
             'description': 'Configure the bots associated with this flow.'
         }),
         ('Flow Settings', {
-            'fields': ('active', 'hidden', 'user_type', 'parent_flow', 'default_flow', 'image_config', 'create_story'),
+            'fields': (
+                'active', 'hidden', 'user_type', 'login_config',
+                'parent_flow', 'default_flow', 'image_config', 'create_story',
+            ),
         }),
         ('Advanced Settings', {
             'fields': ('websocket_url',),

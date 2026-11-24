@@ -18,6 +18,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from middleware.env_config import ensure_env_validated
+ensure_env_validated()
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CODE_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -114,6 +117,8 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'middleware.env_config.EnvConfigMiddleware',
+    'middleware.jwt_auth.JWTAuthMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
@@ -122,6 +127,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'middleware.route_guard.RouteGuardMiddleware',
+
 
     ## extra middlwares
     'chatbot.middlewares.VerifyAuthToken'
@@ -405,6 +412,13 @@ SIMPLE_JWT = {
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
     'TOKEN_SERIALIZER': 'chatbot.serializers.ProfileTokenObtainPairSerializer'
 }
+
+JWT_ALGORITHM = os.environ["JWT_ALGORITHM"]
+JWT_VERIFY_KEY = (
+    os.environ["ACCESS_TOKEN_SECRET"]
+    if JWT_ALGORITHM == "HS256"
+    else os.environ["JWT_PUBLIC_KEY"].replace("\\n", "\n")
+)
 
 SESSION_COOKIE_HTTPONLY = False
 SESSION_COOKIE_SAMESITE = None
