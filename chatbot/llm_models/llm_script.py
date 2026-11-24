@@ -308,7 +308,6 @@ def handle_bedrock_model(
         connect_timeout=connect_timeout,
         read_timeout=read_timeout,
     )
-    print("aws_key used: ", aws_key if aws_key else AWS_KEY)
     custom_model = get_custom_model(company_bot)
     if custom_model:
         model_id = custom_model
