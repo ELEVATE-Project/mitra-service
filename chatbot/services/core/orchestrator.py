@@ -18,10 +18,11 @@ class ChatOrchestrator:
         self.message_handler = MessageHandler()
 
     def process_chat_request(self, channel_name, session_id, profile_id, language, user_details=None):
-        # user_details (login feature): decoded-JWT userDetails of a logged-in user, or None for guests.
+        # user_details (login feature): {"userId", "userProfile"} of a logged-in user, or None for guests.
         # It is passed through to the response handler as kwargs['user_details'], where profile-linked
-        # steps are auto-filled from user_details['userProfile']. Defaults to None so the other callers
-        # of this method (chaupal, oneshot, guided, ...) keep working unchanged.
+        # steps are auto-filled from user_details['userProfile']. When not passed, it is read from the
+        # ChatSession (user_id / user_profile, bound by attach_user_to_session when the WebSocket connects
+        # with a verified token), so no token or profile data travels through the Celery task arguments.
         try:
             # Root span for the whole chat-request lifecycle — every span below nests under this one.
             with langfuse.start_as_current_observation(
@@ -109,27 +110,10 @@ class ChatOrchestrator:
                     'profile_id': profile_id,
                     'temp_messages': temp_messages,
                     'intro_mssg': intro_mssg,
-                    'user_details': user_details,
-                }
-
-                # DEV ONLY (login feature): simulates the decoded-JWT userDetails until JWT integration
-                # passes it from the consumer (async_consumer -> get_flow_response -> here).
-                # Comment out this block to test the guest flow. Must be removed before merge (stage 6).
-                response_params['user_details'] = {
-                    "userToken": "dev-token",
-                    "userId": "dev-user-id",
-                    "userProfile": {
-                        "profileid": 47,
-                        "company": "shikshalokamstaging",
-                        "has_accepted_tnc": True,
-                        "route": "en",
-                        "reroute_url": "g",
-                        "name": "Vin",
-                        "role": "HM",
-                        "school_name": "Gvt public school",
-                        "district": "Bangalore",
-                        "state": "Karnataka",
-                    },
+                    'user_details': (
+                        user_details if user_details is not None
+                        else self._user_details_from_session(session_data['chat_session'])
+                    ),
                 }
 
                 if hasattr(self.bot_strategy, 'get_route') and 'oneshot' in self.bot_strategy.get_route():
@@ -157,6 +141,16 @@ class ChatOrchestrator:
             logger.error('Error in chat processing: %s', e, exc_info=True)
             traceback.print_exc()
             raise
+
+    @staticmethod
+    def _user_details_from_session(chat_session):
+        # Logged-in sessions carry the Elevate user ID and the user/read 'result' snapshot.
+        # Guests, or sessions whose profile fetch failed, return None, so no step is auto-filled.
+        user_id = getattr(chat_session, 'user_id', None)
+        user_profile = getattr(chat_session, 'user_profile', None)
+        if not user_id or not isinstance(user_profile, dict) or not user_profile:
+            return None
+        return {"userId": user_id, "userProfile": user_profile}
 
     def _handle_error_response(self, error_msg, channel_name, language, chat_session, company_bot):
         logger.info(f"Sending error message: {error_msg}")
