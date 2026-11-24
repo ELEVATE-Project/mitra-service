@@ -23,18 +23,14 @@ class CompanyBotSerializer(serializers.ModelSerializer):
 
     def get_state_machine_steps(self, obj):
         """Return ordered list of state machine step info for bot's state machine."""
-        steps = CompanyStateMachine.objects.filter(company_bot=obj).order_by('step')
-        return [
-            {
-                "step": s.step,
-                "operation_type": s.operation_type,
-                "bot_question": s.bot_question,
-                "validate_method": s.validate_method,
-                "validation_type": s.validation_type,
-                "render_as": s.render_as,
-            }
-            for s in steps
-        ]
+        from chatbot.utils.chat_utils import build_state_machine_steps_response
+
+        request = self.context.get('request')
+        language = 'en'
+        if request:
+            language = request.query_params.get('target_language') or request.query_params.get('language') or 'en'
+
+        return build_state_machine_steps_response(obj, language=language)
 
 
 class CompanyStateMachineSerializer(serializers.ModelSerializer):

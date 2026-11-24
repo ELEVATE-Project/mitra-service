@@ -271,3 +271,25 @@ def build_validation_response(state_data, language="en"):
         "error_message": error_messages,
         "config": config,
     }
+
+
+def build_state_machine_steps_response(bot, language="en"):
+    """
+    Return ordered list of state machine step dictionaries with validations
+    for the given bot and language.
+    """
+    from chatbot.models.company_models import CompanyStateMachine
+
+    steps = CompanyStateMachine.objects.filter(company_bot=bot).order_by('step')
+    return [
+        {
+            "step": step.step,
+            "operation_type": step.operation_type,
+            "bot_question": step.bot_question,
+            "validate_method": step.validate_method,
+            "validation_type": step.validation_type,
+            "render_as": step.render_as,
+            "validations": build_validation_response(step, language=language),
+        }
+        for step in steps
+    ]
