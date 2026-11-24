@@ -293,35 +293,24 @@ def non_llm_chat_view(request):
     No auth required. Saves user message, advances step, returns next bot question.
     """
 
-    # DEV ONLY (login feature): simulates the decoded-JWT userDetails that JWT integration will put on
-    # request.data["userDetails"]. Comment out this block to test the guest flow. Assumes a JSON body
-    # (what the frontend sends); a form-encoded body is an immutable QueryDict and can't be assigned to.
-    request.data["userDetails"] = {
-        "userToken": "dev-token",
-        "userId": "dev-user-id",
-        "userProfile": {
-            "profileid": 47,
-            "company": "shikshalokamstaging",
-            "has_accepted_tnc": True,
-            "route": "en",
-            "reroute_url": "g",
-            "name": "Vin",
-            "role": "HM",
-            "school_name": "Gvt public school",
-            "district": "Bangalore",
-            "state": "Karnataka",
-        },
-    }
+  
+  
 
-    body = request.data
+    # Verified by JWTAuthMiddleware. None for guests and invalid tokens.
+    details = getattr(request, "user_details", None)
+
 
     # Logged-in users carry their decoded-JWT details in request.data["userDetails"]; guests don't.
     # Missing, not a dict, or an empty object all mean "guest" ({}), and the profile auto-fill below is
     # skipped entirely, so the existing flow runs unchanged.
-    user_details = request.data.get("userDetails") if request.data else None
-    if not isinstance(user_details, dict) or not user_details:
-        user_details = {}
+    # Shape the auto-fill helper expects. Empty for guests, so auto-fill is skipped.
+    user_details = {}
+    if details is not None:
+        profile_data = details.userProfile  # cached user/read result, or None if the call failed
+        if profile_data:
+            user_details = {"userId": details.userId, "userProfile": profile_data}
 
+    body = request.data
     session = body.get("session")
     profile_id = body.get("profile_id")
     message = body.get("message")
