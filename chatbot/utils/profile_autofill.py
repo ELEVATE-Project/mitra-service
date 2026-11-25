@@ -8,8 +8,8 @@ user's answer, exactly like a typed answer, and the conversation moves on to the
 
 A question that asks for several things at once (e.g. "...the village, block, district and state...")
 can list several comma-separated keys: `village,block,district,state`. It is auto-filled only when the
-profile has a value for every key, as "Village: Rampur, Block: Hosakote, District: Bangalore,
-State: Karnataka"; if any one is missing the question is asked, so a partial answer is never saved.
+profile has a value for every key, as "Rampur, Hosakote, Bangalore, Karnataka" (values in the
+configured order); if any one is missing the question is asked, so a partial answer is never saved.
 
 Rules (see .claude/work/login/profile-autofill-plan.md, D1-D3 / A1-A5):
   - The configured key(s) are used as-is; they are never matched against the question text.
@@ -86,12 +86,6 @@ def _profile_value(user_profile, key):
     return value or None
 
 
-def _key_label(key):
-    """Human-readable label: "profileState.label" -> "Label", "district" -> "District"."""
-    last = key.split(".")[-1]
-    return last.replace("_", " ").strip().capitalize()
-
-
 def get_profile_answer(state_machine, user_profile):
     """
     Return the profile value to auto-fill this step with, or None if the user must be asked.
@@ -103,8 +97,8 @@ def get_profile_answer(state_machine, user_profile):
       - the value is empty / whitespace only
       - the step is a MULTIPLE_CHOICE question and the value matches none of its choices,
         since saving an answer the step would never accept is worse than asking.
-    One key returns the bare value ("Bangalore"); several keys return labelled values joined in the
-    configured order ("Village: Rampur, Block: Hosakote, District: Bangalore, State: Karnataka").
+    One key returns the bare value ("Bangalore"); several keys return their values comma-separated in
+    the configured order ("Rampur, Hosakote, Bangalore, Karnataka").
     Numbers (e.g. a pincode stored as int) are converted to strings.
     """
     if not state_machine or not _get(state_machine, "is_linked_to_profile"):
@@ -119,10 +113,7 @@ def get_profile_answer(state_machine, user_profile):
     if any(value is None for value in values):
         return None
 
-    if len(profile_keys) == 1:
-        value = values[0]
-    else:
-        value = ", ".join(f"{_key_label(key)}: {val}" for key, val in zip(profile_keys, values))
+    value = ", ".join(values)
 
     if _get(state_machine, "validation_type") == ValidationTypeChoices.MULTIPLE_CHOICE:
         choices = (_get(state_machine, "validation_config") or {}).get("choices") or []
