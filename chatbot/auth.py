@@ -36,10 +36,8 @@ class ProfileJWTAuthentication(JWTAuthentication):
                 raise AuthenticationFailed('Token not found')
 
             authentication = super().authenticate(request)
-            print(authentication)
             if authentication:
                 token = authentication[1]
-                print(token)
                 # Check if the token is blacklisted
                 if BlacklistedToken.objects.filter(token=token).exists():
                     print('Token blacklisted')

@@ -40,7 +40,6 @@ class ReflectionBedrockConsumer(BaseConsumer):
             self.close()
 
         def receive(self, text_data):
-            print(text_data)
             text_data_json = json.loads(text_data)
             message_type = text_data_json.get('type', None)
 
@@ -57,7 +56,7 @@ class ReflectionBedrockConsumer(BaseConsumer):
                     )
                     print(f"Authenticated with session_id: {self.session_id}, profile_id: {self.profile_id}, "
                           f"route: {self.route}")
-                    print(f"Received project_id: {self.project_id} and access_token: {self.access_token}")
+                    print(f"Received project_id: {self.project_id}")
                     user_id = None
                     if self.access_token:   
                         decoded = jwt.decode(

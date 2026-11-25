@@ -46,7 +46,7 @@ class CompanyStateMachineAdmin(InlineActionsMixin, admin.TabularInline):
         'name', 'step', 'use_stage_chats', 'text_conversion_type',
         'bot_question', 'completion_criteria', 'context', 'tool_context',
         'operation_type', 'skip_if_authenticated',
-        'preprocess_type', 'preprocess_prompt', 'preprocess_bot', 'preprocess_output_mode',
+        'preprocess_type', 'preprocess_prompt', 'preprocess_bot', 'preprocess_output_mode', 'postprocess_bot',
         'postprocess_type', 'postprocess_prompt', 'postprocess_output_mode',
         'skip_to_step', 'translations'
     )

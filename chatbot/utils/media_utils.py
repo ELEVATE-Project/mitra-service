@@ -48,7 +48,7 @@ def perform_cloud_upload(file_info, pdf_file):
         print(f"File uploaded successfully")
         return True
     else:
-        print(f"Failed to upload file: {response.status_code}, {response.text}")
+        print(f"Failed to upload file: {response.status_code}")
         return False
 
 
@@ -89,7 +89,6 @@ def handle_cloud_response(results, session_value, story=None, instance=None):
     if instance:
         file_name = instance.get("name")
         file_info = results.get(session_value, {}).get("files", [])[0]
-        print("file_info: ", file_info)
         source_path = file_info["payload"]["sourcePath"]
         file_data = instance.get("base64_str")
         print('source path: ', source_path)
@@ -97,7 +96,6 @@ def handle_cloud_response(results, session_value, story=None, instance=None):
         binary_data = base64.b64decode(file_data)
 
         update_story_media_source_path(file_name, source_path)
-        print('file_info["url"]: ', file_info["url"])
 
         response = requests.put(
             file_info["url"],
@@ -113,7 +111,7 @@ def handle_cloud_response(results, session_value, story=None, instance=None):
         if response.status_code == 200:
             print(f"File uploaded successfully: {file_name}")
         else:
-            print(f"Failed to upload file {file_name}: {response.status_code}, {response.text}")
+            print(f"Failed to upload file {file_name}: {response.status_code}")
 
         attachments.append({
             "name": file_name,
@@ -178,7 +176,6 @@ def upload_to_cloud(session_value, access_token, story=None, instance=None):
         response = requests.post(url, headers=headers, json=data)
         response.raise_for_status()
 
-        print('response text: ', response.json())
 
         results = response.json().get("result", {})
         with transaction.atomic():

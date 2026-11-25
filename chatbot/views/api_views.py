@@ -107,8 +107,6 @@ def login(request):
         if 'email' in request.data and 'password' in request.data:
             email = request.data['email']
             password = request.data['password']
-            print("Login User Email: ", email)
-            print("Login User Password: ", password)
 
             p = Profile.objects.filter(email=email)
             if len(p) > 0:
