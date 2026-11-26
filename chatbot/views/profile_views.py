@@ -54,3 +54,25 @@ def create_profile_views(request):
 #         'status': 'ok',
 #         'profile_details': profile_details
 #     }, status=200)
+
+@api_view(["GET"])
+def get_profile_details(request):
+    details = getattr(request, "user_details", None)
+    if details is None:
+        return Response(
+            {"status": "ERR_AUTH_REQUIRED", "message": "Authentication required"},
+            status=401,
+        )
+
+    error = details.profileError
+    if error:
+        http_status, message = error
+        return Response(
+            {"status": "ERR_PROFILE_UNAVAILABLE", "message": message},
+            status=http_status,
+        )
+
+    return Response({
+        "userId": details.userId,
+        "userProfile": details.userProfile,
+    })

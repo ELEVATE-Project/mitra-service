@@ -65,8 +65,15 @@ class Profile(models.Model):
         super().save(*args, **kwargs)
 
     class Meta:
-        unique_together = ('email', 'company')
-        indexes = [
+         unique_together = ('email', 'company')
+         indexes = [
             models.Index(fields=['email']),
             models.Index(fields=['phone']),
-        ]
+         ]
+         constraints = [
+            models.UniqueConstraint(
+                fields=['userid'],
+                condition=models.Q(userid__isnull=False) & ~models.Q(userid=''),
+                name='unique_profile_userid',
+            ),
+         ]
