@@ -1,10 +1,10 @@
 import json
 import logging
-import os
 import traceback
 
 import jwt
 from channels.db import database_sync_to_async
+from django.conf import settings
 
 from chatbot.celery_tasks.common_chat_tasks import save_in_company_db
 from chatbot.celery_tasks.flow_tasks import get_flow_response
@@ -22,13 +22,10 @@ from chatbot.models import (
 from chatbot.models.company_models import CompanyStateMachine
 from chatbot.utils.audio_provider_utils import text_translate_provider
 from chatbot.utils.transliterate_utils import transliterate_text
-
-from chatbot.utils.session_auth import attach_user_to_session
+from chatbot.utils.session_auth import attach_user_to_session, get_or_create_token_profile
 from middleware.user_details import UserDetails
-from django.conf import settings
 
 logger = logging.getLogger('django')
-PUBLIC_KEY = os.getenv("JWT_PUBLIC_KEY")
 
 
 class AsyncSocketConsumer(AsyncBaseConsumer):
@@ -68,7 +65,6 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
                 self.flow_name = text_data_json.get('flow_name')
                 self.ip_address = text_data_json.get('address')
                 self.access_token = text_data_json.get('access_token')
-
 
                 profile = await self.get_profile(self.profile_id)
                 logger.info(
@@ -201,11 +197,29 @@ class AsyncSocketConsumer(AsyncBaseConsumer):
 
     @database_sync_to_async
     def create_chat_session(self, session_id, profile, company_bot, ip_address, user_details):
+        # Logged-in users get the existing profile for their token user ID, or one is created.
+        # This runs before the CHALLENGES lookup, which uses the resulting profile.
+        if user_details is not None and company_bot is not None and user_details.userProfile:
+            data = user_details.userProfile
+            token_profile, _, error = get_or_create_token_profile(
+                user_details,
+                company_bot.company,
+                email=data.get("email") or "",
+                defaults={
+                    "first_name": data.get("name") or "",
+                    "preferred_route": (data.get("preferred_language") or {}).get("value"),
+                },
+            )
+            if token_profile is not None:
+                profile = token_profile
+            elif error:
+                logger.error("Profile resolution failed for session %s: %s", session_id, error[1])
+
         step_number = 1
         if profile and profile.first_name and profile.first_name != '':
             try:
                 challenges_step = CompanyStateMachine.objects.get(
-                    company_bot=self.company_bot, name="CHALLENGES"
+                    company_bot=company_bot, name="CHALLENGES"
                 )
                 step_number = challenges_step.step
             except CompanyStateMachine.DoesNotExist:

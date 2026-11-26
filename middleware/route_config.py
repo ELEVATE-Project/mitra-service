@@ -13,29 +13,29 @@ GUEST_URLS = (
     "/api/user_profile/",
     "/api/create-profile/",
     "/api/profileuser/",
-    "/api/profileuser/<int:pk>/",
+    "/api/profileuser/",
 
     # Company chat and bot
     "/api/companychat/",
-    "/api/companychat/<int:pk>/",
+    "/api/companychat/",
     "/api/companybot/",
-    "/api/companybot/<int:pk>/",
+    "/api/companybot/",
     "/api/bot_vernacular/",
-    "/api/bot_vernacular/<int:pk>/",
+    "/api/bot_vernacular/",
 
     # Stories
     "/api/story/",
-    "/api/story/<int:pk>/",
+    "/api/story/",
     "/api/get-story/",
     "/api/end-story/",
     "/api/end-story/v2/",
     "/api/storymedia/",
-    "/api/storymedia/<int:pk>/",
+    "/api/storymedia/",
 
     # Chat sessions and chat APIs
     "/api/chatsession/",
-    "/api/chatsession/<int:pk>/",
-    "/api/chatsession/<str:session>/",
+    "/api/chatsession/",
+    "/api/chatsession/",
     "/api/save-company-chat/",
     "/api/create-chatsession/",
     "/api/non-llm-chat/",
@@ -97,7 +97,7 @@ GUEST_URLS = (
     "/admin/<str:app_label>/<str:model_name>/batch-import/",
 
     # Template details
-    "/api/template-details/<int:template_id>/",
+    "/api/template-details/",
 )
 
 

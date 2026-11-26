@@ -1,9 +1,11 @@
+
 import logging
 import os
 
 from django.core.exceptions import ImproperlyConfigured
 
 from config.env_schema import ENV_SCHEMA
+
 logger = logging.getLogger(__name__)
 
 _validated = False
@@ -20,10 +22,13 @@ def _is_required(spec):
 
     actual = os.environ.get(condition["key"], "")
     operator = condition.get("operator")
+
     if operator == "EQUALS":
         return actual == condition["value"]
+
     if operator == "NOT_EQUALS":
         return actual != condition["value"]
+
     return False
 
 
@@ -38,15 +43,28 @@ def validate_env(schema=ENV_SCHEMA):
         if _is_required(spec):
             if not value:
                 problem = spec.get("message") or f"{name} is required"
+
         elif not value and "default" in spec:
             os.environ[name] = str(spec["default"])
             value = os.environ[name]
 
         possible = spec.get("possible_values")
+
         if problem is None and value and possible:
-            match = next((p for p in possible if p.lower() == value.lower()), None)
+            match = next(
+                (p for p in possible if p.lower() == value.lower()),
+                None,
+            )
+
             if match is None:
-                problem = f"{spec.get('message', name)} Valid values: {', '.join(possible)}"
+                problem = (
+                    f"{spec.get('message', name)} "
+                    f"Valid values: {', '.join(possible)}"
+                )
+            else:
+                # Normalize accepted values to their canonical form.
+                os.environ[name] = match
+                value = match
 
         if problem:
             errors.append(f"{name}: {problem}")
@@ -55,22 +73,31 @@ def validate_env(schema=ENV_SCHEMA):
             rows.append((name, "PASSED"))
 
     width = max((len(name) for name, _ in rows), default=0)
-    table = "\n".join(f"{name.ljust(width)}  {status}" for name, status in rows)
+    table = "\n".join(
+        f"{name.ljust(width)}  {status}"
+        for name, status in rows
+    )
+
     logger.info("Environment validation:\n%s", table)
+
     return errors
 
 
 def ensure_env_validated():
     """Runs validation once per process. Raises if anything is missing."""
     global _validated
+
     if _validated:
         return
 
     errors = validate_env()
+
     if errors:
         raise ImproperlyConfigured(
-            "Environment validation failed:\n  - " + "\n  - ".join(errors)
+            "Environment validation failed:\n  - "
+            + "\n  - ".join(errors)
         )
+
     _validated = True
 
 
