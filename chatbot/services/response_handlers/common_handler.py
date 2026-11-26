@@ -8,6 +8,7 @@ from chatbot.celery_tasks.handle_message import translate_and_send_message
 from chatbot.utils.langfuse_client import get_langfuse_client
 import logging
 import json
+from django.db.models import Max
 from json_repair import repair_json
 from chatbot.utils.media_preview.media_creation import create_and_upload_file
 from chatbot.utils.profile_autofill import auto_fill_profile_steps
@@ -564,8 +565,10 @@ class CommonResponseHandler(BaseResponseHandler):
             #
             # Next-stage preprocessing (handle_response) ran for the step right after the current one. When
             # that step gets auto-filled, the step we actually land on has had no preprocessing, so it is
-            # run here. If it says "skip", we move one step further and try auto-fill again from there;
-            # every pass moves forward, so the loop always ends.
+            # run here. If it says "skip", we move to the next existing step, try auto-fill from there, and
+            # run that step's preprocessing too, whether or not anything was filled (e.g. GRADE skipped for a
+            # working user, then COURSE_STREAM must also be checked). Every pass moves forward, so the loop
+            # always ends.
             #
             # Only logged-in users (non-empty user_details) get here; for guests autofill stays empty and
             # the loop never runs.
@@ -580,33 +583,26 @@ class CommonResponseHandler(BaseResponseHandler):
                     language=language,
                 )
             auto_filled_steps = []
-            while autofill["filled_steps"]:
-                auto_filled_steps.extend(autofill["filled_steps"])
-                # A question rewritten by earlier preprocessing belongs to a step that has now been
-                # auto-filled or skipped, not to the step we will ask, so it must not be reused.
-                modified_bot_question = None
+            # Only entered when something was auto-filled; guests and the normal flow skip it. Each pass
+            # either breaks on a step that will be asked, ends the flow, or moves to a later step.
+            resolve_landed_step = bool(autofill["filled_steps"])
+            while resolve_landed_step:
+                if autofill["filled_steps"]:
+                    auto_filled_steps.extend(autofill["filled_steps"])
+                    # A question rewritten by earlier preprocessing belongs to a step that has now been
+                    # auto-filled or skipped, not to the step we will ask, so it must not be reused.
+                    modified_bot_question = None
 
-                if autofill["completed"]:
-                    # Every remaining step came from the profile, so there is no question left to send.
-                    # Keep current_step on the last step and push today's end-of-flow message
-                    # (finish_reason "stop", source "bot") with an empty text. Sending nothing would leave
-                    # the frontend waiting, as it only ends the flow when it receives this message.
-                    # translate_and_send_message passes an empty message straight through untranslated.
+                    if autofill["completed"]:
+                        # Every remaining step came from the profile, so there is no question left to send.
+                        self._complete_flow_after_autofill(
+                            chat_session, autofill["step"], auto_filled_steps, handle_function_call_span,
+                            **kwargs
+                        )
+                        return response
+
                     chat_session.current_step = autofill["step"]
-                    chat_session.session_status = ChatStatus.COMPLETED
-                    chat_session.save()
-                    self.translate_message(
-                        message="", channel_name=channel_name, step_number=chat_session.current_step,
-                        language=language, company_bot=company_bot
-                    )
-                    handle_function_call_span.update(output={
-                        "new_step": chat_session.current_step,
-                        "auto_filled_steps": auto_filled_steps,
-                        "session_status": chat_session.session_status,
-                    })
-                    return response
 
-                chat_session.current_step = autofill["step"]
                 preprocess_action, preprocess_question = self._preprocess_step_after_autofill(
                     chat_session, **kwargs
                 )
@@ -615,9 +611,19 @@ class CommonResponseHandler(BaseResponseHandler):
                 if preprocess_action != 'skip':
                     break
 
-                # Preprocessing skips the landed step, the same as the existing skip_next_stage_preprocessing
-                # (+1 past the skipped step). The step after it may itself be profile-linked.
-                chat_session.current_step += 1
+                # Preprocessing skips the landed step: move to the next existing step (by order, so gaps such
+                # as 2 -> 5 are handled), which may itself be profile-linked. If the skipped step was the last
+                # one, the flow is over: stay on it and end the flow the same way as a full auto-fill.
+                next_step = CompanyStateMachine.objects.filter(
+                    company_bot=company_bot, step__gt=chat_session.current_step
+                ).order_by('step').values_list('step', flat=True).first()
+                if next_step is None:
+                    self._complete_flow_after_autofill(
+                        chat_session, chat_session.current_step, auto_filled_steps, handle_function_call_span,
+                        **kwargs
+                    )
+                    return response
+                chat_session.current_step = next_step
                 autofill = auto_fill_profile_steps(
                     chat_session,
                     company_bot,
@@ -626,9 +632,15 @@ class CommonResponseHandler(BaseResponseHandler):
                     profile_id=profile_id,
                     language=language,
                 )
+                # Next pass runs the landed step's preprocessing even when nothing was filled here.
 
-            total_steps = CompanyStateMachine.objects.filter(company_bot=company_bot).count()
-            if chat_session.current_step >= total_steps:
+            # Compare against the highest step number, not the number of steps: with gaps (e.g. 1, 2, 5, 6)
+            # auto-fill can land on 5, which is >= the count (4) but not the last step. For steps 1..N the
+            # two are equal, so contiguous bots behave as before.
+            last_step = CompanyStateMachine.objects.filter(company_bot=company_bot).aggregate(
+                last_step=Max('step')
+            )['last_step']
+            if last_step is not None and chat_session.current_step >= last_step:
                 chat_session.session_status = ChatStatus.COMPLETED
             chat_session.save()
 
@@ -678,6 +690,27 @@ class CommonResponseHandler(BaseResponseHandler):
                 "auto_filled_steps": auto_filled_steps,
             })
             return response
+
+    def _complete_flow_after_autofill(self, chat_session, last_step, auto_filled_steps, span, **kwargs):
+        """
+        End the flow after profile auto-fill left no question to ask (every remaining step was auto-filled,
+        or preprocessing skipped the last one). Keeps current_step on the last real step and pushes today's
+        end-of-flow message (finish_reason "stop", source "bot") with an empty text. Sending nothing would
+        leave the frontend waiting, as it only ends the flow when it receives this message.
+        translate_and_send_message passes an empty message straight through untranslated.
+        """
+        chat_session.current_step = last_step
+        chat_session.session_status = ChatStatus.COMPLETED
+        chat_session.save()
+        self.translate_message(
+            message="", channel_name=kwargs['channel_name'], step_number=chat_session.current_step,
+            language=kwargs['language'], company_bot=kwargs['company_bot']
+        )
+        span.update(output={
+            "new_step": chat_session.current_step,
+            "auto_filled_steps": auto_filled_steps,
+            "session_status": chat_session.session_status,
+        })
 
     def _preprocess_step_after_autofill(self, chat_session, **kwargs):
         """

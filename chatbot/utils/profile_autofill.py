@@ -162,6 +162,7 @@ def auto_fill_profile_steps(chat_session, company_bot, start_step, user_profile,
     if not user_profile or not isinstance(user_profile, dict):
         return result
 
+    steps = {}
     try:
         company_bot_id = getattr(company_bot, "id", company_bot)
 
@@ -242,8 +243,16 @@ def auto_fill_profile_steps(chat_session, company_bot, start_step, user_profile,
 
     except Exception as e:
         # Never break the chat over auto-fill. Rows already written stay (they are correct
-        # answers); report what was filled so far so the caller resumes from the right step.
+        # answers); report what was filled so far so the caller resumes from the right step: the
+        # next existing step after the last filled one (by order, so with steps 1, 2, 5 a failure
+        # after filling 2 resumes at 5, not 3). If nothing comes after it, every step was filled.
         logger.exception(f"profile_autofill: failed for session={getattr(chat_session, 'session', None)}: {e}")
         if result["filled_steps"]:
-            result["step"] = result["filled_steps"][-1] + 1
+            last_filled = result["filled_steps"][-1]
+            next_step = next((step for step in sorted(steps) if step > last_filled), None)
+            if next_step is not None:
+                result["step"] = next_step
+            else:
+                result["step"] = last_filled
+                result["completed"] = True
         return result
