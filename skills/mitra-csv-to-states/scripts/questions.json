@@ -1,0 +1,183 @@
+[
+  {
+    "q_no": "1",
+    "section": "0-General Info",
+    "main_question": "Please tell us the name of the district where your child attends school",
+    "branches": [
+      {
+        "expected_responses": "Name of the district",
+        "probing_required": "No",
+        "when_to_probe": "NA",
+        "followup": ""
+      }
+    ]
+  },
+  {
+    "q_no": "2",
+    "section": "",
+    "main_question": "Are you the child's mother, father or guardian?",
+    "branches": [
+      {
+        "expected_responses": "Father/Mother/Guardian",
+        "probing_required": "No",
+        "when_to_probe": "NA",
+        "followup": ""
+      }
+    ]
+  },
+  {
+    "q_no": "3",
+    "section": "",
+    "main_question": "Does your child study in government school or private school?",
+    "branches": [
+      {
+        "expected_responses": "Government School/Private School",
+        "probing_required": "No",
+        "when_to_probe": "NA",
+        "followup": ""
+      }
+    ]
+  },
+  {
+    "q_no": "4",
+    "section": "",
+    "main_question": "In which class does your child study?",
+    "branches": [
+      {
+        "expected_responses": "Grade/Class",
+        "probing_required": "No",
+        "when_to_probe": "NA",
+        "followup": ""
+      }
+    ]
+  },
+  {
+    "q_no": "5",
+    "section": "",
+    "main_question": "Did you get an opportunity to go to school? If yes, up to which class did you study?",
+    "branches": [
+      {
+        "expected_responses": "Education Qualification (Grade, degree)",
+        "probing_required": "No",
+        "when_to_probe": "NA",
+        "followup": ""
+      }
+    ]
+  },
+  {
+    "q_no": "6",
+    "section": "1.2-School‑based participation",
+    "main_question": "Over the last 6 months, how many times have you visited your child's school?",
+    "branches": [
+      {
+        "expected_responses": "Frequency (Yearly, Monthly, weekly, daily ) I don't visit I don't find time to visit Few times, sometimes",
+        "probing_required": "Yes",
+        "when_to_probe": "Generic scenarios to probe based on edge case sheet, When response is no, incomplete, irrelevant or not given",
+        "followup": ""
+      }
+    ]
+  },
+  {
+    "q_no": "7",
+    "section": "",
+    "main_question": "Why do you usually visit school?",
+    "branches": [
+      {
+        "expected_responses": "Meetings, talking to teachers, events, celebrations, any volunteering work",
+        "probing_required": "Yes",
+        "when_to_probe": "Generic scenarios to probe based on edge case sheet, When response is no, incomplete, irrelevant or not given",
+        "followup": ""
+      }
+    ]
+  },
+  {
+    "q_no": "8",
+    "section": "2.1-School-->home communication",
+    "main_question": "What all information do you receive from your child's school?",
+    "branches": [
+      {
+        "expected_responses": "Meeting info, child progress, invitations to school meetings & events, New advancements in school",
+        "probing_required": "Yes",
+        "when_to_probe": "Generic scenarios to probe based on edge case sheet, When response is no, incomplete, irrelevant or not given",
+        "followup": ""
+      }
+    ]
+  },
+  {
+    "q_no": "9",
+    "section": "2.3-Perceptions about school environment & relationships for/with parents",
+    "main_question": "Many parents find it hard to talk to teachers sometimes, is this hard or easy for you ?",
+    "branches": [
+      {
+        "expected_responses": "Very Difficult/hard, Easy, sometimes easy, sometimes difficult",
+        "probing_required": "Yes",
+        "when_to_probe": "Easy, very easy, mostly easy",
+        "followup": "Can you Please tell us what makes it easy for you?"
+      },
+      {
+        "expected_responses": "",
+        "probing_required": "",
+        "when_to_probe": "Hard, very difficult, sometimes difficult",
+        "followup": "Can you please tell us what makes it hard for you?"
+      }
+    ]
+  },
+  {
+    "q_no": "10",
+    "section": "3.2-Teaching quality and instructional practices",
+    "main_question": "What do you think about the teaching quality in your child's school?",
+    "branches": [
+      {
+        "expected_responses": "It's good, teachers explain well. It's okay, but not very good. Teachers don't come to school regularly. Teachers teach well. I don't really know It's better than before",
+        "probing_required": "Yes",
+        "when_to_probe": "Generic scenarios to probe based on edge case sheet, When response is no, incomplete, irrelevant or not given",
+        "followup": ""
+      }
+    ]
+  },
+  {
+    "q_no": "11",
+    "section": "3.1-School Climate, Safety & Basic Infrastructure for students",
+    "main_question": "What are 2-3 things you would like to see improved in your child's school, to better prepare your child for their future?",
+    "branches": [
+      {
+        "expected_responses": "Infra, teaching/teachers, particular skills, facilities, opportunities, extra curricular, English language etc",
+        "probing_required": "Yes",
+        "when_to_probe": "Generic scenarios to probe based on edge case sheet, When response is no, incomplete, irrelevant or not given",
+        "followup": ""
+      }
+    ]
+  },
+  {
+    "q_no": "12",
+    "section": "",
+    "main_question": "Can you describe any experiences at school where you felt concerned about your child's safety?",
+    "branches": [
+      {
+        "expected_responses": "For Example any incidents of bullying, corporal punishment, discrimination, physical safety",
+        "probing_required": "Yes",
+        "when_to_probe": "If the answer is anything other than NO, NO such incidents, I don't know",
+        "followup": "Can you share if there any experiences of bullying, corporal punishment, discrimination, physical safety ?"
+      },
+      {
+        "expected_responses": "No, No incidents, I don't know, don't remember",
+        "probing_required": "No",
+        "when_to_probe": "If the answer is NO,No such experiences, don't know, don't remember don't probe",
+        "followup": ""
+      }
+    ]
+  },
+  {
+    "q_no": "13",
+    "section": "",
+    "main_question": "What do you think makes a school feel safe and welcoming for children?",
+    "branches": [
+      {
+        "expected_responses": "Physical infrastructure & safety, Teacher behavior, Peer relationships, Adult presence & supervision, commute safety, inclusive practices",
+        "probing_required": "Yes",
+        "when_to_probe": "Generic scenarios to probe based on edge case sheet, When response is no, incomplete, irrelevant or not given",
+        "followup": ""
+      }
+    ]
+  }
+]

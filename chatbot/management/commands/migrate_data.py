@@ -335,36 +335,6 @@ def parse_bucket_arg(raw: str) -> str:
     return raw
 
 
-def parse_csv_path_arg(raw: str) -> str:
-    if not os.path.isfile(raw):
-        raise argparse.ArgumentTypeError(f"CSV file not found: '{raw}'")
-    return raw
-
-
-def read_csv_sessions(path: str, column: str, stdout) -> list:
-    """Unique, trimmed, non-blank values of `column` (by header name), in file order."""
-    with open(path, newline="", encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
-        headers = reader.fieldnames or []
-        if column not in headers:
-            raise CommandError(f"Column '{column}' not in CSV headers: {headers}")
-        total = blanks = 0
-        sessions = {}  # dict keeps file order while deduping
-        for row in reader:
-            total += 1
-            value = (row.get(column) or "").strip()
-            if not value:
-                blanks += 1
-                continue
-            sessions[value] = None
-    stdout.write(
-        f"CSV '{path}': {total} rows, {len(sessions)} unique sessions, {blanks} blank skipped"
-    )
-    if not sessions:
-        raise CommandError(f"No session values in column '{column}' of '{path}'")
-    return list(sessions)
-
-
 class S3MigrationError(Exception):
     pass
 
@@ -641,23 +611,6 @@ class Command(BaseCommand):
             help="Restrict migration to a single CompanyBot route (e.g. shiksha-samvad)",
         )
         parser.add_argument(
-            "--sessions-csv",
-            type=parse_csv_path_arg,
-            default=None,
-            help="CSV of session ids to migrate (excludes --date-from/--date-to/--session_name)",
-        )
-        parser.add_argument(
-            "--sessions-csv-column",
-            type=str,
-            default=None,
-            help="Header name of the session id column in --sessions-csv",
-        )
-        parser.add_argument(
-            "--trace-memory",
-            action="store_true",
-            help="Enable tracemalloc per-line allocation logs (slower; for leak hunting)",
-        )
-        parser.add_argument(
             "--src-bucket",
             type=parse_bucket_arg,
             required=True,
@@ -678,18 +631,9 @@ class Command(BaseCommand):
         session_name = options["session_name"]
         src_bucket = options["src_bucket"]
         target_bucket = options["target_bucket"]
-        sessions_csv = options["sessions_csv"]
-        sessions_csv_column = options["sessions_csv_column"]
-        monitor = ResourceMonitor(trace_memory=options["trace_memory"])
 
         if src_bucket == target_bucket:
             raise CommandError("--src-bucket and --target-bucket must differ")
-        if bool(sessions_csv) != bool(sessions_csv_column):
-            raise CommandError("--sessions-csv and --sessions-csv-column must be passed together")
-        if sessions_csv and (date_from or date_to or session_name):
-            raise CommandError(
-                "--sessions-csv cannot be combined with --date-from / --date-to / --session_name"
-            )
 
         s3 = boto3.client(
             "s3",
@@ -707,18 +651,8 @@ class Command(BaseCommand):
         if dry_run:
             self.stdout.write(self.style.WARNING("DRY RUN — no writes will occur\n"))
 
-        csv_sessions = (
-            read_csv_sessions(sessions_csv, sessions_csv_column, self.stdout) if sessions_csv else None
-        )
-        monitor.checkpoint("startup")
-        scope = build_scope(date_from, date_to, session_name, csv_sessions, self.stdout)
-        monitor.checkpoint("build_scope")
-        ctx = MigrationContext(
-            src_bucket=src_bucket, target_bucket=target_bucket, s3=s3, dry_run=dry_run, monitor=monitor
-        )
-        monitor.ctx = ctx
-        for session in scope.missing_csv_sessions:
-            ctx.log_skip("CSVSession", session, "session not found in source ChatSession")
+        scope = build_scope(date_from, date_to, session_name, self.stdout)
+        ctx = MigrationContext(src_bucket=src_bucket, target_bucket=target_bucket, s3=s3, dry_run=dry_run)
 
         steps = [
             ("Company", lambda: migrate_companies(ctx, scope, batch_size, dry_run, self.stdout)),

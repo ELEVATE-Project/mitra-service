@@ -40,7 +40,6 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
             self.close()
 
         def receive(self, text_data):
-            print(text_data)
             text_data_json = json.loads(text_data)
             message_type = text_data_json.get('type', None)
 
@@ -135,7 +134,6 @@ class ShikshalokamBedrockConsumer(BaseConsumer):
                 else:
                     translated_message = None
 
-                print("text_data_json: ", text_data_json)
                 if message_type != 'authenticate' and text_data_json and text_data_json.get('text'):
                     chat_session = ChatSession.objects.filter(session=self.session_id).order_by('-created_at').first()
                     current_stage = None
