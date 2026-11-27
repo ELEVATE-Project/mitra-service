@@ -1,5 +1,6 @@
 """
-Re-(translate/transliterate) stored chats for given state-machine stage(s), then delete +
+Re-(translate/transliterate) stored chats for given state-machine stage(s) (all stages
+when --statemachine is omitted), then delete +
 regenerate the affected Story/StoryTranslation via create_story_object
 (--report-version 1, default) or generate_story (--report-version 2).
 
@@ -114,7 +115,7 @@ def _created_at_range(date_from, date_to):
 class Command(BaseCommand):
     help = (
         "Re-translate/transliterate stored chats (per stage text_conversion_type) "
-        "for given state-machine stages, then "
+        "for given state-machine stages (all stages if --statemachine omitted), then "
         "delete and regenerate the affected reports."
     )
 
@@ -125,7 +126,7 @@ class Command(BaseCommand):
         parser.add_argument("--timestamp-to", type=str, default=None)
         parser.add_argument("--session-type", type=str, default=None)
         parser.add_argument("--session", type=str, default=None)
-        parser.add_argument("--statemachine", type=str, required=True)
+        parser.add_argument("--statemachine", type=str, default=None)
         parser.add_argument("--route", type=str, default="/shikshalokam_chaupal")
         parser.add_argument("--flow", type=str, default=None)
         parser.add_argument("--report-version", type=int, choices=[1, 2], default=1)
@@ -137,9 +138,8 @@ class Command(BaseCommand):
 
     # ------------------------------------------------------------------ #
     def handle(self, *args, **opts):
+        # Empty list = no stage filter (all stages).
         stages = [s.strip() for s in (opts["statemachine"] or "").split(",") if s.strip()]
-        if not stages:
-            raise CommandError("--statemachine must list at least one stage name.")
 
         date_from = parse_date_arg(opts["timestamp_from"]) if opts["timestamp_from"] else None
         date_to = parse_date_arg(opts["timestamp_to"]) if opts["timestamp_to"] else None
@@ -166,7 +166,7 @@ class Command(BaseCommand):
         logger.info(
             "[regen] START routes=%s stages=%s from=%s to=%s session_types=%s sessions=%s "
             "skip_text_conversion=%s skip_report=%s limit=%s dry_run=%s bot_profile_id=%s report_version=%s",
-            routes, stages, opts["timestamp_from"], opts["timestamp_to"],
+            routes, stages or "ALL", opts["timestamp_from"], opts["timestamp_to"],
             session_types or "ANY", session_ids or "ANY",
             skip_text_conversion, skip_report, limit, dry_run, self.bot_profile_id, self.report_version,
         )
@@ -220,9 +220,10 @@ class Command(BaseCommand):
 
         chat_filter = {
             "session__in": list(session_language.keys()),
-            "stage__in": stages,
             "translated_message__isnull": False,
         }
+        if stages:
+            chat_filter["stage__in"] = stages
         chat_filter.update(_created_at_range(date_from, date_to))
         chats = (
             CompanyChat.objects.filter(**chat_filter)
@@ -232,12 +233,12 @@ class Command(BaseCommand):
 
         self.stdout.write(
             f"  Scope: session_type={session_types or 'ANY'}, "
-            f"session={session_ids or 'ANY'}, stages={stages}, "
+            f"session={session_ids or 'ANY'}, stages={stages or 'ALL'}, "
             f"sessions matched={len(session_language)}, chats matched={chats.count()}"
         )
         logger.info(
             "[regen] route=%s scoped sessions=%d chats_matched=%d stages=%s",
-            route, len(session_language), chats.count(), stages,
+            route, len(session_language), chats.count(), stages or "ALL",
         )
 
         voice_cache = {}
