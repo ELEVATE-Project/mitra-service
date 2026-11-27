@@ -58,6 +58,7 @@ from chatbot.models import (
     Voice,
     VoiceType,
 )
+from chatbot.utils.audio_provider_utils import text_translate_provider
 from chatbot.utils.transliterate_utils import (
     transliterate_text,
     get_transliteration_output,
@@ -246,13 +247,16 @@ class Command(BaseCommand):
 
         @lru_cache(10)
         def get_voice(lang, company_bot_id, stage_name):
+            """Returns (voice, conversion_type) for the chat's stage config.
+            voice is None when the stage or a matching Voice is missing."""
             state_machine = CompanyStateMachine.objects.filter(company_bot_id=company_bot_id, name=stage_name).first()
 
             if not state_machine:
-                return None
+                return None, None
 
+            conversion_type = state_machine.text_conversion_type
             voice_type = VoiceType.Transliterate
-            if state_machine.text_conversion_type == TextConversionType.TRANSLATE:
+            if conversion_type == TextConversionType.TRANSLATE:
                 voice_type = VoiceType.TextToText
 
             voice_key = f"{company_bot_id}_{lang}_{voice_type}"
@@ -260,7 +264,31 @@ class Command(BaseCommand):
                 voice_cache[voice_key] = Voice.objects.filter(
                     company_bot_id=company_bot_id, type=voice_type, language=lang
                 ).first()
-            return voice_cache[voice_key]
+            return voice_cache[voice_key], conversion_type
+
+        def convert(message, lang, voice_provider, conversion_type):
+            """Mirror the live pipeline (async_consumer.translate_message):
+            TRANSLATE -> text_translate_provider, else transliterate_text.
+            Returns (output_or_None, raw_response)."""
+            if conversion_type == TextConversionType.TRANSLATE:
+                response = text_translate_provider(
+                    message_body=message,
+                    target_language="en",
+                    source_language=lang,
+                    voice_provider=voice_provider,
+                )
+                if response and response.get("status") == 200 and response.get("content"):
+                    return response.get("content"), response
+                return None, response
+
+            response = transliterate_text(
+                source_language=lang,
+                target_language="en",
+                message_body=message,
+                is_sentence=True,
+                voice_provider=voice_provider,
+            )
+            return get_transliteration_output(response), response
 
         # =========================== STEP 1: re-transliterate =============== #
         affected_sessions = set()
@@ -294,16 +322,20 @@ class Command(BaseCommand):
                     )
                     continue
 
-                voice_provider = get_voice(lang, company_bot_id=chat_session.company_bot_id, stage_name=chat.stage)
+                voice_provider, conversion_type = get_voice(
+                    lang, company_bot_id=chat_session.company_bot_id, stage_name=chat.stage
+                )
                 if not voice_provider:
-                    self.stdout.write(self.style.WARNING(
-                        f"  No Transliterate Voice for language='{lang}', skipping chat {chat.id}"
-                    ))
+                    reason = (
+                        f"no CompanyStateMachine '{chat.stage}' on bot {chat_session.company_bot_id}"
+                        if conversion_type is None
+                        else f"no Voice for {conversion_type} language='{lang}' on bot {chat_session.company_bot_id}"
+                    )
+                    self.stdout.write(self.style.WARNING(f"  Skipping chat {chat.id}: {reason}"))
                     t_failed += 1
                     logger.error(
-                        "[regen] step1 chat_id=%s session=%s lang=%s route=%s FAILED: "
-                        "no Transliterate Voice for this language on the route bot",
-                        chat.id, chat.session, lang, route,
+                        "[regen] step1 chat_id=%s session=%s lang=%s stage=%s route=%s FAILED: %s",
+                        chat.id, chat.session, lang, chat.stage, route, reason,
                     )
                     continue
 
@@ -312,17 +344,11 @@ class Command(BaseCommand):
                     t_success += 1
                     continue
 
-                response = transliterate_text(
-                    source_language=lang,
-                    target_language="en",
-                    message_body=chat.message,
-                    is_sentence=True,
-                    voice_provider=voice_provider,
-                )
-                output = get_transliteration_output(response)
+                output, response = convert(chat.message, lang, voice_provider, conversion_type)
                 logger.info(
-                    "[regen] step1 chat_id=%s session=%s lang=%s stage=%s source=%r old=%r new=%r",
-                    chat.id, chat.session, lang, chat.stage, chat.message, chat.translated_message, output,
+                    "[regen] step1 chat_id=%s session=%s lang=%s stage=%s conversion=%s source=%r old=%r new=%r",
+                    chat.id, chat.session, lang, chat.stage, conversion_type,
+                    chat.message, chat.translated_message, output,
                 )
                 if output:
                     chat.translated_message = output
@@ -330,12 +356,14 @@ class Command(BaseCommand):
                     affected_sessions.add(chat.session)
                     t_success += 1
                 else:
-                    self.stdout.write(self.style.ERROR(f"  Transliteration failed for chat {chat.id}: {response}"))
+                    self.stdout.write(self.style.ERROR(
+                        f"  {conversion_type} failed for chat {chat.id}: {response}"
+                    ))
                     t_failed += 1
                     logger.error(
-                        "[regen] step1 chat_id=%s session=%s lang=%s FAILED: "
-                        "empty transliteration output, raw_response=%r",
-                        chat.id, chat.session, lang, response,
+                        "[regen] step1 chat_id=%s session=%s lang=%s conversion=%s FAILED: "
+                        "empty output, raw_response=%r",
+                        chat.id, chat.session, lang, conversion_type, response,
                     )
 
             self.stdout.write(
