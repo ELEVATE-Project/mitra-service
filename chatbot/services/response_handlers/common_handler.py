@@ -146,7 +146,7 @@ class CommonResponseHandler(BaseResponseHandler):
     def _analyze_response(self, response):
         is_actual_function_call = self.is_function_call(response=response)
         if is_actual_function_call:
-            return True, None, None
+            return True, None, None, None
         extracted_response, reason_text, meta = self._extract_response_and_reason(response)
         if meta:
             flag = meta.get("should_function_call")
@@ -155,14 +155,14 @@ class CommonResponseHandler(BaseResponseHandler):
             if flag is True:
                 print("DEBUG: should_function_call detected via meta in _analyze_response")
                 logger.info("should_function_call detected via meta in _analyze_response")
-                return True, None, None
+                return True, None, None, None
         if extracted_response == '':
             print("DEBUG: Empty response detected after extraction, treating as function call for state transition")
-            return True, extracted_response, reason_text
-        return False, extracted_response, reason_text
+            return True, extracted_response, reason_text, meta
+        return False, extracted_response, reason_text, meta
 
     def analyze_response_for_postprocessing(self, response):
-        is_function_call, _, _ = self._analyze_response(response)
+        is_function_call, _, _, _ = self._analyze_response(response)
         return is_function_call
 
     def process_response(self, response, chat_session, chunks, streaming_completed=False, **kwargs):
@@ -195,13 +195,14 @@ class CommonResponseHandler(BaseResponseHandler):
                 is_function_call = True
                 expected_output_response = None
                 reason_text = None
+                response_meta = None
             else:
                 # Span: classifying whether the LLM response is a function call, a plain reply, or empty.
                 with langfuse.start_as_current_observation(
                     as_type="span",
                     name="analyze_response", input={"response_preview": str(response)[:300]}
                 ) as analyze_span:
-                    is_function_call, expected_output_response, reason_text = self._analyze_response(response)
+                    is_function_call, expected_output_response, reason_text, response_meta = self._analyze_response(response)
                     analyze_span.update(output={
                         "is_function_call": is_function_call,
                         "expected_output_response": expected_output_response,
@@ -288,7 +289,7 @@ class CommonResponseHandler(BaseResponseHandler):
                         expected_output_response is not None and expected_output_response != "") else response
                 result = self._handle_regular_response(
                     response=final_response, chat_session=chat_session, chunks=chunks, current_step=current_step,
-                    streaming_completed=streaming_completed, reason=reason_text, **kwargs
+                    streaming_completed=streaming_completed, reason=reason_text, response_meta=response_meta, **kwargs
                 )
                 process_response_span.update(output={"path": "regular_response", "result_preview": str(result)[:300]})
                 return result
@@ -597,7 +598,7 @@ class CommonResponseHandler(BaseResponseHandler):
 
     def _handle_regular_response(self, response, chat_session, company_bot,
                                  session_id, channel_name, language, profile_id,
-                                 chunks, current_step, reason=None,
+                                 chunks, current_step, reason=None, response_meta=None,
                                  streaming_completed=False, **kwargs):
         # Span: saving and sending the bot's plain-text reply for this turn.
         with langfuse.start_as_current_observation(
@@ -627,7 +628,7 @@ class CommonResponseHandler(BaseResponseHandler):
                 language=language, company_bot=company_bot, extra_content=extra_content
             )
 
-            other_params = {}
+            other_params = dict(response_meta) if isinstance(response_meta, dict) else {}
             if reason:
                 other_params['reason'] = reason
                 print(f"DEBUG: Adding reason to other_params: {reason}")
