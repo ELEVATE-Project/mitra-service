@@ -13,7 +13,7 @@ from chatbot.utils.langfuse_client import get_langfuse_client
 from chatbot.utils.ptm_utils.chat_utils import save_question_answer_utils
 from chatbot.utils.transliterate_utils import transliterate_text
 from langfuse import observe
-from chatbot.utils.session_auth import attach_user_to_session
+from chatbot.utils.session_auth import attach_user_to_session, get_or_create_token_profile
 
 
 langfuse = get_langfuse_client()
@@ -111,24 +111,23 @@ def create_chatsession(request):
     except Exception as e:
         return Response({"error": f"{e}"}, status=400)
 
-    # Logged-in users get a profile bound to their token user ID. Guests get none.
+    # Logged-in users get the existing profile for their token user ID, or one is created.
+    # Guests get none.
     profile = None
-    if details is not None:
-        claims = request.user_claims or {}
-        first_name = (claims.get("data") or {}).get("name")
-        user_roles = claims.get("roles", [])
-
-        profile, created = Profile.objects.get_or_create(
-            userid=details.userId,
+    if details is not None and details.userProfile:
+        data = details.userProfile
+        profile, _, error = get_or_create_token_profile(
+            details,
+            company,
+            email=data.get("email") or email,
             defaults={
-                'first_name': first_name,
-                'email': email,
-                'password': 'grit@123',
-                'preferred_route': preferred_language,
-                'company': company,
-                "designation": user_roles
-            }
+                "first_name": data.get("name") or "",
+                "preferred_route": preferred_language,
+            },
         )
+        if error:
+            status_code, error_message = error
+            return Response({"error": error_message}, status=status_code)
 
     bot_route = body.get("bot_route")
     language = body.get("language", "en")
@@ -298,27 +297,9 @@ def save_ptm_chats(request):
 @api_view(["POST"])
 def non_llm_chat_view(request):
     """
-    Guest HTTP endpoint for NON_LLM state machine steps.
-    No auth required. Saves user message, advances step, returns next bot question.
+    NON_LLM state machine endpoint for guests and logged-in users.
+    JWTAuthMiddleware sets request.user_details for a valid x-auth-token; guests get None.
     """
-
-  
-  
-
-    # Verified by JWTAuthMiddleware. None for guests and invalid tokens.
-    details = getattr(request, "user_details", None)
-
-
-    # Logged-in users carry their decoded-JWT details in request.data["userDetails"]; guests don't.
-    # Missing, not a dict, or an empty object all mean "guest" ({}), and the profile auto-fill below is
-    # skipped entirely, so the existing flow runs unchanged.
-    # Shape the auto-fill helper expects. Empty for guests, so auto-fill is skipped.
-    user_details = {}
-    if details is not None:
-        profile_data = details.userProfile  # cached user/read result, or None if the call failed
-        if profile_data:
-            user_details = {"userId": details.userId, "userProfile": profile_data}
-
     body = request.data
     session = body.get("session")
     profile_id = body.get("profile_id")
@@ -327,6 +308,21 @@ def non_llm_chat_view(request):
     language = body.get("language", "en")
     flow_name = body.get("flow_name", None)
     company_bot = body.get("company_bot", None)
+
+    # Verified by JWTAuthMiddleware. None for guests and invalid tokens.
+    details = getattr(request, "user_details", None)
+
+    # Shape the auto-fill helper expects. Empty for guests, so auto-fill is skipped.
+    user_details = {}
+    if details is not None:
+        profile_data = details.userProfile  # cached user/read result, or None if the call failed
+        if profile_data:
+            user_details = {"userId": details.userId, "userProfile": profile_data}
+        else:
+            logger.warning(
+                "non_llm_chat_view: user/read failed for user %s: %s",
+                details.userId, details.profileError,
+            )
 
     missing = [
         f
@@ -363,7 +359,25 @@ def non_llm_chat_view(request):
             if not resolved_company_bot:
                 return Response({"error": "Invalid company_bot."}, status=400)
 
-        profile = resolve_profile(profile_id, getattr(request, "user_details", None))
+        # Logged-in users get the existing profile for their token user ID, or one is created.
+        profile = None
+        if details is not None and details.userProfile and resolved_company_bot is not None:
+            data = details.userProfile
+            profile, _, error = get_or_create_token_profile(
+                details,
+                resolved_company_bot.company,
+                email=data.get("email") or "",
+                defaults={
+                    "first_name": data.get("name") or "",
+                    "preferred_route": (data.get("preferred_language") or {}).get("value"),
+                },
+            )
+            if error:
+                status_code, error_message = error
+                return Response({"error": error_message}, status=status_code)
+
+        if profile is None:
+            profile = resolve_profile(profile_id, details)
         if profile is None:
             return Response({"error": "Profile not found for this session."}, status=400)
 
@@ -387,7 +401,7 @@ def non_llm_chat_view(request):
         chat_session.save()
         is_new_session = True
 
-    attach_user_to_session(chat_session, getattr(request, "user_details", None))
+    attach_user_to_session(chat_session, details)
 
     if chat_session.session_status == ChatStatus.COMPLETED:
         return Response({"error": "Chat session is already marked as completed"}, status=400)
@@ -446,6 +460,34 @@ def non_llm_chat_view(request):
 
     next_step = next_state["step"]
 
+        # A session created without a profile (for example by a guest) gets one bound once,
+    # from the token user or the body's profile_id. A session that already has a profile
+    # keeps it, so a later request cannot change its sender.
+    if chat_session.profile_id is None:
+        bound_profile = None
+        bot_company = chat_session.company_bot.company if chat_session.company_bot_id else None
+
+        if details is not None and details.userProfile and bot_company is not None:
+            data = details.userProfile
+            bound_profile, _, error = get_or_create_token_profile(
+                details,
+                bot_company,
+                email=data.get("email") or "",
+                defaults={
+                    "first_name": data.get("name") or "",
+                    "preferred_route": (data.get("preferred_language") or {}).get("value"),
+                },
+            )
+            if error:
+                status_code, error_message = error
+                return Response({"error": error_message}, status=status_code)
+
+        if bound_profile is None:
+            bound_profile = resolve_profile(profile_id, details)
+
+        if bound_profile is not None:
+            chat_session.profile = bound_profile
+            chat_session.save(update_fields=["profile"])
     # The session's profile is the sender. profile_id from the body is only used
     # when the session was created above, so it can't change the sender later.
     sender_id = chat_session.profile_id
@@ -506,10 +548,9 @@ def non_llm_chat_view(request):
         f"non_llm_chat_view: saved CompanyChat id={company_chat.id} for session={session} step={current_step}"
     )
 
-    # Profile auto-fill (login feature): only for logged-in users (non-empty user_details). If the next
-    # step(s) have is_linked_to_profile = True, a profile_key, and a value for that key in
-    # user_details["userProfile"], they are answered and saved here instead of being sent to the user.
-    # Guests never enter this path, so for them the flow below runs exactly as before.
+    # Profile auto-fill (login feature): only for logged-in users with profile data. Steps marked
+    # is_linked_to_profile are answered from the profile and saved here instead of being sent to
+    # the user. Guests skip this block and the flow below runs unchanged.
     autofill = {"step": next_step, "filled_steps": [], "completed": False}
     if user_details:
         autofill = auto_fill_profile_steps(
@@ -523,8 +564,7 @@ def non_llm_chat_view(request):
     if autofill["filled_steps"]:
         if autofill["completed"]:
             # Every remaining step came from the profile, so there is no question left to send.
-            # Keep current_step on the last step and send today's HTTP end signal
-            # (is_complete=True) with an empty message; the frontend ends the flow on it.
+            # Keep current_step on the last step and send the end signal (is_complete=True).
             chat_session.current_step = autofill["step"]
             chat_session.session_status = ChatStatus.COMPLETED
             chat_session.save(update_fields=["current_step", "session_status"])
@@ -545,9 +585,9 @@ def non_llm_chat_view(request):
                 status=200,
             )
 
-        # The first step that still needs the user can be several steps ahead, outside the
-        # three-step prefetch above, so load it (and the one after it by order, for the
-        # completion check). Step numbers may have gaps, so "after" means next by order, not +1.
+        # The first step that still needs the user can be several steps ahead of the prefetch
+        # above, so load it and the one after it by order. Step numbers can have gaps, so "next"
+        # means next by order, not +1.
         next_step = autofill["step"]
         chat_session.current_step = next_step
         landed_states = list(
@@ -558,7 +598,7 @@ def non_llm_chat_view(request):
         next_state = landed_states[0] if landed_states and landed_states[0]["step"] == next_step else None
         next_to_next_state = landed_states[1] if next_state and len(landed_states) > 1 else None
         if not next_state:
-            # Only reachable if auto-fill stopped part-way on an unexpected error; the answers it
+            # Only reachable if auto-fill stopped part-way on an unexpected error. The answers it
             # saved are valid, so close the session the same way the completed branch does.
             chat_session.current_step = autofill["filled_steps"][-1]
             chat_session.session_status = ChatStatus.COMPLETED

@@ -19,6 +19,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from middleware.env_config import ensure_env_validated
+from django.core.exceptions import ImproperlyConfigured
 ensure_env_validated()
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -418,11 +419,18 @@ SIMPLE_JWT = {
 }
 
 JWT_ALGORITHM = os.environ["JWT_ALGORITHM"]
-JWT_VERIFY_KEY = (
-    os.environ["ACCESS_TOKEN_SECRET"]
-    if JWT_ALGORITHM == "HS256"
-    else os.environ["JWT_PUBLIC_KEY"].replace("\\n", "\n")
-)
+
+if JWT_ALGORITHM == "HS256":
+    JWT_VERIFY_KEY = os.environ["ACCESS_TOKEN_SECRET"]
+
+elif JWT_ALGORITHM == "RS256":
+    JWT_VERIFY_KEY = os.environ["JWT_PUBLIC_KEY"].replace("\\n", "\n")
+
+else:
+    raise ImproperlyConfigured(
+        f"Unsupported JWT algorithm: {JWT_ALGORITHM}"
+    )
+
 
 SESSION_COOKIE_HTTPONLY = False
 SESSION_COOKIE_SAMESITE = None

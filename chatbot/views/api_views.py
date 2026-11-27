@@ -31,7 +31,10 @@ def generate_session_id(request):
 @api_view(['POST'])
 def post_profile(request):
     try:
-        data = request.data
+         # Copy so the body can be edited. userid is never accepted from the body:
+        # it is set only from the verified x-auth-token, in save_kwargs below.
+        data = request.data.copy()
+        data.pop('userid', None)
         if not ('email' in data and 'company' in data):
             return Response({
                'status': 'error',
@@ -63,7 +66,7 @@ def post_profile(request):
 
         profile = None
         if token_user_id:
-            profile = Profile.objects.filter(userid=token_user_id, company=company).first()
+            profile = Profile.objects.filter(userid=token_user_id).first()
 
         if profile is None:
             profile = Profile.objects.filter(email=email, company=company).first()

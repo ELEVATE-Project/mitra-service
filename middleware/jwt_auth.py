@@ -1,3 +1,4 @@
+
 import jwt
 from django.conf import settings
 
@@ -46,11 +47,21 @@ class JWTAuthMiddleware:
             request.auth_error = "Invalid token"
             return
 
-        user_id = (claims.get("data") or {}).get("id")
+        # Validate the data claim before accessing its fields.
+        data = claims.get("data")
+        if not isinstance(data, dict):
+            request.auth_error = "Invalid token"
+            return
+
+        user_id = data.get("id")
         if user_id is None:
             request.auth_error = "Invalid token"
             return
 
+        # Attach authenticated user information to the request.
         request.user_claims = claims
         request.elevate_user_id = str(user_id)
-        request.user_details = UserDetails(token=token, user_id=str(user_id))
+        request.user_details = UserDetails(
+            token=token,
+            user_id=str(user_id),
+        )
