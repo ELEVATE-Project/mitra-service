@@ -5,17 +5,17 @@ regenerate the affected Story/StoryTranslation via create_story_object
 
 Usage
 -----
-    python manage.py regenerate_transliterated_reports \
+    python manage.py regenerate_translate_messages \
         --statemachine INTRODUCTION,ORGANIZATION \
         --route /shikshalokam_chaupal \
         --timestamp-from "2026-06-01" --timestamp-to "2026-06-30 23:59"
 
     # Preview only
-    python manage.py regenerate_transliterated_reports \
+    python manage.py regenerate_translate_messages \
         --statemachine INTRODUCTION --dry-run
 
     # Use the v2 generator (generate_story)
-    python manage.py regenerate_transliterated_reports \
+    python manage.py regenerate_translate_messages \
         --statemachine INTRODUCTION --report-version 2
 
 See --help for the full argument list.
@@ -113,7 +113,8 @@ def _created_at_range(date_from, date_to):
 
 class Command(BaseCommand):
     help = (
-        "Re-transliterate stored chats for given state-machine stages, then "
+        "Re-translate/transliterate stored chats (per stage text_conversion_type) "
+        "for given state-machine stages, then "
         "delete and regenerate the affected reports."
     )
 
@@ -129,7 +130,7 @@ class Command(BaseCommand):
         parser.add_argument("--flow", type=str, default=None)
         parser.add_argument("--report-version", type=int, choices=[1, 2], default=1)
         parser.add_argument("--bot-profile-id", type=int, default=1)
-        parser.add_argument("--skip-transliterate", action="store_true")
+        parser.add_argument("--skip-text-conversion", action="store_true")
         parser.add_argument("--skip-report", action="store_true")
         parser.add_argument("--limit", type=int, default=100)
         parser.add_argument("--dry-run", action="store_true")
@@ -157,17 +158,17 @@ class Command(BaseCommand):
         )
         self._story_voice_cache = {}
         self._flow_row_cache = {}
-        skip_transliterate = opts["skip_transliterate"]
+        skip_text_conversion = opts["skip_text_conversion"]
         skip_report = opts["skip_report"]
         limit = opts["limit"]
         dry_run = opts["dry_run"]
 
         logger.info(
             "[regen] START routes=%s stages=%s from=%s to=%s session_types=%s sessions=%s "
-            "skip_transliterate=%s skip_report=%s limit=%s dry_run=%s bot_profile_id=%s report_version=%s",
+            "skip_text_conversion=%s skip_report=%s limit=%s dry_run=%s bot_profile_id=%s report_version=%s",
             routes, stages, opts["timestamp_from"], opts["timestamp_to"],
             session_types or "ANY", session_ids or "ANY",
-            skip_transliterate, skip_report, limit, dry_run, self.bot_profile_id, self.report_version,
+            skip_text_conversion, skip_report, limit, dry_run, self.bot_profile_id, self.report_version,
         )
 
         g_affected = g_r_success = g_r_failed = 0
@@ -176,7 +177,7 @@ class Command(BaseCommand):
             affected, r_success, r_failed = self._process_route(
                 route=route, stages=stages, date_from=date_from, date_to=date_to,
                 session_types=session_types, session_ids=session_ids,
-                skip_transliterate=skip_transliterate, skip_report=skip_report,
+                skip_text_conversion=skip_text_conversion, skip_report=skip_report,
                 limit=limit, dry_run=dry_run,
             )
             g_affected += affected
@@ -187,7 +188,7 @@ class Command(BaseCommand):
 
     # ------------------------------------------------------------------ #
     def _process_route(self, route, stages, date_from, date_to, session_types,
-                       session_ids, skip_transliterate, skip_report, limit, dry_run):
+                       session_ids, skip_text_conversion, skip_report, limit, dry_run):
         """Scope + Step 1 + Step 2 for a single bot route. Returns
         (affected_sessions, reports_success, reports_failed)."""
         logger.info("[regen] route=%s scoping sessions", route)
@@ -233,10 +234,6 @@ class Command(BaseCommand):
             f"  Scope: session_type={session_types or 'ANY'}, "
             f"session={session_ids or 'ANY'}, stages={stages}, "
             f"sessions matched={len(session_language)}, chats matched={chats.count()}"
-        )
-        logger.info(
-            "[regen] route=%s scoped sessions=%d chats_matched=%d stages=%s",
-            route, len(session_language), chats.count(), stages,
         )
         logger.info(
             "[regen] route=%s scoped sessions=%d chats_matched=%d stages=%s",
@@ -290,13 +287,13 @@ class Command(BaseCommand):
             )
             return get_transliteration_output(response), response
 
-        # =========================== STEP 1: re-transliterate =============== #
+        # ============ STEP 1: re-convert (translate/transliterate) ============ #
         affected_sessions = set()
         t_success = t_failed = t_skipped = 0
 
-        if skip_transliterate:
+        if skip_text_conversion:
             affected_sessions = {c.session for c in chats.only("session")}
-            self.stdout.write("  Step 1 skipped (--skip-transliterate).")
+            self.stdout.write("  Step 1 skipped (--skip-text-conversion).")
         else:
             for chat in chats.iterator():
                 lang = session_language.get(chat.session)
@@ -367,15 +364,10 @@ class Command(BaseCommand):
                     )
 
             self.stdout.write(
-                f"  Step 1 (re-transliterate): success={t_success}, failed={t_failed}, skipped={t_skipped}"
+                f"  Step 1 (re-convert): success={t_success}, failed={t_failed}, skipped={t_skipped}"
             )
             logger.info(
                 "[regen] step1 route=%s done success=%d failed=%d skipped=%d affected_sessions=%d",
-                route, t_success, t_failed, t_skipped, len(affected_sessions),
-            )
-            logger.info(
-                "[regen] step1 route=%s done success=%d failed=%d skipped=%d "
-                "affected_sessions=%d",
                 route, t_success, t_failed, t_skipped, len(affected_sessions),
             )
 
