@@ -349,7 +349,11 @@ class Command(BaseCommand):
                 )
                 if output:
                     chat.translated_message = output
-                    chat.save(update_fields=["translated_message"])
+                    # Both writes together: chat row + its ChatSession.updated_at
+                    # (session is unique; auto_now bumps updated_at on save).
+                    with transaction.atomic():
+                        chat.save(update_fields=["translated_message"])
+                        chat_session.save(update_fields=["updated_at"])
                     affected_sessions.add(chat.session)
                     t_success += 1
                 else:
